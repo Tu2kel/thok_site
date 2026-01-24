@@ -1,0 +1,1226 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The House of Kel | Imperio Vita</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        /* Royal Red Gradient */
+        --red-darkest: #140000;
+        --red-deep: #4a0606;
+        --red-blood: #8f0d0d;
+        --red-crimson: #d81f1f;
+        --red-light: #ffb3b3;
+
+        /* Royal Gold Gradient */
+        --gold-bronze: #8c6b1f;
+        --gold-rich: #c6a645;
+        --gold-pure: #ffd700;
+        --gold-champagne: #f4e3a1;
+        --gold-dark: #b8860b;
+
+        /* Black/Charcoal */
+        --black-pure: #000000;
+        --black-near: #121212;
+        --black-dark-charcoal: #242424;
+        --charcoal-medium: #3a3a3a;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Cormorant Garamond', serif;
+        background: linear-gradient(
+          135deg,
+          #030000 0%,
+          #000000 18%,
+          #8f0d0d 32%,
+          #d81f1f 45%,
+          /* #ffb3b3 50%, */ #d81f1f 55%,
+          #8f0d0d 68%,
+          #000000 82%,
+          #140000 100%
+        );
+
+        color: var(--gold-champagne);
+        overflow-x: hidden;
+        position: relative;
+        min-height: 100vh;
+      }
+
+      /* Baroque Circles Background - Red/Gold Only */
+      body::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: radial-gradient(
+            circle at 20% 30%,
+            rgba(139, 0, 0, 0.15) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            circle at 80% 20%,
+            rgba(255, 215, 0, 0.08) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 40% 70%,
+            rgba(139, 0, 0, 0.12) 0%,
+            transparent 45%
+          ),
+          radial-gradient(
+            circle at 90% 80%,
+            rgba(255, 215, 0, 0.06) 0%,
+            transparent 35%
+          ),
+          radial-gradient(
+            circle at 10% 90%,
+            rgba(139, 0, 0, 0.1) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            circle at 60% 40%,
+            rgba(255, 215, 0, 0.05) 0%,
+            transparent 30%
+          );
+        opacity: 0.6;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .exit {
+        color: #ecd60f;
+        font-size: 1.5em;
+        position: relative;
+        display: flex;
+        flex-direction: row-reverse;
+        padding: 2vw 2vw 0 0;
+        font-weight: bold;
+      }
+
+      /* Main Content */
+      .main-content {
+        position: relative;
+        z-index: 2;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 4rem 2rem;
+      }
+
+      /* Welcome Section */
+      .welcome-section {
+        text-align: center;
+        margin-bottom: 3rem;
+        animation: slideUp 1.2s ease-out backwards;
+      }
+
+      @keyframes slideUp {
+        from {
+          transform: translateY(30px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      .welcome-title {
+        font-family: 'Cinzel', serif;
+        font-size: 6rem;
+        font-weight: 900;
+        background: linear-gradient(
+          135deg,
+          #e7aa51,
+          #ffe499,
+          #8d5a1b,
+          #e7aa51,
+          #ac7031
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-shadow: 0 0 40px rgba(255, 215, 0, 0.4);
+        letter-spacing: 0.2em;
+        margin-bottom: 1rem;
+        position: relative;
+      }
+
+      .welcome-title::before,
+      .welcome-title::after {
+        content: '⚜';
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--red-crimson);
+        font-size: 3rem;
+        text-shadow: 0 0 20px rgba(216, 31, 31, 0.6);
+      }
+
+      .welcome-title::before {
+        left: -100px;
+      }
+
+      .welcome-title::after {
+        right: -100px;
+      }
+
+      .welcome-subtitle {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 2.2rem;
+        font-weight: 300;
+        color: var(--gold-rich);
+        letter-spacing: 0.25em;
+        font-style: italic;
+        margin-top: 1.5rem;
+        margin-bottom: 3rem;
+      }
+
+      /* Gold Baroque Divider */
+      .gold-divider {
+        width: 700px;
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--gold-bronze) 10%,
+          var(--gold-pure) 30%,
+          var(--gold-champagne) 50%,
+          var(--gold-pure) 70%,
+          var(--gold-bronze) 90%,
+          transparent
+        );
+        margin: 0 auto;
+        box-shadow:
+          0 0 20px rgba(255, 215, 0, 0.7),
+          0 0 40px rgba(255, 215, 0, 0.4);
+        position: relative;
+        animation: slideUp 1.5s ease-out backwards;
+      }
+
+      .gold-divider::before,
+      .gold-divider::after {
+        content: '⚜';
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gold-pure);
+        font-size: 2rem;
+        text-shadow: 0 0 25px rgba(255, 215, 0, 0.7);
+      }
+
+      .gold-divider::before {
+        left: -50px;
+      }
+
+      .gold-divider::after {
+        right: -50px;
+      }
+
+      .tagline {
+        font-size: 1.6rem;
+        font-style: italic;
+        color: var(--gold-rich);
+        margin-top: 3rem;
+        margin-bottom: 6rem;
+        letter-spacing: 0.08em;
+        text-align: center;
+        animation: slideUp 1.8s ease-out backwards;
+      }
+
+      /* Intro Text Section */
+      .intro-section {
+        max-width: 60vw;
+        text-align: center;
+        margin: 8rem auto;
+        padding: 0 3rem;
+      }
+
+      .intro-text {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 2.2rem;
+        line-height: 2.4;
+        color: var(--gold-champagne);
+        letter-spacing: 0.03em;
+        margin-bottom: 3rem;
+      }
+
+      .intro-text strong {
+        color: var(--gold-pure);
+        font-weight: 600;
+      }
+
+      /* Ventures Section */
+      .about-section {
+        max-width: 1400px;
+        width: 100%;
+        margin: 10rem auto;
+        padding: 0 3rem;
+      }
+
+      .section-title {
+        font-family: 'Cinzel', serif;
+        font-size: 4.5rem;
+        font-weight: 700;
+        text-align: center;
+        background: linear-gradient(
+          135deg,
+          var(--gold-bronze),
+          var(--gold-pure),
+          var(--gold-champagne),
+          var(--gold-pure),
+          var(--gold-bronze)
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: 0.2em;
+        margin-bottom: 8rem;
+        text-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
+      }
+
+      /* Venture Rows */
+      .venture-row {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 5rem;
+        align-items: center;
+        margin-bottom: 15rem;
+        padding: 5rem 4rem;
+        /* background: linear-gradient(
+          135deg,
+          rgba(74, 6, 6, 0.3) 0%,
+          rgba(143, 13, 13, 0.2) 50%,
+          rgba(74, 6, 6, 0.3) 100%
+        ); */
+        background: linear-gradient(
+          135deg,
+          #000000 0%,
+          #121212 20%,
+          #242424 35%,
+          #3a3a3a 46%,
+          /* #9e9e9e 50%, */ #3a3a3a 54%,
+          #242424 68%,
+          #121212 82%,
+          #000000 100%
+        );
+
+        border: 2px solid var(--gold-dark);
+        border-radius: 12px;
+        box-shadow:
+          0 8px 30px rgba(139, 0, 0, 0.5),
+          inset 0 2px 0 rgba(255, 215, 0, 0.15);
+        transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Gold Glare Effect */
+      .venture-row::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 215, 0, 0.3),
+          transparent
+        );
+        transition: left 0.7s ease;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .venture-row:hover::before {
+        left: 100%;
+      }
+
+      .venture-row:hover {
+        border-color: var(--gold-pure);
+        box-shadow:
+          0 12px 50px rgba(255, 215, 0, 0.5),
+          0 0 60px rgba(216, 31, 31, 0.4),
+          inset 0 2px 0 rgba(255, 215, 0, 0.3);
+        transform: translateY(-8px);
+      }
+
+      .venture-row.reverse {
+        grid-template-columns: 1fr 300px;
+      }
+
+      .venture-image {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        filter: drop-shadow(0 0 25px rgba(255, 215, 0, 0.6));
+        position: relative;
+        z-index: 2;
+      }
+
+      .venture-image img {
+        max-width: 220px;
+        width: 100%;
+        height: auto;
+        transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      .venture-row:hover .venture-image img {
+        transform: scale(1.12);
+      }
+
+      .venture-content {
+        padding: 2rem;
+        position: relative;
+        z-index: 2;
+      }
+
+      .venture-title {
+        font-family: 'Cinzel', serif;
+        font-size: 3rem;
+        font-weight: 700;
+        color: var(--gold-pure);
+        letter-spacing: 0.12em;
+        margin-bottom: 1.5rem;
+        text-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+      }
+
+      .venture-tagline {
+        font-family: 'Cinzel', serif;
+        font-size: 1.2rem;
+        font-weight: 400;
+        color: var(--gold-champagne);
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        margin-bottom: 2rem;
+        opacity: 0.9;
+      }
+
+      .venture-stats {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2.5rem;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 1.1rem;
+        color: var(--gold-rich);
+        letter-spacing: 0.05em;
+      }
+
+      .stat-item {
+        position: relative;
+      }
+
+      .stat-divider {
+        color: var(--red-crimson);
+        font-size: 1.2rem;
+      }
+
+      .venture-description {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 1.4rem;
+        line-height: 2.2;
+        color: var(--gold-champagne);
+        letter-spacing: 0.03em;
+        padding: 1.5rem 0;
+        max-width: 700px;
+      }
+
+      /* Navigation Section */
+      .navigation-section {
+        max-width: 1400px;
+        width: 100%;
+        margin: 12rem auto 4rem;
+        padding: 0 3rem;
+        text-align: center;
+      }
+
+      .nav-section-title {
+        font-family: 'Cinzel', serif;
+        font-size: 4rem;
+        font-weight: 700;
+        background: linear-gradient(
+          135deg,
+          var(--gold-bronze),
+          var(--gold-pure),
+          var(--gold-champagne),
+          var(--gold-pure),
+          var(--gold-bronze)
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: 0.18em;
+        margin-bottom: 3rem;
+        text-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
+      }
+
+      .nav-section-intro {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 1.5rem;
+        line-height: 2.2;
+        color: var(--gold-champagne);
+        letter-spacing: 0.03em;
+        margin-bottom: 6rem;
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      /* Navigation Buttons */
+      .nav-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 2.5rem;
+        max-width: 1400px;
+        width: 100%;
+        padding: 0 3rem;
+      }
+
+      .nav-button {
+        position: relative;
+        background: linear-gradient(
+          135deg,
+          var(--red-deep) 0%,
+          var(--red-blood) 50%,
+          var(--red-deep) 100%
+        );
+        border: 2px solid var(--gold-dark);
+        padding: 3rem 2.5rem;
+        text-decoration: none;
+        color: var(--gold-champagne);
+        font-family: 'Cinzel', serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-align: center;
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        cursor: pointer;
+        overflow: hidden;
+        box-shadow:
+          0 4px 20px rgba(139, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 215, 0, 0.2);
+      }
+
+      .nav-button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 215, 0, 0.3),
+          transparent
+        );
+        transition: left 0.5s ease;
+      }
+
+      .nav-button:hover::before {
+        left: 100%;
+      }
+
+      .nav-button::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          var(--gold-bronze),
+          var(--gold-pure),
+          var(--gold-bronze)
+        );
+        transition: width 0.4s ease;
+      }
+
+      .nav-button:hover::after {
+        width: 80%;
+      }
+
+      .nav-button:hover {
+        transform: translateY(-8px) scale(1.02);
+        border-color: var(--gold-pure);
+        box-shadow:
+          0 10px 40px rgba(255, 215, 0, 0.4),
+          0 0 40px rgba(216, 31, 31, 0.3),
+          inset 0 1px 0 rgba(255, 215, 0, 0.4);
+      }
+
+      .about {
+        margin-bottom: 0.5rem;
+      }
+
+      .mail {
+        position: relative;
+        top: 10px;
+      }
+
+      .mailed {
+        position: relative;
+        top: 30px;
+      }
+
+      .button-icon {
+        display: block;
+        font-size: 3rem;
+        margin-bottom: 0.8rem;
+        filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+      }
+
+      .button-icon img {
+        display: block;
+        margin: 0 auto;
+      }
+
+      .button-text {
+        display: block;
+        text-transform: uppercase;
+        position: relative;
+      }
+
+      .button-desc {
+        display: block;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 0.9rem;
+        font-weight: 300;
+        letter-spacing: 0.05em;
+        margin-top: 0.5rem;
+        opacity: 0.8;
+        text-transform: none;
+      }
+
+      /* Fade in buttons with stagger */
+      .nav-button:nth-child(1) {
+        animation: slideUp 0.8s ease-out 0.2s backwards;
+      }
+      .nav-button:nth-child(2) {
+        animation: slideUp 0.8s ease-out 0.4s backwards;
+      }
+      .nav-button:nth-child(3) {
+        animation: slideUp 0.8s ease-out 0.6s backwards;
+      }
+      .nav-button:nth-child(4) {
+        animation: slideUp 0.8s ease-out 0.8s backwards;
+      }
+      .nav-button:nth-child(5) {
+        animation: slideUp 0.8s ease-out 1s backwards;
+      }
+      .nav-button:nth-child(6) {
+        animation: slideUp 0.8s ease-out 1.2s backwards;
+      }
+
+      /* Decorative corners */
+      .nav-button .corner {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--gold-pure);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .nav-button:hover .corner {
+        opacity: 1;
+      }
+
+      .corner.top-left {
+        top: 10px;
+        left: 10px;
+        border-right: none;
+        border-bottom: none;
+      }
+
+      .corner.top-right {
+        top: 10px;
+        right: 10px;
+        border-left: none;
+        border-bottom: none;
+      }
+
+      .corner.bottom-left {
+        bottom: 10px;
+        left: 10px;
+        border-right: none;
+        border-top: none;
+      }
+
+      .corner.bottom-right {
+        bottom: 10px;
+        right: 10px;
+        border-left: none;
+        border-top: none;
+      }
+
+      /* Footer */
+      .footer {
+        position: relative;
+        width: 100%;
+        margin-top: 10rem;
+        padding: 4rem 2rem 3rem;
+        text-align: center;
+        font-size: 0.9rem;
+        color: var(--gold-rich);
+        background: linear-gradient(
+          180deg,
+          transparent 0%,
+          rgba(20, 0, 0, 0.3) 50%,
+          rgba(0, 0, 0, 0.6) 100%
+        );
+        border-top: 2px solid var(--red-blood);
+      }
+
+      .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      .social-links {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 2.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .social-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-decoration: none;
+        color: var(--gold-champagne);
+        transition: all 0.3s ease;
+        font-family: 'Cinzel', serif;
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .social-icon {
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, var(--red-deep), var(--red-blood));
+        border: 2px solid var(--gold-dark);
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 4px 15px rgba(139, 0, 0, 0.4);
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .social-link:hover .social-icon {
+        background: linear-gradient(
+          135deg,
+          var(--red-crimson),
+          var(--red-blood)
+        );
+        border-color: var(--gold-pure);
+        transform: translateY(-5px) scale(1.1);
+        box-shadow:
+          0 8px 25px rgba(255, 215, 0, 0.3),
+          0 0 30px rgba(216, 31, 31, 0.4);
+      }
+
+      .social-link:hover {
+        color: var(--gold-pure);
+      }
+
+      .footer-divider {
+        width: 300px;
+        height: 2px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--gold-dark),
+          var(--gold-pure),
+          var(--gold-dark),
+          transparent
+        );
+        margin: 2rem auto;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+      }
+
+      .footer-text {
+        color: var(--gold-rich);
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 0.95rem;
+        letter-spacing: 0.05em;
+      }
+
+      .footer-brand {
+        color: var(--gold-pure);
+        font-weight: 600;
+      }
+
+      /* Responsive Design */
+      @media (max-width: 968px) {
+        .welcome-title {
+          font-size: 4rem;
+        }
+
+        .welcome-title::before,
+        .welcome-title::after {
+          font-size: 2rem;
+        }
+
+        .welcome-title::before {
+          left: -70px;
+        }
+
+        .welcome-title::after {
+          right: -70px;
+        }
+
+        .welcome-subtitle {
+          font-size: 1.6rem;
+        }
+
+        .gold-divider {
+          width: 500px;
+        }
+
+        .intro-text {
+          font-size: 1.4rem;
+        }
+
+        .section-title {
+          font-size: 3rem;
+        }
+
+        .venture-row {
+          grid-template-columns: 200px 1fr;
+          gap: 3rem;
+          margin-bottom: 10rem;
+          padding: 3rem 2rem;
+        }
+
+        .venture-row.reverse {
+          grid-template-columns: 1fr 200px;
+        }
+
+        .venture-title {
+          font-size: 2.2rem;
+        }
+
+        .venture-description {
+          font-size: 1.2rem;
+        }
+
+        .nav-section-title {
+          font-size: 3rem;
+        }
+
+        .nav-section-intro {
+          font-size: 1.3rem;
+        }
+
+        .nav-buttons {
+          grid-template-columns: 1fr;
+          max-width: 500px;
+        }
+
+        .social-links {
+          gap: 2rem;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .welcome-title {
+          font-size: 2.5rem;
+          letter-spacing: 0.1em;
+        }
+
+        .welcome-title::before,
+        .welcome-title::after {
+          display: none;
+        }
+
+        .welcome-subtitle {
+          font-size: 1.2rem;
+        }
+
+        .tagline {
+          font-size: 1rem;
+        }
+
+        .gold-divider {
+          width: 80%;
+        }
+
+        .gold-divider::before,
+        .gold-divider::after {
+          font-size: 1.2rem;
+        }
+
+        .gold-divider::before {
+          left: -35px;
+        }
+
+        .gold-divider::after {
+          right: -35px;
+        }
+
+        .intro-text {
+          font-size: 1.2rem;
+        }
+
+        .section-title {
+          font-size: 2.2rem;
+          margin-bottom: 5rem;
+        }
+
+        .venture-row {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+          text-align: center;
+          margin-bottom: 8rem;
+          padding: 3rem 1.5rem;
+        }
+
+        .venture-row.reverse {
+          grid-template-columns: 1fr;
+        }
+
+        .venture-image {
+          order: -1;
+        }
+
+        .venture-image img {
+          max-width: 150px;
+        }
+
+        .venture-title {
+          font-size: 1.8rem;
+        }
+
+        .venture-tagline {
+          font-size: 1rem;
+        }
+
+        .venture-stats {
+          justify-content: center;
+          font-size: 0.95rem;
+        }
+
+        .venture-description {
+          font-size: 1.1rem;
+          line-height: 1.9;
+        }
+
+        .nav-section-title {
+          font-size: 2.2rem;
+        }
+
+        .nav-section-intro {
+          font-size: 1.15rem;
+        }
+
+        .nav-button {
+          padding: 2rem 1.5rem;
+          font-size: 1.2rem;
+        }
+
+        .button-icon {
+          font-size: 2.5rem;
+        }
+
+        .social-links {
+          gap: 1.2rem;
+          flex-wrap: wrap;
+        }
+
+        .social-icon {
+          width: 45px;
+          height: 45px;
+          font-size: 1.3rem;
+        }
+
+        .social-link {
+          font-size: 0.65rem;
+        }
+      }
+
+      /* Scroll animation trigger */
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a href="index.html" class="exit" id="enterText">Main</a>
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Hero Welcome Section -->
+      <div class="welcome-section">
+        <h1 class="welcome-title">The House of Kel</h1>
+        <h2 class="welcome-subtitle">Imperio Vita</h2>
+      </div>
+
+      <!-- Gold Baroque Divider -->
+      <div class="gold-divider"></div>
+
+      <!-- Tagline Below Divider -->
+      <p class="tagline">Where Excellence Reigns</p>
+
+      <!-- Intro Section -->
+      <section class="intro-section">
+        <p class="intro-text">
+          <strong>The House of Kel LLC</strong> is a multifaceted enterprise
+          built on a foundation of military precision, strategic vision, and
+          unwavering commitment to excellence. From federal talent acquisition
+          to innovative digital solutions and strategic real estate ventures, we
+          operate at the intersection of service, innovation, and
+          empire-building. Every endeavor reflects our core values: integrity,
+          expertise, and long-term value creation.
+        </p>
+      </section>
+
+      <!-- Ventures Section -->
+      <section class="about-section">
+        <h2 class="section-title">Our Ventures</h2>
+
+        <!-- VENTURE 1: Imperio Talent Solutions -->
+        <article class="venture-row">
+          <div class="venture-image">
+            <img src="./images/crown2.png" alt="Imperio Talent Solutions" />
+          </div>
+          <div class="venture-content">
+            <h3 class="venture-title">Imperio Talent Solutions</h3>
+            <div class="venture-tagline">PRECISION</div>
+            <div class="venture-stats">
+              <span class="stat-item">DOD Cleared</span>
+              <span class="stat-divider">•</span>
+              <span class="stat-item">SDVOSB</span>
+              <span class="stat-divider">•</span>
+              <span class="stat-item">21 Years</span>
+            </div>
+            <p class="venture-description">
+              Elite federal contracting and strategic talent placement.
+              Connecting cleared professionals with government and enterprise
+              clients across four specialized verticals.
+            </p>
+          </div>
+        </article>
+
+        <!-- VENTURE 2: Digital Content -->
+        <article class="venture-row reverse">
+          <div class="venture-content">
+            <h3 class="venture-title">Digital Content & Innovation</h3>
+            <div class="venture-tagline">INNOVATION</div>
+            <div class="venture-stats">
+              <span class="stat-item">Smart Swap</span>
+              <span class="stat-divider">•</span>
+              <span class="stat-item">Business Tools</span>
+              <span class="stat-divider">•</span>
+              <span class="stat-item">Applications</span>
+            </div>
+            <p class="venture-description">
+              Transformative digital products and professional management
+              systems. Building tools that solve real problems for real
+              businesses.
+            </p>
+          </div>
+          <div class="venture-image">
+            <img src="./images/sso.png" alt="Digital Content" />
+          </div>
+        </article>
+
+        <!-- VENTURE 3: Real Estate -->
+        <article class="venture-row">
+          <div class="venture-image">
+            <img src="./images/thokCastle.png" alt="Real Estate Ventures" />
+          </div>
+          <div class="venture-content">
+            <h3 class="venture-title">Real Estate Ventures</h3>
+            <div class="venture-tagline">EMPIRE</div>
+            <div class="venture-stats">
+              <span class="stat-item">Strategic Acquisition</span>
+              <span class="stat-divider">•</span>
+              <span class="stat-item">Asset Growth</span>
+            </div>
+            <p class="venture-description">
+              Building wealth through calculated property development. Long-term
+              vision for empire expansion through brick and mortar.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <!-- Navigation Section with Intro -->
+      <section class="navigation-section">
+        <h2 class="nav-section-title">Explore Our Realm</h2>
+        <p class="nav-section-intro">
+          Dive deeper into each facet of The House of Kel. Whether you're
+          seeking elite talent solutions, exploring our digital innovations, or
+          learning about our mission and values, each portal below provides
+          direct access to our specialized offerings.
+        </p>
+      </section>
+
+      <!-- Navigation Cards -->
+      <div class="nav-buttons">
+        <a href="#" class="nav-button">
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-left"></span>
+          <span class="corner bottom-right"></span>
+          <span class="button-icon">
+            <img
+              class="crown2"
+              src="./images/crown2.png"
+              alt=""
+              style="width: 65px"
+            />
+          </span>
+          <span class="button-text">Imperio Talent</span>
+          <span class="button-desc">⚜️ Recruiting ⚜️⚜️ Contracting ⚜️</span>
+        </a>
+
+        <a href="#" class="nav-button">
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-left"></span>
+          <span class="corner bottom-right"></span>
+          <span class="button-icon">
+            <img
+              src="./images/shield1.png"
+              alt=""
+              class="about"
+              style="width: 85px"
+            />
+          </span>
+          <span class="button-text">About Us</span>
+          <span class="button-desc">Our Legacy & Mission</span>
+        </a>
+
+        <a href="#" class="nav-button">
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-left"></span>
+          <span class="corner bottom-right"></span>
+          <span class="button-icon"
+            ><img src="./images/quartermaster.png" width="75px"
+          /></span>
+          <span class="button-text">Services</span>
+          <span class="button-desc">Strategic Talent Placement</span>
+        </a>
+
+        <a href="#" class="nav-button">
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-left"></span>
+          <span class="corner bottom-right"></span>
+          <span class="button-icon"
+            ><img
+              src="./images/thokCastle.png"
+              width="120px"
+              style="margin-bottom: -35px"
+          /></span>
+          <span class="button-text">Portfolio</span>
+          <span class="button-desc">Our Ventures & Achievements</span>
+        </a>
+
+        <a
+          href="https://tinyurl.com/nada-diet"
+          class="nav-button"
+          target="_blank"
+          rel="noopener"
+        >
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-left"></span>
+          <span class="corner bottom-right"></span>
+          <span class="button-icon"
+            ><img src="./images/sso.png" width="85px"
+          /></span>
+          <span class="button-text">Smart Swap Official</span>
+          <span class="button-desc">Nutritional Intelligence Platform</span>
+        </a>
+
+        <a href="#" class="nav-button">
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-left"></span>
+          <span class="corner bottom-right"></span>
+          <span class="button-icon"
+            ><img src="./images/mail.png" width="65px" class="mail"
+          /></span>
+          <span class="button-text mailed">Contact</span>
+          <span class="button-desc mailed">Connect With Us</span>
+        </a>
+      </div>
+
+      <footer class="footer">
+        <div class="footer-content">
+          <div class="social-links">
+            <a href="#" class="social-link" target="_blank" rel="noopener">
+              <div class="social-icon">
+                <img src="./images/facebook.png" class="fb" />
+              </div>
+              <span>Facebook</span>
+            </a>
+            <a href="#" class="social-link" target="_blank" rel="noopener">
+              <div class="social-icon">
+                <img src="./images/ig.png" alt="" />
+              </div>
+              <span>Instagram</span>
+            </a>
+            <a href="#" class="social-link" target="_blank" rel="noopener">
+              <div class="social-icon"><img src="./images/linkedIn.png" /></div>
+              <span>LinkedIn</span>
+            </a>
+            <a href="#" class="social-link" target="_blank" rel="noopener">
+              <div class="social-icon">
+                <img src="./images/yt.png" alt="" />
+              </div>
+              <span>YouTube</span>
+            </a>
+            <a href="#" class="social-link" target="_blank" rel="noopener">
+              <div class="social-icon">
+                <img src="./images/tiktok.png" alt="" width=" 50px;" />
+              </div>
+              <span>TikTok</span>
+            </a>
+          </div>
+
+          <div class="footer-divider"></div>
+
+          <p class="footer-text">
+            &copy; 2026 <span class="footer-brand">The House of Kel LLC</span> ·
+            Imperio Vita · All Rights Reserved
+          </p>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
