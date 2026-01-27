@@ -1,4 +1,4 @@
-<!doctype html>
+<!-- <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -257,6 +257,228 @@
         document
           .querySelector('.welcome-static')
           .classList.add('pixelate-effect');
+      }, 5000);
+    </script>
+  </body>
+</html> -->
+
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The House of Kel | Imperio Vita</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --red-darkest: #140000;
+        --red-deep: #4a0606;
+        --red-blood: #8f0d0d;
+        --red-crimson: #d81f1f;
+        --gold-bronze: #8c6b1f;
+        --gold-rich: #c6a645;
+        --gold-pure: #ffd700;
+        --gold-champagne: #f4e3a1;
+        --gold-dark: #b8860b;
+        --black-pure: #000000;
+        --black-near: #121212;
+        --brown-warm: #2d1810;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Cormorant Garamond', serif;
+        background: linear-gradient(
+          135deg,
+          var(--red-darkest) 0%,
+          var(--black-pure) 50%,
+          var(--red-darkest) 100%
+        );
+        color: var(--gold-champagne);
+        overflow: hidden;
+        min-height: 100vh;
+      }
+
+      .logo-intro {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: inherit;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+      }
+
+      .welcome-static {
+        position: absolute;
+        top: 5vh;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: 'Cinzel', serif;
+        font-size: 5rem;
+        font-weight: 400;
+        letter-spacing: 0.4em;
+        background: linear-gradient(
+          135deg,
+          var(--gold-bronze) 0%,
+          var(--gold-pure) 25%,
+          var(--gold-champagne) 50%,
+          var(--gold-pure) 75%,
+          var(--gold-bronze) 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        z-index: 10;
+        opacity: 1;
+        white-space: nowrap;
+      }
+
+      .logo-container {
+        position: relative;
+        width: 100vw;
+        height: auto;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        overflow: visible;
+        padding-top: 15vh;
+      }
+
+      .castle-logo {
+        padding-top: 30vh;
+        max-width: 98vw;
+        max-height: 350vh;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 0 50px rgba(255, 215, 0, 0.7))
+          drop-shadow(0 0 90px rgba(139, 0, 0, 0.5));
+        animation: zoomInSlow 3.5s ease-out forwards;
+      }
+
+      @keyframes zoomInSlow {
+        0% {
+          transform: scale(0.1);
+          opacity: 0;
+          filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.3))
+            drop-shadow(0 0 40px rgba(139, 0, 0, 0.2));
+        }
+        40% { opacity: 1; }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+          filter: drop-shadow(0 0 60px rgba(255, 215, 0, 0.8))
+            drop-shadow(0 0 100px rgba(139, 0, 0, 0.6));
+        }
+      }
+
+      .enter-text {
+        position: absolute;
+        bottom: 8vh;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: 'Cinzel', serif;
+        font-size: 3rem;
+        font-weight: 700;
+        letter-spacing: 0.5em;
+        color: var(--gold-pure);
+        opacity: 0;
+        animation: fadeInEnter 1s ease-out 4s forwards;
+        cursor: pointer;
+        text-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+        text-decoration: none;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+      }
+
+      .enter-text:hover {
+        color: var(--gold-champagne);
+        text-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
+        transform: translateX(-50%) scale(1.1);
+      }
+
+      @keyframes fadeInEnter { to { opacity: 1; } }
+
+      .pixelate-effect {
+        animation: pixelateSlow 2s ease-in 5s forwards !important;
+      }
+
+      @keyframes pixelateSlow {
+        0% {
+          transform: scale(1);
+          filter: drop-shadow(0 0 60px rgba(255, 215, 0, 0.8))
+            drop-shadow(0 0 100px rgba(139, 0, 0, 0.6));
+          opacity: 1;
+        }
+        40% { filter: contrast(150%) brightness(150%); opacity: 0.8; }
+        75% { filter: blur(25px) contrast(300%) brightness(200%); opacity: 0.3; }
+        100% { filter: blur(70px) contrast(500%); opacity: 0; }
+      }
+
+      /* --- SPECIFIC FIX FOR UNDER 400PX (FOLD 6 FRONT SCREEN) --- */
+      @media (max-width: 400px) {
+        .welcome-static {
+          /* Smoothly scales between 1.8rem and 2.5rem */
+          font-size: clamp(1.8rem, 10vw, 2.5rem);
+          /* Tighten spacing so it doesn't bleed off screen edges */
+          letter-spacing: 0.15em; 
+          top: 10vh;
+        }
+
+        .enter-text {
+          font-size: clamp(1.2rem, 6vw, 1.8rem);
+          letter-spacing: 0.2em;
+          bottom: 12vh;
+        }
+      }
+
+      /* Desktop/Large Tablet */
+      @media (min-width: 401px) and (max-width: 968px) {
+        .welcome-static { font-size: 3.5rem; top: 4vh; }
+        .logo-container { padding-top: 12vh; }
+        .enter-text { font-size: 2rem; bottom: 6vh; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { animation: none !important; transition: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo-intro" id="logoIntro">
+      <div class="welcome-static">W E L C O M E</div>
+      <div class="logo-container">
+        <img
+          src="./images/thokCastle.png"
+          alt="The House of Kel"
+          class="castle-logo"
+          id="castleLogo"
+        />
+      </div>
+      <a href="thok.html" class="enter-text" id="enterText">E N T E R</a>
+    </div>
+
+    <script>
+      setTimeout(() => {
+        document.getElementById('castleLogo').classList.add('pixelate-effect');
+        document.querySelector('.welcome-static').classList.add('pixelate-effect');
       }, 5000);
     </script>
   </body>
