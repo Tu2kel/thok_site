@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Imperio Talent Solutions - Professional Memorandum</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Cormorant+Garamond:wght@300;400;600&display=swap');
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Cormorant Garamond', serif;
+        background: linear-gradient(135deg, #1a0000 0%, #4a0000 100%);
+        padding: 20px 10px;
+        min-height: 100vh;
+      }
+
+      .container-wrapper {
+        display: flex;
+        gap: 10px;
+        max-width: 1600px;
+        margin: 0 auto;
+        align-items: flex-start;
+      }
+
+      .input-section {
+        background: #2c2c2c;
+        padding: 20px;
+        border-radius: 8px;
+        flex: 0 0 320px;
+        border: 2px solid #b8860b;
+        position: sticky;
+        top: 20px;
+      }
+
+      .input-section h2 {
+        color: #ffd700;
+        font-family: 'Playfair Display', serif;
+        margin-bottom: 15px;
+        text-align: center;
+        font-size: 20px;
+      }
+
+      .toggle-group {
+        margin-bottom: 15px;
+        padding: 12px;
+        background: rgba(139, 0, 0, 0.2);
+        border-radius: 4px;
+        border: 1px solid #b8860b;
+      }
+
+      .toggle-group label {
+        display: flex;
+        align-items: center;
+        color: #fafad2;
+        font-size: 13px;
+        cursor: pointer;
+        margin-bottom: 6px;
+      }
+
+      .toggle-group label:last-child {
+        margin-bottom: 0;
+      }
+
+      .toggle-group input[type='checkbox'] {
+        width: auto;
+        margin-right: 10px;
+        cursor: pointer;
+      }
+
+      .input-group {
+        margin-bottom: 15px;
+      }
+
+      .input-group label {
+        display: block;
+        color: #fafad2;
+        font-weight: 600;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+
+      .input-group input,
+      .input-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #b8860b;
+        border-radius: 4px;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 14px;
+        background: #ffffff;
+        color: #2c2c2c;
+      }
+
+      .input-group textarea {
+        min-height: 200px;
+        resize: vertical;
+        line-height: 1.5;
+      }
+
+      .print-button {
+        background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
+        color: #ffd700;
+        border: 2px solid #ffd700;
+        padding: 12px 30px;
+        font-family: 'Playfair Display', serif;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: 4px;
+        display: block;
+        margin: 15px auto 0;
+        transition: all 0.3s;
+        width: 100%;
+      }
+
+      .print-button:hover {
+        background: linear-gradient(135deg, #dc143c 0%, #8b0000 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(220, 20, 60, 0.4);
+      }
+
+      .memo-container {
+        flex: 1;
+        background: #ffffff;
+        border: 3px solid #b8860b;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      }
+
+      .header {
+        background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
+        padding: 25px 40px;
+        border-bottom: 4px solid #ffd700;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: repeating-linear-gradient(
+          45deg,
+          transparent,
+          transparent 10px,
+          rgba(255, 215, 0, 0.03) 10px,
+          rgba(255, 215, 0, 0.03) 20px
+        );
+      }
+
+      .header-content {
+        position: relative;
+        z-index: 1;
+      }
+
+      .company-name {
+        font-family: 'Playfair Display', serif;
+        font-size: 32px;
+        font-weight: 700;
+        color: #ffd700;
+        text-align: center;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        letter-spacing: 2px;
+      }
+
+      .memo-title {
+        background: linear-gradient(to right, #8b0000, #dc143c);
+        padding: 15px 40px;
+        border-bottom: 2px solid #ffd700;
+      }
+
+      .memo-title h1 {
+        font-family: 'Playfair Display', serif;
+        font-size: 22px;
+        color: #ffd700;
+        text-align: center;
+        letter-spacing: 2px;
+      }
+
+      .subject-line {
+        padding: 20px 40px;
+        background: #fff9e6;
+        border-bottom: 2px solid #b8860b;
+      }
+
+      .subject-line strong {
+        font-family: 'Playfair Display', serif;
+        color: #8b0000;
+        font-size: 16px;
+      }
+
+      .subject-content {
+        color: #2c2c2c;
+        margin-left: 10px;
+        font-size: 16px;
+      }
+
+      .memo-body {
+        padding: 25px 40px 40px 40px;
+        background: #ffffff;
+        min-height: 400px;
+        font-size: 16px;
+        line-height: 1.8;
+        color: #2c2c2c;
+        page-break-inside: auto;
+      }
+
+      .structured-section {
+        margin-bottom: 16px;
+      }
+
+      .structured-section strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      #bodyPreview {
+        white-space: pre-wrap;
+      }
+
+      .signature-section {
+        margin-top: 60px;
+        padding-top: 20px;
+        page-break-inside: avoid;
+      }
+
+      .signature-line {
+        border-top: 2px solid #2c2c2c;
+        width: 300px;
+        margin-top: 50px;
+      }
+
+      .signature-name {
+        font-weight: 600;
+        color: #8b0000;
+        margin-top: 8px;
+      }
+
+      .signature-title {
+        font-style: italic;
+        color: #5a5a5a;
+      }
+
+      .footer {
+        background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
+        padding: 25px 40px;
+        border-top: 4px solid #ffd700;
+        color: #fafad2;
+        font-size: 13px;
+        text-align: center;
+      }
+
+      .footer-contact {
+        margin-bottom: 10px;
+      }
+
+      .footer-divider {
+        color: #ffd700;
+        margin: 0 8px;
+      }
+
+      @media print {
+        body {
+          background: white;
+          padding: 0;
+        }
+
+        .container-wrapper {
+          display: block;
+        }
+
+        .memo-container {
+          box-shadow: none;
+          border: 2px solid #b8860b;
+          page-break-after: auto;
+        }
+
+        .input-section {
+          display: none !important;
+        }
+
+        .header {
+          page-break-after: avoid;
+        }
+
+        .memo-title {
+          page-break-after: avoid;
+        }
+
+        .subject-line {
+          page-break-after: avoid;
+        }
+
+        .footer {
+          page-break-before: auto;
+          page-break-inside: avoid;
+        }
+
+        .signature-section {
+          page-break-inside: avoid;
+          page-break-after: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container-wrapper">
+      <div class="input-section">
+        <h2>✎ Memo Input</h2>
+
+        <div class="toggle-group">
+          <label>
+            <input type="checkbox" id="togglePurpose" checked />
+            Include Purpose Section
+          </label>
+          <label>
+            <input type="checkbox" id="toggleBackground" checked />
+            Include Background Section
+          </label>
+          <label>
+            <input type="checkbox" id="toggleDiscussion" checked />
+            Include Discussion Section
+          </label>
+          <label>
+            <input type="checkbox" id="toggleRecommendation" checked />
+            Include Recommendation Section
+          </label>
+        </div>
+
+        <div class="input-group">
+          <label for="subject">Subject:</label>
+          <input type="text" id="subject" placeholder="Enter memo subject" />
+        </div>
+        <div class="input-group">
+          <label for="body">Memo Body:</label>
+          <textarea
+            id="body"
+            placeholder="Enter memo content here..."
+          ></textarea>
+        </div>
+        <button class="print-button" onclick="window.print()">
+          🖨 Print or Save as PDF
+        </button>
+      </div>
+
+      <div class="memo-container">
+        <div class="header">
+          <div class="header-content">
+            <div class="company-name">IMPERIO TALENT SOLUTIONS</div>
+          </div>
+        </div>
+
+        <div class="memo-title">
+          <h1>MEMORANDUM</h1>
+        </div>
+
+        <div class="subject-line">
+          <strong>SUBJECT:</strong
+          ><span class="subject-content" id="subjectPreview"
+            >[Enter subject above]</span
+          >
+        </div>
+
+        <div class="memo-body">
+          <div class="structured-section" id="purposeSection">
+            <strong>Purpose:</strong>
+            <div>[State the purpose of the memo clearly and concisely.]</div>
+          </div>
+
+          <div class="structured-section" id="backgroundSection">
+            <strong>Background:</strong>
+            <div>[Provide context and relevant background information.]</div>
+          </div>
+
+          <div class="structured-section" id="discussionSection">
+            <strong>Discussion:</strong>
+            <div>
+              [Present main points, analysis, or findings. This section may
+              contain multiple paragraphs covering different aspects of the
+              subject matter.]
+            </div>
+          </div>
+
+          <div class="structured-section" id="recommendationSection">
+            <strong>Recommendation/Action Items:</strong>
+            <div>
+              [Clearly state recommendations, decisions, or required actions.]
+            </div>
+          </div>
+
+          <div id="bodyPreview"></div>
+
+          <div class="signature-section">
+            <div class="signature-line"></div>
+            <div class="signature-name">Anthony K. Kelley</div>
+            <div class="signature-title">Founder & Chief Executive Officer</div>
+            <div class="signature-title">Imperio Talent Solutions</div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div class="footer-contact">
+            <strong>Anthony K. Kelley, Founder</strong>
+            <span class="footer-divider">•</span>
+            (254) 265-9335
+            <span class="footer-divider">•</span>
+            anthony@imperiovita.co
+          </div>
+          <div>
+            www.imperiovita.co
+            <span class="footer-divider">•</span>
+            Veteran-Owned Business
+            <span class="footer-divider">•</span>
+            Secret Clearance Specialists
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Real-time preview updates
+      document.getElementById('subject').addEventListener('input', function () {
+        document.getElementById('subjectPreview').textContent =
+          this.value || '[Enter subject above]';
+      });
+
+      document.getElementById('body').addEventListener('input', function () {
+        document.getElementById('bodyPreview').textContent = this.value;
+      });
+
+      // Toggle sections - actually remove from DOM
+      function toggleSection(checkboxId, sectionId) {
+        const checkbox = document.getElementById(checkboxId);
+        const section = document.getElementById(sectionId);
+
+        checkbox.addEventListener('change', function () {
+          if (this.checked) {
+            section.style.display = 'block';
+          } else {
+            section.style.display = 'none';
+          }
+        });
+      }
+
+      toggleSection('togglePurpose', 'purposeSection');
+      toggleSection('toggleBackground', 'backgroundSection');
+      toggleSection('toggleDiscussion', 'discussionSection');
+      toggleSection('toggleRecommendation', 'recommendationSection');
+    </script>
+  </body>
+</html>

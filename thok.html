@@ -47,12 +47,11 @@
           #000000 18%,
           #8f0d0d 32%,
           #d81f1f 45%,
-          /* #ffb3b3 50%, */ #d81f1f 55%,
+          #d81f1f 55%,
           #8f0d0d 68%,
           #000000 82%,
           #140000 100%
         );
-
         color: var(--gold-champagne);
         overflow-x: hidden;
         position: relative;
@@ -100,16 +99,6 @@
         opacity: 0.6;
         pointer-events: none;
         z-index: 1;
-      }
-
-      .exit {
-        color: #ecd60f;
-        font-size: 1.5em;
-        position: relative;
-        display: flex;
-        flex-direction: row-reverse;
-        padding: 2vw 2vw 0 0;
-        font-weight: bold;
       }
 
       /* Main Content */
@@ -161,6 +150,7 @@
         letter-spacing: 0.2em;
         margin-bottom: 1rem;
         position: relative;
+        white-space: nowrap;
       }
 
       .welcome-title::before,
@@ -184,7 +174,7 @@
 
       .welcome-subtitle {
         font-family: 'Cormorant Garamond', serif;
-        font-size: 2.2rem;
+        font-size: 2.6rem;
         font-weight: 300;
         color: var(--gold-rich);
         letter-spacing: 0.25em;
@@ -235,11 +225,11 @@
       }
 
       .tagline {
-        font-size: 1.6rem;
+        font-size: 2rem;
         font-style: italic;
         color: var(--gold-rich);
         margin-top: 3rem;
-        margin-bottom: 6rem;
+        margin-bottom: 18rem;
         letter-spacing: 0.08em;
         text-align: center;
         animation: slideUp 1.8s ease-out backwards;
@@ -249,7 +239,7 @@
       .intro-section {
         max-width: 60vw;
         text-align: center;
-        margin: 8rem auto;
+        margin: 0 auto 6rem;
         padding: 0 3rem;
       }
 
@@ -271,7 +261,7 @@
       .about-section {
         max-width: 1400px;
         width: 100%;
-        margin: 10rem auto;
+        margin: 8rem auto;
         padding: 0 3rem;
       }
 
@@ -292,7 +282,7 @@
         -webkit-text-fill-color: transparent;
         background-clip: text;
         letter-spacing: 0.2em;
-        margin-bottom: 8rem;
+        margin-bottom: 6rem;
         text-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
       }
 
@@ -302,26 +292,19 @@
         grid-template-columns: 300px 1fr;
         gap: 5rem;
         align-items: center;
-        margin-bottom: 15rem;
+        margin-bottom: 12rem;
         padding: 5rem 4rem;
-        /* background: linear-gradient(
-          135deg,
-          rgba(74, 6, 6, 0.3) 0%,
-          rgba(143, 13, 13, 0.2) 50%,
-          rgba(74, 6, 6, 0.3) 100%
-        ); */
         background: linear-gradient(
           135deg,
           #000000 0%,
           #121212 20%,
           #242424 35%,
           #3a3a3a 46%,
-          /* #9e9e9e 50%, */ #3a3a3a 54%,
+          #3a3a3a 54%,
           #242424 68%,
           #121212 82%,
           #000000 100%
         );
-
         border: 2px solid var(--gold-dark);
         border-radius: 12px;
         box-shadow:
@@ -406,7 +389,7 @@
 
       .venture-tagline {
         font-family: 'Cinzel', serif;
-        font-size: 1.2rem;
+        font-size: 1.5rem;
         font-weight: 400;
         color: var(--gold-champagne);
         letter-spacing: 0.3em;
@@ -421,7 +404,7 @@
         gap: 1rem;
         margin-bottom: 2.5rem;
         font-family: 'Cormorant Garamond', serif;
-        font-size: 1.1rem;
+        font-size: 1.4rem;
         color: var(--gold-rich);
         letter-spacing: 0.05em;
       }
@@ -437,7 +420,7 @@
 
       .venture-description {
         font-family: 'Cormorant Garamond', serif;
-        font-size: 1.4rem;
+        font-size: 1.8rem;
         line-height: 2.2;
         color: var(--gold-champagne);
         letter-spacing: 0.03em;
@@ -449,7 +432,7 @@
       .navigation-section {
         max-width: 1400px;
         width: 100%;
-        margin: 12rem auto 4rem;
+        margin: 10rem auto 4rem;
         padding: 0 3rem;
         text-align: center;
       }
@@ -476,7 +459,7 @@
 
       .nav-section-intro {
         font-family: 'Cormorant Garamond', serif;
-        font-size: 1.5rem;
+        font-size: 1.9rem;
         line-height: 2.2;
         color: var(--gold-champagne);
         letter-spacing: 0.03em;
@@ -509,7 +492,7 @@
         text-decoration: none;
         color: var(--gold-champagne);
         font-family: 'Cinzel', serif;
-        font-size: 1.5rem;
+        font-size: 1.8rem;
         font-weight: 600;
         letter-spacing: 0.1em;
         text-align: center;
@@ -606,7 +589,7 @@
       .button-desc {
         display: block;
         font-family: 'Cormorant Garamond', serif;
-        font-size: 0.9rem;
+        font-size: 1.2rem;
         font-weight: 300;
         letter-spacing: 0.05em;
         margin-top: 0.5rem;
@@ -770,7 +753,7 @@
       .footer-text {
         color: var(--gold-rich);
         font-family: 'Cormorant Garamond', serif;
-        font-size: 0.95rem;
+        font-size: 1.1rem;
         letter-spacing: 0.05em;
       }
 
@@ -977,7 +960,6 @@
     </style>
   </head>
   <body>
-    <a href="index.html" class="exit" id="enterText">Main</a>
     <!-- Main Content -->
     <div class="main-content">
       <!-- Hero Welcome Section -->
