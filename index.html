@@ -67,6 +67,32 @@
       color: #000;
       box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
     }
+
+    /* Mobile Fix for The House of Kel Intro */
+@media (max-width: 768px) {
+  .welcome-static {
+    /* Shrinks that massive text so it fits on one line on phones */
+    font-size: 2.5rem; 
+    letter-spacing: 4px;
+    margin-bottom: 10px;
+  }
+
+  #castleLogo {
+    /* Zooms the video in on mobile so the castle stays the focal point */
+    width: 180%; 
+    transform: scale(1.1);
+  }
+
+  .enter-text {
+    font-size: 1rem;
+    padding: 8px 20px;
+  }
+}
+
+
+
+
+
   </style>
 </head>
 <body>
