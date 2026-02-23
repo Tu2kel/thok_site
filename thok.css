@@ -319,6 +319,10 @@ body::before {
 .venture-row.reverse {
   grid-template-columns: 1fr 300px;
 }
+#art {
+ 
+  
+}
 
 /* 1. The Container: Ensures the logo stays centered in its column */
 .venture-image {
@@ -349,7 +353,7 @@ body::before {
 }
 
 /* 4. Hover Effect: Keeps the zoom consistent for all logos */
-.venture-row:hover .venture-image img {
+.venture-row:hover .venture-image img{
   transform: scale(1.12);
 }
 
@@ -987,24 +991,22 @@ body::before {
   }
 }
 
-.featured-media {
-    justify-content: center;
-    padding: 60px 20px;
-    background: linear-gradient(to bottom, transparent, rgba(92, 10, 10, 0.2), transparent);
+.venture-row-full {
+    width: 100%;
+    margin: 40px 0;
 }
 
-.video-container {
+.video-hero-wrapper {
     position: relative;
-    padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+    padding-bottom: 56.25%; /* Force 16:9 Aspect Ratio */
     height: 0;
     overflow: hidden;
-    max-width: 800px;
-    margin: 30px auto;
-    border: 2px solid var(--gold); /* Keeps your gold theme */
-    box-shadow: 0 0 20px rgba(197, 160, 40, 0.3);
+    max-width: 100%; /* Makes it as wide as the text above it */
+    border: 1px solid #C5A028; /* Gold border to match your cards */
+    margin: 20px 0;
 }
 
-.video-container iframe {
+.video-hero-wrapper iframe {
     position: absolute;
     top: 0;
     left: 0;
