@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imperio SCC — Distributor Migration</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --imperial-red: #2a000a;
+    --metallic-black-sheen: linear-gradient(160deg,#2e2b32 0%,#1a1820 18%,#0e0d10 40%,#161418 60%,#1f1d23 80%,#111012 100%);
+    --gold-gradient: linear-gradient(to bottom,#cf972d 22%,#f9f295 45%,#e0aa3e 50%,#b8860b 55%,#f9f295 78%);
+    --gold-solid: #C9A84C;
+    --gold-border: rgba(201,168,76,0.2);
+    --alabaster: #F5F0E8;
+  }
+  body {
+    background: var(--imperial-red);
+    background-image: radial-gradient(ellipse at 15% 0%,rgba(240,0,45,.5) 0%,transparent 55%),
+                      radial-gradient(ellipse at 85% 100%,rgba(240,0,45,.35) 0%,transparent 50%);
+    min-height: 100vh;
+    font-family: 'Cormorant Garamond', serif;
+    color: var(--alabaster);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .card {
+    background: var(--metallic-black-sheen);
+    border: 1px solid var(--gold-border);
+    border-radius: 4px;
+    padding: 40px;
+    width: 100%;
+    max-width: 560px;
+  }
+  .eyebrow {
+    font-family: 'Cinzel', serif;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: rgba(201,168,76,0.5);
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    background: var(--gold-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: rgba(245,240,232,0.5);
+    margin-bottom: 32px;
+    line-height: 1.6;
+  }
+  .field { margin-bottom: 20px; }
+  label {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-solid);
+    margin-bottom: 8px;
+  }
+  input {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--gold-border);
+    border-radius: 2px;
+    padding: 10px 14px;
+    color: var(--alabaster);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus { border-color: var(--gold-solid); }
+  .btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--gold-gradient);
+    border: none;
+    border-radius: 2px;
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #1a0005;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .log {
+    margin-top: 24px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--gold-border);
+    border-radius: 2px;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.8;
+    min-height: 80px;
+    display: none;
+  }
+  .log.visible { display: block; }
+  .log-line { margin-bottom: 4px; }
+  .ok   { color: #6fcf97; }
+  .err  { color: #eb5757; }
+  .info { color: rgba(245,240,232,0.55); }
+  .warn { color: var(--gold-solid); }
+  .divider {
+    display: flex; align-items: center; gap: 14px;
+    margin: 28px 0;
+  }
+  .divider-line { flex:1; height:1px; background: linear-gradient(to right,transparent,var(--gold-solid),transparent); opacity:0.2; }
+  .divider-diamond { width:5px; height:5px; background:var(--gold-solid); transform:rotate(45deg); flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="eyebrow">Imperio SCC · One-Time Migration</div>
+  <h1>Seed Distributors → MongoDB</h1>
+  <p class="subtitle">
+    Loads all distributors from the flat <code>distributors.js</code> array into the
+    <code>scc_db.distributors</code> MongoDB collection. Skips any that already exist.
+    Run once — safe to re-run.
+  </p>
+
+  <div class="field">
+    <label>Netlify Function Base URL</label>
+    <input type="text" id="baseUrl" placeholder="https://your-site.netlify.app" />
+  </div>
+
+  <button class="btn" id="migrateBtn" onclick="runMigration()">
+    ◆ Migrate Distributors to MongoDB
+  </button>
+
+  <div class="log" id="log"></div>
+</div>
+
+<!-- Load the existing flat distributor array from the SCC app -->
+<script src="./scc/distributors.js"></script>
+
+<script>
+  function log(msg, type = 'info') {
+    const el = document.getElementById('log');
+    el.classList.add('visible');
+    const line = document.createElement('div');
+    line.className = `log-line ${type}`;
+    line.textContent = msg;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  async function runMigration() {
+    const baseUrl = document.getElementById('baseUrl').value.trim().replace(/\/$/, '');
+    if (!baseUrl) { log('Enter the Netlify base URL first.', 'err'); return; }
+
+    const btn = document.getElementById('migrateBtn');
+    btn.disabled = true;
+    document.getElementById('log').innerHTML = '';
+
+    // Pull distributors from the loaded SCC_DIST global
+    const records = window.SCC_DIST?.DISTRIBUTORS;
+    if (!Array.isArray(records) || records.length === 0) {
+      log('SCC_DIST.DISTRIBUTORS not found — make sure distributors.js loaded correctly.', 'err');
+      btn.disabled = false;
+      return;
+    }
+
+    log(`Found ${records.length} distributors in flat array.`, 'info');
+    log('Sending to MongoDB via scc-distributors function...', 'info');
+
+    try {
+      const res = await fetch(`${baseUrl}/.netlify/functions/scc-distributors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'distSeedFromArray',
+          payload: { records }
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        log(`Error: ${data.error || res.statusText}`, 'err');
+        btn.disabled = false;
+        return;
+      }
+
+      const { inserted, skipped } = data.result;
+      log(`Migration complete.`, 'ok');
+      log(`  Inserted: ${inserted}`, 'ok');
+      log(`  Skipped (already existed): ${skipped}`, 'warn');
+      log('distributors collection is live in MongoDB.', 'ok');
+      log('You can now delete this file — it is not needed again.', 'info');
+
+    } catch (err) {
+      log(`Network error: ${err.message}`, 'err');
+    }
+
+    btn.disabled = false;
+  }
+</script>
+
+</body>
+</html>

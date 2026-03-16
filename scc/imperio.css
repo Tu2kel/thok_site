@@ -1070,12 +1070,13 @@ td.iname {
 }
 
 .sol-link {
+  color: var(--accent-blue);
   font-size: 15px;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
   transition: filter 0.2s;
-  background: linear-gradient(
+  /* background: linear-gradient(
     180deg,
     #a8f0c6 0%,
     #3ddc84 25%,
@@ -1088,9 +1089,9 @@ td.iname {
   background-clip: text;
   font-weight: 600;
   letter-spacing: 0.04em;
-}
-.sol-link:hover {
-  filter: brightness(1.3);
+} */
+  /* .sol-link:hover {
+  filter: brightness(1.3); */
 }
 
 /* ── TOAST ── */
@@ -1623,17 +1624,7 @@ td.iname {
 
 /* Sol links (green gradient text) — darken on light */
 [data-theme="light"] .sol-link {
-  background: linear-gradient(
-    180deg,
-    #0d6a30 0%,
-    #0a5228 25%,
-    #083d20 55%,
-    #062a15 80%,
-    #0a5228 100%
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent-blue);
 }
 [data-theme="light"] .source-search-panel,
 [data-theme="light"] [style*="background:rgba(0,0,0,.25)"],

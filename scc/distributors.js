@@ -1,1251 +1,238 @@
 (function () {
   // ═══════════════════════════════════════════════════════════════════════
-  //  IMPERIO SCC — DISTRIBUTOR DATABASE + SOURCE ENGINE
-  //  120 vendors · 47 FSC lanes mapped · Tier + friction scoring
+  //  IMPERIO SCC — DISTRIBUTOR DATABASE
+  //  MongoDB-backed · In-memory cache · Same SCC_DIST API as before
+  //  source.js calls scoreAndRank / getDistsByFSC synchronously — those
+  //  read from _cache which is populated on init via Mongo fetch.
   // ═══════════════════════════════════════════════════════════════════════
 
-  // ── ALL KEYS ARE STRINGS — FSC values from records arrive as strings ──
+  const FUNC_URL = "/.netlify/functions/scc-distributors";
+
+  // ── Internal cache (populated from MongoDB on load) ───────────────────
+  let _cache      = [];   // full distributor array
+  let _fscMap     = {};   // fsc → [id, id, ...]  rebuilt from cache
+  let _ready      = false;
+  let _readyCbs   = [];
+
+  function onReady(cb) {
+    if (_ready) { cb(); return; }
+    _readyCbs.push(cb);
+  }
+  function _setReady() {
+    _ready = true;
+    _readyCbs.forEach(cb => cb());
+    _readyCbs = [];
+  }
+
+  // ── Rebuild FSC_DIST_MAP from live cache ──────────────────────────────
+  function _rebuildFscMap() {
+    const map = {};
+    _cache.forEach(d => {
+      (d.fsc || []).forEach(code => {
+        if (!map[code]) map[code] = [];
+        if (!map[code].includes(d.id)) map[code].push(d.id);
+      });
+    });
+    _fscMap = map;
+  }
+
+  // ── API call helper ───────────────────────────────────────────────────
+  async function _call(action, payload = {}) {
+    const res = await fetch(FUNC_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ action, payload }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "scc-distributors error");
+    return data.result;
+  }
+
+  // ── Initialize: load all from Mongo into cache ────────────────────────
+  async function _init() {
+    try {
+      const records = await _call("distGetAll");
+      if (Array.isArray(records) && records.length > 0) {
+        _cache = records;
+        _rebuildFscMap();
+        console.log(`[SCC_DIST] Loaded ${_cache.length} distributors from MongoDB.`);
+      } else {
+        console.warn("[SCC_DIST] MongoDB returned empty — check collection or run migration.");
+      }
+    } catch (err) {
+      console.error("[SCC_DIST] Failed to load from MongoDB:", err.message);
+    }
+    _setReady();
+  }
+
+  // ── FSC lane labels ───────────────────────────────────────────────────
   const FSC_LANES_MAP = {
-    5305: "Screws & Bolts",
-    5306: "Bolts",
-    5310: "Nuts & Washers",
-    5315: "Pins & Rivets",
-    5320: "Rivets",
-    5340: "Hardware & Chain",
-    5360: "Springs",
-    5365: "Rings & Spacers",
-    5855: "Night Vision",
-    6610: "Instruments & Navigation (Avionics / ELT)",
-    5961: "Semiconductors",
-    5962: "Microelectronics",
-    5935: "Connectors",
-    5905: "Resistors",
-    5975: "Electrical Hardware",
-    5998: "PCBs",
-    6150: "Wire & Cable",
-    6510: "Medical/Surgical",
-    6515: "Medical/EMS/Field",
-    6520: "Dental",
-    6530: "Hospital Furniture",
-    6810: "Chemicals",
-    6840: "Pest Control",
-    6850: "Chemical Products",
-    7110: "Office Furniture",
-    7125: "Storage/Shelving",
-    7930: "Cleaning Compounds",
-    8030: "Adhesives",
-    8040: "Sealants",
-    8115: "Boxes/Cartons",
-    8415: "Individual Equipment",
-    8430: "Footwear",
-    8455: "Badges & Insignia",
-    8465: "Carrying Equipment",
-    8470: "Armor",
-    8520: "Toiletries",
-    9150: "Oils & Greases",
-    9510: "Iron & Steel",
-    9520: "Steel Materials",
-    9535: "Metal Bar/Sheet",
-    1005: "Guns Through 30mm",
-    1095: "Misc Weapons",
-    4240: "Safety/Rescue PPE",
-    4730: "Hose/Pipe/Fittings",
-    5110: "Hand Tools",
-    5120: "Power Tools",
-    4910: "Shop Equipment",
-    4940: "Maintenance Equipment",
+    "5305": "Screws & Bolts",    "5306": "Bolts",
+    "5310": "Nuts & Washers",    "5315": "Pins & Rivets",
+    "5320": "Rivets",            "5340": "Hardware & Chain",
+    "5360": "Springs",           "5365": "Rings & Spacers",
+    "5855": "Night Vision",      "5961": "Semiconductors",
+    "5962": "Microelectronics",  "5935": "Connectors",
+    "5905": "Resistors",         "5975": "Electrical Hardware",
+    "5998": "PCBs",              "6150": "Wire & Cable",
+    "6510": "Medical/Surgical",  "6515": "Medical/EMS/Field",
+    "6520": "Dental",            "6530": "Hospital Furniture",
+    "6810": "Chemicals",         "6840": "Pest Control",
+    "6850": "Chemical Products", "7110": "Office Furniture",
+    "7125": "Storage/Shelving",  "7930": "Cleaning Compounds",
+    "8030": "Adhesives",         "8040": "Sealants",
+    "8115": "Boxes/Cartons",     "8415": "Individual Equipment",
+    "8430": "Footwear",          "8455": "Badges & Insignia",
+    "8465": "Carrying Equipment","8470": "Armor",
+    "8520": "Toiletries",        "9150": "Oils & Greases",
+    "9510": "Iron & Steel",      "9520": "Steel Materials",
+    "9535": "Metal Bar/Sheet",   "1005": "Guns Through 30mm",
+    "1095": "Misc Weapons",      "4240": "Safety/Rescue PPE",
+    "4730": "Hose/Pipe/Fittings","5110": "Hand Tools",
+    "5120": "Power Tools",       "4910": "Shop Equipment",
+    "4940": "Maintenance Equipment",
   };
 
-  const DISTRIBUTORS = [
-    // ── INDUSTRIAL / MRO ──
-    {
-      id: "grainger",
-      name: "Grainger",
-      tier: 1,
-      fsc: [
-        "5305",
-        "5310",
-        "5340",
-        "4240",
-        "5110",
-        "5120",
-        "7930",
-        "6150",
-        "8030",
-        "4910",
-        "4940",
-      ],
-      search_url: "https://www.grainger.com/search?searchQuery=",
-      friction: "low",
-      tags: ["industrial", "mro", "safety", "tools"],
-      part_prefixes: [],
-    },
-    {
-      id: "fastenal",
-      name: "Fastenal",
-      tier: 1,
-      fsc: ["5305", "5306", "5310", "5315", "5320", "5340"],
-      search_url: "https://www.fastenal.com/products/search?searchTerm=",
-      friction: "low",
-      tags: ["fasteners", "industrial"],
-      part_prefixes: [],
-    },
-    {
-      id: "msc",
-      name: "MSC Industrial",
-      tier: 1,
-      fsc: ["5110", "5120", "5305", "5340", "4910"],
-      search_url: "https://www.mscdirect.com/browse/tn/?searchterm=",
-      friction: "low",
-      tags: ["industrial", "tools", "mro"],
-      part_prefixes: [],
-    },
-    {
-      id: "mcmaster",
-      name: "McMaster-Carr",
-      tier: 1,
-      fsc: ["5305", "5310", "5340", "5330", "5365", "4730"],
-      search_url: "https://www.mcmaster.com/#",
-      friction: "low",
-      tags: ["fasteners", "hardware", "industrial"],
-      part_prefixes: [],
-    },
-    {
-      id: "zoro",
-      name: "Zoro",
-      tier: 2,
-      fsc: ["5305", "5310", "5340", "4240", "7930"],
-      search_url: "https://www.zoro.com/search?q=",
-      friction: "low",
-      tags: ["industrial", "mro"],
-      part_prefixes: [],
-    },
-    {
-      id: "motion",
-      name: "Motion Industries",
-      tier: 2,
-      fsc: ["4730", "5340", "4910"],
-      search_url: "https://www.motionindustries.com/search?searchString=",
-      friction: "medium",
-      tags: ["bearings", "power transmission"],
-      part_prefixes: [],
-    },
-    {
-      id: "applied",
-      name: "Applied Industrial",
-      tier: 2,
-      fsc: ["4730", "5340"],
-      search_url: "https://www.applied.com/store/search?term=",
-      friction: "medium",
-      tags: ["bearings", "industrial"],
-      part_prefixes: [],
-    },
-    {
-      id: "global_ind",
-      name: "Global Industrial",
-      tier: 2,
-      fsc: ["7110", "7125", "4240", "5110"],
-      search_url: "https://www.globalindustrial.com/g/?q=",
-      friction: "low",
-      tags: ["industrial", "furniture", "safety"],
-      part_prefixes: [],
-    },
-    {
-      id: "hd_supply",
-      name: "HD Supply",
-      tier: 2,
-      fsc: ["7930", "7110", "4240"],
-      search_url: "https://www.hdsupply.com/search?q=",
-      friction: "low",
-      tags: ["janitorial", "maintenance"],
-      part_prefixes: [],
-    },
-    // ── FASTENERS ──
-    {
-      id: "kanebridge",
-      name: "Kanebridge",
-      tier: 1,
-      fsc: ["5305", "5306", "5310", "5315", "5320", "5340"],
-      search_url: "https://www.kanebridge.com/search?q=",
-      friction: "low",
-      tags: ["fasteners", "mil-spec", "nsn"],
-      part_prefixes: ["MS", "NAS", "AN", "BAC"],
-      known_nsns: [],
-    },
-    {
-      id: "efi",
-      name: "Electronic Fasteners",
-      tier: 1,
-      fsc: ["5305", "5310", "5315", "5320"],
-      search_url: "https://www.electronicfasteners.com/search?q=",
-      friction: "low",
-      tags: ["fasteners", "mil-spec"],
-      part_prefixes: ["MS", "NAS", "AN"],
-    },
-    {
-      id: "brighton",
-      name: "Brighton Best",
-      tier: 2,
-      fsc: ["5305", "5310", "5315", "5320"],
-      search_url: "https://www.brightonbest.com/search?q=",
-      friction: "medium",
-      tags: ["fasteners"],
-      part_prefixes: [],
-    },
-    {
-      id: "kd_fast",
-      name: "KD Fasteners",
-      tier: 2,
-      fsc: ["5305", "5310"],
-      search_url: "https://www.kdfasteners.com/search?q=",
-      friction: "medium",
-      tags: ["fasteners", "mil-spec"],
-      part_prefixes: ["MS"],
-    },
-    {
-      id: "wurth",
-      name: "Würth",
-      tier: 2,
-      fsc: ["5305", "5310", "5315", "5340"],
-      search_url: "https://www.wurth.com/us/en/search?query=",
-      friction: "medium",
-      tags: ["fasteners", "automotive"],
-      part_prefixes: [],
-    },
-    {
-      id: "bay_supply",
-      name: "Bay Supply",
-      tier: 2,
-      fsc: ["5305", "5310", "5315", "5320"],
-      search_url: "https://www.baysupply.com/search?q=",
-      friction: "medium",
-      tags: ["fasteners", "aerospace"],
-      part_prefixes: ["MS", "NAS"],
-    },
-    {
-      id: "bossard",
-      name: "Bossard",
-      tier: 2,
-      fsc: ["5305", "5310", "5315"],
-      search_url: "https://www.bossard.com/global/en/search/?q=",
-      friction: "medium",
-      tags: ["fasteners"],
-      part_prefixes: [],
-    },
-    {
-      id: "field_fast",
-      name: "Field Fastener",
-      tier: 2,
-      fsc: ["5305", "5310"],
-      search_url: "https://www.fieldfastener.com/search?q=",
-      friction: "medium",
-      tags: ["fasteners"],
-      part_prefixes: [],
-    },
-    {
-      id: "endries",
-      name: "Endries International",
-      tier: 2,
-      fsc: ["5305", "5310", "5315"],
-      search_url: "https://www.endries.com/search?q=",
-      friction: "medium",
-      tags: ["fasteners"],
-      part_prefixes: [],
-    },
-    {
-      id: "penn_eng",
-      name: "PennEngineering",
-      tier: 2,
-      fsc: ["5305", "5315"],
-      search_url: "https://www.pemnet.com/fastening_products/search.cfm?q=",
-      friction: "medium",
-      tags: ["fasteners", "inserts"],
-      part_prefixes: ["PEM"],
-    },
-    {
-      id: "bolt_depot",
-      name: "Bolt Depot",
-      tier: 3,
-      fsc: ["5305", "5310"],
-      search_url: "https://www.boltdepot.com/fastener_search.aspx?q=",
-      friction: "low",
-      tags: ["fasteners"],
-      part_prefixes: [],
-    },
-    {
-      id: "albany_co",
-      name: "Albany County Fasteners",
-      tier: 3,
-      fsc: ["5305", "5310"],
-      search_url: "https://www.albanycountyfasteners.com/search.asp?q=",
-      friction: "low",
-      tags: ["fasteners"],
-      part_prefixes: [],
-    },
-    {
-      id: "advance_comp",
-      name: "Advance Components",
-      tier: 2,
-      fsc: ["5305", "5310", "5315", "5935"],
-      search_url: "https://www.advancecomponents.com/search?q=",
-      friction: "medium",
-      tags: ["fasteners", "mil-spec"],
-      part_prefixes: ["MS"],
-    },
-    // ── MEDICAL / EMS ──
-    {
-      id: "medline",
-      name: "Medline",
-      tier: 1,
-      fsc: ["6510", "6515", "6520", "6530", "8520"],
-      search_url: "https://www.medline.com/pages/search/results?q=",
-      friction: "low",
-      tags: ["medical", "ems", "hospital"],
-      part_prefixes: ["MDS", "MED"],
-      known_nsns: [],
-    },
-    {
-      id: "bound_tree",
-      name: "Bound Tree Medical",
-      tier: 1,
-      fsc: ["6515", "6510"],
-      search_url: "https://www.boundtree.com/catalogsearch/result/?q=",
-      friction: "low",
-      tags: ["ems", "medical", "field"],
-      part_prefixes: ["BT"],
-    },
-    {
-      id: "nar",
-      name: "North American Rescue",
-      tier: 1,
-      fsc: ["6515", "4240"],
-      search_url: "https://www.narescue.com/search?type=product&q=",
-      friction: "low",
-      tags: ["tactical-medical", "tccc", "ifak"],
-      part_prefixes: ["NAR"],
-    },
-    {
-      id: "cardinal",
-      name: "Cardinal Health",
-      tier: 1,
-      fsc: ["6510", "6515", "6520", "6530"],
-      search_url:
-        "https://www.cardinalhealth.com/en/medical-supplies/search.html?searchTerm=",
-      friction: "medium",
-      tags: ["medical", "hospital"],
-      part_prefixes: ["CAH", "8888"],
-    },
-    {
-      id: "mckesson",
-      name: "McKesson",
-      tier: 1,
-      fsc: ["6510", "6515", "6520"],
-      search_url: "https://mms.mckesson.com/product/search?q=",
-      friction: "medium",
-      tags: ["medical", "hospital", "distribution"],
-      part_prefixes: [],
-    },
-    {
-      id: "henry_schein",
-      name: "Henry Schein",
-      tier: 2,
-      fsc: ["6515", "6520", "6510"],
-      search_url: "https://www.henryschein.com/us-en/search.aspx?q=",
-      friction: "medium",
-      tags: ["medical", "dental"],
-      part_prefixes: [],
-    },
-    {
-      id: "dynarex",
-      name: "Dynarex",
-      tier: 2,
-      fsc: ["6515", "6510", "4240"],
-      search_url: "https://www.dynarex.com/search?q=",
-      friction: "medium",
-      tags: ["medical", "disposables"],
-      part_prefixes: ["DYND"],
-    },
-    {
-      id: "hh_medical",
-      name: "H&H Medical",
-      tier: 1,
-      fsc: ["6515", "4240"],
-      search_url: "https://www.hhmedical.com/search?q=",
-      friction: "low",
-      tags: ["tactical-medical", "combat"],
-      part_prefixes: ["HH"],
-    },
-    {
-      id: "rescue_essentials",
-      name: "Rescue Essentials",
-      tier: 2,
-      fsc: ["6515", "4240"],
-      search_url: "https://www.rescue-essentials.com/search.php?search_query=",
-      friction: "low",
-      tags: ["tactical-medical", "ifak"],
-      part_prefixes: [],
-    },
-    {
-      id: "chinook_med",
-      name: "Chinook Medical",
-      tier: 2,
-      fsc: ["6515", "4240"],
-      search_url: "https://www.chinookmed.com/search?type=product&q=",
-      friction: "medium",
-      tags: ["tactical-medical", "military"],
-      part_prefixes: [],
-    },
-    {
-      id: "owens_minor",
-      name: "Owens & Minor",
-      tier: 2,
-      fsc: ["6510", "6515"],
-      search_url: "https://www.owens-minor.com/",
-      friction: "high",
-      tags: ["medical", "hospital"],
-      part_prefixes: [],
-    },
-    {
-      id: "galls",
-      name: "Galls",
-      tier: 2,
-      fsc: ["6515", "4240", "8415", "8465"],
-      search_url: "https://www.galls.com/search?q=",
-      friction: "low",
-      tags: ["tactical", "law-enforcement", "ems"],
-      part_prefixes: [],
-    },
-    // ── ELECTRONICS ──
-    {
-      id: "mouser",
-      name: "Mouser Electronics",
-      tier: 1,
-      fsc: ["5961", "5962", "5935", "5905", "5975"],
-      search_url: "https://www.mouser.com/c/?q=",
-      friction: "low",
-      tags: ["electronics", "components"],
-      part_prefixes: [],
-    },
-    {
-      id: "digikey",
-      name: "DigiKey",
-      tier: 1,
-      fsc: ["5961", "5962", "5935", "5905", "5975", "5998"],
-      search_url: "https://www.digikey.com/en/products/result?keywords=",
-      friction: "low",
-      tags: ["electronics", "components"],
-      part_prefixes: [],
-    },
-    {
-      id: "arrow",
-      name: "Arrow Electronics",
-      tier: 1,
-      fsc: ["5961", "5962", "5935", "5905"],
-      search_url: "https://www.arrow.com/en/search?q=",
-      friction: "medium",
-      tags: ["electronics", "distribution"],
-      part_prefixes: [],
-    },
-    {
-      id: "avnet",
-      name: "Avnet",
-      tier: 1,
-      fsc: ["5961", "5962", "5935"],
-      search_url: "https://www.avnet.com/shop/us/search/all/all?q=",
-      friction: "medium",
-      tags: ["electronics", "distribution"],
-      part_prefixes: [],
-    },
-    {
-      id: "rochester",
-      name: "Rochester Electronics",
-      tier: 2,
-      fsc: ["5961", "5962"],
-      search_url: "https://www.rocelec.com/search?q=",
-      friction: "medium",
-      tags: ["electronics", "obsolete"],
-      part_prefixes: [],
-    },
-    {
-      id: "newark",
-      name: "Newark",
-      tier: 2,
-      fsc: ["5961", "5935", "5905", "5975", "6150"],
-      search_url: "https://www.newark.com/search?st=",
-      friction: "low",
-      tags: ["electronics", "industrial"],
-      part_prefixes: [],
-    },
-    {
-      id: "heilind",
-      name: "Heilind Electronics",
-      tier: 2,
-      fsc: ["5935", "5961"],
-      search_url: "https://www.heilind.com/search?q=",
-      friction: "medium",
-      tags: ["connectors", "electronics"],
-      part_prefixes: [],
-    },
-    {
-      id: "tti",
-      name: "TTI Inc",
-      tier: 2,
-      fsc: ["5961", "5905", "5935"],
-      search_url: "https://www.ttiinc.com/page/search-results?q=",
-      friction: "medium",
-      tags: ["electronics", "passives"],
-      part_prefixes: [],
-    },
-    {
-      id: "pei_genesis",
-      name: "PEI-Genesis",
-      tier: 2,
-      fsc: ["5935", "5975"],
-      search_url: "https://www.peigenesis.com/en/search?q=",
-      friction: "medium",
-      tags: ["connectors", "mil-spec"],
-      part_prefixes: ["MS", "MIL"],
-    },
-    {
-      id: "galco",
-      name: "Galco Industrial",
-      tier: 2,
-      fsc: ["5961", "5975", "6150"],
-      search_url: "https://www.galco.com/search?q=",
-      friction: "medium",
-      tags: ["electronics", "industrial"],
-      part_prefixes: [],
-    },
-    // ── METALS ──
-    {
-      id: "tw_metals",
-      name: "TW Metals",
-      tier: 1,
-      fsc: ["9510", "9520", "9535"],
-      search_url: "https://www.twmetals.com/product-search?q=",
-      friction: "medium",
-      tags: ["metals", "aerospace"],
-      part_prefixes: [],
-    },
-    {
-      id: "alro",
-      name: "Alro Metals",
-      tier: 1,
-      fsc: ["9510", "9520", "9535"],
-      search_url: "https://www.alro.com/search?q=",
-      friction: "medium",
-      tags: ["metals", "steel", "aluminum"],
-      part_prefixes: [],
-    },
-    {
-      id: "ryerson",
-      name: "Ryerson",
-      tier: 1,
-      fsc: ["9510", "9520", "9535"],
-      search_url: "https://www.ryerson.com/search/?q=",
-      friction: "medium",
-      tags: ["metals", "steel"],
-      part_prefixes: [],
-    },
-    {
-      id: "online_metals",
-      name: "OnlineMetals",
-      tier: 2,
-      fsc: ["9510", "9520", "9535"],
-      search_url: "https://www.onlinemetals.com/en/search?q=",
-      friction: "low",
-      tags: ["metals", "cut-to-size"],
-      part_prefixes: [],
-    },
-    {
-      id: "metal_supermarkets",
-      name: "Metal Supermarkets",
-      tier: 2,
-      fsc: ["9510", "9520", "9535"],
-      search_url: "https://www.metalsupermarkets.com/find-products/?q=",
-      friction: "low",
-      tags: ["metals", "retail"],
-      part_prefixes: [],
-    },
-    {
-      id: "speedy_metals",
-      name: "Speedy Metals",
-      tier: 2,
-      fsc: ["9510", "9520"],
-      search_url: "https://www.speedymetals.com/search.aspx?q=",
-      friction: "low",
-      tags: ["metals"],
-      part_prefixes: [],
-    },
-    {
-      id: "texas_iron",
-      name: "Texas Iron & Metal",
-      tier: 2,
-      fsc: ["9510", "9520"],
-      search_url: "https://www.texasironandmetal.com/search?q=",
-      friction: "low",
-      tags: ["metals", "local-tx"],
-      part_prefixes: [],
-    },
-    // ── AVIATION / AEROSPACE ──
-    {
-      id: "aircraft_spruce",
-      name: "Aircraft Spruce",
-      tier: 1,
-      fsc: ["5305", "5310", "9510", "1005"],
-      search_url: "https://www.aircraftspruce.com/search/?q=",
-      friction: "low",
-      tags: ["aerospace", "aviation", "mil-spec"],
-      part_prefixes: ["AN", "MS", "NAS"],
-    },
-    {
-      id: "aviall",
-      name: "Aviall (Boeing)",
-      tier: 1,
-      fsc: ["5305", "5310", "5935", "9510"],
-      search_url: "https://www.aviall.com/en_US/products/search?q=",
-      friction: "high",
-      tags: ["aerospace", "aviation"],
-      part_prefixes: ["AN", "MS"],
-    },
-    {
-      id: "klx",
-      name: "KLX Aerospace",
-      tier: 1,
-      fsc: ["5305", "5310", "5315", "9510"],
-      search_url: "https://www.klxaerospace.com/search?q=",
-      friction: "high",
-      tags: ["aerospace"],
-      part_prefixes: ["AN", "MS", "NAS"],
-    },
-    {
-      id: "skygeek",
-      name: "SkyGeek",
-      tier: 2,
-      fsc: ["5305", "5310", "5340"],
-      search_url: "https://www.skygeek.com/search.php?search_query=",
-      friction: "low",
-      tags: ["aerospace", "aviation"],
-      part_prefixes: ["AN", "MS"],
-    },
-    {
-      id: "nsn_components",
-      name: "NSN Components",
-      tier: 2,
-      fsc: ["5305", "5310", "5340", "5935", "6515"],
-      search_url: "https://www.nsncomponents.com/search?q=",
-      friction: "medium",
-      tags: ["nsn", "mil-spec"],
-      part_prefixes: [],
-    },
-    {
-      id: "aerobase",
-      name: "AeroBase Group",
-      tier: 2,
-      fsc: ["5305", "5310", "5935"],
-      search_url: "https://www.aerobasegroup.com/search?q=",
-      friction: "medium",
-      tags: ["aerospace", "military"],
-      part_prefixes: ["AN", "MS"],
-    },
-    // ── AVIONICS / ELT (FSC 6610) ──
-    {
-      id: "acr_artex",
-      name: "ACR / Artex (OEM)",
-      tier: 1,
-      fsc: ["6610"],
-      search_url: "https://www.acrartex.com/",
-      friction: "medium",
-      tags: ["avionics", "elt", "oem", "6610"],
-      part_prefixes: ["453", "ACR", "ELT"],
-      email: "sales@acrartex.com",
-      phone: "954-981-3333",
-    },
-    {
-      id: "se_aerospace",
-      name: "Southeast Aerospace",
-      tier: 1,
-      fsc: ["6610"],
-      search_url: "https://www.seaerospace.com/",
-      friction: "low",
-      tags: ["avionics", "6610", "elt", "major-dist"],
-      part_prefixes: [],
-      email: "sales@seaerospace.com",
-      phone: "321-255-9877",
-    },
-    {
-      id: "chief_aircraft",
-      name: "Chief Aircraft",
-      tier: 1,
-      fsc: ["6610"],
-      search_url: "https://www.chiefaircraft.com/search.php?q=",
-      friction: "low",
-      tags: ["avionics", "elt", "6610"],
-      part_prefixes: [],
-      email: "sales@chiefaircraft.com",
-      phone: "",
-    },
-    {
-      id: "duncan_aviation",
-      name: "Duncan Aviation",
-      tier: 1,
-      fsc: ["6610"],
-      search_url: "https://www.duncanaviation.aero/parts/search?q=",
-      friction: "medium",
-      tags: ["avionics", "6610", "major-mro"],
-      part_prefixes: [],
-      email: "parts@duncanaviation.com",
-      phone: "",
-    },
-    {
-      id: "dallas_avionics",
-      name: "Dallas Avionics",
-      tier: 1,
-      fsc: ["6610"],
-      search_url: "https://www.dallasavionics.com/search?q=",
-      friction: "low",
-      tags: ["avionics", "6610", "mil-dist"],
-      part_prefixes: [],
-      email: "sales@dallasavionics.com",
-      phone: "",
-    },
-    {
-      id: "pacific_coast_av",
-      name: "Pacific Coast Avionics",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.pca.aero/search?q=",
-      friction: "low",
-      tags: ["avionics", "6610"],
-      part_prefixes: [],
-      email: "sales@pca.aero",
-      phone: "",
-    },
-    {
-      id: "avionics_source",
-      name: "Avionics Source",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.avionicssource.com/search?q=",
-      friction: "low",
-      tags: ["avionics", "6610"],
-      part_prefixes: [],
-      email: "sales@avionicssource.com",
-      phone: "",
-    },
-    {
-      id: "banyan_air",
-      name: "Banyan Air Service",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.banyanair.com/",
-      friction: "medium",
-      tags: ["avionics", "6610", "mro"],
-      part_prefixes: [],
-      email: "parts@banyanair.com",
-      phone: "",
-    },
-    {
-      id: "wings_wheels",
-      name: "Wings & Wheels",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.wingsandwheels.com/",
-      friction: "low",
-      tags: ["avionics", "6610"],
-      part_prefixes: [],
-      email: "sales@wingsandwheels.com",
-      phone: "800-231-3525",
-    },
-    {
-      id: "scross_aviation",
-      name: "S-Cross Aviation",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.scross.com/",
-      friction: "low",
-      tags: ["avionics", "6610"],
-      part_prefixes: [],
-      email: "sales@scross.com",
-      phone: "562-421-3400",
-    },
-    {
-      id: "skygeek_av",
-      name: "SkyGeek (Avionics)",
-      tier: 2,
-      fsc: ["6610", "5305", "5310", "5340"],
-      search_url: "https://www.skygeek.com/search.php?search_query=",
-      friction: "low",
-      tags: ["avionics", "aerospace", "6610"],
-      part_prefixes: [],
-      email: "sales@skygeek.com",
-      phone: "877-443-5735",
-    },
-    {
-      id: "rotor_svc_grp",
-      name: "Rotorcraft Services Group",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.rsgus.com/",
-      friction: "medium",
-      tags: ["avionics", "6610", "rotorcraft"],
-      part_prefixes: [],
-      email: "parts@rsgus.com",
-      phone: "",
-    },
-    {
-      id: "heli_parts_intl",
-      name: "Helicopter Parts Intl",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.heliparts.com/",
-      friction: "medium",
-      tags: ["avionics", "6610", "rotorcraft"],
-      part_prefixes: [],
-      email: "sales@heliparts.com",
-      phone: "",
-    },
-    {
-      id: "aero_performance",
-      name: "Aero Performance",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.aeroperformance.com/",
-      friction: "low",
-      tags: ["avionics", "6610", "aircraft-equipment"],
-      part_prefixes: [],
-      email: "sales@aeroperformance.com",
-      phone: "",
-    },
-    {
-      id: "sartech_eng",
-      name: "Sartech Engineering",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.sartech.com/",
-      friction: "medium",
-      tags: ["avionics", "6610", "elt", "survival"],
-      part_prefixes: [],
-      email: "info@sartech.com",
-      phone: "",
-    },
-    {
-      id: "global_avionics",
-      name: "Global Avionics",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.globalavionics.com/",
-      friction: "medium",
-      tags: ["avionics", "6610", "military"],
-      part_prefixes: [],
-      email: "sales@globalavionics.com",
-      phone: "",
-    },
-    {
-      id: "ai_supply",
-      name: "Avionics Intl Supply",
-      tier: 2,
-      fsc: ["6610"],
-      search_url: "https://www.aisupply.com/",
-      friction: "low",
-      tags: ["avionics", "6610"],
-      part_prefixes: [],
-      email: "sales@aisupply.com",
-      phone: "",
-    },
-    // ── ELECTRICAL / HVAC ──
-    {
-      id: "graybar",
-      name: "Graybar",
-      tier: 1,
-      fsc: ["5975", "6150", "5935"],
-      search_url:
-        "https://www.graybar.com/store/en/US/SearchDisplay?searchTerm=",
-      friction: "medium",
-      tags: ["electrical", "wire", "distribution"],
-      part_prefixes: [],
-    },
-    {
-      id: "wesco",
-      name: "WESCO",
-      tier: 1,
-      fsc: ["5975", "6150", "5935"],
-      search_url: "https://www.wesco.com/search?q=",
-      friction: "high",
-      tags: ["electrical", "industrial"],
-      part_prefixes: [],
-    },
-    {
-      id: "ferguson",
-      name: "Ferguson",
-      tier: 2,
-      fsc: ["4730", "4510"],
-      search_url: "https://www.ferguson.com/search#q=",
-      friction: "medium",
-      tags: ["plumbing", "hvac"],
-      part_prefixes: [],
-    },
-    // ── SAFETY / PPE ──
-    {
-      id: "mcr_safety",
-      name: "MCR Safety",
-      tier: 2,
-      fsc: ["4240"],
-      search_url: "https://www.mcrsafety.com/en/search#q=",
-      friction: "low",
-      tags: ["ppe", "safety", "gloves"],
-      part_prefixes: [],
-    },
-    {
-      id: "lakeland",
-      name: "Lakeland Industries",
-      tier: 2,
-      fsc: ["4240", "8415"],
-      search_url: "https://www.lakeland.com/search?q=",
-      friction: "medium",
-      tags: ["ppe", "protective-clothing"],
-      part_prefixes: [],
-    },
-    // ── JANITORIAL / CLEANING ──
-    {
-      id: "zep",
-      name: "Zep",
-      tier: 2,
-      fsc: ["7930", "6840", "6850"],
-      search_url: "https://www.zep.com/search?q=",
-      friction: "low",
-      tags: ["cleaning", "chemicals"],
-      part_prefixes: [],
-    },
-    {
-      id: "imperial_dade",
-      name: "Imperial Dade",
-      tier: 2,
-      fsc: ["7930", "8115"],
-      search_url: "https://www.imperialdade.com/search?q=",
-      friction: "medium",
-      tags: ["janitorial", "packaging"],
-      part_prefixes: [],
-    },
-    // ── PACKAGING ──
-    {
-      id: "uline",
-      name: "Uline",
-      tier: 1,
-      fsc: ["8115", "8135"],
-      search_url: "https://www.uline.com/catalog/search.asp?avail=1&q=",
-      friction: "low",
-      tags: ["packaging", "storage", "shipping"],
-      part_prefixes: ["S-"],
-    },
-    // ── CHEMICALS / ADHESIVES ──
-    {
-      id: "ellsworth",
-      name: "Ellsworth Adhesives",
-      tier: 2,
-      fsc: ["8030", "8040"],
-      search_url: "https://www.ellsworth.com/search/?q=",
-      friction: "medium",
-      tags: ["adhesives", "sealants"],
-      part_prefixes: [],
-    },
-    // ── TACTICAL / MIL GEAR ──
-    {
-      id: "galls_tac",
-      name: "Galls Tactical",
-      tier: 2,
-      fsc: ["8415", "8465", "8470", "4240"],
-      search_url: "https://www.galls.com/search?q=",
-      friction: "low",
-      tags: ["tactical", "military", "law-enforcement"],
-      part_prefixes: [],
-    },
-    // ── LOCAL / SMALL BIZ ──
-    {
-      id: "gms",
-      name: "GMS Industrial Supply",
-      tier: 1,
-      fsc: ["4910", "4940", "7930", "6840", "8520", "5305"],
-      search_url: "https://www.gmsindustrialsupply.com/nsn-list",
-      friction: "low",
-      tags: ["nsn", "local", "navy-approved", "dla-depot"],
-      part_prefixes: [],
-      notes: "LOCAL · Fredericksburg TX · GSA GS-07F-0369V · T-SHML approved",
-    },
-    {
-      id: "ace_biz",
-      name: "ACE Business Supplies",
-      tier: 2,
-      fsc: ["7110", "7125", "8415", "8455", "8465", "6515", "7930", "5961"],
-      search_url: "https://www.acebusinessupplies.com",
-      friction: "low",
-      tags: ["office", "rotc", "ppe", "toner", "govt-vendor"],
-      part_prefixes: [],
-      notes: "SDVOSB-friendly · CAGE 9CCS8 · Elk Grove CA · Gov contracted",
-    },
-    {
-      id: "gdp",
-      name: "Global Data Products",
-      tier: 2,
-      fsc: ["7045", "7025"],
-      search_url: "https://www.globaldataproducts.com",
-      friction: "low",
-      tags: ["toner", "office-tech", "gsa"],
-      part_prefixes: [],
-      notes: "GSA 47QTCA-19-D-00MM · CAGE 78LQ2 · Toner/supply specialist",
-    },
-  ];
-
-  // ── All FSC values are strings to match incoming record data ──────────
-  const FSC_DIST_MAP = {
-    5305: [
-      "kanebridge",
-      "efi",
-      "fastenal",
-      "grainger",
-      "msc",
-      "mcmaster",
-      "brighton",
-      "kd_fast",
-      "wurth",
-      "bay_supply",
-      "bossard",
-      "field_fast",
-      "endries",
-      "bolt_depot",
-      "albany_co",
-      "advance_comp",
-      "aircraft_spruce",
-      "skygeek",
-      "aerobase",
-      "aviall",
-    ],
-    5310: [
-      "kanebridge",
-      "efi",
-      "fastenal",
-      "grainger",
-      "msc",
-      "mcmaster",
-      "brighton",
-      "kd_fast",
-      "wurth",
-      "bay_supply",
-      "bossard",
-    ],
-    5315: [
-      "kanebridge",
-      "efi",
-      "fastenal",
-      "brighton",
-      "bay_supply",
-      "advance_comp",
-    ],
-    5320: ["kanebridge", "efi", "fastenal", "brighton"],
-    5340: [
-      "kanebridge",
-      "fastenal",
-      "grainger",
-      "msc",
-      "mcmaster",
-      "wurth",
-      "motion",
-      "applied",
-    ],
-    5935: [
-      "mouser",
-      "digikey",
-      "arrow",
-      "avnet",
-      "newark",
-      "heilind",
-      "pei_genesis",
-      "galco",
-      "advance_comp",
-      "aerobase",
-    ],
-    5961: [
-      "mouser",
-      "digikey",
-      "arrow",
-      "avnet",
-      "rochester",
-      "newark",
-      "tti",
-      "galco",
-    ],
-    5962: ["mouser", "digikey", "arrow", "avnet", "rochester", "tti"],
-    5975: ["graybar", "wesco", "newark", "galco"],
-    6150: ["graybar", "wesco", "newark"],
-    6510: ["medline", "cardinal", "mckesson", "henry_schein", "owens_minor"],
-    6515: [
-      "medline",
-      "bound_tree",
-      "nar",
-      "cardinal",
-      "mckesson",
-      "henry_schein",
-      "dynarex",
-      "hh_medical",
-      "rescue_essentials",
-      "chinook_med",
-      "owens_minor",
-      "galls",
-    ],
-    6520: ["medline", "cardinal", "henry_schein"],
-    7930: ["grainger", "hd_supply", "zep", "imperial_dade", "gms"],
-    8030: ["grainger", "ellsworth"],
-    8115: ["uline", "imperial_dade"],
-    8415: ["galls_tac", "galls", "lakeland", "ace_biz"],
-    8455: ["galls_tac", "ace_biz"],
-    8465: ["galls_tac", "galls", "ace_biz"],
-    8470: ["galls_tac"],
-    8520: ["medline", "gms"],
-    9510: [
-      "tw_metals",
-      "alro",
-      "ryerson",
-      "online_metals",
-      "metal_supermarkets",
-      "speedy_metals",
-      "texas_iron",
-    ],
-    9520: [
-      "tw_metals",
-      "alro",
-      "ryerson",
-      "online_metals",
-      "speedy_metals",
-      "texas_iron",
-    ],
-    9535: ["tw_metals", "alro", "ryerson", "online_metals"],
-    4240: ["grainger", "nar", "hh_medical", "galls", "mcr_safety", "lakeland"],
-    4730: ["mcmaster", "grainger", "motion", "applied", "ferguson"],
-    4910: ["grainger", "msc", "gms"],
-    4940: ["grainger", "gms"],
-    5110: ["grainger", "msc", "fastenal"],
-    5120: ["grainger", "msc"],
-    7110: ["global_ind", "ace_biz"],
-    7125: ["global_ind", "uline", "ace_biz"],
-    6840: ["zep", "gms"],
-    6850: ["zep"],
-    7045: ["gdp"],
-    6610: [
-      "acr_artex",
-      "se_aerospace",
-      "chief_aircraft",
-      "duncan_aviation",
-      "dallas_avionics",
-      "pacific_coast_av",
-      "avionics_source",
-      "banyan_air",
-      "wings_wheels",
-      "scross_aviation",
-      "skygeek_av",
-      "rotor_svc_grp",
-      "heli_parts_intl",
-      "aero_performance",
-      "sartech_eng",
-      "global_avionics",
-      "ai_supply",
-    ],
-  };
+  // ── Synchronous helpers (read from cache) ─────────────────────────────
 
   function getDistsByFSC(fsc) {
     const key = String(fsc);
-    const ids = FSC_DIST_MAP[key] || [];
+    const ids = _fscMap[key] || [];
     if (ids.length)
-      return ids
-        .map((id) => DISTRIBUTORS.find((d) => d.id === id))
-        .filter(Boolean);
-    // fallback: score all by fsc match
-    return DISTRIBUTORS.filter((d) => d.fsc.includes(key)).slice(0, 10);
+      return ids.map(id => _cache.find(d => d.id === id)).filter(Boolean);
+    return _cache.filter(d => (d.fsc || []).includes(key)).slice(0, 10);
   }
 
   function scoreAndRank(query, fsc, partNum) {
-    const fscKey = String(fsc || "");
+    const fscKey   = String(fsc || "");
     const hasInput = !!(fscKey || partNum || (query || "").trim());
     if (!hasInput) return [];
 
     const partPrefix = partNum
       ? partNum.toUpperCase().match(/^([A-Z]+)/)?.[1]
       : null;
-    const ALL_OPEN_TAG = "all-open";
 
-    return DISTRIBUTORS.map((d) => {
+    return _cache.map(d => {
       let score = 0;
       let relevanceHits = 0;
       const q = (query || "").toLowerCase().trim();
 
-      // ── FSC signals ──────────────────────────────────────────────
-      const fscMapIds = fscKey ? FSC_DIST_MAP[fscKey] || [] : [];
-      if (fscKey && fscMapIds.includes(d.id)) {
-        score += 150;
-        relevanceHits++;
-      }
-      if (fscKey && d.fsc && d.fsc.includes(fscKey)) {
-        score += 80;
-        relevanceHits++;
-      }
+      const fscMapIds = fscKey ? (_fscMap[fscKey] || []) : [];
+      if (fscKey && fscMapIds.includes(d.id))         { score += 150; relevanceHits++; }
+      if (fscKey && (d.fsc||[]).includes(fscKey))     { score += 80;  relevanceHits++; }
 
-      // ── Part prefix match ────────────────────────────────────────
-      if (
-        partNum &&
-        partPrefix &&
-        d.part_prefixes &&
-        d.part_prefixes.length > 0
-      ) {
-        if (
-          d.part_prefixes.some(
-            (p) => partPrefix === p || partPrefix.startsWith(p),
-          )
-        ) {
-          score += 180;
-          relevanceHits++;
+      if (partNum && partPrefix && (d.part_prefixes||[]).length > 0) {
+        if (d.part_prefixes.some(p => partPrefix === p || partPrefix.startsWith(p))) {
+          score += 180; relevanceHits++;
         }
       }
 
-      // ── Keyword match ────────────────────────────────────────────
+      // NSN match in known_nsns
+      if (query && (d.known_nsns||[]).includes(query.trim())) {
+        score += 200; relevanceHits++;
+      }
+
       if (q) {
-        if (d.name.toLowerCase().includes(q)) {
-          score += 60;
-          relevanceHits++;
-        }
-        if (d.tags && d.tags.some((t) => t.includes(q))) {
-          score += 35;
-          relevanceHits++;
-        }
-        if (d.id && d.id.toLowerCase().includes(q)) {
-          score += 25;
-          relevanceHits++;
-        }
+        if (d.name.toLowerCase().includes(q))                { score += 60; relevanceHits++; }
+        if ((d.tags||[]).some(t => t.includes(q)))           { score += 35; relevanceHits++; }
+        if ((d.id||"").toLowerCase().includes(q))            { score += 25; relevanceHits++; }
       }
 
-      // ── All-open tag ─────────────────────────────────────────────
-      if (!partNum && fscKey && d.tags && d.tags.includes(ALL_OPEN_TAG)) {
-        score += 20;
-        relevanceHits++;
+      if (!partNum && fscKey && (d.tags||[]).includes("all-open")) {
+        score += 20; relevanceHits++;
       }
 
-      // ── Tier & friction tiebreakers ──────────────────────────────
       if (relevanceHits > 0) {
-        if (d.tier === 1) score += 25;
-        if (d.friction === "low") score += 20;
-        if (d.friction === "medium") score += 7;
-        if (d.friction === "high") score -= 10;
+        if (d.tier === 1)             score += 25;
+        if (d.friction === "low")     score += 20;
+        if (d.friction === "medium")  score += 7;
+        if (d.friction === "high")    score -= 10;
       }
 
       return { ...d, score, relevanceHits };
     })
-      .filter((d) => d.relevanceHits > 0)
-      .sort((a, b) => b.score - a.score);
+    .filter(d => d.relevanceHits > 0)
+    .sort((a, b) => b.score - a.score);
   }
 
+  // ── Async write operations (used by intake tool / chat parser) ─────────
+
+  async function distSave(record) {
+    const result = await _call("distSave", { record });
+    // Update cache
+    const idx = _cache.findIndex(d => d.id === record.id);
+    if (idx >= 0) {
+      _cache[idx] = {
+        ..._cache[idx],
+        ...record,
+        known_nsns:    [...new Set([...(_cache[idx].known_nsns||[]), ...(record.known_nsns||[])])],
+        part_prefixes: [...new Set([...(_cache[idx].part_prefixes||[]), ...(record.part_prefixes||[])])],
+        fsc:           [...new Set([...(_cache[idx].fsc||[]), ...(record.fsc||[])])],
+        tags:          [...new Set([...(_cache[idx].tags||[]), ...(record.tags||[])])],
+      };
+    } else {
+      _cache.push(record);
+    }
+    _rebuildFscMap();
+    return result;
+  }
+
+  async function distBatch(records) {
+    const result = await _call("distBatch", { records });
+    // Reload cache from Mongo after batch
+    const fresh = await _call("distGetAll");
+    if (Array.isArray(fresh)) { _cache = fresh; _rebuildFscMap(); }
+    return result;
+  }
+
+  async function distAddNSN(id, nsn, part_numbers = []) {
+    const result = await _call("distAddNSN", { id, nsn, part_numbers });
+    // Patch cache
+    const d = _cache.find(x => x.id === id);
+    if (d) {
+      if (nsn && !d.known_nsns?.includes(nsn)) (d.known_nsns = d.known_nsns||[]).push(nsn);
+      part_numbers.forEach(p => { if (!(d.part_prefixes||[]).includes(p)) (d.part_prefixes=d.part_prefixes||[]).push(p); });
+    }
+    return result;
+  }
+
+  async function distDelete(id) {
+    const result = await _call("distDelete", { id });
+    _cache = _cache.filter(d => d.id !== id);
+    _rebuildFscMap();
+    return result;
+  }
+
+  async function distGetByNSN(nsn) {
+    return _call("distGetByNSN", { nsn });
+  }
+
+  async function distReloadCache() {
+    const fresh = await _call("distGetAll");
+    if (Array.isArray(fresh)) { _cache = fresh; _rebuildFscMap(); }
+    return _cache;
+  }
+
+  // ── Expose public API ─────────────────────────────────────────────────
   window.SCC_DIST = {
+    // Read — synchronous (from cache)
+    get DISTRIBUTORS()  { return _cache; },
+    get FSC_DIST_MAP()  { return _fscMap; },
     FSC_LANES_MAP,
-    DISTRIBUTORS,
-    FSC_DIST_MAP,
     getDistsByFSC,
     scoreAndRank,
+    onReady,
+
+    // Write — async (to MongoDB + cache)
+    distSave,
+    distBatch,
+    distAddNSN,
+    distDelete,
+    distGetByNSN,
+    distReloadCache,
   };
+
+  // ── Boot ──────────────────────────────────────────────────────────────
+  _init();
+
 })();
