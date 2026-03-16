@@ -1,0 +1,806 @@
+(function () {
+  // ═══════════════════════════════════════════════════════════════════════
+  //  IMPERIO SCC — APP ROOT
+  //  Pre-compiled React · No Babel · No JSX
+  //  All modules loaded via index.html script tags before this file.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const {
+    createElement: hA,
+    useState,
+    useEffect,
+    useCallback,
+    Fragment: AFrag,
+  } = React;
+
+  // ── TOAST ────────────────────────────────────────────────────────────
+  function Toast({ msg, err }) {
+    return hA(
+      "div",
+      {
+        className: "toast show",
+        style: {
+          borderColor: err ? "#e74c3c" : "rgba(201,168,76,.45)",
+          color: err ? "#e74c3c" : "#C9A84C",
+        },
+      },
+      msg,
+    );
+  }
+
+  // ── ARCHIVE TAB ──────────────────────────────────────────────────────
+  function ArchiveTab({ showToast, onRestored }) {
+    const { dbGetArchive, dbRestoreFromArchive, dbDeleteFromArchive } =
+      window.SCC_DB;
+    const { fmt, TIER_MARGINS, calcBidMath } = window.SCC_MATH;
+
+    const [rows, setRows] = useState([]);
+    const [search, setSearch] = useState("");
+
+    useEffect(() => {
+      dbGetArchive().then(setRows);
+    }, []);
+
+    const handleRestore = async (sol_number) => {
+      if (!confirm("Restore " + sol_number + " to active pipeline?")) return;
+      await dbRestoreFromArchive(sol_number);
+      setRows((r) => r.filter((x) => x.sol_number !== sol_number));
+      showToast(sol_number + " restored to pipeline");
+      if (onRestored) onRestored();
+    };
+
+    const handleDelete = async (sol_number) => {
+      if (
+        !confirm(
+          "Permanently delete " +
+            sol_number +
+            " from archive?\n\nThis cannot be undone.",
+        )
+      )
+        return;
+      await dbDeleteFromArchive(sol_number);
+      setRows((r) => r.filter((x) => x.sol_number !== sol_number));
+      showToast(sol_number + " permanently deleted");
+    };
+
+    const filtered = rows.filter((r) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        (r.sol_number || "").toLowerCase().includes(q) ||
+        (r.item_name || "").toLowerCase().includes(q) ||
+        (r.nsn || "").includes(q) ||
+        (r.fsc || "").includes(q) ||
+        (r.ref_part_number || "").toLowerCase().includes(q)
+      );
+    });
+
+    return hA(
+      "div",
+      { style: { animation: "fadeUp .5s ease both" } },
+
+      // ── Header ──
+      hA(
+        "div",
+        { className: "pipe-header" },
+        hA(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "4px" } },
+          hA("div", { className: "pipe-title" }, "Archive"),
+          hA(
+            "div",
+            {
+              style: {
+                fontFamily: "Cormorant Garamond,serif",
+                fontSize: "14px",
+                fontStyle: "italic",
+                color: "var(--body-faint)",
+              },
+            },
+            "Expired & closed solicitations — intel preserved, NSN data permanent",
+          ),
+        ),
+        hA(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "12px" } },
+          hA("input", {
+            value: search,
+            onChange: (e) => setSearch(e.target.value),
+            placeholder: "Search sol #, item, NSN, FSC, part…",
+            style: {
+              padding: "8px 14px",
+              background: "var(--inset-bg)",
+              border: "1px solid rgba(201,168,76,.2)",
+              color: "var(--alabaster)",
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "12px",
+              outline: "none",
+              width: "280px",
+              letterSpacing: ".04em",
+            },
+          }),
+          hA(
+            "div",
+            {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: "10px",
+                letterSpacing: ".14em",
+                color: "var(--gold-dim)",
+                textTransform: "uppercase",
+                padding: "6px 14px",
+                border: "1px solid rgba(201,168,76,.12)",
+                background: "rgba(201,168,76,.04)",
+              },
+            },
+            filtered.length + " record" + (filtered.length !== 1 ? "s" : ""),
+          ),
+        ),
+      ),
+
+      // ── Empty state ──
+      filtered.length === 0 &&
+        hA(
+          "div",
+          { className: "empty" },
+          rows.length === 0
+            ? "No archived solicitations yet — use ⬇ Arc on any pipeline row to preserve it here."
+            : 'No records match "' + search + '".',
+        ),
+
+      // ── Archive table ──
+      filtered.length > 0 &&
+        hA(
+          "div",
+          { className: "tbl-wrap" },
+          hA(
+            "table",
+            null,
+            hA(
+              "thead",
+              null,
+              hA(
+                "tr",
+                null,
+                hA("th", null, "Sol Number"),
+                hA("th", null, "Item"),
+                hA("th", null, "NSN"),
+                hA("th", null, "FSC"),
+                hA("th", null, "Part #"),
+                hA("th", null, "Qty"),
+                hA("th", null, "Gov Ref $"),
+                hA("th", null, "Ext Price"),
+                hA("th", null, "Est Net $"),
+                hA("th", null, "Quote Due"),
+                hA("th", null, "Archived"),
+                hA("th", null, "Reason"),
+                hA("th", null, "Notes"),
+                hA("th", null, "Actions"),
+              ),
+            ),
+            hA(
+              "tbody",
+              null,
+              ...filtered.map((r) => {
+                const qty = parseFloat(r.quantity) || 1;
+                const govUnit = parseFloat(r.unit_price) || 0;
+                const tier = r.tier || "Standard";
+                const costUnit = r.supplier_quote_price
+                  ? parseFloat(r.supplier_quote_price)
+                  : govUnit * 0.7;
+                const m = calcBidMath(
+                  costUnit,
+                  qty,
+                  TIER_MARGINS[tier] || 0.3,
+                  0,
+                  0,
+                  0,
+                );
+
+                return hA(
+                  "tr",
+                  {
+                    key: r.sol_number,
+                    style: { opacity: ".72", transition: "opacity .15s" },
+                    onMouseEnter: (e) => (e.currentTarget.style.opacity = "1"),
+                    onMouseLeave: (e) =>
+                      (e.currentTarget.style.opacity = ".72"),
+                  },
+                  hA(
+                    "td",
+                    null,
+                    hA("span", { className: "sol-link" }, r.sol_number || "—"),
+                  ),
+                  hA(
+                    "td",
+                    { className: "iname" },
+                    r.item_name || r.item_name_ai || "—",
+                  ),
+                  hA("td", null, r.nsn || "—"),
+                  hA("td", null, r.fsc || "—"),
+                  hA(
+                    "td",
+                    null,
+                    r.ref_part_number
+                      ? hA(
+                          "span",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "11px",
+                              color: "var(--accent-green-bright)",
+                            },
+                          },
+                          r.ref_part_number,
+                        )
+                      : hA(
+                          "span",
+                          { style: { color: "var(--body-faint)" } },
+                          "—",
+                        ),
+                  ),
+                  hA(
+                    "td",
+                    null,
+                    (r.quantity || "—") +
+                      (r.unit_of_issue ? " " + r.unit_of_issue : ""),
+                  ),
+                  hA(
+                    "td",
+                    null,
+                    hA(
+                      "span",
+                      { style: { color: "var(--body-dim)" } },
+                      fmt(r.unit_price),
+                    ),
+                    r.price_is_hist &&
+                      hA(
+                        "span",
+                        {
+                          style: {
+                            fontSize: "10px",
+                            display: "block",
+                            color: "var(--body-faint)",
+                          },
+                        },
+                        "hist.",
+                      ),
+                  ),
+                  hA(
+                    "td",
+                    {
+                      style: {
+                        color: "var(--accent-yellow)",
+                        fontWeight: "600",
+                      },
+                    },
+                    fmt(govUnit * qty),
+                    hA(
+                      "span",
+                      {
+                        style: {
+                          fontSize: "10px",
+                          display: "block",
+                          color: "var(--accent-yellow-dim)",
+                          letterSpacing: ".04em",
+                        },
+                      },
+                      "ext",
+                    ),
+                  ),
+                  hA(
+                    "td",
+                    {
+                      style: {
+                        color: "var(--accent-green)",
+                        fontWeight: "700",
+                      },
+                    },
+                    fmt(m.net),
+                  ),
+                  hA(
+                    "td",
+                    null,
+                    hA(
+                      "div",
+                      {
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "12px",
+                          color: "var(--body-dim)",
+                        },
+                      },
+                      r.quote_due || "—",
+                    ),
+                  ),
+                  hA(
+                    "td",
+                    null,
+                    hA(
+                      "div",
+                      {
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "11px",
+                          color: "var(--gold-dim)",
+                        },
+                      },
+                      r.archive_date || "—",
+                    ),
+                  ),
+                  hA(
+                    "td",
+                    null,
+                    hA(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cinzel,serif",
+                          fontSize: "8px",
+                          letterSpacing: ".1em",
+                          textTransform: "uppercase",
+                          padding: "2px 7px",
+                          border: "1px solid rgba(201,168,76,.2)",
+                          color: "var(--gold-dim)",
+                          background: "rgba(201,168,76,.04)",
+                        },
+                      },
+                      r.archive_reason || "expired",
+                    ),
+                  ),
+                  hA(
+                    "td",
+                    {
+                      style: {
+                        maxWidth: "180px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        fontFamily: "Cormorant Garamond,serif",
+                        fontSize: "12px",
+                        fontStyle: "italic",
+                        color: "var(--body-faint)",
+                      },
+                    },
+                    r.win_loss_reason || r.notes || "—",
+                  ),
+                  hA(
+                    "td",
+                    null,
+                    hA(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          gap: "6px",
+                          alignItems: "center",
+                        },
+                      },
+                      hA(
+                        "button",
+                        {
+                          onClick: () => handleRestore(r.sol_number),
+                          title: "Restore to active pipeline",
+                          style: {
+                            background: "transparent",
+                            border: "1px solid rgba(61,214,140,.35)",
+                            color: "var(--accent-green)",
+                            fontFamily: "Cinzel,serif",
+                            fontSize: "10px",
+                            letterSpacing: ".06em",
+                            padding: "4px 8px",
+                            cursor: "pointer",
+                            transition: "all .2s",
+                            whiteSpace: "nowrap",
+                          },
+                          onMouseEnter: (e) => {
+                            e.target.style.background = "rgba(61,214,140,.1)";
+                            e.target.style.color = "#3ddc84";
+                          },
+                          onMouseLeave: (e) => {
+                            e.target.style.background = "transparent";
+                            e.target.style.color = "rgba(61,214,140,.7)";
+                          },
+                        },
+                        "↑ Restore",
+                      ),
+                      hA(
+                        "button",
+                        {
+                          className: "del-btn",
+                          onClick: () => handleDelete(r.sol_number),
+                          title: "Permanently delete",
+                        },
+                        "✕",
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+    );
+  }
+
+  // ── APP ROOT ─────────────────────────────────────────────────────────
+  function App() {
+    const { dbSave, dbGetAll, dbDelete, exportAllData, importAllData } =
+      window.SCC_DB;
+    const { isListing, parseListing, parseAIText } = window.SCC_PARSER;
+    const { calcPricing } = window.SCC_MATH;
+    const { DashboardTab, IntakeTab, PipelineTab, SourceTab, RFQTab } =
+      window.SCC_TABS;
+
+    const [tab, setTab] = useState("dashboard");
+    const [boxA, setBoxA] = useState("");
+    const [boxB, setBoxB] = useState("");
+    const [parsed, setParsed] = useState(null);
+    const [rows, setRows] = useState([]);
+    const [filter, setFilter] = useState("All");
+    const [toast, setToast] = useState(null);
+    const [openDrawer, setOpenDrawer] = useState(null);
+    const [oopSet, setOopSet] = useState(new Set());
+    const [sourcePreload, setSourcePreload] = useState(null);
+    const [theme, setTheme] = useState(
+      () => localStorage.getItem("scc-theme") || "dark",
+    );
+
+    // Apply theme to <html> and persist
+    useEffect(() => {
+      document.documentElement.setAttribute("data-theme", theme);
+      localStorage.setItem("scc-theme", theme);
+    }, [theme]);
+
+    // 3-way cycle: dark (Imperial Red) → metallic → light (Ivory)
+    const toggleTheme = () =>
+      setTheme((t) => (t === "dark" ? "metallic" : t === "metallic" ? "light" : "dark"));
+
+    const goSource = (r) => {
+      setSourcePreload({
+        nsn: r.nsn || "",
+        fsc: r.fsc || "",
+        part: r.ref_part_number || "",
+      });
+      setTab("source");
+    };
+
+    useEffect(() => {
+      setOopSet((prev) => {
+        const n = new Set(prev);
+        rows.forEach((r) => {
+          if (!n.has("__removed__" + r.sol_number)) n.add(r.sol_number);
+        });
+        return n;
+      });
+    }, [rows]);
+
+    const toggleOop = (sol) =>
+      setOopSet((prev) => {
+        const n = new Set(prev);
+        if (n.has(sol)) {
+          n.delete(sol);
+          n.add("__removed__" + sol);
+        } else {
+          n.delete("__removed__" + sol);
+          n.add(sol);
+        }
+        return n;
+      });
+
+    const showToast = (msg, err = false) => {
+      setToast({ msg, err });
+      setTimeout(() => setToast(null), 3000);
+    };
+
+    const loadPipeline = useCallback(async () => {
+      const all = await dbGetAll();
+      all.sort((a, b) => (a.quote_due || "").localeCompare(b.quote_due || ""));
+      setRows(all);
+    }, []);
+
+    useEffect(() => {
+      if (tab === "pipeline" || tab === "dashboard") loadPipeline();
+    }, [tab, loadPipeline]);
+
+    const handleParse = () => {
+      if (!boxA.trim() && !boxB.trim()) {
+        showToast("Paste at least one input", true);
+        return;
+      }
+      let listingText = "",
+        aiText = "";
+      if (isListing(boxA)) {
+        listingText = boxA;
+        aiText = boxB;
+      } else if (isListing(boxB)) {
+        listingText = boxB;
+        aiText = boxA;
+      } else {
+        listingText = boxA;
+        aiText = boxB;
+      }
+      let data = listingText ? parseListing(listingText) : {};
+      if (aiText.trim()) {
+        const ai = parseAIText(aiText);
+        Object.entries(ai).forEach(([k, v]) => {
+          if (v) data[k] = v;
+        });
+      }
+      if (data.unit_price && data.quote_due) {
+        const pricing = calcPricing(
+          data.unit_price,
+          data.quote_due,
+          data.posted_date,
+        );
+        data = { ...data, ...pricing };
+      }
+      setParsed(data);
+    };
+
+    const handleClear = () => {
+      setBoxA("");
+      setBoxB("");
+      setParsed(null);
+    };
+
+    const handleSave = async () => {
+      if (!parsed?.sol_number) {
+        showToast("Sol number missing — cannot save", true);
+        return;
+      }
+      await dbSave({
+        ...parsed,
+        status: "New",
+        date_added: new Date().toLocaleDateString(),
+        notes: "",
+      });
+      showToast(parsed.sol_number + " saved to pipeline");
+      setBoxA("");
+      setBoxB("");
+      setParsed(null);
+    };
+
+    return hA(
+      AFrag,
+      null,
+
+      // ── NAV ──
+      hA(
+        "nav",
+        null,
+        hA(
+          "div",
+          null,
+          hA(
+            "div",
+            { className: "brand gold-text" },
+            "IMPERIO · SUPPLY CHAIN COMMAND",
+          ),
+          hA(
+            "div",
+            { className: "brand-sub" },
+            "CAGE 152U4 · DLA Supplier Intelligence",
+          ),
+        ),
+
+        // ── THEME TOGGLE ──
+        hA(
+          "button",
+          {
+            className: "theme-toggle-btn",
+            onClick: toggleTheme,
+            title: theme === "dark"
+              ? "Switch to Metallic Dark"
+              : theme === "metallic"
+              ? "Switch to Ivory Imperial"
+              : "Switch to Imperial Red",
+            "aria-label": "Toggle theme",
+          },
+          hA(
+            "span",
+            { className: "toggle-label" },
+            theme === "dark" ? "Imperial" : theme === "metallic" ? "Metallic" : "Ivory",
+          ),
+          hA(
+            "div",
+            { className: "toggle-track" },
+            hA("span", { className: "toggle-icon toggle-icon-moon" }, "☽"),
+            hA("span", { className: "toggle-icon toggle-icon-sun" }, "✦"),
+            hA("div", { className: "toggle-thumb" }),
+          ),
+          hA(
+            "span",
+            { className: "toggle-label" },
+            theme === "dark" ? "Red" : theme === "metallic" ? "Dark" : "Light",
+          ),
+        ),
+
+        hA(
+          "div",
+          { className: "tabs" },
+          ["dashboard", "intake", "pipeline"].map((t) =>
+            hA(
+              "button",
+              {
+                key: t,
+                className: "tab" + (tab === t ? " active" : ""),
+                onClick: () => setTab(t),
+              },
+              hA("span", { className: "glint" }),
+              t.charAt(0).toUpperCase() + t.slice(1),
+            ),
+          ),
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "source" ? " active" : ""),
+              onClick: () => setTab("source"),
+              style: {
+                borderColor: "rgba(201,168,76,.35)",
+                color:
+                  tab === "source"
+                    ? "var(--gold-solid)"
+                    : "rgba(201,168,76,.5)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "◆ Source",
+          ),
+          // RFQ Blaster tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "rfq" ? " active" : ""),
+              onClick: () => setTab("rfq"),
+              style: {
+                borderColor:
+                  tab === "rfq"
+                    ? "rgba(232,116,116,.6)"
+                    : "rgba(232,116,116,.25)",
+                color: tab === "rfq" ? "#e87474" : "rgba(232,116,116,.5)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "⚡ RFQ Blaster",
+          ),
+          // Archive tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "archive" ? " active" : ""),
+              onClick: () => setTab("archive"),
+              style: {
+                borderColor:
+                  tab === "archive"
+                    ? "rgba(232,143,203,.5)"
+                    : "rgba(232,143,203,.2)",
+                color: tab === "archive" ? "#e88fcb" : "rgba(232,143,203,.45)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "⬇ Archive",
+          ),
+          // Backup
+          hA(
+            "button",
+            {
+              className: "tab",
+              onClick: exportAllData,
+              title:
+                "Export full backup — solicitations + vendor intel + archive",
+              style: {
+                borderColor: "rgba(61,214,140,.25)",
+                color: "var(--accent-green)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "↓ Backup",
+          ),
+          // Restore
+          hA(
+            "label",
+            {
+              className: "tab",
+              style: {
+                cursor: "pointer",
+                borderColor: "rgba(126,184,247,.25)",
+                color: "var(--accent-blue)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "↑ Restore",
+            hA("input", {
+              type: "file",
+              accept: ".json",
+              style: { display: "none" },
+              onChange: (e) => {
+                const f = e.target.files[0];
+                if (!f) return;
+                const r = new FileReader();
+                r.onload = (ev) =>
+                  importAllData(ev.target.result, (s, v) => {
+                    showToast(
+                      "Restored " +
+                        s +
+                        " solicitations + " +
+                        v +
+                        " vendor intel records",
+                    );
+                    loadPipeline();
+                  });
+                r.readAsText(f);
+                e.target.value = "";
+              },
+            }),
+          ),
+        ),
+      ),
+
+      // ── DIVIDER ──
+      hA(
+        "div",
+        { className: "divider", style: { margin: "0" } },
+        hA("div", { className: "divider-line" }),
+        hA("div", { className: "divider-diamond" }),
+        hA("div", { className: "divider-line" }),
+      ),
+
+      // ── MAIN ──
+      hA(
+        "main",
+        null,
+        tab === "dashboard" && hA(DashboardTab, { rows }),
+
+        tab === "intake" &&
+          hA(IntakeTab, {
+            boxA,
+            setBoxA,
+            boxB,
+            setBoxB,
+            parsed,
+            onParse: handleParse,
+            onClear: handleClear,
+            onSave: handleSave,
+          }),
+
+        tab === "pipeline" &&
+          hA(PipelineTab, {
+            rows,
+            setRows,
+            filter,
+            setFilter,
+            openDrawer,
+            setOpenDrawer,
+            oopSet,
+            toggleOop,
+            goSource,
+            showToast,
+            loadPipeline,
+          }),
+
+        tab === "source" &&
+          hA(SourceTab, {
+            preload: sourcePreload,
+            onPreloadConsumed: () => setSourcePreload(null),
+          }),
+
+        tab === "rfq" && hA(RFQTab, null),
+
+        tab === "archive" &&
+          hA(ArchiveTab, {
+            showToast,
+            onRestored: () => {
+              loadPipeline();
+              setTab("pipeline");
+            },
+          }),
+      ),
+
+      // ── TOAST ──
+      toast && hA(Toast, { msg: toast.msg, err: toast.err }),
+    );
+  }
+
+  // ── MOUNT ──
+  ReactDOM.createRoot(document.getElementById("root")).render(hA(App, null));
+})();

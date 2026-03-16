@@ -1,1 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Supply Chain Command — Imperio Talent Solutions</title>
 
+    <!-- ── FONTS ── -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- ── DESIGN SYSTEM ── -->
+    <link rel="stylesheet" href="imperio.css" />
+
+    <!-- ── REACT (production — no Babel, no JSX transformer) ── -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  </head>
+  <body>
+    <!-- React mounts here -->
+    <div id="root"></div>
+
+    <!--
+    ══════════════════════════════════════════════════════════════════════
+    LOAD ORDER — all files are siblings in the same flat folder.
+    Each exposes its API on a window.SCC_* namespace.
+    app.js must be LAST — it destructures all other namespaces.
+
+    Flat layout (matches VS Code workspace):
+      Supply Command/
+        index.html
+        imperio.css
+        app.js
+        backup.js
+        bidmath.js
+        dashboard.js
+        db-nsn.js        ← 2MB NSN database, loads deferred
+        db.js
+        distributors.js
+        intake.js
+        parser.js
+        pipeline.js
+        rfq.js
+        source.js
+    ══════════════════════════════════════════════════════════════════════
+  -->
+
+    <!-- ── CORE LIBS (no dependencies on each other, load first) ── -->
+    <script src="db.js"></script>
+    <script src="bidmath.js"></script>
+    <script src="parser.js"></script>
+    <script src="distributors.js"></script>
+
+    <!-- ── NSN DATABASE (2MB — deferred so it doesn't block initial render) ── -->
+    <!-- Source tab only needs this at user-click time, so defer is safe -->
+    <script src="db-nsn.js" defer></script>
+
+    <!-- ── REACT TAB COMPONENTS ── -->
+    <!-- source.js must be before pipeline.js — exports DrawerSourcePanel + VI_STATUS_STYLE -->
+    <script src="backup.js"></script>
+    <script src="dashboard.js"></script>
+    <script src="intake.js"></script>
+    <script src="source.js"></script>
+    <script src="pipeline.js"></script>
+    <script src="rfq.js"></script>
+
+    <!-- ── APP ROOT — must be last ── -->
+    <script src="./app.js"></script>
+    <!-- same folder, fine -->
+  </body>
+</html>
