@@ -1,0 +1,8 @@
+{
+  "name": "thok-site",
+  "version": "1.0.0",
+  "description": "Imperio SCC backend functions",
+  "dependencies": {
+    "mongodb": "^6.3.0"
+  }
+}
