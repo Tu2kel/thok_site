@@ -847,7 +847,7 @@
               color: "var(--gold-dim)",
             },
           },
-          "120 vendors · 47 FSC lanes mapped · Ranked by fit · Global intel layer",
+          `${window.SCC_DIST?.DISTRIBUTORS?.length || 0} vendors · ${Object.keys(window.SCC_DIST?.FSC_DIST_MAP || {}).length} FSC lanes mapped · Ranked by fit · Global intel layer`,
         ),
       ),
 
