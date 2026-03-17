@@ -1702,7 +1702,7 @@
                 marginBottom: "8px",
               },
             },
-            "120 Distributors Ready",
+            `${window.SCC_DIST?.DISTRIBUTORS?.length || 0} Distributors Ready`,
           ),
           hS(
             "div",
