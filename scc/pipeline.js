@@ -474,7 +474,11 @@
             ).map((d) =>
               hP(
                 "option",
-                { key: d.id, value: d.id, style: { background: "var(--surface-inset)" } },
+                {
+                  key: d.id,
+                  value: d.id,
+                  style: { background: "var(--surface-inset)" },
+                },
                 d.name + " · T" + d.tier + " · " + d.friction,
               ),
             ),
@@ -1943,6 +1947,7 @@ Rules:
     oopSet,
     toggleOop,
     goSource,
+    goAward,
     showToast,
     loadPipeline,
   }) {
@@ -2840,6 +2845,50 @@ Rules:
                                 (e.target.style.opacity = "1"),
                             },
                             "◆",
+                          ),
+                          hP(
+                            "button",
+                            {
+                              onClick: () => {
+                                handleStatus(r.sol_number, "Awarded");
+                                if (goAward) goAward(r);
+                              },
+                              title: "Mark Awarded — opens Award processing",
+                              style: {
+                                background:
+                                  r.status === "Awarded"
+                                    ? "rgba(61,214,140,.15)"
+                                    : "transparent",
+                                border:
+                                  "1px solid " +
+                                  (r.status === "Awarded"
+                                    ? "rgba(61,214,140,.6)"
+                                    : "rgba(61,214,140,.3)"),
+                                color:
+                                  r.status === "Awarded"
+                                    ? "var(--accent-green)"
+                                    : "rgba(61,214,140,.6)",
+                                fontFamily: "Cinzel,serif",
+                                fontSize: "10px",
+                                letterSpacing: ".06em",
+                                padding: "4px 8px",
+                                cursor: "pointer",
+                                transition: "all .2s",
+                                whiteSpace: "nowrap",
+                              },
+                              onMouseEnter: (e) => {
+                                e.target.style.background =
+                                  "rgba(61,214,140,.12)";
+                                e.target.style.color = "var(--accent-green)";
+                              },
+                              onMouseLeave: (e) => {
+                                if (r.status !== "Awarded") {
+                                  e.target.style.background = "transparent";
+                                  e.target.style.color = "rgba(61,214,140,.6)";
+                                }
+                              },
+                            },
+                            "★ Award",
                           ),
                           hP(
                             "button",

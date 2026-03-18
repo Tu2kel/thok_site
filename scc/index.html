@@ -14,11 +14,235 @@
     <!-- ── DESIGN SYSTEM ── -->
     <link rel="stylesheet" href="imperio.css" />
 
+    <!-- ── SIDEBAR ── -->
+    <style>
+      #imp-sb {
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        width: 48px;
+        background: linear-gradient(160deg, #2e2b32 0%, #1a1820 18%, #0e0d10 40%, #161418 60%, #1f1d23 80%, #111012 100%);
+        border-right: 1px solid rgba(201,168,76,.2);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        z-index: 9999;
+        transition: width .22s cubic-bezier(.4,0,.2,1);
+        overflow: hidden;
+        box-shadow: 3px 0 20px rgba(0,0,0,.6);
+      }
+      #imp-sb.open { width: 194px; }
+
+      /* Top-edge gloss line — matches metallic black surface treatment */
+      #imp-sb::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.1) 40%, rgba(201,168,76,.4) 50%, rgba(255,255,255,.1) 60%, transparent);
+        pointer-events: none;
+      }
+
+      /* Toggle button */
+      .sb-toggle {
+        height: 52px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(201,168,76,.12);
+        transition: background .18s;
+        padding: 0 12px;
+        gap: 10px;
+      }
+      .sb-toggle:hover { background: rgba(201,168,76,.06); }
+      .sb-toggle-icon {
+        font-size: 16px;
+        flex-shrink: 0;
+        width: 24px;
+        text-align: center;
+        background: linear-gradient(to bottom, #cf972d 22%, #f9f295 45%, #e0aa3e 50%, #b8860b 55%, #f9f295 78%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .sb-toggle-label {
+        font-family: 'Cinzel', serif;
+        font-size: 8px;
+        letter-spacing: .28em;
+        text-transform: uppercase;
+        background: linear-gradient(to bottom, #cf972d 22%, #f9f295 45%, #e0aa3e 50%, #b8860b 55%, #f9f295 78%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity .12s;
+      }
+      #imp-sb.open .sb-toggle-label { opacity: 1; transition: opacity .18s .08s; }
+
+      /* Section label */
+      .sb-sec-label {
+        font-family: 'Cinzel', serif;
+        font-size: 7px;
+        letter-spacing: .26em;
+        text-transform: uppercase;
+        color: rgba(201,168,76,.35);
+        white-space: nowrap;
+        padding: 12px 12px 5px;
+        display: block;
+        opacity: 0;
+        transition: opacity .12s;
+      }
+      #imp-sb.open .sb-sec-label { opacity: 1; transition: opacity .18s .06s; }
+
+      .sb-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(201,168,76,.15) 30%, rgba(201,168,76,.15) 70%, transparent);
+        margin: 6px 0;
+      }
+
+      /* Nav links */
+      .sb-link {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 12px;
+        text-decoration: none;
+        border-left: 2px solid transparent;
+        transition: background .15s, border-color .15s;
+        white-space: nowrap;
+        position: relative;
+      }
+      .sb-link:hover {
+        background: rgba(201,168,76,.07);
+        border-left-color: rgba(201,168,76,.5);
+      }
+      .sb-link-icon {
+        width: 24px;
+        flex-shrink: 0;
+        text-align: center;
+        font-size: 13px;
+        color: #C9A84C;
+      }
+      .sb-link-text {
+        font-family: 'Cinzel', serif;
+        font-size: 9.5px;
+        letter-spacing: .1em;
+        background: linear-gradient(to bottom, #cf972d 22%, #f9f295 45%, #e0aa3e 50%, #b8860b 55%, #f9f295 78%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        opacity: 0;
+        transition: opacity .12s;
+      }
+      #imp-sb.open .sb-link-text { opacity: 1; transition: opacity .18s .06s; }
+
+      /* Tooltip when collapsed */
+      #imp-sb:not(.open) .sb-link::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: 52px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: linear-gradient(160deg, #2e2b32 0%, #111012 100%);
+        border: 1px solid rgba(201,168,76,.3);
+        font-family: 'Cinzel', serif;
+        font-size: 9px;
+        letter-spacing: .1em;
+        color: #C9A84C;
+        padding: 5px 12px;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        z-index: 99999;
+      }
+      #imp-sb:not(.open) .sb-link:hover::after { opacity: 1; }
+
+      /* Push app body right */
+      body { padding-left: 48px; transition: padding-left .22s cubic-bezier(.4,0,.2,1); }
+      body.sb-open { padding-left: 194px; }
+    </style>
+
     <!-- ── REACT (production — no Babel, no JSX transformer) ── -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   </head>
   <body>
+
+    <!-- ══ IMPERIO SIDEBAR — Ecosystem Launcher ══ -->
+    <nav id="imp-sb">
+
+      <div class="sb-toggle" onclick="sbToggle()" title="Expand">
+        <span class="sb-toggle-icon">◆</span>
+        <span class="sb-toggle-label">Imperio</span>
+      </div>
+
+      <!-- External Tools -->
+      <span class="sb-sec-label">External Tools</span>
+
+      <a class="sb-link" href="https://dibbs.dla.mil" target="_blank" rel="noopener" data-tip="DIBBS / DLA">
+        <span class="sb-link-icon">⚙</span>
+        <span class="sb-link-text">DIBBS / DLA</span>
+      </a>
+
+      <a class="sb-link" href="https://wawf.eb.mil" target="_blank" rel="noopener" data-tip="WAWF Portal">
+        <span class="sb-link-icon">⧉</span>
+        <span class="sb-link-text">WAWF Portal</span>
+      </a>
+
+      <a class="sb-link" href="https://sam.gov" target="_blank" rel="noopener" data-tip="SAM.gov">
+        <span class="sb-link-icon">🔍</span>
+        <span class="sb-link-text">SAM.gov</span>
+      </a>
+
+      <a class="sb-link" href="https://www.txsmartbuy.gov/esbd" target="_blank" rel="noopener" data-tip="ESBD Texas">
+        <span class="sb-link-icon">★</span>
+        <span class="sb-link-text">ESBD Texas</span>
+      </a>
+
+      <a class="sb-link" href="https://www.nsn.gov" target="_blank" rel="noopener" data-tip="NSN Lookup">
+        <span class="sb-link-icon">◈</span>
+        <span class="sb-link-text">NSN Lookup</span>
+      </a>
+
+      <div class="sb-divider"></div>
+
+      <!-- Imperio Network -->
+      <span class="sb-sec-label">Imperio Network</span>
+
+      <a class="sb-link" href="https://thehouseofkel.com" target="_blank" rel="noopener" data-tip="Brand Site">
+        <span class="sb-link-icon">🏛</span>
+        <span class="sb-link-text">Brand Site</span>
+      </a>
+
+      <a class="sb-link" href="https://thehouseofkel.com/contractors" target="_blank" rel="noopener" data-tip="Contractors">
+        <span class="sb-link-icon">🎖</span>
+        <span class="sb-link-text">Contractors</span>
+      </a>
+
+      <a class="sb-link" href="https://thehouseofkel.com/employers" target="_blank" rel="noopener" data-tip="Employers">
+        <span class="sb-link-icon">🏢</span>
+        <span class="sb-link-text">Employers</span>
+      </a>
+
+    </nav>
+
+    <script>
+      function sbToggle() {
+        const sb = document.getElementById('imp-sb');
+        const open = sb.classList.toggle('open');
+        document.body.classList.toggle('sb-open', open);
+        localStorage.setItem('imp-sb-open', open ? '1' : '0');
+      }
+      (function() {
+        if (localStorage.getItem('imp-sb-open') === '1') {
+          document.getElementById('imp-sb').classList.add('open');
+          document.body.classList.add('sb-open');
+        }
+      })();
+    </script>
+
     <!-- React mounts here -->
     <div id="root"></div>
 
@@ -33,6 +257,7 @@
         index.html
         imperio.css
         app.js
+        awards.js        ← contract records, sales orders, invoices, WAWF mirror
         backup.js
         bidmath.js
         dashboard.js
@@ -65,6 +290,8 @@
     <script src="source.js"></script>
     <script src="pipeline.js"></script>
     <script src="rfq.js"></script>
+    <script src="awards.js"></script>
+    <script src="memo.js"></script>
 
     <!-- ── APP ROOT — must be last ── -->
     <script src="./app.js"></script>

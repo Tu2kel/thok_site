@@ -428,7 +428,7 @@
       window.SCC_DB;
     const { isListing, parseListing, parseAIText } = window.SCC_PARSER;
     const { calcPricing } = window.SCC_MATH;
-    const { DashboardTab, IntakeTab, PipelineTab, SourceTab, RFQTab } =
+    const { DashboardTab, IntakeTab, PipelineTab, SourceTab, RFQTab, AwardsTab, MemoTab } =
       window.SCC_TABS;
 
     const [tab, setTab] = useState("dashboard");
@@ -441,6 +441,7 @@
     const [openDrawer, setOpenDrawer] = useState(null);
     const [oopSet, setOopSet] = useState(new Set());
     const [sourcePreload, setSourcePreload] = useState(null);
+    const [awardPrefill, setAwardPrefill] = useState(null);
     const [theme, setTheme] = useState(
       () => localStorage.getItem("scc-theme") || "dark",
     );
@@ -462,6 +463,11 @@
         part: r.ref_part_number || "",
       });
       setTab("source");
+    };
+
+    const goAward = (r) => {
+      setAwardPrefill(r);
+      setTab("awards");
     };
 
     useEffect(() => {
@@ -680,6 +686,40 @@
             hA("span", { className: "glint" }),
             "⬇ Archive",
           ),
+          // Awards tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "awards" ? " active" : ""),
+              onClick: () => setTab("awards"),
+              style: {
+                borderColor:
+                  tab === "awards"
+                    ? "rgba(61,214,140,.6)"
+                    : "rgba(61,214,140,.2)",
+                color: tab === "awards" ? "var(--accent-green)" : "rgba(61,214,140,.4)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "★ Awards",
+          ),
+          // Memo Generator tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "memo" ? " active" : ""),
+              onClick: () => setTab("memo"),
+              style: {
+                borderColor:
+                  tab === "memo"
+                    ? "rgba(184,134,11,.7)"
+                    : "rgba(184,134,11,.25)",
+                color: tab === "memo" ? "#b8860b" : "rgba(184,134,11,.5)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "📄 Memo",
+          ),
           // Backup
           hA(
             "button",
@@ -774,6 +814,7 @@
             oopSet,
             toggleOop,
             goSource,
+            goAward,
             showToast,
             loadPipeline,
           }),
@@ -794,6 +835,15 @@
               setTab("pipeline");
             },
           }),
+
+        tab === "awards" &&
+          hA(AwardsTab, {
+            awardPrefill,
+            onPrefillConsumed: () => setAwardPrefill(null),
+            showToast,
+          }),
+
+        tab === "memo" && hA(MemoTab, null),
       ),
 
       // ── TOAST ──
