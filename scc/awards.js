@@ -1,11 +1,4 @@
 (function () {
-  // ═══════════════════════════════════════════════════════════════════════
-  //  IMPERIO SCC — AWARDS TAB
-  //  Contract Record · Sales Order · Invoice Generator · WAWF Mirror
-  //  Pre-compiled React · No Babel · No JSX
-  //  Triggered from pipeline.js "Mark Awarded" button or standalone entry.
-  // ═══════════════════════════════════════════════════════════════════════
-
   const {
     createElement: hW,
     useState: useWState,
@@ -15,7 +8,6 @@
 
   const ENTITY_DEFAULT = "IMP";
 
-  // ── Shared style helpers ─────────────────────────────────────────────
   const gold = {
     background:
       "linear-gradient(to bottom,#cf972d 22%,#f9f295 45%,#e0aa3e 50%,#b8860b 55%,#f9f295 78%)",
@@ -65,7 +57,6 @@
     marginBottom: "5px",
   };
 
-  // ── Field builder ────────────────────────────────────────────────────
   function Field({ label, value, onChange, readOnly, type, placeholder }) {
     return hW(
       "div",
@@ -86,7 +77,30 @@
     );
   }
 
-  // ── Copy-to-clipboard cell (WAWF mirror) ────────────────────────────
+  function SelectField({ label, value, onChange, options }) {
+    return hW(
+      "div",
+      { style: { display: "flex", flexDirection: "column", gap: "4px" } },
+      hW("label", { style: labelStyle }, label),
+      hW(
+        "select",
+        {
+          value: value || "",
+          onChange: onChange ? (e) => onChange(e.target.value) : undefined,
+          style: {
+            ...fieldStyle,
+            cursor: "pointer",
+            appearance: "none",
+            WebkitAppearance: "none",
+          },
+        },
+        ...options.map(([val, lbl]) =>
+          hW("option", { key: val, value: val }, lbl),
+        ),
+      ),
+    );
+  }
+
   function CopyCell({ label, value }) {
     const [copied, setCopied] = useWState(false);
     const copy = () => {
@@ -173,7 +187,15 @@
     );
   }
 
-  // ── AWARD FORM (new or edit) ─────────────────────────────────────────
+  // ── PAYMENT STATUS COLORS ────────────────────────────────────────────
+  const payStatusColors = {
+    unpaid: "var(--red)",
+    partial: "var(--amber)",
+    paid: "var(--accent-green)",
+    overdue: "rgba(231,76,60,.9)",
+  };
+
+  // ── AWARD FORM ───────────────────────────────────────────────────────
   function AwardForm({ prefill, onSave, onCancel, showToast }) {
     const { awardSave, awardGetBySol, nextDocNumber, peekDocNumber } =
       window.SCC_DB;
@@ -181,7 +203,6 @@
 
     const today = new Date().toLocaleDateString();
 
-    // Pre-populate from pipeline record if provided
     const initial = {
       sol_number: prefill?.sol_number || "",
       nsn: prefill?.nsn || "",
@@ -198,28 +219,26 @@
       ref_part_number: prefill?.ref_part_number || "",
       cage_supplier: prefill?.cage || "",
       award_date: today,
-      funding_path: prefill?.funding_path || "self", // 'self' | 'ssc'
-      // Sales order fields
+      funding_path: prefill?.funding_path || "self",
       supplier_name: prefill?.supplier_poc || "",
       supplier_quote_price: String(prefill?.supplier_quote_price || ""),
       actual_cost: String(prefill?.actual_cost || ""),
       shipping_cost: "0",
-      // Invoice
       payment_terms: "Net 30",
       invoice_date: today,
-      // DoDAAC from DIBBS — filled manually if not parsed
       dodaac: prefill?.dodaac || "",
       contracting_office: prefill?.contracting_office || "",
       entity: ENTITY_DEFAULT,
+      payment_status: prefill?.payment_status || "unpaid",
+      date_paid: prefill?.date_paid || "",
     };
 
     const [form, setForm] = useWState(initial);
-    const [docNums, setDocNums] = useWState(null); // null = not yet generated
+    const [docNums, setDocNums] = useWState(null);
     const [saving, setSaving] = useWState(false);
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-    // Computed math
     const qty = parseFloat(form.quantity) || 0;
     const unitBid = parseFloat(form.unit_price) || 0;
     const cogs = parseFloat(form.actual_cost || form.supplier_quote_price) || 0;
@@ -238,12 +257,10 @@
         ? "quoted"
         : "manual";
 
-    // Preview next document numbers without consuming
     const previewNums = () => {
       const entity = form.entity || ENTITY_DEFAULT;
-      // We peek at current counter — all three will be sequential
       const base = peekDocNumber("PO", entity);
-      const seqNum = base.split("-").pop(); // e.g. '0042'
+      const seqNum = base.split("-").pop();
       const year = new Date().getFullYear();
       return {
         po: "PO-" + entity + "-" + year + "-" + seqNum,
@@ -272,19 +289,14 @@
       }
       setSaving(true);
 
-      // Check if this sol already has an award (edit case)
       const existing = await awardGetBySol(form.sol_number);
-
       let po_number, so_number, inv_number;
       if (existing) {
-        // Editing — keep existing doc numbers
         po_number = existing.po_number;
         so_number = existing.so_number;
         inv_number = existing.inv_number;
       } else {
-        // New award — consume three sequential numbers from the same counter slot
         po_number = nextDocNumber("PO", form.entity || ENTITY_DEFAULT);
-        // SO and INV get same sequence suffix but different prefix — increment counter
         so_number = nextDocNumber("SO", form.entity || ENTITY_DEFAULT);
         inv_number = nextDocNumber("INV", form.entity || ENTITY_DEFAULT);
       }
@@ -301,7 +313,7 @@
         item_name: form.item_name,
         quantity: form.quantity,
         unit_of_issue: form.unit_of_issue,
-        unit_price: form.unit_price, // bid/award price
+        unit_price: form.unit_price,
         bid_total: String(bidTotal),
         delivery_days: form.delivery_days,
         ship_to: form.ship_to,
@@ -316,7 +328,6 @@
         payment_terms: form.payment_terms,
         funding_path: form.funding_path,
         entity: form.entity || ENTITY_DEFAULT,
-        // Sales order
         supplier_name: form.supplier_name,
         supplier_quote_price: form.supplier_quote_price,
         actual_cost: form.actual_cost,
@@ -327,9 +338,10 @@
         ssc_fee: String(sscFee),
         net_take: String(netTake),
         cogs_source: cogsSource,
-        // Invoice status
-        inv_status: existing?.inv_status || "draft", // draft | issued | submitted | paid
-        so_status: existing?.so_status || "open", // open | fulfilled | invoiced
+        inv_status: existing?.inv_status || "draft",
+        so_status: existing?.so_status || "open",
+        payment_status: form.payment_status || "unpaid",
+        date_paid: form.date_paid || "",
         last_updated: new Date().toISOString(),
       };
 
@@ -357,7 +369,6 @@
         },
       },
 
-      // ── Header
       hW(
         "div",
         { style: { marginBottom: "28px" } },
@@ -402,7 +413,7 @@
         ),
       ),
 
-      // ── Doc number preview
+      // Doc number preview bar
       hW(
         "div",
         {
@@ -495,7 +506,6 @@
         ),
       ),
 
-      // ── CONTRACT RECORD ──────────────────────────────────────────────
       section("Contract Record"),
       hW(
         "div",
@@ -609,7 +619,6 @@
         }),
       ),
 
-      // ── SALES ORDER ──────────────────────────────────────────────────
       section("Sales Order — Supplier & COGS"),
       hW(
         "div",
@@ -648,7 +657,6 @@
         }),
       ),
 
-      // Funding path selector
       hW(
         "div",
         { style: { marginBottom: "16px" } },
@@ -670,7 +678,7 @@
           "div",
           { style: { display: "flex", gap: "10px" } },
           ...[
-            ["self", "Self-Funded (≤$10K)", "var(--accent-green)"],
+            ["self", "Self-Funded (\u2264$10K)", "var(--accent-green)"],
             ["ssc", "SSC / Factoring (6%)", "var(--amber)"],
           ].map(([val, lbl, clr]) =>
             hW(
@@ -703,7 +711,6 @@
         ),
       ),
 
-      // Margin summary card
       bidTotal > 0 &&
         hW(
           "div",
@@ -767,8 +774,7 @@
             ),
         ),
 
-      // ── INVOICE ──────────────────────────────────────────────────────
-      section("Invoice Details"),
+      section("Invoice & Payment"),
       hW(
         "div",
         {
@@ -789,9 +795,25 @@
           value: form.payment_terms,
           onChange: (v) => set("payment_terms", v),
         }),
+        hW(SelectField, {
+          label: "Payment Status",
+          value: form.payment_status,
+          onChange: (v) => set("payment_status", v),
+          options: [
+            ["unpaid", "Unpaid"],
+            ["partial", "Partial"],
+            ["paid", "Paid"],
+            ["overdue", "Overdue"],
+          ],
+        }),
+        hW(Field, {
+          label: "Date Paid",
+          value: form.date_paid,
+          onChange: (v) => set("date_paid", v),
+          placeholder: "MM/DD/YYYY",
+        }),
       ),
 
-      // ── CONFIRM BUTTON ───────────────────────────────────────────────
       hW(
         "div",
         {
@@ -816,10 +838,10 @@
           },
           hW("span", { className: "glint" }),
           saving
-            ? "Saving…"
+            ? "Saving\u2026"
             : docNums
-              ? "✓ Award Confirmed — Update Record"
-              : "◆ Confirm Award & Issue Documents",
+              ? "\u2713 Award Confirmed \u2014 Update Record"
+              : "\u25c6 Confirm Award & Issue Documents",
         ),
         onCancel &&
           hW(
@@ -850,28 +872,27 @@
                 color: "var(--accent-green)",
               },
             },
-            "✓ " +
+            "\u2713 " +
               docNums.po_number +
-              " · " +
+              " \u00b7 " +
               docNums.so_number +
-              " · " +
+              " \u00b7 " +
               docNums.inv_number,
           ),
       ),
     );
   }
 
-  // ── AWARD DETAIL VIEW ────────────────────────────────────────────────
+  // ── AWARD DETAIL ─────────────────────────────────────────────────────
   function AwardDetail({ record, onEdit, onVoid, showToast }) {
     const { fmt } = window.SCC_MATH;
-    const [wawfView, setWawfView] = useWState(false);
-    const [activePanel, setActivePanel] = useWState("contract"); // contract | so | invoice | wawf
+    const [activePanel, setActivePanel] = useWState("contract");
 
     const panels = [
       ["contract", "Contract Record"],
       ["so", "Sales Order"],
       ["invoice", "Invoice"],
-      ["wawf", "⧉ WAWF Mirror"],
+      ["wawf", "\u29c9 WAWF Mirror"],
     ];
 
     const gpColor =
@@ -892,7 +913,7 @@
       "div",
       { style: { animation: "fadeUp .4s ease both" } },
 
-      // ── Top bar
+      // Top bar
       hW(
         "div",
         {
@@ -919,7 +940,7 @@
                 marginBottom: "6px",
               },
             },
-            "◆ Award Record",
+            "\u25c6 Award Record",
           ),
           hW(
             "div",
@@ -943,7 +964,7 @@
                 marginTop: "4px",
               },
             },
-            record.item_name || "—",
+            record.item_name || "\u2014",
           ),
         ),
         hW(
@@ -964,7 +985,7 @@
                 cursor: "pointer",
               },
             },
-            "✎ Edit",
+            "\u270e Edit",
           ),
           hW(
             "button",
@@ -988,12 +1009,12 @@
                 cursor: "pointer",
               },
             },
-            "⊗ Void",
+            "\u2297 Void",
           ),
         ),
       ),
 
-      // ── Doc number chips
+      // Doc chips + status chips
       hW(
         "div",
         {
@@ -1044,6 +1065,7 @@
             ),
           ),
         ),
+        // INV status chip
         hW(
           "div",
           {
@@ -1070,9 +1092,40 @@
             "INV: " + (record.inv_status || "draft"),
           ),
         ),
+        // Pay status chip
+        hW(
+          "div",
+          {
+            style: {
+              padding: "6px 14px",
+              background: "var(--surface-sheen)",
+              border:
+                "1px solid " +
+                (payStatusColors[record.payment_status] ||
+                  "rgba(201,168,76,.18)"),
+              borderRadius: "2px",
+            },
+          },
+          hW(
+            "span",
+            {
+              style: {
+                ...cinzel,
+                fontSize: "9px",
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                color:
+                  payStatusColors[record.payment_status] || "var(--body-dim)",
+              },
+            },
+            "PAY: " +
+              (record.payment_status || "unpaid") +
+              (record.date_paid ? " \u00b7 " + record.date_paid : ""),
+          ),
+        ),
       ),
 
-      // ── Panel nav
+      // Panel nav
       hW(
         "div",
         {
@@ -1081,7 +1134,6 @@
             gap: "4px",
             marginBottom: "20px",
             borderBottom: "1px solid rgba(201,168,76,.12)",
-            paddingBottom: "0",
           },
         },
         ...panels.map(([id, lbl]) =>
@@ -1113,7 +1165,7 @@
         ),
       ),
 
-      // ── CONTRACT PANEL ───────────────────────────────────────────────
+      // CONTRACT PANEL
       activePanel === "contract" &&
         hW(
           "div",
@@ -1141,7 +1193,9 @@
             ["Award Date", record.award_date],
             [
               "Delivery",
-              record.delivery_days ? record.delivery_days + " days ARO" : "—",
+              record.delivery_days
+                ? record.delivery_days + " days ARO"
+                : "\u2014",
             ],
             ["Ship To", record.ship_to],
             ["FOB", record.fob],
@@ -1184,13 +1238,13 @@
                     fontStyle: val ? "normal" : "italic",
                   },
                 },
-                val || "—",
+                val || "\u2014",
               ),
             ),
           ),
         ),
 
-      // ── SALES ORDER PANEL ────────────────────────────────────────────
+      // SALES ORDER PANEL
       activePanel === "so" &&
         hW(
           "div",
@@ -1277,19 +1331,18 @@
                               : "var(--body-faint)",
                       },
                     },
-                    val || "—",
+                    val || "\u2014",
                   ),
                 ),
               ),
           ),
         ),
 
-      // ── INVOICE PANEL ────────────────────────────────────────────────
+      // INVOICE PANEL
       activePanel === "invoice" &&
         hW(
           "div",
           { style: { animation: "fadeUp .3s ease both" } },
-          // Invoice card — Imperial Ivory print style
           hW(
             "div",
             {
@@ -1301,7 +1354,6 @@
                 marginBottom: "20px",
               },
             },
-            // Invoice header
             hW(
               "div",
               {
@@ -1341,7 +1393,7 @@
                       letterSpacing: ".12em",
                     },
                   },
-                  "Talent Solutions · Mil-Spec Supply",
+                  "Talent Solutions \u00b7 Mil-Spec Supply",
                 ),
                 hW(
                   "div",
@@ -1353,7 +1405,7 @@
                       marginTop: "6px",
                     },
                   },
-                  "CAGE 152U4 · SDVOSB · Killeen, TX",
+                  "CAGE 152U4 \u00b7 SDVOSB \u00b7 Killeen, TX",
                 ),
                 hW(
                   "div",
@@ -1364,7 +1416,7 @@
                       color: "var(--body-faint)",
                     },
                   },
-                  "anthony@imperiovita.co · (254) 265-9335",
+                  "anthony@imperiovita.co \u00b7 (254) 265-9335",
                 ),
               ),
               hW(
@@ -1419,16 +1471,12 @@
                 ),
               ),
             ),
-
-            // Divider
             hW("div", {
               style: {
                 borderTop: "1px solid rgba(201,168,76,.25)",
                 marginBottom: "20px",
               },
             }),
-
-            // Bill to
             hW(
               "div",
               { style: { marginBottom: "20px" } },
@@ -1455,7 +1503,7 @@
                     color: "var(--alabaster)",
                   },
                 },
-                record.contracting_office || "—",
+                record.contracting_office || "\u2014",
               ),
               hW(
                 "div",
@@ -1466,11 +1514,9 @@
                     color: "var(--body-dim)",
                   },
                 },
-                "DoDAAC: " + (record.dodaac || "—"),
+                "DoDAAC: " + (record.dodaac || "\u2014"),
               ),
             ),
-
-            // Contract reference
             hW(
               "div",
               {
@@ -1513,13 +1559,11 @@
                         color: "var(--alabaster)",
                       },
                     },
-                    val || "—",
+                    val || "\u2014",
                   ),
                 ),
               ),
             ),
-
-            // Line items table
             hW(
               "div",
               { style: { marginBottom: "24px" } },
@@ -1578,7 +1622,7 @@
                       color: "var(--alabaster)",
                     },
                   },
-                  record.item_name || "—",
+                  record.item_name || "\u2014",
                 ),
                 hW(
                   "div",
@@ -1629,7 +1673,6 @@
                   fmt(parseFloat(record.bid_total)),
                 ),
               ),
-              // Total row
               hW(
                 "div",
                 {
@@ -1670,75 +1713,168 @@
             ),
           ),
 
-          // Invoice status controls
+          // Status controls row
           hW(
             "div",
             {
               style: {
                 display: "flex",
-                gap: "10px",
-                alignItems: "center",
+                gap: "32px",
+                alignItems: "flex-start",
                 flexWrap: "wrap",
               },
             },
+            // Invoice status
             hW(
               "div",
-              {
-                style: {
-                  ...cinzel,
-                  fontSize: "9px",
-                  letterSpacing: ".14em",
-                  textTransform: "uppercase",
-                  color: "var(--gold-dim)",
-                },
-              },
-              "Invoice Status:",
-            ),
-            ...["draft", "issued", "submitted", "paid"].map((s) =>
+              null,
               hW(
-                "button",
+                "div",
                 {
-                  key: s,
-                  onClick: () => {
-                    const updated = {
-                      ...record,
-                      inv_status: s,
-                      last_updated: new Date().toISOString(),
-                    };
-                    window.SCC_DB.awardSave(updated).then(() =>
-                      showToast(record.inv_number + " → " + s),
-                    );
-                  },
                   style: {
-                    padding: "6px 14px",
-                    background:
-                      record.inv_status === s
-                        ? "rgba(201,168,76,.1)"
-                        : "transparent",
-                    border:
-                      "1px solid " +
-                      (record.inv_status === s
-                        ? invStatusColors[s] || "var(--gold-solid)"
-                        : "rgba(201,168,76,.18)"),
-                    color:
-                      record.inv_status === s
-                        ? invStatusColors[s] || "var(--gold-solid)"
-                        : "var(--body-dim)",
                     ...cinzel,
                     fontSize: "9px",
-                    letterSpacing: ".1em",
+                    letterSpacing: ".14em",
                     textTransform: "uppercase",
-                    cursor: "pointer",
-                    transition: "all .15s",
+                    color: "var(--gold-dim)",
+                    marginBottom: "8px",
                   },
                 },
-                s,
+                "Invoice Status",
               ),
+              hW(
+                "div",
+                { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+                ...["draft", "issued", "submitted", "paid"].map((s) =>
+                  hW(
+                    "button",
+                    {
+                      key: s,
+                      onClick: () => {
+                        const updated = {
+                          ...record,
+                          inv_status: s,
+                          last_updated: new Date().toISOString(),
+                        };
+                        window.SCC_DB.awardSave(updated).then(() =>
+                          showToast(record.inv_number + " \u2192 " + s),
+                        );
+                      },
+                      style: {
+                        padding: "6px 14px",
+                        background:
+                          record.inv_status === s
+                            ? "rgba(201,168,76,.1)"
+                            : "transparent",
+                        border:
+                          "1px solid " +
+                          (record.inv_status === s
+                            ? invStatusColors[s] || "var(--gold-solid)"
+                            : "rgba(201,168,76,.18)"),
+                        color:
+                          record.inv_status === s
+                            ? invStatusColors[s] || "var(--gold-solid)"
+                            : "var(--body-dim)",
+                        ...cinzel,
+                        fontSize: "9px",
+                        letterSpacing: ".1em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        transition: "all .15s",
+                      },
+                    },
+                    s,
+                  ),
+                ),
+              ),
+            ),
+            // Payment status
+            hW(
+              "div",
+              null,
+              hW(
+                "div",
+                {
+                  style: {
+                    ...cinzel,
+                    fontSize: "9px",
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "var(--gold-dim)",
+                    marginBottom: "8px",
+                  },
+                },
+                "Payment Status",
+              ),
+              hW(
+                "div",
+                { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+                ...["unpaid", "partial", "paid", "overdue"].map((s) =>
+                  hW(
+                    "button",
+                    {
+                      key: s,
+                      onClick: () => {
+                        const datePaid =
+                          s === "paid"
+                            ? record.date_paid ||
+                              new Date().toLocaleDateString()
+                            : record.date_paid;
+                        const updated = {
+                          ...record,
+                          payment_status: s,
+                          date_paid: datePaid,
+                          last_updated: new Date().toISOString(),
+                        };
+                        window.SCC_DB.awardSave(updated).then(() =>
+                          showToast("Payment: " + s),
+                        );
+                      },
+                      style: {
+                        padding: "6px 14px",
+                        background:
+                          record.payment_status === s
+                            ? "rgba(201,168,76,.07)"
+                            : "transparent",
+                        border:
+                          "1px solid " +
+                          (record.payment_status === s
+                            ? payStatusColors[s]
+                            : "rgba(201,168,76,.18)"),
+                        color:
+                          record.payment_status === s
+                            ? payStatusColors[s]
+                            : "var(--body-dim)",
+                        ...cinzel,
+                        fontSize: "9px",
+                        letterSpacing: ".1em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        transition: "all .15s",
+                      },
+                    },
+                    s,
+                  ),
+                ),
+              ),
+              record.date_paid &&
+                hW(
+                  "div",
+                  {
+                    style: {
+                      ...mono,
+                      fontSize: "11px",
+                      color: "var(--body-dim)",
+                      marginTop: "6px",
+                    },
+                  },
+                  "Paid: " + record.date_paid,
+                ),
             ),
           ),
         ),
 
-      // ── WAWF MIRROR PANEL ────────────────────────────────────────────
+      // WAWF PANEL
       activePanel === "wawf" &&
         hW(
           "div",
@@ -1766,7 +1902,7 @@
                   marginBottom: "4px",
                 },
               },
-              "⧉ WAWF Mirror — Wide Area Workflow",
+              "\u29c9 WAWF Mirror \u2014 Wide Area Workflow",
             ),
             hW(
               "div",
@@ -1842,7 +1978,7 @@
     const { awardGetAll, awardVoid } = window.SCC_DB;
     const { fmt } = window.SCC_MATH;
 
-    const [view, setView] = useWState("list"); // list | new | detail
+    const [view, setView] = useWState("list");
     const [awards, setAwards] = useWState([]);
     const [selected, setSelected] = useWState(null);
     const [editRecord, setEditRecord] = useWState(null);
@@ -1854,7 +1990,6 @@
       loadAwards();
     }, []);
 
-    // If pipeline pushed a prefill record, auto-open the new award form
     useWEffect(() => {
       if (awardPrefill) {
         setEditRecord(null);
@@ -1868,7 +2003,7 @@
       await awardVoid(award_id, reason);
       await loadAwards();
       setView("list");
-      showToast("Award voided — document numbers retired to void log");
+      showToast("Award voided \u2014 document numbers retired to void log");
     };
 
     const filtered = awards.filter((r) => {
@@ -1894,7 +2029,6 @@
       "div",
       { style: { animation: "fadeUp .5s ease both" } },
 
-      // ── Header
       hW(
         "div",
         { className: "pipe-header" },
@@ -1912,7 +2046,7 @@
                 color: "var(--body-faint)",
               },
             },
-            "Contract Records · Sales Orders · Invoices · WAWF Mirror",
+            "Contract Records \u00b7 Sales Orders \u00b7 Invoices \u00b7 WAWF Mirror",
           ),
         ),
         hW(
@@ -1937,7 +2071,7 @@
                 style: { fontSize: "11px", padding: "9px 22px" },
               },
               hW("span", { className: "glint" }),
-              "◆ New Award",
+              "\u25c6 New Award",
             ),
           (view === "new" || view === "detail") &&
             hW(
@@ -1955,12 +2089,11 @@
                   cursor: "pointer",
                 },
               },
-              "← Back to List",
+              "\u2190 Back to List",
             ),
         ),
       ),
 
-      // ── LIST VIEW ────────────────────────────────────────────────────
       view === "list" &&
         hW(
           WFrag,
@@ -1978,24 +2111,21 @@
                     color: "var(--body-faint)",
                   },
                 },
-                'No awards yet — press a bid to "Awarded" in Pipeline, or use ◆ New Award above.',
+                'No awards yet \u2014 press a bid to "Awarded" in Pipeline, or use \u25c6 New Award above.',
               )
             : hW(
                 WFrag,
                 null,
-                // Search
                 hW(
                   "div",
                   { style: { padding: "16px 0 8px", maxWidth: "420px" } },
                   hW("input", {
                     value: search,
                     onChange: (e) => setSearch(e.target.value),
-                    placeholder: "Search sol, NSN, invoice #…",
+                    placeholder: "Search sol, NSN, invoice #\u2026",
                     style: { ...fieldStyle, width: "100%" },
                   }),
                 ),
-
-                // Table
                 hW(
                   "div",
                   { style: { overflowX: "auto" } },
@@ -2019,6 +2149,7 @@
                           "GP%",
                           "Net",
                           "INV Status",
+                          "Pay Status",
                           "",
                         ].map((h) => hW("th", { key: h }, h)),
                       ),
@@ -2070,7 +2201,7 @@
                                 whiteSpace: "nowrap",
                               },
                             },
-                            r.item_name || "—",
+                            r.item_name || "\u2014",
                           ),
                           hW(
                             "td",
@@ -2162,6 +2293,30 @@
                           ),
                           hW(
                             "td",
+                            null,
+                            hW(
+                              "span",
+                              {
+                                style: {
+                                  ...cinzel,
+                                  fontSize: "9px",
+                                  letterSpacing: ".08em",
+                                  textTransform: "uppercase",
+                                  color:
+                                    payStatusColors[r.payment_status] ||
+                                    "var(--body-dim)",
+                                  padding: "3px 8px",
+                                  border:
+                                    "1px solid " +
+                                    (payStatusColors[r.payment_status] ||
+                                      "rgba(201,168,76,.18)"),
+                                },
+                              },
+                              r.payment_status || "unpaid",
+                            ),
+                          ),
+                          hW(
+                            "td",
                             { onClick: (e) => e.stopPropagation() },
                             hW(
                               "button",
@@ -2177,9 +2332,9 @@
                                   )
                                     handleVoid(r.award_id);
                                 },
-                                title: "Void — retires document numbers",
+                                title: "Void \u2014 retires document numbers",
                               },
-                              "⊗",
+                              "\u2297",
                             ),
                           ),
                         ),
@@ -2210,7 +2365,7 @@
                               textTransform: "uppercase",
                             },
                           },
-                          "Awards Total — " +
+                          "Awards Total \u2014 " +
                             filtered.length +
                             " record" +
                             (filtered.length !== 1 ? "s" : ""),
@@ -2253,7 +2408,7 @@
                             ),
                           ),
                         ),
-                        hW("td", { colSpan: "2" }),
+                        hW("td", { colSpan: "3" }),
                       ),
                     ),
                   ),
@@ -2261,7 +2416,6 @@
               ),
         ),
 
-      // ── NEW / EDIT FORM ──────────────────────────────────────────────
       view === "new" &&
         hW(AwardForm, {
           prefill: editRecord || awardPrefill,
@@ -2274,7 +2428,6 @@
           },
         }),
 
-      // ── DETAIL VIEW ──────────────────────────────────────────────────
       view === "detail" &&
         selected &&
         hW(AwardDetail, {
