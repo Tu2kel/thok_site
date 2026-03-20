@@ -1,38 +1,99 @@
 <!doctype html>
 <html lang="en">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "The House of Kel LLC",
+  "url": "https://thehouseofkel.com",
+  "logo": "https://thehouseofkel.com/images/thk-icon.png",
+  "description": "SDVOSB government contractor specializing in procurement, supply chain, and talent solutions.",
+  "sameAs": [
+    "https://www.linkedin.com/in/anthony-k-kelley-sr/"
+  ]
+}
+</script>
+
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The House of Kel | Imperio Vita</title>
+    <title>SDVOSB Government Contractor | The House of Kel LLC</title>
+
+    <meta
+      name="description"
+      content="The House of Kel LLC is a Service-Disabled Veteran-Owned Small Business (SDVOSB) specializing in government contracting, procurement, supply chain solutions, and talent acquisition."
+    />
+
+    <meta
+      name="keywords"
+      content="SDVOSB, government contractor, DLA supplier, procurement services, supply chain, federal contracting, Imperio Talent Solutions"
+    />
+
+    <meta name="author" content="The House of Kel LLC" />
+
+    <!-- Open Graph (for sharing + Google understanding) -->
+    <meta property="og:title" content="The House of Kel LLC" />
+    <meta
+      property="og:description"
+      content="Government contracting, procurement, and talent solutions."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://thehouseofkel.com" />
+
+    <!-- Favicon (IMPORTANT for branding in Google) -->
+    <link rel="icon" href="/images/thk-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
       rel="stylesheet"
     />
+
+    <!-- icons sizes-->
+     <link rel="icon" type="image/png" sizes="32x32" href="./images/thok32.png">
+      <link rel="icon" type="image/png" sizes="192x192" href="./images/thok192.png">
+      <link rel="icon" type="image/png" sizes="512x512" href="./images/thok512.png">
+
+
     <link rel="stylesheet" href="./thok.css" />
   </head>
   <body>
+    <!--THK-->
+        <!-- <div class="">
+        <img src="./images/thok512.png" class="hero-logo" />
+        </div>
+
+        <header class="sticky-header">
+          <img src="./images/thok192.png" class="nav-logo" />
+        </header> -->
+
     <!-- ═══════════════ HERO ═══════════════ -->
     <div class="page">
       <header class="hero">
         <h1 class="hero-title">The House of Kel</h1>
-        <h2 class="hero-subtitle">Imperio Vita</h2>
+        <h2 class="hero-subtitle">
+  <span class="spanhero-subtitle">A Multi-Venture Enterprise:</span><br>
+  Government & State Contracting · Technology · Supply Chain · Real Estate
+</h2>
+
       </header>
 
       <div class="divider"></div>
-      <p class="tagline">Where Excellence Reigns</p>
+      <p class="tagline">Where Excellence Reigns <br>
+  The House of Kel LLC is a Texas-based Service-Disabled Veteran-Owned Small Business (SDVOSB), recognized by the Texas Veterans Commission (TVC) and VetHUB, delivering government contracting, procurement, and supply chain solutions across federal and state agencies.
+
+
+
+</p>
 
       <!-- INTRO -->
       <section class="intro">
         <p>
           <strong>The House of Kel LLC</strong> is a multifaceted enterprise
-          built on a foundation of military precision, strategic vision, and
-          unwavering commitment to excellence. From federal talent acquisition
-          to innovative digital solutions and strategic real estate ventures, we
-          operate at the intersection of service, innovation, and
-          empire-building. Every endeavor reflects our core values: integrity,
-          expertise, and long-term value creation.
+          <p>
+Built on a foundation of military precision and strategic leadership, The House of Kel LLC operates as a multi-venture enterprise focused on long-term value creation across its portfolio. Each venture reflects a commitment to discipline, innovation, and execution at scale.
+</p>
         </p>
       </section>
 
@@ -43,7 +104,7 @@
         <!-- 1: Imperio Talent Solutions -->
         <article class="venture-card">
           <div class="v-icon-col">
-            <img src="./images/crown23.png" alt="Imperio Talent Solutions" />
+            <img src="./images/crown23.png" alt="Imperio Talent Solutions SDVOSB government contracting services" />
           </div>
           <div class="v-content">
             <h3 class="v-title">Imperio Talent Solutions</h3>
@@ -70,7 +131,7 @@
             <img
               class="icon-wide"
               src="./images/newest_castle.png"
-              alt="Digital Content"
+              alt="THOK digital tools and contracting automation software"
             />
           </div>
           <div class="v-content">
@@ -94,7 +155,7 @@
         <!-- 3: Real Estate -->
         <article class="venture-card">
           <div class="v-icon-col">
-            <img src="./images/thokCastle.png" alt="Real Estate" />
+            <img src="./images/thokCastle.png" alt="The House of Kel real estate investment and property development division" />
           </div>
           <div class="v-content">
             <h3 class="v-title">Real Estate Ventures</h3>
@@ -116,7 +177,7 @@
         <!-- 4: Legacy & Artistry — content left, video right -->
         <article class="venture-card-video">
           <div class="v-icon-col">
-            <img src="./images/shield1.png" alt="Legacy & Artistry" />
+            <img src="./images/shield1.png" alt="THOK legacy brand emblem gold crest logo" />
           </div>
           <div class="v-content">
             <h3 class="v-title">Legacy & Artistry</h3>
@@ -292,6 +353,23 @@
       </div>
     </footer>
     <script>
+      const header = document.querySelector('.sticky-header');
+      
+// const heroLogo = document.querySelector('.hero-logo');
+
+// window.addEventListener('scroll', () => {
+//   if (window.scrollY > 120) {
+//     header.classList.add('show');
+//     heroLogo.style.transform = 'scale(0.6)';
+//     heroLogo.style.opacity = '0.2';
+//   } else {
+//     header.classList.remove('show');
+//     heroLogo.style.transform = 'scale(1)';
+//     heroLogo.style.opacity = '1';
+//   }
+// });
+
+
       (function () {
         let _t = 0,
           _tm;
@@ -311,5 +389,7 @@
         });
       })();
     </script>
+
+    
   </body>
 </html>

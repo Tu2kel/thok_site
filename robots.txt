@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+https://thehouseofkel.com/robots.txt
