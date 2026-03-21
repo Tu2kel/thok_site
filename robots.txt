@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
 
-https://thehouseofkel.com/robots.txt
+Disallow: /contractor.html
+Disallow: /employers.html
+Disallow: /job-seekers.html
+
+Sitemap: https://thehouseofkel.com/sitemap.xml
