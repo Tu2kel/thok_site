@@ -23,9 +23,10 @@
 
 /* ── Print ── */
 @media print {
+  /* No @page margin — the border on #memo-page IS the frame */
   @page {
     size: letter;
-    margin: 0.5in 0.6in;
+    margin: 0;
   }
 
   * {
@@ -45,10 +46,11 @@
   }
 
   body {
-    padding-left: 0 !important;
-    background: #faf7f2 !important;
+    padding: 0 !important;
     margin: 0 !important;
+    background: #faf7f2 !important;
   }
+
   main {
     padding: 0 !important;
     overflow: visible !important;
@@ -71,29 +73,35 @@
   }
 
   /*
-   * Flex column on #memo-page with explicit height so the browser
-   * has a containing block to resolve margin-top:auto against.
-   * The key is height (not min-height) — gives flex a definite size.
+   * Full page box — 11in tall, padding is the margin.
+   * Flex column so .memo-body stretches and #memo-sig
+   * with margin-top:auto lands at the bottom naturally.
    */
   #memo-page {
     display: flex !important;
     flex-direction: column !important;
-    width: 100% !important;
-    height: 9in !important;
+    width: 8.5in !important;
+    height: 11in !important;
     min-height: unset !important;
     max-width: 100% !important;
-    padding: 26px 30px 34px !important;
-    border: 1px solid rgba(160, 110, 0, 0.22) !important;
-    background: rgba(255, 255, 255, 0.45) !important;
+    /* Padding acts as page margins */
+    padding: 0.6in 0.7in !important;
+    border: none !important;
     box-shadow: none !important;
+    background: #faf7f2 !important;
+    margin: 0 !important;
   }
 
   .memo-body {
     flex: 1 !important;
   }
 
-  /* Spacer between body and sig */
   #memo-sig {
     margin-top: auto !important;
+  }
+
+  /* Footer sits naturally below sig — no extra spacing needed */
+  #memo-footer {
+    margin-top: 24px !important;
   }
 }
