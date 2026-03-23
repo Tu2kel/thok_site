@@ -199,12 +199,18 @@
           #memo-editor-panel, .theme-toggle-btn { display: none !important; }
           body { padding-left: 0 !important; background: #faf7f2 !important; }
           main { padding: 0 !important; overflow: visible !important; }
+          #memo-tab-root { overflow: visible !important; height: auto !important; }
           #memo-preview-panel {
             padding: 0 !important;
             background: #faf7f2 !important;
             background-image: none !important;
             overflow: visible !important;
             flex: unset !important;
+            height: auto !important;
+            width: 100% !important;
+          }
+          #memo-preview-panel > div {
+            overflow: visible !important;
             height: auto !important;
           }
           #memo-page {
@@ -242,6 +248,7 @@
     };
 
     return hM('div', {
+      id: 'memo-tab-root',
       style: { display:'flex', height:'calc(100vh - 56px)', overflow:'hidden', animation:'fadeUp .4s ease both' }
     },
 
