@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Imperio — Supplier Purchase Order</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --ivory: #faf7f2;
+        --ivory-mid: #f0ebe2;
+        --ivory-deep: #e8e0d0;
+        --gold-solid: #7a5000;
+        --gold-dim: rgba(120, 80, 0, 0.65);
+        --gold-border: rgba(160, 110, 0, 0.22);
+        --gold-glow: rgba(180, 130, 0, 0.08);
+        --body-text: #1a0a12;
+        --body-muted: #4a3020;
+        --surface: linear-gradient(160deg, #fff 0%, #f8f4ed 40%, #eee9df 100%);
+      }
+
+      /* ── LAYOUT ── */
+      body {
+        background: var(--ivory);
+        background-image:
+          radial-gradient(
+            ellipse at 15% 5%,
+            rgba(200, 150, 0, 0.07) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 85% 95%,
+            rgba(200, 130, 0, 0.05) 0%,
+            transparent 45%
+          );
+        min-height: 100vh;
+        font-family: "Cormorant Garamond", serif;
+        color: var(--body-text);
+        display: flex;
+        gap: 0;
+      }
+
+      /* ── EDITOR PANEL ── */
+      .editor-panel {
+        width: 320px;
+        min-height: 100vh;
+        flex-shrink: 0;
+        background: linear-gradient(
+          160deg,
+          #2e2b32 0%,
+          #1a1820 18%,
+          #0e0d10 40%,
+          #161418 60%,
+          #1f1d23 80%,
+          #111012 100%
+        );
+        padding: 28px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border-right: 1px solid rgba(201, 168, 76, 0.15);
+      }
+
+      .editor-wordmark {
+        font-family: "Cinzel", serif;
+        font-size: 11px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        background: linear-gradient(
+          to bottom,
+          #cf972d 22%,
+          #f9f295 45%,
+          #e0aa3e 50%,
+          #b8860b 55%,
+          #f9f295 78%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 6px;
+      }
+
+      .editor-subtitle {
+        font-family: "Cinzel", serif;
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        color: rgba(201, 168, 76, 0.5);
+        text-transform: uppercase;
+        margin-bottom: 22px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(201, 168, 76, 0.12);
+      }
+
+      .section-label {
+        font-family: "Cinzel", serif;
+        font-size: 8.5px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(201, 168, 76, 0.6);
+        margin-bottom: 8px;
+        margin-top: 16px;
+      }
+      .section-label:first-of-type {
+        margin-top: 0;
+      }
+
+      .field-row {
+        margin-bottom: 7px;
+      }
+
+      .field-label {
+        font-family: "Cinzel", serif;
+        font-size: 8px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(245, 240, 232, 0.45);
+        margin-bottom: 3px;
+      }
+
+      .editor-panel input,
+      .editor-panel textarea,
+      .editor-panel select {
+        width: 100%;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(201, 168, 76, 0.18);
+        border-radius: 3px;
+        padding: 6px 9px;
+        font-family: "Cormorant Garamond", serif;
+        font-size: 13px;
+        color: #f5f0e8;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .editor-panel input:focus,
+      .editor-panel textarea:focus,
+      .editor-panel select:focus {
+        border-color: rgba(201, 168, 76, 0.5);
+      }
+      .editor-panel textarea {
+        resize: vertical;
+        min-height: 56px;
+        line-height: 1.5;
+      }
+      .editor-panel select option {
+        background: #1a1820;
+        color: #f5f0e8;
+      }
+
+      .divider-rule {
+        border: none;
+        border-top: 1px solid rgba(201, 168, 76, 0.12);
+        margin: 14px 0;
+      }
+
+      .btn-print {
+        margin-top: auto;
+        padding-top: 20px;
+        width: 100%;
+        padding: 11px;
+        background: linear-gradient(135deg, #cf972d, #f9f295 50%, #b8860b);
+        color: #1a0a12;
+        font-family: "Cinzel", serif;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        font-weight: 700;
+        border: none;
+        cursor: pointer;
+        border-radius: 3px;
+        margin-top: 20px;
+        position: relative;
+        overflow: hidden;
+        text-transform: uppercase;
+      }
+      .btn-print:hover {
+        opacity: 0.9;
+      }
+
+      /* ── PREVIEW PANEL ── */
+      .preview-panel {
+        flex: 1;
+        padding: 50px 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      /* ── PO DOCUMENT ── */
+      .po-doc {
+        width: 100%;
+        max-width: 720px;
+        background: linear-gradient(160deg, #fff 0%, #f8f4ed 40%, #eee9df 100%);
+        border: 1px solid var(--gold-border);
+        box-shadow:
+          0 0 0 4px rgba(255, 255, 255, 0.7),
+          0 0 40px rgba(180, 130, 0, 0.06),
+          0 8px 32px rgba(0, 0, 0, 0.08);
+        padding: 52px 56px 56px;
+        position: relative;
+      }
+
+      /* page frame */
+      .po-doc::before {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        border: 1px solid rgba(160, 110, 0, 0.1);
+        pointer-events: none;
+      }
+
+      /* ── DOC HEADER ── */
+      .doc-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 28px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--gold-border);
+      }
+
+      .doc-logo-block .company-name {
+        font-family: "Cinzel", serif;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--gold-solid);
+        letter-spacing: 0.1em;
+        line-height: 1.2;
+      }
+      .doc-logo-block .company-dba {
+        font-family: "Cinzel", serif;
+        font-size: 9.5px;
+        letter-spacing: 0.22em;
+        color: var(--gold-dim);
+        margin-top: 3px;
+        text-transform: uppercase;
+      }
+      .doc-logo-block .company-detail {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 12px;
+        color: var(--body-muted);
+        margin-top: 8px;
+        line-height: 1.7;
+      }
+
+      .doc-title-block {
+        text-align: right;
+      }
+      .doc-title-block .po-label {
+        font-family: "Cinzel", serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--gold-solid);
+        letter-spacing: 0.08em;
+      }
+      .doc-title-block .po-number {
+        font-family: "Cinzel", serif;
+        font-size: 13px;
+        color: var(--body-muted);
+        letter-spacing: 0.12em;
+        margin-top: 4px;
+      }
+      .doc-title-block .po-date {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 12px;
+        color: var(--body-muted);
+        margin-top: 4px;
+        font-style: italic;
+      }
+
+      /* ── GOLD RULE ── */
+      .gold-rule {
+        position: relative;
+        text-align: center;
+        margin: 20px 0;
+      }
+      .gold-rule::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          to right,
+          transparent,
+          var(--gold-solid),
+          transparent
+        );
+        opacity: 0.4;
+      }
+      .gold-rule .diamond {
+        display: inline-block;
+        position: relative;
+        z-index: 1;
+        background: var(--ivory-mid);
+        padding: 0 10px;
+        color: var(--gold-solid);
+        font-size: 10px;
+        opacity: 0.7;
+      }
+
+      /* ── VENDOR / SHIP-TO BLOCK ── */
+      .address-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        margin-bottom: 24px;
+      }
+
+      .address-block .block-label {
+        font-family: "Cinzel", serif;
+        font-size: 8.5px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--gold-solid);
+        opacity: 0.7;
+        margin-bottom: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(160, 110, 0, 0.15);
+      }
+      .address-block .block-content {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 13.5px;
+        color: var(--body-text);
+        line-height: 1.75;
+      }
+
+      /* ── META ROW ── */
+      .meta-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        background: rgba(160, 110, 0, 0.15);
+        border: 1px solid var(--gold-border);
+        margin-bottom: 24px;
+      }
+      .meta-cell {
+        background: var(--ivory);
+        padding: 9px 12px;
+        text-align: center;
+      }
+      .meta-cell .meta-label {
+        font-family: "Cinzel", serif;
+        font-size: 7.5px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--gold-dim);
+        margin-bottom: 3px;
+      }
+      .meta-cell .meta-value {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 13px;
+        color: var(--body-text);
+        font-weight: 600;
+      }
+
+      /* ── LINE ITEMS TABLE ── */
+      .po-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 24px;
+        font-family: "Cormorant Garamond", serif;
+      }
+      .po-table thead tr {
+        background: rgba(160, 110, 0, 0.1);
+        border-bottom: 1px solid rgba(160, 110, 0, 0.3);
+      }
+      .po-table thead th {
+        font-family: "Cinzel", serif;
+        font-size: 8px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--gold-solid);
+        padding: 9px 10px;
+        text-align: left;
+        font-weight: 600;
+      }
+      .po-table thead th:last-child,
+      .po-table thead th:nth-child(3),
+      .po-table thead th:nth-child(4) {
+        text-align: right;
+      }
+
+      .po-table tbody tr {
+        border-bottom: 1px solid rgba(160, 110, 0, 0.1);
+      }
+      .po-table tbody tr:last-child {
+        border-bottom: none;
+      }
+      .po-table tbody td {
+        padding: 10px 10px;
+        font-size: 13.5px;
+        color: var(--body-text);
+        vertical-align: top;
+      }
+      .po-table tbody td:nth-child(3),
+      .po-table tbody td:nth-child(4),
+      .po-table tbody td:last-child {
+        text-align: right;
+      }
+
+      .po-table tfoot tr {
+        border-top: 1px solid rgba(160, 110, 0, 0.25);
+      }
+      .po-table tfoot td {
+        padding: 9px 10px;
+        font-size: 13.5px;
+        color: var(--body-text);
+      }
+      .po-table tfoot .total-label {
+        font-family: "Cinzel", serif;
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold-dim);
+        text-align: right;
+        padding-right: 14px;
+      }
+      .po-table tfoot .total-value {
+        text-align: right;
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--gold-solid);
+      }
+
+      /* ── TERMS + NOTES ── */
+      .terms-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        margin-bottom: 28px;
+      }
+      .terms-block .terms-label {
+        font-family: "Cinzel", serif;
+        font-size: 8.5px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--gold-solid);
+        opacity: 0.7;
+        margin-bottom: 7px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(160, 110, 0, 0.15);
+      }
+      .terms-block .terms-content {
+        font-size: 12.5px;
+        color: var(--body-muted);
+        line-height: 1.7;
+      }
+
+      /* ── SIGNATURE BLOCK ── */
+      .sig-block {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 40px;
+        margin-top: 32px;
+        padding-top: 20px;
+        border-top: 1px solid var(--gold-border);
+      }
+      .sig-item .sig-line {
+        height: 1px;
+        background: rgba(160, 110, 0, 0.3);
+        margin-bottom: 6px;
+        margin-top: 36px;
+      }
+      .sig-item .sig-label {
+        font-family: "Cinzel", serif;
+        font-size: 8px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--gold-dim);
+      }
+      .sig-item .sig-name {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 13px;
+        color: var(--body-muted);
+        margin-top: 2px;
+        font-style: italic;
+      }
+
+      /* ── FOOTER ── */
+      .doc-footer {
+        margin-top: 36px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(160, 110, 0, 0.12);
+        text-align: center;
+        font-family: "Cormorant Garamond", serif;
+        font-size: 11px;
+        color: var(--gold-dim);
+        letter-spacing: 0.05em;
+        line-height: 1.6;
+      }
+
+      /* ── PRINT ── */
+      @media print {
+        body {
+          background: none !important;
+          display: block !important;
+        }
+        .editor-panel {
+          display: none !important;
+        }
+        .preview-panel {
+          padding: 0 !important;
+        }
+        .po-doc {
+          box-shadow: none !important;
+          border: 1px solid rgba(160, 110, 0, 0.3) !important;
+          max-width: 100% !important;
+          page-break-inside: avoid;
+        }
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ── EDITOR ── -->
+    <div class="editor-panel" id="editorPanel">
+      <div class="editor-wordmark">Imperio Talent Solutions</div>
+      <div class="editor-subtitle">Supplier PO Generator</div>
+
+      <div class="section-label">PO Info</div>
+
+      <div class="field-row">
+        <div class="field-label">PO Number</div>
+        <input
+          id="f-po-number"
+          type="text"
+          placeholder="IMP-2026-0042"
+          oninput="render()"
+        />
+      </div>
+      <div class="field-row">
+        <div class="field-label">PO Date</div>
+        <input id="f-po-date" type="text" oninput="render()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">SOL / Contract #</div>
+        <input
+          id="f-sol"
+          type="text"
+          placeholder="SPE4AX-26-Q-XXXX"
+          oninput="render()"
+        />
+      </div>
+
+      <div class="section-label">Vendor (Ship From)</div>
+
+      <div class="field-row">
+        <div class="field-label">Vendor Name</div>
+        <input id="f-vendor-name" type="text" oninput="render()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">Vendor Address</div>
+        <textarea id="f-vendor-addr" rows="3" oninput="render()"></textarea>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Vendor Contact / Email</div>
+        <input id="f-vendor-contact" type="text" oninput="render()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">Vendor Phone</div>
+        <input id="f-vendor-phone" type="text" oninput="render()" />
+      </div>
+
+      <div class="section-label">Ship To</div>
+      <div class="field-row">
+        <div class="field-label">Deliver To</div>
+        <textarea id="f-ship-to" rows="3" oninput="render()"></textarea>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Required Delivery Date</div>
+        <input id="f-delivery-date" type="text" oninput="render()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">FOB</div>
+        <select id="f-fob" onchange="render()">
+          <option value="Destination">Destination</option>
+          <option value="Origin">Origin</option>
+        </select>
+      </div>
+
+      <div class="section-label">Line Item</div>
+      <div class="field-row">
+        <div class="field-label">NSN</div>
+        <input
+          id="f-nsn"
+          type="text"
+          placeholder="1234-56-789-0123"
+          oninput="render()"
+        />
+      </div>
+      <div class="field-row">
+        <div class="field-label">Item Description</div>
+        <input id="f-item" type="text" oninput="render()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">Part / Ref Number</div>
+        <input id="f-part" type="text" oninput="render()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">Quantity</div>
+        <input id="f-qty" type="text" oninput="calcTotal()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">Unit of Issue</div>
+        <input id="f-unit" type="text" placeholder="EA" oninput="render()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">Unit Price ($)</div>
+        <input id="f-unit-price" type="text" oninput="calcTotal()" />
+      </div>
+      <div class="field-row">
+        <div class="field-label">CLIN</div>
+        <input id="f-clin" type="text" placeholder="0001" oninput="render()" />
+      </div>
+
+      <hr class="divider-rule" />
+
+      <div class="section-label">Terms &amp; Notes</div>
+      <div class="field-row">
+        <div class="field-label">Payment Terms</div>
+        <select id="f-terms" onchange="render()">
+          <option value="Net 30">Net 30</option>
+          <option value="Net 45">Net 45</option>
+          <option value="Net 15">Net 15</option>
+          <option value="Due on Receipt">Due on Receipt</option>
+          <option value="CIA (Cash in Advance)">CIA (Cash in Advance)</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Special Instructions / Notes</div>
+        <textarea id="f-notes" rows="4" oninput="render()"></textarea>
+      </div>
+
+      <button class="btn-print" onclick="window.print()">
+        &#9632; Print / Save PDF
+      </button>
+    </div>
+
+    <!-- ── PREVIEW ── -->
+    <div class="preview-panel">
+      <div class="po-doc" id="poDoc">
+        <!-- Header -->
+        <div class="doc-header">
+          <div class="doc-logo-block">
+            <div class="company-name">Imperio Talent Solutions</div>
+            <div class="company-dba">
+              The House of Kel LLC &nbsp;|&nbsp; SDVOSB &nbsp;|&nbsp; CAGE:
+              152U4
+            </div>
+            <div class="company-detail">
+              anthony@imperiovita.co<br />
+              (254) 265-9335 &nbsp;|&nbsp; (254) 226-5216<br />
+              Killeen, TX
+            </div>
+          </div>
+          <div class="doc-title-block">
+            <div class="po-label">PURCHASE ORDER</div>
+            <div class="po-number" id="p-po-number">IMP-2026-0001</div>
+            <div class="po-date" id="p-po-date"></div>
+          </div>
+        </div>
+
+        <!-- Gold Rule -->
+        <div class="gold-rule"><span class="diamond">&#9670;</span></div>
+
+        <!-- Vendor + Ship-To -->
+        <div class="address-row">
+          <div class="address-block">
+            <div class="block-label">Vendor</div>
+            <div class="block-content" id="p-vendor"></div>
+          </div>
+          <div class="address-block">
+            <div class="block-label">Ship To</div>
+            <div class="block-content" id="p-ship-to"></div>
+          </div>
+        </div>
+
+        <!-- Meta Row -->
+        <div class="meta-row">
+          <div class="meta-cell">
+            <div class="meta-label">SOL / Contract</div>
+            <div class="meta-value" id="p-sol">--</div>
+          </div>
+          <div class="meta-cell">
+            <div class="meta-label">Payment Terms</div>
+            <div class="meta-value" id="p-terms">Net 30</div>
+          </div>
+          <div class="meta-cell">
+            <div class="meta-label">Required Delivery</div>
+            <div class="meta-value" id="p-delivery">--</div>
+          </div>
+          <div class="meta-cell">
+            <div class="meta-label">FOB</div>
+            <div class="meta-value" id="p-fob">Destination</div>
+          </div>
+        </div>
+
+        <!-- Line Items Table -->
+        <table class="po-table">
+          <thead>
+            <tr>
+              <th style="width: 8%">CLIN</th>
+              <th style="width: 32%">Item Description / NSN</th>
+              <th style="width: 14%">Part No.</th>
+              <th style="width: 10%">Qty</th>
+              <th style="width: 8%">U/I</th>
+              <th style="width: 14%">Unit Price</th>
+              <th style="width: 14%">Extended</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td id="p-clin">0001</td>
+              <td id="p-item-desc">--</td>
+              <td id="p-part">--</td>
+              <td id="p-qty">--</td>
+              <td id="p-unit">EA</td>
+              <td id="p-unit-price">--</td>
+              <td id="p-extended">--</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5"></td>
+              <td class="total-label">Total</td>
+              <td class="total-value" id="p-total">--</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <!-- Terms + Notes -->
+        <div class="terms-row">
+          <div class="terms-block">
+            <div class="terms-label">Terms &amp; Conditions</div>
+            <div class="terms-content">
+              Vendor agrees to deliver items in conformance with applicable
+              federal supply specifications, MIL-SPEC requirements, and any
+              shelf-life or packaging requirements specified in the referenced
+              solicitation. All items must be new, unused, and meet applicable
+              quality standards. Substitutions require prior written approval.
+            </div>
+          </div>
+          <div class="terms-block">
+            <div class="terms-label">Special Instructions</div>
+            <div
+              class="terms-content"
+              id="p-notes"
+              style="white-space: pre-wrap; font-style: italic"
+            >
+              --
+            </div>
+          </div>
+        </div>
+
+        <!-- Gold Rule -->
+        <div class="gold-rule"><span class="diamond">&#9670;</span></div>
+
+        <!-- Signature Block -->
+        <div class="sig-block">
+          <div class="sig-item">
+            <div class="sig-line"></div>
+            <div class="sig-label">Authorized Signature</div>
+            <div class="sig-name">Anthony Kelley Sr., Founder &amp; CEO</div>
+          </div>
+          <div class="sig-item">
+            <div class="sig-line"></div>
+            <div class="sig-label">Vendor Acknowledgment</div>
+            <div class="sig-name">Signature / Date</div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="doc-footer">
+          Imperio Talent Solutions &nbsp;|&nbsp; The House of Kel LLC
+          &nbsp;|&nbsp; CAGE: 152U4 &nbsp;|&nbsp; SDVOSB<br />
+          anthony@imperiovita.co &nbsp;|&nbsp; (254) 265-9335 &nbsp;|&nbsp;
+          Killeen, TX
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ── Auto-fill today's date
+      (function () {
+        const d = new Date();
+        const months = [
+          "January",
+          "February",
+          "March",
+          "April",
+          "May",
+          "June",
+          "July",
+          "August",
+          "September",
+          "October",
+          "November",
+          "December",
+        ];
+        const formatted =
+          months[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
+        document.getElementById("f-po-date").value = formatted;
+      })();
+
+      function fmt(n) {
+        if (isNaN(n) || n === "") return "--";
+        return (
+          "$" +
+          Number(n).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        );
+      }
+
+      function calcTotal() {
+        const qty = parseFloat(
+          (document.getElementById("f-qty").value || "").replace(/,/g, ""),
+        );
+        const up = parseFloat(
+          (document.getElementById("f-unit-price").value || "").replace(
+            /[$,]/g,
+            "",
+          ),
+        );
+        const ext = !isNaN(qty) && !isNaN(up) ? qty * up : NaN;
+        document.getElementById("p-extended").textContent = isNaN(ext)
+          ? "--"
+          : fmt(ext);
+        document.getElementById("p-total").textContent = isNaN(ext)
+          ? "--"
+          : fmt(ext);
+        render();
+      }
+
+      function v(id) {
+        return document.getElementById(id).value.trim();
+      }
+      function set(id, val) {
+        document.getElementById(id).textContent = val || "--";
+      }
+      function setHTML(id, val) {
+        document.getElementById(id).innerHTML = val || "--";
+      }
+
+      function render() {
+        // Header
+        set("p-po-number", v("f-po-number") || "IMP-2026-0001");
+        set("p-po-date", v("f-po-date"));
+
+        // Vendor block
+        const vendorLines = [
+          v("f-vendor-name"),
+          v("f-vendor-addr").replace(/\n/g, "<br>"),
+          v("f-vendor-contact"),
+          v("f-vendor-phone"),
+        ].filter(Boolean);
+        setHTML("p-vendor", vendorLines.join("<br>") || "--");
+
+        // Ship-to
+        const shipLines = [v("f-ship-to").replace(/\n/g, "<br>")].filter(
+          Boolean,
+        );
+        setHTML("p-ship-to", shipLines.join("<br>") || "--");
+
+        // Meta
+        set("p-sol", v("f-sol"));
+        set("p-terms", v("f-terms") || "Net 30");
+        set("p-delivery", v("f-delivery-date"));
+        set("p-fob", v("f-fob") || "Destination");
+
+        // Line item
+        set("p-clin", v("f-clin") || "0001");
+        const itemDesc = [v("f-item"), v("f-nsn") ? "NSN: " + v("f-nsn") : ""]
+          .filter(Boolean)
+          .join("\n");
+        document.getElementById("p-item-desc").innerHTML =
+          itemDesc.replace(/\n/g, "<br>") || "--";
+        set("p-part", v("f-part"));
+        set("p-qty", v("f-qty"));
+        set("p-unit", v("f-unit") || "EA");
+
+        const rawPrice = (v("f-unit-price") || "").replace(/[$,]/g, "");
+        const priceNum = parseFloat(rawPrice);
+        document.getElementById("p-unit-price").textContent = !isNaN(priceNum)
+          ? fmt(priceNum)
+          : "--";
+
+        // Notes
+        set("p-notes", v("f-notes"));
+      }
+
+      // ── Read URL params and prefill on load
+      (function () {
+        const p = new URLSearchParams(window.location.search);
+        const set = (id, val) => {
+          if (val) document.getElementById(id).value = val;
+        };
+        set("f-po-number", p.get("po") || "");
+        set("f-sol", p.get("sol"));
+        set("f-nsn", p.get("nsn"));
+        set("f-item", p.get("item"));
+        set("f-part", p.get("part"));
+        set("f-qty", p.get("qty"));
+        set("f-unit", p.get("unit"));
+        set("f-unit-price", p.get("price"));
+        set("f-clin", p.get("clin"));
+        set("f-delivery-date", p.get("delivery"));
+        set("f-fob", p.get("fob"));
+        // Vendor block
+        const vendor = p.get("vendor") || "";
+        const email = p.get("vendorEmail") || "";
+        const phone = p.get("vendorPhone") || "";
+        if (vendor || email || phone) {
+          set("f-vendor-name", vendor);
+          set("f-vendor-contact", email);
+          set("f-vendor-phone", phone);
+        }
+        set("f-ship-to", p.get("shipto"));
+      })();
+
+      // Init
+      calcTotal();
+      render();
+    </script>
+  </body>
+</html>

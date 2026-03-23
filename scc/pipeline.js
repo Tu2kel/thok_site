@@ -2031,6 +2031,29 @@ Rules:
         return sortDir === "asc" ? aMs - bMs : bMs - aMs;
       });
 
+    const goPO = (r) => {
+      const params = new URLSearchParams({
+        sol: r.sol_number || "",
+        nsn: r.nsn || "",
+        item: r.item_name || "",
+        part: r.ref_part_number || "",
+        qty: r.quantity || "",
+        unit: r.unit_of_issue || "EA",
+        price: r.supplier_quote_price || r.ref_unit_price || "",
+        clin: r.clin || "0001",
+        delivery: r.delivery_days ? r.delivery_days + " days ARO" : "",
+        vendor: r.supplier_poc || r.ref_supplier || "",
+        vendorEmail: r.supplier_email || "",
+        vendorPhone: r.supplier_phone || "",
+        shipto: r.ship_to || "",
+        fob: r.fob || "Destination",
+      });
+      window.open(
+        "/scc/supplier-po-template.html?" + params.toString(),
+        "_blank",
+      );
+    };
+
     const handleStatus = async (sol_number, status) => {
       const updated = rows.map((r) =>
         r.sol_number === sol_number ? { ...r, status } : r,
@@ -2924,6 +2947,35 @@ Rules:
                               },
                             },
                             "✉ FU",
+                          ),
+                          hP(
+                            "button",
+                            {
+                              onClick: () => goPO(r),
+                              title: "Generate Supplier PO",
+                              style: {
+                                background: "transparent",
+                                border: "1px solid rgba(201,168,76,.3)",
+                                color: "var(--gold-mid)",
+                                fontFamily: "Cinzel,serif",
+                                fontSize: "10px",
+                                letterSpacing: ".06em",
+                                padding: "4px 8px",
+                                cursor: "pointer",
+                                transition: "all .2s",
+                                whiteSpace: "nowrap",
+                              },
+                              onMouseEnter: (e) => {
+                                e.target.style.background =
+                                  "rgba(201,168,76,.1)";
+                                e.target.style.color = "#f9f295";
+                              },
+                              onMouseLeave: (e) => {
+                                e.target.style.background = "transparent";
+                                e.target.style.color = "rgba(201,168,76,.7)";
+                              },
+                            },
+                            "PO",
                           ),
                           hP(
                             "button",
