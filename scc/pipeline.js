@@ -1948,6 +1948,7 @@ Rules:
     toggleOop,
     goSource,
     goAward,
+    goFU,
     showToast,
     loadPipeline,
   }) {
@@ -2889,6 +2890,40 @@ Rules:
                               },
                             },
                             "★ Award",
+                          ),
+                          hP(
+                            "button",
+                            {
+                              onClick: () => goFU && goFU(r),
+                              title:
+                                "Send to FU Engine — pre-fills solicitation inquiry",
+                              style: {
+                                background: "transparent",
+                                border: "1px solid rgba(135,206,235,.3)",
+                                color: "rgba(135,206,235,.7)",
+                                fontFamily: "Cinzel,serif",
+                                fontSize: "10px",
+                                letterSpacing: ".06em",
+                                padding: "4px 8px",
+                                cursor: "pointer",
+                                transition: "all .2s",
+                                whiteSpace: "nowrap",
+                              },
+                              onMouseEnter: (e) => {
+                                e.target.style.background =
+                                  "rgba(135,206,235,.1)";
+                                e.target.style.color = "#87ceeb";
+                                e.target.style.borderColor =
+                                  "rgba(135,206,235,.6)";
+                              },
+                              onMouseLeave: (e) => {
+                                e.target.style.background = "transparent";
+                                e.target.style.color = "rgba(135,206,235,.7)";
+                                e.target.style.borderColor =
+                                  "rgba(135,206,235,.3)";
+                              },
+                            },
+                            "✉ FU",
                           ),
                           hP(
                             "button",

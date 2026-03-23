@@ -428,8 +428,16 @@
       window.SCC_DB;
     const { isListing, parseListing, parseAIText } = window.SCC_PARSER;
     const { calcPricing } = window.SCC_MATH;
-    const { DashboardTab, IntakeTab, PipelineTab, SourceTab, RFQTab, AwardsTab, MemoTab } =
-      window.SCC_TABS;
+    const {
+      DashboardTab,
+      IntakeTab,
+      PipelineTab,
+      SourceTab,
+      RFQTab,
+      AwardsTab,
+      MemoTab,
+      FUTab,
+    } = window.SCC_TABS;
 
     const [tab, setTab] = useState("dashboard");
     const [boxA, setBoxA] = useState("");
@@ -442,6 +450,7 @@
     const [oopSet, setOopSet] = useState(new Set());
     const [sourcePreload, setSourcePreload] = useState(null);
     const [awardPrefill, setAwardPrefill] = useState(null);
+    const [fuPrefill, setFuPrefill] = useState(null);
     const [theme, setTheme] = useState(
       () => localStorage.getItem("scc-theme") || "dark",
     );
@@ -454,7 +463,9 @@
 
     // 3-way cycle: dark (Imperial Red) → metallic → light (Ivory)
     const toggleTheme = () =>
-      setTheme((t) => (t === "dark" ? "metallic" : t === "metallic" ? "light" : "dark"));
+      setTheme((t) =>
+        t === "dark" ? "metallic" : t === "metallic" ? "light" : "dark",
+      );
 
     const goSource = (r) => {
       setSourcePreload({
@@ -468,6 +479,19 @@
     const goAward = (r) => {
       setAwardPrefill(r);
       setTab("awards");
+    };
+
+    const goFU = (r) => {
+      setFuPrefill({
+        sol: r.sol_number || "",
+        nsn: r.nsn || "",
+        item: r.item_name || "",
+        qty: r.quantity || "",
+        due: r.quote_due || "",
+        delivery: r.delivery_days || "30",
+        shipTo: r.ship_to || "",
+      });
+      setTab("fu");
     };
 
     useEffect(() => {
@@ -595,17 +619,22 @@
           {
             className: "theme-toggle-btn",
             onClick: toggleTheme,
-            title: theme === "dark"
-              ? "Switch to Metallic Dark"
-              : theme === "metallic"
-              ? "Switch to Ivory Imperial"
-              : "Switch to Imperial Red",
+            title:
+              theme === "dark"
+                ? "Switch to Metallic Dark"
+                : theme === "metallic"
+                  ? "Switch to Ivory Imperial"
+                  : "Switch to Imperial Red",
             "aria-label": "Toggle theme",
           },
           hA(
             "span",
             { className: "toggle-label" },
-            theme === "dark" ? "Imperial" : theme === "metallic" ? "Metallic" : "Ivory",
+            theme === "dark"
+              ? "Imperial"
+              : theme === "metallic"
+                ? "Metallic"
+                : "Ivory",
           ),
           hA(
             "div",
@@ -697,7 +726,10 @@
                   tab === "awards"
                     ? "rgba(61,214,140,.6)"
                     : "rgba(61,214,140,.2)",
-                color: tab === "awards" ? "var(--accent-green)" : "rgba(61,214,140,.4)",
+                color:
+                  tab === "awards"
+                    ? "var(--accent-green)"
+                    : "rgba(61,214,140,.4)",
               },
             },
             hA("span", { className: "glint" }),
@@ -719,6 +751,23 @@
             },
             hA("span", { className: "glint" }),
             "📄 Memo",
+          ),
+          // FU Engine tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "fu" ? " active" : ""),
+              onClick: () => setTab("fu"),
+              style: {
+                borderColor:
+                  tab === "fu"
+                    ? "rgba(135,206,235,.6)"
+                    : "rgba(135,206,235,.25)",
+                color: tab === "fu" ? "#87ceeb" : "rgba(135,206,235,.5)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "✉ FU Engine",
           ),
           // Backup
           hA(
@@ -815,6 +864,7 @@
             toggleOop,
             goSource,
             goAward,
+            goFU,
             showToast,
             loadPipeline,
           }),
@@ -844,6 +894,13 @@
           }),
 
         tab === "memo" && hA(MemoTab, null),
+
+        tab === "fu" &&
+          hA(FUTab, {
+            prefill: fuPrefill,
+            onPrefillConsumed: () => setFuPrefill(null),
+            showToast,
+          }),
       ),
 
       // ── TOAST ──
