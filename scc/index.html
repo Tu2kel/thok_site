@@ -358,6 +358,26 @@
     </script>
 
     <!-- React mounts here -->
+    <!-- ══ THOK WATERMARK — outside React, no stacking context issues ══ -->
+    <div
+      id="thok-watermark"
+      style="
+        display: none;
+        position: fixed;
+        top: 100px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: url(thok_logo.png);
+        background-repeat: no-repeat;
+        background-position: center center;
+        background-size: 860px 860px;
+        opacity: 0.09;
+        pointer-events: none;
+        z-index: 9998;
+      "
+    ></div>
+
     <div id="root"></div>
 
     <!--

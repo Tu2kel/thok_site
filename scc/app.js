@@ -530,6 +530,9 @@
 
     useEffect(() => {
       if (tab === "pipeline" || tab === "dashboard") loadPipeline();
+      // Show THOK watermark only on dashboard
+      const wm = document.getElementById("thok-watermark");
+      if (wm) wm.style.display = tab === "dashboard" ? "block" : "none";
     }, [tab, loadPipeline]);
 
     const handleParse = () => {

@@ -300,7 +300,15 @@
 
     return h(
       "div",
-      { style: { animation: "fadeUp .5s ease both", paddingBottom: "32px" } },
+      {
+        style: {
+          animation: "fadeUp .5s ease both",
+          paddingBottom: "32px",
+          position: "relative",
+        },
+      },
+
+      // watermark handled in index.html + app.js
 
       // ── PAGE HEADER ───────────────────────────────────────────────────
       h(
@@ -313,6 +321,8 @@
             marginBottom: "24px",
             flexWrap: "wrap",
             gap: "8px",
+            position: "relative",
+            zIndex: 1,
           },
         },
         h(
@@ -372,6 +382,8 @@
             gridTemplateColumns: "repeat(5,1fr)",
             gap: "12px",
             marginBottom: "16px",
+            position: "relative",
+            zIndex: 1,
           },
         },
 
@@ -524,6 +536,8 @@
             gridTemplateColumns: "1fr 1fr",
             gap: "12px",
             marginBottom: "16px",
+            position: "relative",
+            zIndex: 1,
           },
         },
 
@@ -689,6 +703,8 @@
             gridTemplateColumns: "1fr 1fr",
             gap: "12px",
             marginBottom: "16px",
+            position: "relative",
+            zIndex: 1,
           },
         },
 
@@ -1038,7 +1054,14 @@
       // ── ROW 4: FSC PERFORMANCE TABLE ──────────────────────────────────
       h(
         "div",
-        { style: { ...card, marginBottom: "16px" } },
+        {
+          style: {
+            ...card,
+            marginBottom: "16px",
+            position: "relative",
+            zIndex: 1,
+          },
+        },
         h("div", { style: sectionTitle }, "FSC Lane Performance"),
         fscList.length === 0
           ? h(
@@ -1247,7 +1270,7 @@
       dueWeek.length > 0 &&
         h(
           "div",
-          { style: card },
+          { style: { ...card, position: "relative", zIndex: 1 } },
           h(
             "div",
             { style: sectionTitle },
