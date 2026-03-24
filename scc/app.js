@@ -769,6 +769,23 @@
             hA("span", { className: "glint" }),
             "✉ FU Engine",
           ),
+          // Deal Checker tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "dealcheck" ? " active" : ""),
+              onClick: () => setTab("dealcheck"),
+              style: {
+                borderColor:
+                  tab === "dealcheck"
+                    ? "rgba(61,214,140,.6)"
+                    : "rgba(61,214,140,.2)",
+                color: tab === "dealcheck" ? "#3dd68c" : "rgba(61,214,140,.4)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "◈ Deal Check",
+          ),
           // Backup
           hA(
             "button",
@@ -894,6 +911,8 @@
           }),
 
         tab === "memo" && hA(MemoTab, null),
+
+        tab === "dealcheck" && hA(window.SCC_TABS.DealCheckTab, null),
 
         tab === "fu" &&
           hA(FUTab, {
