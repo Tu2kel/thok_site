@@ -3,7 +3,58 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The House of Kel</title>
+    <title>
+      The House of Kel LLC — Veteran-Owned SDVOSB | Imperio Talent Solutions |
+      Killeen TX
+    </title>
+    <meta
+      name="description"
+      content="The House of Kel LLC is a veteran-owned SDVOSB holding company based in Killeen, TX. Home of Imperio Talent Solutions — federal supply contracting, staffing, and software. CAGE 152U4."
+    />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph -->
+    <meta
+      property="og:title"
+      content="The House of Kel LLC — Imperio Talent Solutions"
+    />
+    <meta
+      property="og:description"
+      content="Veteran-owned SDVOSB. Federal supply contracting, staffing, and software. Killeen, TX. CAGE 152U4."
+    />
+    <meta property="og:url" content="https://thehouseofkel.com/" />
+    <meta property="og:type" content="website" />
+
+    <!-- Schema.org Organization -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "The House of Kel LLC",
+        "alternateName": [
+          "Imperio Talent Solutions",
+          "THOK",
+          "Imperio Holdings"
+        ],
+        "url": "https://thehouseofkel.com",
+        "description": "Veteran-owned SDVOSB holding company. Federal supply contracting, staffing, and software. Killeen, TX.",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Killeen",
+          "addressRegion": "TX",
+          "addressCountry": "US"
+        },
+        "telephone": "+12542659335",
+        "email": "anthony@imperiovita.co",
+        "founder": {
+          "@type": "Person",
+          "name": "Anthony Kelley"
+        },
+        "areaServed": "US",
+        "identifier": "CAGE 152U4"
+      }
+    </script>
+
     <style>
       body {
         margin: 0;
@@ -24,16 +75,14 @@
 
       .welcome-static {
         font-size: 6.5rem;
-        /* font-size: 1.5rem; */
         letter-spacing: 10px;
         margin-bottom: 20px;
-        color: #d4af37; /* Gold tone */
+        color: #d4af37;
       }
 
       .logo-container {
         position: relative;
         width: 100%;
-        /* max-width: 800px; Adjust size of the logo area here */
         overflow: hidden;
         display: flex;
         justify-content: center;
@@ -44,14 +93,10 @@
         width: 100%;
         height: auto;
         display: block;
-        /* This scale makes the logo feel massive */
         transform: scale(1.1);
-        /* Masking removes the 'square box' edges so flames fade out naturally */
         -webkit-mask-image: radial-gradient(circle, black 50%, transparent 90%);
         mask-image: radial-gradient(circle, black 50%, transparent 90%);
       }
-
-      
 
       .enter-text {
         margin-top: 30px;
@@ -70,21 +115,26 @@
         box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
       }
 
-      /* Mobile Fix for The House of Kel Intro */
+      .seo-footer {
+        text-align: center;
+        padding: 10px;
+        font-size: 10px;
+        letter-spacing: 1.5px;
+        color: rgba(180, 140, 50, 0.35);
+        font-family: serif;
+        pointer-events: none;
+      }
+
       @media (max-width: 768px) {
         .welcome-static {
-          /* Shrinks that massive text so it fits on one line on phones */
           font-size: 2.5rem;
           letter-spacing: 4px;
           margin-bottom: 10px;
         }
-
         #castleLogo {
-          /* Zooms the video in on mobile so the castle stays the focal point */
           width: 180%;
           transform: scale(1.1);
         }
-
         .enter-text {
           font-size: 1rem;
           padding: 8px 20px;
@@ -106,72 +156,60 @@
           id="castleLogo"
         >
           <source src="./images/thok.mp4" type="video/mp4" />
-          The House of Kel LLC – Imperio Holdings, Government Contracting, Staffing, Software
         </video>
       </div>
-      <div>  
-        <p style="
-            color:#C9A84C;
-            font-size:16px;
-            letter-spacing:3px;
-            text-align:center;
-            margin-top:20px;
-          ">
-            THE HOUSE OF KEL LLC
-          </p>
-          <p style="
-            color:#C9A84C;
-            font-size:16px;
-            letter-spacing:2px;
-            margin-top:20px;
-            text-align:center;
-          ">
-            Imperio Ecosystem • Government Contracting • Staffing • Software
-          </p>
-          <p style="
-            color:#888;
-            font-size:12px;
-            text-align:center;
-            margin-top:6px;
-            letter-spacing:1px;
-          ">
-            Veteran-Owned • SDVOSB • VetHUB • United States
-          </p>
+
+      <div>
+        <p
+          style="
+            color: #c9a84c;
+            font-size: 16px;
+            letter-spacing: 3px;
+            text-align: center;
+            margin-top: 20px;
+          "
+        >
+          THE HOUSE OF KEL LLC
+        </p>
+        <p
+          style="
+            color: #c9a84c;
+            font-size: 16px;
+            letter-spacing: 2px;
+            margin-top: 20px;
+            text-align: center;
+          "
+        >
+          Imperio Ecosystem &bull; Government Contracting &bull; Staffing &bull;
+          Software
+        </p>
+        <p
+          style="
+            color: #888;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 6px;
+            letter-spacing: 1px;
+          "
+        >
+          Veteran-Owned &bull; SDVOSB &bull; VetHUB &bull; United States
+        </p>
       </div>
+
       <a href="thok.html" class="enter-text" id="enterText">E N T E R</a>
     </div>
-<!-- 🔥 SEO VISIBLE MICRO-LINE (POWER SIGNAL) -->
-    
 
-    <!-- <a href="thok.html" class="enter-text" id="enterText">E N T E R</a> -->
-  </div>
-
-  <!-- 🔥 HIDDEN SEO CORE BLOCK (THIS IS THE MONEY) -->
-  <div style="position:absolute; left:-9999px;">
-    <h1>The House of Kel LLC</h1>
-    <h2>Imperio Holdings Group</h2>
-
-    <p>
-      The House of Kel LLC (THOK) is a veteran-owned holding company and parent organization of the Imperio ecosystem, including Imperio Talent Solutions, Imperio Software, Imperio Supply, and Imperio digital ventures.
+    <!-- Visible to crawlers, unobtrusive on screen -->
+    <p class="seo-footer">
+      The House of Kel LLC &mdash; Imperio Talent Solutions &mdash; SDVOSB
+      &mdash; Federal Supply Contracting &mdash; Killeen, TX &mdash; CAGE 152U4
     </p>
 
-    <p>
-      THOK specializes in government contracting (Federal, State & Local), SDVOSB procurement, staffing and recruiting solutions, supply chain distribution, and proprietary software systems designed to support federal, state, and commercial operations.
-    </p>
-
-    <p>
-      Headquartered in the United States, The House of Kel LLC operates across multiple industries including defense logistics, workforce solutions, SaaS development, and enterprise procurement systems.
-    </p>
-  </div>
-
-  <script>
-    // Ensures the video plays even if the browser has strict autoplay settings
-    window.addEventListener('load', () => {
-      const video = document.getElementById('castleLogo');
-      video.play().catch(error => {
-        console.log("Autoplay waiting for user interaction.");
+    <script>
+      window.addEventListener("load", () => {
+        const video = document.getElementById("castleLogo");
+        video.play().catch(() => {});
       });
-    });
-  </script>
+    </script>
   </body>
 </html>
