@@ -125,13 +125,13 @@
   --surface-spec-sm: rgba(255, 255, 255, 0.03);
 
   --body-color: #f5f0e8;
-  --body-dim: rgba(245, 240, 232, 0.55);
-  --body-faint: rgba(245, 240, 232, 0.35);
-  --body-muted: rgba(245, 240, 232, 0.6);
-  --body-strong: rgba(245, 240, 232, 0.85);
-  --body-mono: rgba(245, 240, 232, 0.7);
+  --body-dim: rgba(245, 240, 232, 0.65);
+  --body-faint: rgba(245, 240, 232, 0.6);
+  --body-muted: rgba(245, 240, 232, 0.7);
+  --body-strong: rgba(245, 240, 232, 0.9);
+  --body-mono: rgba(245, 240, 232, 0.75);
 
-  --gold-dim: rgba(201, 168, 76, 0.45);
+  --gold-dim: rgba(201, 168, 76, 0.65);
   --gold-border: rgba(201, 168, 76, 0.2);
 
   --inset-bg: rgba(0, 0, 0, 0.3);
@@ -185,6 +185,7 @@
   --surface-inset: #1a1018;
   --border-subtle: rgba(245, 240, 232, 0.18);
   --surface-dim: rgba(245, 240, 232, 0.06);
+  --card-bg: rgba(30, 25, 35, 0.85);
 }
 
 /* ── Metallic Dark (second mode) ── */
@@ -208,13 +209,13 @@
   --surface-spec-sm: rgba(255, 255, 255, 0.03);
 
   --body-color: #f5f0e8;
-  --body-dim: rgba(245, 240, 232, 0.55);
-  --body-faint: rgba(245, 240, 232, 0.35);
-  --body-muted: rgba(245, 240, 232, 0.6);
-  --body-strong: rgba(245, 240, 232, 0.85);
-  --body-mono: rgba(245, 240, 232, 0.7);
+  --body-dim: rgba(245, 240, 232, 0.65);
+  --body-faint: rgba(245, 240, 232, 0.6);
+  --body-muted: rgba(245, 240, 232, 0.7);
+  --body-strong: rgba(245, 240, 232, 0.9);
+  --body-mono: rgba(245, 240, 232, 0.75);
 
-  --gold-dim: rgba(201, 168, 76, 0.45);
+  --gold-dim: rgba(201, 168, 76, 0.65);
   --gold-border: rgba(201, 168, 76, 0.2);
 
   --inset-bg: rgba(0, 0, 0, 0.3);
@@ -268,6 +269,7 @@
   --surface-inset: #1a1018;
   --border-subtle: rgba(245, 240, 232, 0.18);
   --surface-dim: rgba(245, 240, 232, 0.06);
+  --card-bg: rgba(25, 22, 30, 0.88);
 }
 
 [data-theme="light"] {
@@ -381,6 +383,7 @@
     #fdfaf5 80%,
     #f8f5ef 100%
   );
+  --card-bg: rgba(255, 255, 255, 0.65);
 }
 
 /* ── CANVAS ── */

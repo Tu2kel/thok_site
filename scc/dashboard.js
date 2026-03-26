@@ -32,6 +32,27 @@
       }
     }, []);
 
+    // ── ESBD DATA ─────────────────────────────────────────────────────────
+    const [esbdBids, setEsbdBids] = useState([]);
+    useEffect(() => {
+      if (window.SCC_ESBD && window.SCC_ESBD.esbdGetAll) {
+        window.SCC_ESBD.esbdGetAll().then((b) => setEsbdBids(b || []));
+      }
+    }, []);
+
+    const esbdActive = esbdBids.filter(
+      (b) => !["Awarded", "Lost", "No Bid"].includes(b.status),
+    );
+    const esbdAwarded = esbdBids.filter((b) => b.status === "Awarded");
+    const esbdPipelineValue = esbdActive.reduce(
+      (s, b) => s + (parseFloat(b.bid_total) || 0),
+      0,
+    );
+    const esbdAwardedValue = esbdAwarded.reduce(
+      (s, b) => s + (parseFloat(b.bid_total) || 0),
+      0,
+    );
+
     // ── PIPELINE SLICES ───────────────────────────────────────────────────
     const active = rows.filter(
       (r) => !["Awarded", "Lost", "On Hold"].includes(r.status),
@@ -200,7 +221,7 @@
 
     // ── STYLES ────────────────────────────────────────────────────────────
     const card = {
-      background: "rgba(255,255,255,.55)",
+      background: "var(--card-bg, rgba(255,255,255,.55))",
       border: "1px solid rgba(120,80,0,.18)",
       borderTop: "2px solid rgba(120,80,0,.35)",
       padding: "18px 20px",
@@ -208,10 +229,10 @@
     };
     const sectionTitle = {
       fontFamily: "Cinzel,serif",
-      fontSize: "11px",
+      fontSize: "13px",
       letterSpacing: "2px",
       textTransform: "uppercase",
-      color: "rgba(100,65,0,.8)",
+      color: "var(--gold-dim, rgba(201,168,76,.7))",
       marginBottom: "14px",
     };
     const kpiVal = {
@@ -221,10 +242,10 @@
     };
     const kpiLbl = {
       fontFamily: "Cinzel,serif",
-      fontSize: "10px",
+      fontSize: "13px",
       letterSpacing: "1.5px",
       textTransform: "uppercase",
-      color: "rgba(80,50,0,.65)",
+      color: "var(--body-faint)",
       marginTop: "4px",
     };
     const divider = h("div", {
@@ -277,8 +298,8 @@
           "span",
           {
             style: {
-              fontSize: "12px",
-              color: "rgba(60,35,0,.7)",
+              fontSize: "14px",
+              color: "var(--body-faint)",
               fontFamily: "Cormorant Garamond,serif",
             },
           },
@@ -364,8 +385,8 @@
           {
             style: {
               fontFamily: "Cinzel,serif",
-              fontSize: "11px",
-              color: "rgba(80,50,0,.5)",
+              fontSize: "13px",
+              color: "var(--body-faint)",
               letterSpacing: "1px",
             },
           },
@@ -402,7 +423,7 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "#e74c3c",
                   fontFamily: "Cinzel,serif",
                   marginTop: "4px",
@@ -437,8 +458,8 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
-                  color: "rgba(80,50,0,.55)",
+                  fontSize: "13px",
+                  color: "var(--body-faint)",
                   fontFamily: "Cormorant Garamond,serif",
                   marginTop: "3px",
                 },
@@ -461,8 +482,8 @@
             "div",
             {
               style: {
-                fontSize: "11px",
-                color: "rgba(80,50,0,.55)",
+                fontSize: "13px",
+                color: "var(--body-faint)",
                 fontFamily: "Cormorant Garamond,serif",
                 marginTop: "3px",
               },
@@ -486,7 +507,7 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "rgba(61,214,140,.5)",
                   fontFamily: "Cormorant Garamond,serif",
                   marginTop: "3px",
@@ -516,14 +537,247 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
-                  color: "rgba(80,50,0,.55)",
+                  fontSize: "13px",
+                  color: "var(--body-faint)",
                   fontFamily: "Cormorant Garamond,serif",
                   marginTop: "3px",
                 },
               },
               submitted.length + " submitted",
             ),
+        ),
+      ),
+
+      // ── ESBD + COMBINED TOTALS ─────────────────────────────────────────
+      h(
+        "div",
+        {
+          style: {
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: "12px",
+            marginBottom: "16px",
+            position: "relative",
+            zIndex: 1,
+          },
+        },
+
+        // DIBBS Pipeline
+        h(
+          "div",
+          { style: { ...card, borderColor: "rgba(201,168,76,.3)" } },
+          h(
+            "div",
+            { style: { ...sectionTitle, marginBottom: "12px" } },
+            "DIBBS Pipeline",
+          ),
+          h(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+            ...[
+              ["Active Bids", active.length, "#C9A84C"],
+              ["Pipeline Value", fmt(pipelineValue), "#C9A84C"],
+              ["Awarded", awarded.length, "#3dd68c"],
+              ["Awarded Revenue", fmt(awardsRevenue), "#3dd68c"],
+            ].map(([label, val, color]) =>
+              h(
+                "div",
+                {
+                  key: label,
+                  style: {
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                  },
+                },
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "Cormorant Garamond,serif",
+                      fontSize: "14px",
+                      color: "var(--body-faint)",
+                    },
+                  },
+                  label,
+                ),
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "15px",
+                      color,
+                      fontWeight: 600,
+                    },
+                  },
+                  val,
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // State & Federal Pipeline
+        h(
+          "div",
+          { style: { ...card, borderColor: "rgba(135,206,235,.3)" } },
+          h(
+            "div",
+            {
+              style: {
+                ...sectionTitle,
+                marginBottom: "12px",
+                color: "rgba(135,206,235,.8)",
+              },
+            },
+            "State & Federal",
+          ),
+          esbdBids.length === 0
+            ? h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cormorant Garamond,serif",
+                    fontSize: "13px",
+                    fontStyle: "italic",
+                    color: "var(--body-faint)",
+                    marginTop: "8px",
+                  },
+                },
+                "No bids yet.",
+              )
+            : h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  },
+                },
+                ...[
+                  ["Active Bids", esbdActive.length, "rgba(135,206,235,.9)"],
+                  [
+                    "Pipeline Value",
+                    fmt(esbdPipelineValue),
+                    "rgba(135,206,235,.9)",
+                  ],
+                  ["Awarded", esbdAwarded.length, "#3dd68c"],
+                  ["Awarded Value", fmt(esbdAwardedValue), "#3dd68c"],
+                ].map(([label, val, color]) =>
+                  h(
+                    "div",
+                    {
+                      key: label,
+                      style: {
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                      },
+                    },
+                    h(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cormorant Garamond,serif",
+                          fontSize: "14px",
+                          color: "var(--body-faint)",
+                        },
+                      },
+                      label,
+                    ),
+                    h(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cinzel,serif",
+                          fontSize: "15px",
+                          color,
+                          fontWeight: 600,
+                        },
+                      },
+                      val,
+                    ),
+                  ),
+                ),
+              ),
+        ),
+
+        // Combined Total
+        h(
+          "div",
+          {
+            style: {
+              ...card,
+              borderColor: "rgba(61,214,140,.35)",
+              background: "rgba(61,214,140,.04)",
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                ...sectionTitle,
+                marginBottom: "12px",
+                color: "rgba(61,214,140,.8)",
+              },
+            },
+            "Combined Total",
+          ),
+          h(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+            ...[
+              ["Total Active", active.length + esbdActive.length, "#C9A84C"],
+              [
+                "Total Pipeline",
+                fmt(pipelineValue + esbdPipelineValue),
+                "#C9A84C",
+              ],
+              ["Total Awarded", awarded.length + esbdAwarded.length, "#3dd68c"],
+              [
+                "Total Revenue",
+                fmt(awardsRevenue + esbdAwardedValue),
+                "#3dd68c",
+              ],
+            ].map(([label, val, color]) =>
+              h(
+                "div",
+                {
+                  key: label,
+                  style: {
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                  },
+                },
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "Cormorant Garamond,serif",
+                      fontSize: "14px",
+                      color: "var(--body-faint)",
+                    },
+                  },
+                  label,
+                ),
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "15px",
+                      color,
+                      fontWeight: 600,
+                    },
+                  },
+                  val,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
 
@@ -581,8 +835,8 @@
                   "span",
                   {
                     style: {
-                      fontSize: "12px",
-                      color: "rgba(60,35,0,.75)",
+                      fontSize: "14px",
+                      color: "var(--body-faint)",
                       fontFamily: "Cormorant Garamond,serif",
                     },
                   },
@@ -592,7 +846,7 @@
                   "span",
                   {
                     style: {
-                      fontSize: "12px",
+                      fontSize: "14px",
                       color: color,
                       fontFamily: "Cinzel,serif",
                       fontWeight: 600,
@@ -615,8 +869,8 @@
             "div",
             {
               style: {
-                fontSize: "11px",
-                color: "rgba(80,50,0,.5)",
+                fontSize: "13px",
+                color: "var(--body-faint)",
                 fontFamily: "Cormorant Garamond,serif",
                 marginBottom: "10px",
               },
@@ -644,7 +898,7 @@
                   "span",
                   {
                     style: {
-                      fontSize: "12px",
+                      fontSize: "14px",
                       color: band.color,
                       fontFamily: "Cinzel,serif",
                       letterSpacing: ".5px",
@@ -665,8 +919,8 @@
                     "span",
                     {
                       style: {
-                        fontSize: "11px",
-                        color: "rgba(80,50,0,.6)",
+                        fontSize: "13px",
+                        color: "var(--body-faint)",
                         fontFamily: "Cormorant Garamond,serif",
                       },
                     },
@@ -676,7 +930,7 @@
                     "span",
                     {
                       style: {
-                        fontSize: "12px",
+                        fontSize: "14px",
                         color: band.color,
                         fontFamily: "Cinzel,serif",
                         fontWeight: 600,
@@ -721,8 +975,8 @@
               "div",
               {
                 style: {
-                  fontSize: "10px",
-                  color: "rgba(100,65,0,.7)",
+                  fontSize: "13px",
+                  color: "var(--body-faint)",
                   fontFamily: "Cinzel,serif",
                   letterSpacing: "1px",
                   marginBottom: "6px",
@@ -761,8 +1015,8 @@
               "div",
               {
                 style: {
-                  fontSize: "10px",
-                  color: "rgba(100,65,0,.7)",
+                  fontSize: "13px",
+                  color: "var(--body-faint)",
                   fontFamily: "Cinzel,serif",
                   letterSpacing: "1px",
                   marginBottom: "6px",
@@ -787,8 +1041,8 @@
               "div",
               {
                 style: {
-                  fontSize: "10px",
-                  color: "rgba(100,65,0,.7)",
+                  fontSize: "13px",
+                  color: "var(--body-faint)",
                   fontFamily: "Cinzel,serif",
                   letterSpacing: "1px",
                   marginBottom: "6px",
@@ -836,8 +1090,8 @@
                     "span",
                     {
                       style: {
-                        fontSize: "12px",
-                        color: "rgba(60,35,0,.75)",
+                        fontSize: "14px",
+                        color: "var(--body-faint)",
                         fontFamily: "Cormorant Garamond,serif",
                       },
                     },
@@ -847,7 +1101,7 @@
                     "span",
                     {
                       style: {
-                        fontSize: "12px",
+                        fontSize: "14px",
                         color: rate >= 0.5 ? "#3dd68c" : "#f0c040",
                         fontFamily: "Cinzel,serif",
                         fontWeight: 600,
@@ -858,8 +1112,8 @@
                       "span",
                       {
                         style: {
-                          color: "rgba(80,50,0,.5)",
-                          fontSize: "10px",
+                          color: "var(--body-faint)",
+                          fontSize: "13px",
                           marginLeft: "6px",
                         },
                       },
@@ -922,8 +1176,8 @@
                     "div",
                     {
                       style: {
-                        fontSize: "10px",
-                        color: "rgba(80,50,0,.6)",
+                        fontSize: "13px",
+                        color: "var(--body-faint)",
                         fontFamily: "Cinzel,serif",
                         letterSpacing: ".5px",
                         marginTop: "2px",
@@ -976,7 +1230,7 @@
                   "div",
                   {
                     style: {
-                      fontSize: "10px",
+                      fontSize: "13px",
                       color: "rgba(61,214,140,.6)",
                       fontFamily: "Cinzel,serif",
                       letterSpacing: ".5px",
@@ -989,8 +1243,8 @@
                   "div",
                   {
                     style: {
-                      fontSize: "11px",
-                      color: "rgba(80,50,0,.55)",
+                      fontSize: "13px",
+                      color: "var(--body-faint)",
                       fontFamily: "Cormorant Garamond,serif",
                       marginTop: "2px",
                     },
@@ -1024,8 +1278,8 @@
                   "div",
                   {
                     style: {
-                      fontSize: "10px",
-                      color: "rgba(100,65,0,.75)",
+                      fontSize: "13px",
+                      color: "var(--body-faint)",
                       fontFamily: "Cinzel,serif",
                       letterSpacing: ".5px",
                       marginTop: "2px",
@@ -1037,8 +1291,8 @@
                   "div",
                   {
                     style: {
-                      fontSize: "11px",
-                      color: "rgba(80,50,0,.55)",
+                      fontSize: "13px",
+                      color: "var(--body-faint)",
                       fontFamily: "Cormorant Garamond,serif",
                       marginTop: "2px",
                     },
@@ -1071,7 +1325,7 @@
                   fontFamily: "Cormorant Garamond,serif",
                   fontStyle: "italic",
                   fontSize: "14px",
-                  color: "rgba(80,50,0,.5)",
+                  color: "var(--body-faint)",
                 },
               },
               "No FSC data yet",
@@ -1104,10 +1358,10 @@
                           key: col,
                           style: {
                             fontFamily: "Cinzel,serif",
-                            fontSize: "10px",
+                            fontSize: "13px",
                             letterSpacing: "1.5px",
                             textTransform: "uppercase",
-                            color: "rgba(100,65,0,.75)",
+                            color: "var(--body-faint)",
                             padding: "6px 12px",
                             textAlign:
                               col === "FSC" || col === "Lane"
@@ -1150,7 +1404,7 @@
                           style: {
                             padding: "8px 12px",
                             fontFamily: "JetBrains Mono,monospace",
-                            fontSize: "12px",
+                            fontSize: "14px",
                             color: "#C9A84C",
                           },
                         },
@@ -1162,8 +1416,8 @@
                           style: {
                             padding: "8px 12px",
                             fontFamily: "Cormorant Garamond,serif",
-                            fontSize: "12px",
-                            color: "rgba(60,35,0,.7)",
+                            fontSize: "14px",
+                            color: "var(--body-faint)",
                             maxWidth: "160px",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -1179,8 +1433,8 @@
                             padding: "8px 12px",
                             textAlign: "right",
                             fontFamily: "Cinzel,serif",
-                            fontSize: "12px",
-                            color: "rgba(60,35,0,.85)",
+                            fontSize: "14px",
+                            color: "var(--body-faint)",
                           },
                         },
                         data.count,
@@ -1192,7 +1446,7 @@
                             padding: "8px 12px",
                             textAlign: "right",
                             fontFamily: "Cinzel,serif",
-                            fontSize: "12px",
+                            fontSize: "14px",
                             color: "#3dd68c",
                           },
                         },
@@ -1205,7 +1459,7 @@
                             padding: "8px 12px",
                             textAlign: "right",
                             fontFamily: "Cinzel,serif",
-                            fontSize: "12px",
+                            fontSize: "14px",
                             color:
                               data.lost > 0
                                 ? "#e74c3c"
@@ -1221,7 +1475,7 @@
                             padding: "8px 12px",
                             textAlign: "right",
                             fontFamily: "Cinzel,serif",
-                            fontSize: "12px",
+                            fontSize: "14px",
                             color:
                               fscWinRate !== null
                                 ? fscWinRate >= 50
@@ -1239,7 +1493,7 @@
                             padding: "8px 12px",
                             textAlign: "right",
                             fontFamily: "Cinzel,serif",
-                            fontSize: "12px",
+                            fontSize: "14px",
                             color: "#C9A84C",
                           },
                         },
@@ -1252,7 +1506,7 @@
                             padding: "8px 12px",
                             textAlign: "right",
                             fontFamily: "Cinzel,serif",
-                            fontSize: "12px",
+                            fontSize: "14px",
                             fontWeight: 600,
                             color: data.net >= 0 ? "#3dd68c" : "#e74c3c",
                           },
@@ -1326,7 +1580,7 @@
                       style: {
                         fontFamily: "Cormorant Garamond,serif",
                         fontSize: "13px",
-                        color: "rgba(60,35,0,.75)",
+                        color: "var(--body-faint)",
                         marginTop: "1px",
                       },
                     },
@@ -1347,8 +1601,8 @@
                     {
                       style: {
                         fontFamily: "Cormorant Garamond,serif",
-                        fontSize: "12px",
-                        color: "rgba(80,50,0,.6)",
+                        fontSize: "14px",
+                        color: "var(--body-faint)",
                       },
                     },
                     r.fsc || "",
@@ -1358,7 +1612,7 @@
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "12px",
+                        fontSize: "14px",
                         fontWeight: 700,
                         color: clr,
                       },

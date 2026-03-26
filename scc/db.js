@@ -10,6 +10,8 @@
   const LS_AWARDS = "imperio_scc_awards"; // contract records + sales orders + invoices
   const LS_VOID = "imperio_scc_void_log"; // retired/deleted document numbers — never recycled
   const LS_SEQ = "imperio_scc_doc_sequence"; // sequential counter per entity+year
+  const LS_FY_HISTORY = "imperio_scc_fy_history"; // closed FY summary records — never deleted
+  const LS_ACTIVE_FY = "imperio_scc_active_fy"; // current active fiscal year (number)
 
   // ── Raw localStorage helpers ──
   function lsGetSols() {
@@ -350,6 +352,224 @@
     );
   }
 
+  // ── FISCAL YEAR MANAGEMENT ───────────────────────────────────────────────
+  // FY history: array of closed year summaries. Never deleted, grows one row/year.
+  // Active FY: the year currently open for business. Defaults to current calendar year.
+
+  function lsGetFYHistory() {
+    try {
+      return JSON.parse(localStorage.getItem(LS_FY_HISTORY) || "[]");
+    } catch (e) {
+      return [];
+    }
+  }
+  function lsSaveFYHistory(arr) {
+    try {
+      localStorage.setItem(LS_FY_HISTORY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+  function getActiveFY() {
+    const stored = localStorage.getItem(LS_ACTIVE_FY);
+    return stored ? parseInt(stored) : new Date().getFullYear();
+  }
+  function setActiveFY(year) {
+    localStorage.setItem(LS_ACTIVE_FY, String(year));
+  }
+  function getFYHistory() {
+    return lsGetFYHistory();
+  }
+
+  // Derive FY from an award_date string (M/D/YY or M/D/YYYY or ISO)
+  function fyFromDate(dateStr) {
+    if (!dateStr) return null;
+    // Try ISO first
+    const iso = new Date(dateStr);
+    if (!isNaN(iso)) return iso.getFullYear();
+    // Try M/D/YY
+    const parts = dateStr.split("/");
+    if (parts.length === 3) {
+      const y = parseInt(parts[2]);
+      return y < 100 ? 2000 + y : y;
+    }
+    return null;
+  }
+
+  // ── FY CLOSE — the big one ───────────────────────────────────────────────
+  // Steps:
+  //  1. Force a full backup download (cannot skip)
+  //  2. Tag all awards for closing year with fy field
+  //  3. Tag and archive all closed pipeline rows (Awarded/Lost/No Bid) with fy
+  //  4. Tag and archive closed ESBD bids with fy
+  //  5. Write FY summary record to history
+  //  6. Advance active FY to next year
+  //  Returns: { ok, summary } or throws
+
+  async function closeFiscalYear(year, onBackupDone) {
+    year = parseInt(year);
+    if (!year || isNaN(year)) throw new Error("Invalid fiscal year");
+
+    // ── Step 1: Force backup ──────────────────────────────────────────────
+    const sols = lsGetSols();
+    const vi = lsGetVI();
+    const arc = lsGetArc();
+    const awards = lsGetAwards();
+    const voidLog = lsGetVoidLog();
+    const seq = lsGetSeq();
+    const fyHist = lsGetFYHistory();
+    const esbdRaw = (() => {
+      try {
+        return JSON.parse(localStorage.getItem("imperio_esbd_bids") || "[]");
+      } catch (e) {
+        return [];
+      }
+    })();
+
+    const backupPayload = JSON.stringify(
+      {
+        version: 6,
+        exported: new Date().toISOString(),
+        fy_close_year: year,
+        solicitations: sols,
+        vendor_intel: vi,
+        archive: arc,
+        awards,
+        esbd_bids: esbdRaw,
+        void_log: voidLog,
+        doc_sequence: seq,
+        fy_history: fyHist,
+      },
+      null,
+      2,
+    );
+
+    const blob = new Blob([backupPayload], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download =
+      "imperio_FY" +
+      year +
+      "_close_backup_" +
+      new Date().toISOString().slice(0, 10) +
+      ".json";
+    a.click();
+
+    if (onBackupDone) onBackupDone();
+
+    // ── Step 2: Tag awards with FY ────────────────────────────────────────
+    let awardRevenue = 0,
+      awardGP = 0,
+      awardNet = 0,
+      awardCount = 0;
+    const updatedAwards = awards.map((a) => {
+      const afy = fyFromDate(a.award_date) || year;
+      if (afy === year) {
+        awardRevenue += parseFloat(a.bid_total || 0);
+        awardGP += parseFloat(a.gross_profit || 0);
+        awardNet += parseFloat(a.net_take || 0);
+        awardCount++;
+        return { ...a, fy: year };
+      }
+      return a;
+    });
+    lsSaveAwards(updatedAwards);
+
+    // ── Step 3: Archive closed DIBBS pipeline rows ────────────────────────
+    const closedStatuses = ["Awarded", "Lost", "No Bid", "On Hold"];
+    const remaining = [];
+    const toArchive = [];
+    sols.forEach((r) => {
+      if (closedStatuses.includes(r.status)) {
+        toArchive.push({
+          ...r,
+          archived: true,
+          archive_reason: "fy_close_" + year,
+          archive_date: new Date().toLocaleDateString(),
+          fy: year,
+        });
+      } else {
+        remaining.push(r);
+      }
+    });
+    const newArc = [...arc];
+    toArchive.forEach((r) => {
+      const idx = newArc.findIndex((x) => x.sol_number === r.sol_number);
+      if (idx >= 0) newArc[idx] = r;
+      else newArc.push(r);
+    });
+    lsSaveSols(remaining);
+    lsSaveArc(newArc);
+
+    // ── Step 4: Archive closed ESBD bids ─────────────────────────────────
+    const closedEsbd = ["Awarded", "Lost", "No Bid"];
+    const esbdRemaining = [];
+    const esbdClosed = [];
+    let esbdRevenue = 0,
+      esbdCount = 0;
+    esbdRaw.forEach((b) => {
+      if (closedEsbd.includes(b.status)) {
+        esbdClosed.push({ ...b, fy: year, archived: true });
+        esbdRevenue += parseFloat(b.bid_total || 0);
+        if (b.status === "Awarded") esbdCount++;
+      } else {
+        esbdRemaining.push(b);
+      }
+    });
+    try {
+      localStorage.setItem("imperio_esbd_bids", JSON.stringify(esbdRemaining));
+      // Store closed ESBD in its own archive key
+      const esbdArcKey = "imperio_esbd_archive";
+      const existingEsbdArc = (() => {
+        try {
+          return JSON.parse(localStorage.getItem(esbdArcKey) || "[]");
+        } catch (e) {
+          return [];
+        }
+      })();
+      localStorage.setItem(
+        esbdArcKey,
+        JSON.stringify([...existingEsbdArc, ...esbdClosed]),
+      );
+    } catch (e) {}
+
+    // ── Step 5: Write FY summary to history ───────────────────────────────
+    const summary = {
+      fy: year,
+      closed_date: new Date().toISOString(),
+      dibbs_awards: awardCount,
+      dibbs_revenue: +awardRevenue.toFixed(2),
+      dibbs_gp: +awardGP.toFixed(2),
+      dibbs_net: +awardNet.toFixed(2),
+      esbd_awards: esbdCount,
+      esbd_revenue: +esbdRevenue.toFixed(2),
+      total_revenue: +(awardRevenue + esbdRevenue).toFixed(2),
+      total_net: +awardNet.toFixed(2),
+      dibbs_archived: toArchive.length,
+      esbd_archived: esbdClosed.length,
+      active_carried: remaining.length,
+    };
+    const hist = lsGetFYHistory();
+    const hidx = hist.findIndex((h) => h.fy === year);
+    if (hidx >= 0) hist[hidx] = summary;
+    else hist.push(summary);
+    hist.sort((a, b) => b.fy - a.fy);
+    lsSaveFYHistory(hist);
+
+    // ── Step 6: Advance active FY ─────────────────────────────────────────
+    setActiveFY(year + 1);
+
+    return { ok: true, summary };
+  }
+
+  // Awards filtered by FY (for dashboard year selector)
+  async function awardGetByFY(year) {
+    const all = lsGetAwards();
+    if (!year || year === "all") return all;
+    return all.filter((a) => {
+      const afy = a.fy || fyFromDate(a.award_date);
+      return afy === parseInt(year);
+    });
+  }
+
   // ── Expose globally
   window.SCC_DB = {
     dbSave,
@@ -370,7 +590,13 @@
     awardGetBySol,
     awardVoid,
     awardGetVoidLog,
+    awardGetByFY,
     nextDocNumber,
     peekDocNumber,
+    closeFiscalYear,
+    getActiveFY,
+    setActiveFY,
+    getFYHistory,
+    fyFromDate,
   };
 })();

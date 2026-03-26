@@ -437,6 +437,7 @@
       AwardsTab,
       MemoTab,
       FUTab,
+      EsbdTab,
     } = window.SCC_TABS;
 
     const [tab, setTab] = useState("dashboard");
@@ -492,6 +493,42 @@
         shipTo: r.ship_to || "",
       });
       setTab("fu");
+    };
+
+    const goEsbdAward = (bid) => {
+      const prices = (bid.suppliers || [])
+        .map((s) => ({
+          price: parseFloat(s.unit_price),
+          name: s.name,
+          cage: s.cage || "",
+        }))
+        .filter((s) => s.price > 0);
+      const best = prices.length
+        ? prices.reduce((a, b) => (a.price < b.price ? a : b))
+        : null;
+      setAwardPrefill({
+        sol_number: bid.sol_id || "",
+        item_name: bid.title || "",
+        quantity: bid.qty || "",
+        unit_of_issue: bid.uom || "EA",
+        unit_price: bid.bid_unit_price || "",
+        bid_price: bid.bid_unit_price || "",
+        fob: bid.fob || "Destination",
+        ship_to: bid.delivery_addr || "",
+        ref_part_number: bid.mfr_pn || "",
+        supplier_name: best ? best.name : "",
+        supplier_quote_price: best ? String(best.price) : "",
+        funding_path: parseFloat(bid.bid_total) >= 10000 ? "factoring" : "self",
+        source: bid.source || "esbd",
+        esbd_id: bid.id || "",
+        nigp_code: bid.nigp_code || "",
+        naics_code: bid.naics_code || "",
+        set_aside: bid.set_aside || "",
+        agency: bid.agency || "",
+        contact_name: bid.contact_name || "",
+        contact_email: bid.contact_email || "",
+      });
+      setTab("awards");
     };
 
     useEffect(() => {
@@ -789,6 +826,26 @@
             hA("span", { className: "glint" }),
             "◈ Deal Check",
           ),
+          // State & Federal tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "esbd" ? " active" : ""),
+              onClick: () => setTab("esbd"),
+              style: {
+                borderColor:
+                  tab === "esbd"
+                    ? "rgba(135,206,235,.6)"
+                    : "rgba(135,206,235,.2)",
+                color:
+                  tab === "esbd"
+                    ? "rgba(135,206,235,1)"
+                    : "rgba(135,206,235,.45)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "★ State/Fed",
+          ),
           // Backup
           hA(
             "button",
@@ -916,6 +973,8 @@
         tab === "memo" && hA(MemoTab, null),
 
         tab === "dealcheck" && hA(window.SCC_TABS.DealCheckTab, null),
+
+        tab === "esbd" && hA(EsbdTab, { goAward: goEsbdAward }),
 
         tab === "fu" &&
           hA(FUTab, {
