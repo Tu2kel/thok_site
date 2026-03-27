@@ -12,7 +12,7 @@
     />
 
     <!-- ── DESIGN SYSTEM ── -->
-    <link rel="stylesheet" href="imperio.css" />
+    <link rel="stylesheet" href="styles/imperio.css" />
 
     <!-- ── SIDEBAR ── -->
     <style>
@@ -368,7 +368,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background-image: url(thok_logo.png);
+        background-image: url(assets/thok_logo.png);
         background-repeat: no-repeat;
         background-position: center center;
         background-size: 860px 860px;
@@ -386,52 +386,182 @@
     Each exposes its API on a window.SCC_* namespace.
     app.js must be LAST — it destructures all other namespaces.
 
-    Flat layout (matches VS Code workspace):
-      Supply Command/
-        index.html
-        imperio.css
-        app.js
-        awards.js        ← contract records, sales orders, invoices, WAWF mirror
-        backup.js
-        bidmath.js
-        dashboard.js
-        db-nsn.js        ← 2MB NSN database, loads deferred
-        db.js
-        distributors.js
-        intake.js
-        parser.js
-        pipeline.js
-        rfq.js
-        source.js
+    Folder layout (scc/):
+      index.html
+      margin-calc.html
+      assets/     — logos, memo.html, supplier-po-template.html
+      styles/     — imperio.css, memo.css
+      core/       — db.js, db-nsn.js, bidmath.js, parser.js, distributors.js
+      tabs/       — all React tab components + app.js (app.js must be last)
+                    pipeline split: pipeline-vi.js → pipeline-drawer.js → pipeline-table.js
     ══════════════════════════════════════════════════════════════════════
   -->
 
     <!-- ── CORE LIBS (no dependencies on each other, load first) ── -->
-    <script src="db.js"></script>
-    <script src="bidmath.js"></script>
-    <script src="parser.js"></script>
-    <script src="distributors.js"></script>
+    <script src="core/db.js"></script>
+    <script src="core/bidmath.js"></script>
+    <script src="core/parser.js"></script>
+    <script src="core/distributors.js"></script>
 
     <!-- ── NSN DATABASE (2MB — deferred so it doesn't block initial render) ── -->
     <!-- Source tab only needs this at user-click time, so defer is safe -->
-    <script src="db-nsn.js" defer></script>
+    <script src="core/db-nsn.js" defer></script>
 
     <!-- ── REACT TAB COMPONENTS ── -->
-    <!-- source.js must be before pipeline.js — exports DrawerSourcePanel + VI_STATUS_STYLE -->
-    <script src="backup.js"></script>
-    <script src="dashboard.js"></script>
-    <script src="intake.js"></script>
-    <script src="source.js"></script>
-    <script src="pipeline.js"></script>
-    <script src="rfq.js"></script>
-    <script src="awards.js"></script>
-    <script src="memo.js"></script>
-    <script src="fu.js"></script>
-
-    <script src="esbd.js"></script>
+    <!-- source.js must be before pipeline files — exports DrawerSourcePanel + VI_STATUS_STYLE -->
+    <script src="tabs/backup.js"></script>
+    <script src="tabs/dashboard.js"></script>
+    <script src="tabs/intake.js"></script>
+    <script src="tabs/source-blocked.js"></script>
+    <script src="tabs/source-drawer.js"></script>
+    <script src="tabs/source-rolodex.js"></script>
+    <script src="tabs/source-tab.js"></script>
+    <script src="tabs/pipeline-vi.js"></script>
+    <script src="tabs/pipeline-drawer.js"></script>
+    <script src="tabs/pipeline-table.js"></script>
+    <script src="tabs/rfq.js"></script>
+    <script src="tabs/awards.js"></script>
+    <script src="tabs/memo.js"></script>
+    <script src="tabs/fu.js"></script>
+    <script src="tabs/esbd.js"></script>
+    <script src="tabs/dealcheck.js"></script>
 
     <!-- ── APP ROOT — must be last ── -->
-    <script src="./app.js"></script>
-    <!-- same folder, fine -->
+    <script src="tabs/app.js"></script>
+
+    <!-- ── MARGIN CALC OVERLAY ── -->
+    <style>
+      #mc-fab {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(
+          to bottom,
+          #cf972d 22%,
+          #f9f295 45%,
+          #e0aa3e 50%,
+          #b8860b 55%,
+          #f9f295 78%
+        );
+        border: none;
+        cursor: pointer;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Cinzel", serif;
+        font-size: 18px;
+        font-weight: 700;
+        color: #2a000a;
+        box-shadow: 0 2px 16px rgba(201, 168, 76, 0.35);
+        transition:
+          transform 0.15s,
+          box-shadow 0.15s;
+        user-select: none;
+      }
+      #mc-fab:hover {
+        transform: scale(1.08);
+        box-shadow: 0 4px 24px rgba(201, 168, 76, 0.5);
+      }
+      #mc-fab:active {
+        transform: scale(0.96);
+      }
+
+      #mc-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(10, 0, 4, 0.72);
+        backdrop-filter: blur(3px);
+        align-items: center;
+        justify-content: center;
+      }
+      #mc-overlay.open {
+        display: flex;
+      }
+
+      #mc-panel {
+        position: relative;
+        width: min(680px, 94vw);
+        max-height: 88vh;
+        border-radius: 4px;
+        overflow: hidden;
+        border: 1px solid rgba(201, 168, 76, 0.25);
+        box-shadow: 0 8px 48px rgba(0, 0, 0, 0.7);
+        animation: mcSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      @keyframes mcSlideUp {
+        from {
+          opacity: 0;
+          transform: translateY(32px) scale(0.97);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      #mc-panel iframe {
+        width: 100%;
+        height: 88vh;
+        border: none;
+        display: block;
+      }
+
+      #mc-close {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: rgba(201, 168, 76, 0.6);
+        font-size: 18px;
+        cursor: pointer;
+        z-index: 1;
+        line-height: 1;
+        padding: 4px 6px;
+        transition: color 0.15s;
+      }
+      #mc-close:hover {
+        color: #c9a84c;
+      }
+    </style>
+
+    <button id="mc-fab" title="Margin Calculator">$</button>
+
+    <div id="mc-overlay">
+      <div id="mc-panel">
+        <button id="mc-close" title="Close">✕</button>
+        <iframe src="margin-calc.html" id="mc-frame"></iframe>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const fab = document.getElementById("mc-fab");
+        const overlay = document.getElementById("mc-overlay");
+        const close = document.getElementById("mc-close");
+
+        function openCalc() {
+          overlay.classList.add("open");
+        }
+        function closeCalc() {
+          overlay.classList.remove("open");
+        }
+
+        fab.addEventListener("click", openCalc);
+        close.addEventListener("click", closeCalc);
+        overlay.addEventListener("click", function (e) {
+          if (e.target === overlay) closeCalc();
+        });
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") closeCalc();
+        });
+      })();
+    </script>
   </body>
 </html>

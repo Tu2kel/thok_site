@@ -452,6 +452,13 @@
     const [sourcePreload, setSourcePreload] = useState(null);
     const [awardPrefill, setAwardPrefill] = useState(null);
     const [fuPrefill, setFuPrefill] = useState(null);
+    const [highlightSol, setHighlightSol] = useState(null);
+
+    const goPipeline = (sol_number) => {
+      setFilter("All");          // ensure sol is visible regardless of active filter
+      setHighlightSol(sol_number);
+      setTab("pipeline");
+    };
     const [theme, setTheme] = useState(
       () => localStorage.getItem("scc-theme") || "dark",
     );
@@ -915,7 +922,7 @@
       hA(
         "main",
         null,
-        tab === "dashboard" && hA(DashboardTab, { rows }),
+        tab === "dashboard" && hA(DashboardTab, { rows, goPipeline }),
 
         tab === "intake" &&
           hA(IntakeTab, {
@@ -944,6 +951,8 @@
             goFU,
             showToast,
             loadPipeline,
+            highlightSol,
+            setHighlightSol,
           }),
 
         tab === "source" &&

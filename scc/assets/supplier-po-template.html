@@ -518,8 +518,10 @@
           max-width: 100% !important;
           page-break-inside: avoid;
         }
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
       }
     </style>
   </head>
@@ -929,9 +931,11 @@
           set("f-vendor-phone", phone);
         }
         set("f-ship-to", p.get("shipto"));
+        // Fire notes if passed
+        if (p.get("notes")) set("f-notes", p.get("notes"));
       })();
 
-      // Init
+      // Init — calcTotal triggers render internally
       calcTotal();
       render();
     </script>

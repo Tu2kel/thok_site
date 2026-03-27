@@ -8,7 +8,7 @@
 
   const { createElement: h, Fragment, useState, useEffect } = React;
 
-  function DashboardTab({ rows }) {
+  function DashboardTab({ rows, goPipeline }) {
     const { fmt, TIER_MARGINS, calcBidMath, FE } = window.SCC_MATH;
 
     // ── DATE HELPERS ──────────────────────────────────────────────────────
@@ -66,6 +66,73 @@
     const overdue = rows.filter(
       (r) => daysLeft(r) < 0 && !["Awarded", "Lost"].includes(r.status),
     );
+    const due8to30 = rows.filter((r) => daysLeft(r) >= 8 && daysLeft(r) <= 30);
+
+    // ── ESBD DEADLINE HELPERS ─────────────────────────────────────────────
+    const parseEsbdDate = (s) => {
+      if (!s) return null;
+      // handles MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD
+      if (s.includes("-")) return new Date(s);
+      const parts = s.split("/");
+      if (parts.length < 3) return null;
+      const [m, d, y] = parts;
+      return new Date(
+        parseInt(y) < 100 ? 2000 + parseInt(y) : parseInt(y),
+        m - 1,
+        d,
+      );
+    };
+    const esbdDaysLeft = (b) => {
+      const d = parseEsbdDate(b.due_date);
+      return d ? Math.round((d - today) / 86400000) : 999;
+    };
+    const esbdOverdue = esbdActive.filter((b) => esbdDaysLeft(b) < 0);
+    const esbdDueWeek = esbdActive.filter(
+      (b) => esbdDaysLeft(b) >= 0 && esbdDaysLeft(b) <= 7,
+    );
+    const esbdDue8to30 = esbdActive.filter(
+      (b) => esbdDaysLeft(b) >= 8 && esbdDaysLeft(b) <= 30,
+    );
+
+    // ── COMBINED DEADLINE BANDS ───────────────────────────────────────────
+    const allOverdue = [
+      ...overdue.map((r) => ({ ...r, _lane: "DIBBS", _dl: daysLeft(r) })),
+      ...esbdOverdue.map((b) => ({
+        sol_number: b.sol_id,
+        item_name: b.title,
+        fsc: b.nigp_code,
+        _lane: "ESBD",
+        _dl: esbdDaysLeft(b),
+        _esbd: true,
+      })),
+    ].sort((a, b) => a._dl - b._dl);
+
+    const allDueWeek = [
+      ...dueWeek.map((r) => ({ ...r, _lane: "DIBBS", _dl: daysLeft(r) })),
+      ...esbdDueWeek.map((b) => ({
+        sol_number: b.sol_id,
+        item_name: b.title,
+        fsc: b.nigp_code,
+        _lane: "ESBD",
+        _dl: esbdDaysLeft(b),
+        _esbd: true,
+      })),
+    ].sort((a, b) => a._dl - b._dl);
+
+    const allDue8to30 = [
+      ...due8to30.map((r) => ({ ...r, _lane: "DIBBS", _dl: daysLeft(r) })),
+      ...esbdDue8to30.map((b) => ({
+        sol_number: b.sol_id,
+        item_name: b.title,
+        fsc: b.nigp_code,
+        _lane: "ESBD",
+        _dl: esbdDaysLeft(b),
+        _esbd: true,
+      })),
+    ].sort((a, b) => a._dl - b._dl);
+
+    const totalDeadlines =
+      allOverdue.length + allDueWeek.length + allDue8to30.length;
 
     const totalBids = awarded.length + lost.length;
     const winRate =
@@ -100,6 +167,12 @@
       pipelineNet += m.net;
       pipelineOop += m.cogs;
     });
+
+    // Est net take-home — sum of net across all active bids with supplier quotes
+    const confirmedNet = active
+      .filter((r) => r.supplier_quote_price)
+      .reduce((s, r) => s + rowMath(r).net, 0);
+    const estimatedNet = active.reduce((s, r) => s + rowMath(r).net, 0);
 
     // Awards revenue from awards module
     let awardsRevenue = 0,
@@ -200,6 +273,46 @@
       saCounts[sa]++;
       if (r.status === "Awarded") saWon[sa]++;
     });
+
+    // ── WIN / LOSS BREAKDOWN ─────────────────────────────────────────────
+    // By tier
+    const tierOutcomes = {};
+    rows.forEach((r) => {
+      const t = r.tier || "Standard";
+      if (!tierOutcomes[t])
+        tierOutcomes[t] = { won: 0, lost: 0, wonNet: 0, lostNet: 0 };
+      const m = rowMath(r);
+      if (r.status === "Awarded") {
+        tierOutcomes[t].won++;
+        tierOutcomes[t].wonNet += m.net;
+      }
+      if (r.status === "Lost") {
+        tierOutcomes[t].lost++;
+        tierOutcomes[t].lostNet += m.net;
+      }
+    });
+
+    // Loss reasons — pull from win_loss_reason on lost rows
+    const lossReasons = {};
+    rows
+      .filter((r) => r.status === "Lost" && r.win_loss_reason)
+      .forEach((r) => {
+        const reason = r.win_loss_reason.trim().toLowerCase();
+        lossReasons[reason] = (lossReasons[reason] || 0) + 1;
+      });
+    const topReasons = Object.entries(lossReasons)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    // Avg net on won vs lost bids
+    const wonRows = rows.filter((r) => r.status === "Awarded");
+    const lostRows = rows.filter((r) => r.status === "Lost");
+    const avgWonNet = wonRows.length
+      ? wonRows.reduce((s, r) => s + rowMath(r).net, 0) / wonRows.length
+      : 0;
+    const avgLostNet = lostRows.length
+      ? lostRows.reduce((s, r) => s + rowMath(r).net, 0) / lostRows.length
+      : 0;
 
     // ── FUNDING SPLIT ─────────────────────────────────────────────────────
     let selfFundedCount = 0,
@@ -517,7 +630,7 @@
             ),
         ),
 
-        // Due This Week
+        // Est. Net Take-Home
         h(
           "div",
           { style: card },
@@ -526,25 +639,32 @@
             {
               style: {
                 ...kpiVal,
-                color: dueWeek.length > 0 ? "#f0c040" : "rgba(201,168,76,.4)",
+                fontSize: "18px",
+                background: "linear-gradient(90deg,#a8f0c6,#3ddc84,#1a9e52)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
               },
             },
-            dueWeek.length,
+            fmt(estimatedNet),
           ),
-          h("div", { style: kpiLbl }, "Due This Week"),
-          submitted.length > 0 &&
-            h(
-              "div",
-              {
-                style: {
-                  fontSize: "13px",
-                  color: "var(--body-faint)",
-                  fontFamily: "Cormorant Garamond,serif",
-                  marginTop: "3px",
-                },
+          h("div", { style: kpiLbl }, "Est. Net Take-Home"),
+          h(
+            "div",
+            {
+              style: {
+                fontSize: "12px",
+                color:
+                  confirmedNet > 0
+                    ? "rgba(61,214,140,.6)"
+                    : "var(--body-faint)",
+                fontFamily: "Cormorant Garamond,serif",
+                marginTop: "3px",
               },
-              submitted.length + " submitted",
-            ),
+            },
+            confirmedNet > 0
+              ? fmt(confirmedNet) + " confirmed"
+              : "est. — no quotes yet",
+          ),
         ),
       ),
 
@@ -1520,42 +1640,414 @@
             ),
       ),
 
-      // ── ROW 5: DUE THIS WEEK ──────────────────────────────────────────
-      dueWeek.length > 0 &&
+      // ── ROW 4.5: BID OUTCOME ─────────────────────────────────────────
+      (wonRows.length > 0 || lostRows.length > 0) &&
+        h(
+          "div",
+          {
+            style: {
+              ...card,
+              marginBottom: "16px",
+              position: "relative",
+              zIndex: 1,
+            },
+          },
+          h("div", { style: sectionTitle }, "Bid Outcomes"),
+
+          // Top 3 stat cards
+          h(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: "16px",
+                marginBottom: "20px",
+              },
+            },
+
+            h(
+              "div",
+              {
+                style: {
+                  padding: "12px 14px",
+                  background: "rgba(61,214,140,.05)",
+                  border: "1px solid rgba(61,214,140,.15)",
+                },
+              },
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    color: "#3dd68c",
+                  },
+                },
+                fmt(avgWonNet),
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "rgba(61,214,140,.5)",
+                    marginTop: "4px",
+                  },
+                },
+                "Avg Net — Won · " +
+                  wonRows.length +
+                  " bid" +
+                  (wonRows.length !== 1 ? "s" : ""),
+              ),
+            ),
+
+            h(
+              "div",
+              {
+                style: {
+                  padding: "12px 14px",
+                  background: "rgba(231,76,60,.04)",
+                  border: "1px solid rgba(231,76,60,.15)",
+                },
+              },
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    color: "#e74c3c",
+                  },
+                },
+                fmt(avgLostNet),
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "rgba(231,76,60,.4)",
+                    marginTop: "4px",
+                  },
+                },
+                "Avg Net — Lost · " +
+                  lostRows.length +
+                  " bid" +
+                  (lostRows.length !== 1 ? "s" : ""),
+              ),
+            ),
+
+            h(
+              "div",
+              {
+                style: {
+                  padding: "12px 14px",
+                  background: "rgba(201,168,76,.04)",
+                  border: "1px solid rgba(201,168,76,.12)",
+                },
+              },
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    color:
+                      avgWonNet >= avgLostNet
+                        ? "#C9A84C"
+                        : "rgba(201,168,76,.4)",
+                  },
+                },
+                fmt(Math.abs(avgWonNet - avgLostNet)),
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "var(--gold-dim)",
+                    marginTop: "4px",
+                  },
+                },
+                avgWonNet >= avgLostNet
+                  ? "Won bids avg higher"
+                  : "Lost bids avg higher",
+              ),
+            ),
+          ),
+
+          // Two-column: tier breakdown + loss reasons
+          h(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+              },
+            },
+
+            // By Tier
+            h(
+              "div",
+              null,
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "var(--gold-dim)",
+                    marginBottom: "10px",
+                  },
+                },
+                "By Tier",
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  },
+                },
+                ...Object.entries(tierOutcomes).map(([tier, data]) => {
+                  const total = data.won + data.lost;
+                  const rate = total > 0 ? data.won / total : 0;
+                  const tierClr = tier.includes("Hanging")
+                    ? "#C9A84C"
+                    : tier.includes("Fast")
+                      ? "#f0c040"
+                      : "#7eb8f7";
+                  return h(
+                    "div",
+                    {
+                      key: tier,
+                      style: {
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "7px 10px",
+                        background: "rgba(120,80,0,.03)",
+                        borderLeft: "2px solid " + tierClr,
+                      },
+                    },
+                    h(
+                      "div",
+                      null,
+                      h(
+                        "div",
+                        {
+                          style: {
+                            fontFamily: "Cinzel,serif",
+                            fontSize: "12px",
+                            color: tierClr,
+                            letterSpacing: ".04em",
+                          },
+                        },
+                        tier,
+                      ),
+                      h(
+                        "div",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "11px",
+                            color: "var(--body-faint)",
+                            marginTop: "2px",
+                          },
+                        },
+                        data.won + "W · " + data.lost + "L",
+                      ),
+                    ),
+                    h(
+                      "div",
+                      {
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "16px",
+                          fontWeight: 700,
+                          color:
+                            rate >= 0.5
+                              ? "#3dd68c"
+                              : rate > 0
+                                ? "#f0c040"
+                                : "rgba(245,240,232,.3)",
+                        },
+                      },
+                      total > 0 ? Math.round(rate * 100) + "%" : "—",
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            // Loss Reasons
+            h(
+              "div",
+              null,
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "var(--gold-dim)",
+                    marginBottom: "10px",
+                  },
+                },
+                "Loss Reasons",
+              ),
+              topReasons.length === 0
+                ? h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cormorant Garamond,serif",
+                        fontStyle: "italic",
+                        fontSize: "13px",
+                        color: "var(--body-faint)",
+                      },
+                    },
+                    lostRows.length === 0
+                      ? "No losses recorded yet."
+                      : "No loss reasons logged — add them in the pipeline drawer.",
+                  )
+                : h(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "5px",
+                      },
+                    },
+                    ...topReasons.map(([reason, count]) =>
+                      h(
+                        "div",
+                        {
+                          key: reason,
+                          style: {
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "6px 10px",
+                            background: "rgba(231,76,60,.04)",
+                            borderLeft: "2px solid rgba(231,76,60,.3)",
+                          },
+                        },
+                        h(
+                          "span",
+                          {
+                            style: {
+                              fontFamily: "Cormorant Garamond,serif",
+                              fontSize: "13px",
+                              color: "var(--body-dim)",
+                              textTransform: "capitalize",
+                            },
+                          },
+                          reason,
+                        ),
+                        h(
+                          "span",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "13px",
+                              fontWeight: 700,
+                              color: "#e74c3c",
+                            },
+                          },
+                          "x" + count,
+                        ),
+                      ),
+                    ),
+                  ),
+            ),
+          ),
+        ),
+
+      // ── ROW 5: 30-DAY DEADLINE VIEW ──────────────────────────────────
+      totalDeadlines > 0 &&
         h(
           "div",
           { style: { ...card, position: "relative", zIndex: 1 } },
           h(
             "div",
-            { style: sectionTitle },
-            "Due This Week · " +
-              dueWeek.length +
+            { style: { ...sectionTitle, marginBottom: "16px" } },
+            "Upcoming Deadlines · " +
+              totalDeadlines +
               " solicitation" +
-              (dueWeek.length !== 1 ? "s" : ""),
+              (totalDeadlines !== 1 ? "s" : ""),
           ),
-          h(
-            "div",
-            { style: { display: "flex", flexDirection: "column", gap: "6px" } },
-            dueWeek.map((r) => {
-              const dl = daysLeft(r);
-              const clr =
-                dl === 0
+
+          // ── Deadline row renderer ──
+          (() => {
+            const DeadlineRow = (r) => {
+              const dl = r._dl;
+              const isOverdue = dl < 0;
+              const clr = isOverdue
+                ? "#e74c3c"
+                : dl === 0
                   ? "#e74c3c"
                   : dl <= 2
                     ? "#f0c040"
-                    : "rgba(245,240,232,.6)";
-              const lbl = dl === 0 ? "TODAY" : dl === 1 ? "TOMORROW" : dl + "d";
+                    : dl <= 7
+                      ? "rgba(245,240,232,.75)"
+                      : "rgba(201,168,76,.45)";
+              const lbl = isOverdue
+                ? Math.abs(dl) + "d ago"
+                : dl === 0
+                  ? "TODAY"
+                  : dl === 1
+                    ? "TOMORROW"
+                    : dl + "d";
+              const isEsbd = r._esbd;
               return h(
                 "div",
                 {
                   key: r.sol_number,
+                  onClick: () =>
+                    !isEsbd && goPipeline && goPipeline(r.sol_number),
                   style: {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "8px 12px",
-                    background: "rgba(120,80,0,.03)",
+                    background: isOverdue
+                      ? "rgba(231,76,60,.04)"
+                      : "rgba(120,80,0,.03)",
                     borderLeft: "2px solid " + clr,
+                    cursor: isEsbd ? "default" : "pointer",
+                    transition: "background .15s",
+                    marginBottom: "4px",
+                  },
+                  onMouseEnter: (e) => {
+                    if (!isEsbd)
+                      e.currentTarget.style.background = "rgba(201,168,76,.06)";
+                  },
+                  onMouseLeave: (e) => {
+                    e.currentTarget.style.background = isOverdue
+                      ? "rgba(231,76,60,.04)"
+                      : "rgba(120,80,0,.03)";
                   },
                 },
                 h(
@@ -1565,14 +2057,47 @@
                     "div",
                     {
                       style: {
-                        fontFamily: "Cinzel,serif",
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        color: "#C9A84C",
-                        letterSpacing: ".05em",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
                       },
                     },
-                    r.sol_number,
+                    h(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cinzel,serif",
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: "#C9A84C",
+                          letterSpacing: ".05em",
+                        },
+                      },
+                      r.sol_number,
+                    ),
+                    h(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cinzel,serif",
+                          fontSize: "8px",
+                          letterSpacing: ".1em",
+                          padding: "2px 6px",
+                          border:
+                            "1px solid " +
+                            (isEsbd
+                              ? "rgba(135,206,235,.3)"
+                              : "rgba(201,168,76,.25)"),
+                          color: isEsbd
+                            ? "rgba(135,206,235,.8)"
+                            : "rgba(201,168,76,.6)",
+                          background: isEsbd
+                            ? "rgba(135,206,235,.06)"
+                            : "rgba(201,168,76,.04)",
+                        },
+                      },
+                      r._lane,
+                    ),
                   ),
                   h(
                     "div",
@@ -1581,7 +2106,7 @@
                         fontFamily: "Cormorant Garamond,serif",
                         fontSize: "13px",
                         color: "var(--body-faint)",
-                        marginTop: "1px",
+                        marginTop: "2px",
                       },
                     },
                     r.item_name || "—",
@@ -1596,33 +2121,117 @@
                       alignItems: "center",
                     },
                   },
-                  h(
-                    "span",
-                    {
-                      style: {
-                        fontFamily: "Cormorant Garamond,serif",
-                        fontSize: "14px",
-                        color: "var(--body-faint)",
+                  r.fsc &&
+                    h(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cormorant Garamond,serif",
+                          fontSize: "13px",
+                          color: "var(--body-faint)",
+                        },
                       },
-                    },
-                    r.fsc || "",
-                  ),
+                      r.fsc,
+                    ),
                   h(
                     "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "14px",
+                        fontSize: "13px",
                         fontWeight: 700,
                         color: clr,
+                        minWidth: "70px",
+                        textAlign: "right",
                       },
                     },
                     lbl,
                   ),
                 ),
               );
-            }),
-          ),
+            };
+
+            return h(
+              "div",
+              null,
+
+              // Overdue band
+              allOverdue.length > 0 &&
+                h(
+                  "div",
+                  null,
+                  h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "9px",
+                        letterSpacing: ".16em",
+                        color: "#e74c3c",
+                        textTransform: "uppercase",
+                        marginBottom: "6px",
+                        marginTop: "4px",
+                      },
+                    },
+                    "▲ Overdue — " + allOverdue.length,
+                  ),
+                  ...allOverdue.map(DeadlineRow),
+                ),
+
+              // Due 0-7 days band
+              allDueWeek.length > 0 &&
+                h(
+                  "div",
+                  {
+                    style: { marginTop: allOverdue.length > 0 ? "14px" : "0" },
+                  },
+                  h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "9px",
+                        letterSpacing: ".16em",
+                        color: "#f0c040",
+                        textTransform: "uppercase",
+                        marginBottom: "6px",
+                      },
+                    },
+                    "◆ Due This Week — " + allDueWeek.length,
+                  ),
+                  ...allDueWeek.map(DeadlineRow),
+                ),
+
+              // Due 8-30 days band
+              allDue8to30.length > 0 &&
+                h(
+                  "div",
+                  {
+                    style: {
+                      marginTop:
+                        allOverdue.length > 0 || allDueWeek.length > 0
+                          ? "14px"
+                          : "0",
+                    },
+                  },
+                  h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "9px",
+                        letterSpacing: ".16em",
+                        color: "rgba(201,168,76,.5)",
+                        textTransform: "uppercase",
+                        marginBottom: "6px",
+                      },
+                    },
+                    "◇ Next 30 Days — " + allDue8to30.length,
+                  ),
+                  ...allDue8to30.map(DeadlineRow),
+                ),
+            );
+          })(),
         ),
     );
   }

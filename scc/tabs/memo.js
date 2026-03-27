@@ -12,7 +12,7 @@
     const lnk = document.createElement("link");
     lnk.id = "memo-css";
     lnk.rel = "stylesheet";
-    lnk.href = "memo.css";
+    lnk.href = "styles/memo.css";
     document.head.appendChild(lnk);
   }
 

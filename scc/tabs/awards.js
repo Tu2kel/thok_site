@@ -1011,6 +1011,73 @@
             },
             "\u2297 Void",
           ),
+          hW(
+            "button",
+            {
+              onClick: () => {
+                const delivDays = parseInt(record.delivery_days) || 30;
+                const delivDate = new Date();
+                delivDate.setDate(delivDate.getDate() + delivDays);
+                const months = [
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ];
+                const delivStr =
+                  months[delivDate.getMonth()] +
+                  " " +
+                  delivDate.getDate() +
+                  ", " +
+                  delivDate.getFullYear();
+                const params = new URLSearchParams({
+                  po: record.po_number || "",
+                  sol: record.sol_number || "",
+                  nsn: record.nsn || "",
+                  item: record.item_name || "",
+                  part: record.ref_part_number || "",
+                  qty: record.quantity || "",
+                  unit: record.unit_of_issue || "EA",
+                  price:
+                    record.supplier_quote_price || record.actual_cost || "",
+                  clin: record.clin || "0001",
+                  delivery: delivStr,
+                  fob: record.fob || "Destination",
+                  vendor: record.supplier_name || "",
+                  shipto: record.ship_to || "",
+                });
+                window.open(
+                  "../assets/supplier-po-template.html?" + params.toString(),
+                  "_blank",
+                );
+              },
+              style: {
+                padding: "7px 16px",
+                background: "rgba(201,168,76,.06)",
+                border: "1px solid rgba(201,168,76,.4)",
+                color: "var(--gold-solid)",
+                ...cinzel,
+                fontSize: "10px",
+                letterSpacing: ".1em",
+                cursor: "pointer",
+              },
+              onMouseEnter: (e) => {
+                e.target.style.background = "rgba(201,168,76,.14)";
+              },
+              onMouseLeave: (e) => {
+                e.target.style.background = "rgba(201,168,76,.06)";
+              },
+            },
+            "\u2750 Generate PO",
+          ),
         ),
       ),
 
