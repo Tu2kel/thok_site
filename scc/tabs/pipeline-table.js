@@ -818,6 +818,7 @@ Rules:
     const { fmt, TIER_MARGINS, STATUSES, tierClass, calcBidMath } =
       window.SCC_MATH;
     const { dbSave, dbDelete, dbArchive } = window.SCC_DB;
+    const { Drawer } = window.SCC_TABS;
 
     const [bidBand, setBidBand] = usePState("All");
     const [search, setSearch] = usePState("");

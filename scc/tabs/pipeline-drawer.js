@@ -10,6 +10,7 @@
     createElement: hP,
     useState: usePState,
     useEffect: usePEffect,
+    Fragment: PFrag,
   } = React;
 
   // ── DRAWER ───────────────────────────────────────────────────────────

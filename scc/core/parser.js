@@ -11,7 +11,11 @@
   }
 
   function isListing(text) {
-    return /SPE\w+.*?(AI|Send|Save)/i.test((text || "").split("\n")[0]);
+    const first = (text || "").split("\n")[0];
+    if (/SPE\w+.*?(AI|Send|Save)/i.test(first)) return true;
+    if (/SPE\w+.*?Hist\./i.test(first)) return true;
+    if (/SPE\w+/.test(first) && /\|[A-Z0-9]{5}\|/.test(text)) return true;
+    return false;
   }
 
   function parseListing(text) {
@@ -131,7 +135,7 @@
 
     // Suppliers — NAME|CAGE|PARTNO (DIBBS pipe format)
     const sups = [
-      ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]+)/g),
+      ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]*)/g),
     ];
     if (sups.length > 0) {
       d.ref_supplier = sups[0][1].trim();
@@ -140,6 +144,9 @@
       d.all_suppliers = sups
         .map((s) => `${s[1].trim()} (${s[2]}) P/N: ${s[3].trim()}`)
         .join(" · ");
+      d.suppliers =
+        sups.map((s) => `${s[1].trim()}|${s[2]}|${s[3].trim()}`).join(";") +
+        ";";
     }
 
     return d;
@@ -239,6 +246,10 @@
       d.all_suppliers = suppMd
         .map((s) => `${s[1].trim()} (${s[2].trim()}) P/N: ${s[3].trim()}`)
         .join(" · ");
+      d.suppliers =
+        suppMd
+          .map((s) => `${s[1].trim()}|${s[2].trim()}|${s[3].trim()}`)
+          .join(";") + ";";
     }
 
     if (!d.ref_supplier) {
@@ -252,12 +263,16 @@
         d.all_suppliers = suppCondensed
           .map((s) => `${s[1].trim()} (${s[2].trim()}) P/N: ${s[3].trim()}`)
           .join(" · ");
+        d.suppliers =
+          suppCondensed
+            .map((s) => `${s[1].trim()}|${s[2].trim()}|${s[3].trim()}`)
+            .join(";") + ";";
       }
     }
 
     if (!d.ref_supplier) {
       const pipeSups = [
-        ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]+)/g),
+        ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]*)/g),
       ];
       if (pipeSups.length > 0) {
         d.ref_supplier = pipeSups[0][1].trim();
@@ -266,6 +281,10 @@
         d.all_suppliers = pipeSups
           .map((s) => `${s[1].trim()} (${s[2]}) P/N: ${s[3].trim()}`)
           .join(" · ");
+        d.suppliers =
+          pipeSups
+            .map((s) => `${s[1].trim()}|${s[2]}|${s[3].trim()}`)
+            .join(";") + ";";
       }
     }
 
