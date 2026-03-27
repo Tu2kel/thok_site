@@ -231,7 +231,7 @@
 
     const bandCounts = { dead: 0, thin: 0, stretch: 0, go: 0, premium: 0 };
     const bandValue = { dead: 0, thin: 0, stretch: 0, go: 0, premium: 0 };
-    rows.forEach((r) => {
+    active.forEach((r) => {
       const m = rowMath(r);
       const gp = m.gpPct / 100;
       const band = BANDS.find((b) => gp >= b.min && gp < b.max);
@@ -240,11 +240,11 @@
         bandValue[band.key] += m.bidTotal;
       }
     });
-    const totalBandCount = rows.length || 1;
+    const totalBandCount = active.length || 1;
 
     // ── FSC BREAKDOWN ─────────────────────────────────────────────────────
     const fscMap = {};
-    rows.forEach((r) => {
+    active.forEach((r) => {
       if (!r.fsc) return;
       if (!fscMap[r.fsc])
         fscMap[r.fsc] = { count: 0, won: 0, lost: 0, value: 0, net: 0 };
@@ -261,7 +261,7 @@
 
     // ── TIER BREAKDOWN ────────────────────────────────────────────────────
     const tierCounts = {};
-    rows.forEach((r) => {
+    active.forEach((r) => {
       const t = r.tier || "Standard";
       tierCounts[t] = (tierCounts[t] || 0) + 1;
     });
@@ -269,7 +269,7 @@
     // ── SET-ASIDE BREAKDOWN ───────────────────────────────────────────────
     const saCounts = { Y: 0, N: 0 };
     const saWon = { Y: 0, N: 0 };
-    rows.forEach((r) => {
+    active.forEach((r) => {
       const sa = (r.set_aside || "N").toUpperCase() === "Y" ? "Y" : "N";
       saCounts[sa]++;
       if (r.status === "Awarded") saWon[sa]++;
@@ -320,7 +320,7 @@
       sscCount = 0,
       selfFundedValue = 0,
       sscValue = 0;
-    rows.forEach((r) => {
+    active.forEach((r) => {
       const ext =
         parseFloat(r.extended_price) ||
         parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1);
