@@ -474,7 +474,13 @@
     lsSaveAwards(updatedAwards);
 
     // ── Step 3: Archive closed DIBBS pipeline rows ────────────────────────
-    const closedStatuses = ["Awarded", "Lost", "No Bid", "On Hold"];
+    const closedStatuses = [
+      "Awarded",
+      "Lost",
+      "No Source",
+      "No Bid",
+      "On Hold",
+    ];
     const remaining = [];
     const toArchive = [];
     sols.forEach((r) => {

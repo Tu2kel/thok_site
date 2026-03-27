@@ -20,6 +20,7 @@
     "Pending Award",
     "Awarded",
     "Lost",
+    "No Source",
     "On Hold",
   ];
 

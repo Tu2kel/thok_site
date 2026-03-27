@@ -1809,7 +1809,10 @@
 
     // Filter
     const visible = bids.filter((b) => {
-      const matchStatus = filterStatus === "All" || b.status === filterStatus;
+      const matchStatus =
+        filterStatus === "All"
+          ? !["Lost", "No Bid"].includes(b.status)
+          : b.status === filterStatus;
       const q = search.toLowerCase();
       const matchSearch =
         !q ||

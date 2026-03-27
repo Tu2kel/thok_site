@@ -55,7 +55,7 @@
 
     // ── PIPELINE SLICES ───────────────────────────────────────────────────
     const active = rows.filter(
-      (r) => !["Awarded", "Lost", "On Hold"].includes(r.status),
+      (r) => !["Awarded", "Lost", "No Source", "On Hold"].includes(r.status),
     );
     const awarded = rows.filter((r) => r.status === "Awarded");
     const lost = rows.filter((r) => r.status === "Lost");
@@ -64,7 +64,8 @@
     const pending = rows.filter((r) => r.status === "Pending Award");
     const dueWeek = rows.filter((r) => daysLeft(r) >= 0 && daysLeft(r) <= 7);
     const overdue = rows.filter(
-      (r) => daysLeft(r) < 0 && !["Awarded", "Lost"].includes(r.status),
+      (r) =>
+        daysLeft(r) < 0 && !["Awarded", "Lost", "No Source"].includes(r.status),
     );
     const due8to30 = rows.filter((r) => daysLeft(r) >= 8 && daysLeft(r) <= 30);
 

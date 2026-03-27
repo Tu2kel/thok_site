@@ -895,7 +895,11 @@ Rules:
     const [bandMin, bandMax] = BID_BANDS[bidBand] || [0, Infinity];
 
     const visible = rows
-      .filter((r) => filter === "All" || r.status === filter)
+      .filter((r) =>
+        filter === "All"
+          ? !["Lost", "No Source"].includes(r.status)
+          : r.status === filter,
+      )
       .filter((r) => {
         const b = getBidTotal(r);
         return b >= bandMin && b <= bandMax;
