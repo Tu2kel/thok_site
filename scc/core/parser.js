@@ -11,11 +11,7 @@
   }
 
   function isListing(text) {
-    const first = (text || "").split("\n")[0];
-    if (/SPE\w+.*?(AI|Send|Save)/i.test(first)) return true;
-    if (/SPE\w+.*?Hist\./i.test(first)) return true;
-    if (/SPE\w+/.test(first) && /\|[A-Z0-9]{5}\|/.test(text)) return true;
-    return false;
+    return /SPE\w+.*?(AI|Send|Save)/i.test((text || "").split("\n")[0]);
   }
 
   function parseListing(text) {
@@ -34,7 +30,7 @@
 
     // Qty + unit — handles plain digits AND comma-formatted numbers (18,642)
     const UNITS =
-      "EA|LT|BX|DZ|PR|FT|GL|LB|PK|RL|SE|ST|PG|HD|SH|VI|CY|GR|MX|TH|YD";
+      "EA|LT|BX|DZ|PR|FT|GL|LB|PK|RL|SE|ST|PG|HD|SH|VI|CY|GR|MX|TH|YD|SL|RO|AY|KT";
     const qtyRx = new RegExp(
       "\\b(\\d{1,3}(?:,\\d{3})*|\\d+)[ \\t]+(" + UNITS + ")\\b",
       "i",
@@ -50,7 +46,10 @@
       const afterSave = text.match(/Save[ \t]+([\s\S]+)/i);
       if (afterSave) {
         const chunk = afterSave[1];
-        const qIdx = chunk.indexOf(qty[0]);
+        const qtyEscaped = qty[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const qtyFlexRx = new RegExp(qtyEscaped.replace(/\s+/, "\\s+"));
+        const flexMatch = chunk.match(qtyFlexRx);
+        const qIdx = flexMatch ? flexMatch.index : chunk.indexOf(qty[0]);
         const raw =
           qIdx > 0
             ? chunk.substring(0, qIdx).trim()
@@ -135,7 +134,7 @@
 
     // Suppliers — NAME|CAGE|PARTNO (DIBBS pipe format)
     const sups = [
-      ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]*)/g),
+      ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]+)/g),
     ];
     if (sups.length > 0) {
       d.ref_supplier = sups[0][1].trim();
@@ -144,9 +143,6 @@
       d.all_suppliers = sups
         .map((s) => `${s[1].trim()} (${s[2]}) P/N: ${s[3].trim()}`)
         .join(" · ");
-      d.suppliers =
-        sups.map((s) => `${s[1].trim()}|${s[2]}|${s[3].trim()}`).join(";") +
-        ";";
     }
 
     return d;
@@ -246,10 +242,6 @@
       d.all_suppliers = suppMd
         .map((s) => `${s[1].trim()} (${s[2].trim()}) P/N: ${s[3].trim()}`)
         .join(" · ");
-      d.suppliers =
-        suppMd
-          .map((s) => `${s[1].trim()}|${s[2].trim()}|${s[3].trim()}`)
-          .join(";") + ";";
     }
 
     if (!d.ref_supplier) {
@@ -263,16 +255,12 @@
         d.all_suppliers = suppCondensed
           .map((s) => `${s[1].trim()} (${s[2].trim()}) P/N: ${s[3].trim()}`)
           .join(" · ");
-        d.suppliers =
-          suppCondensed
-            .map((s) => `${s[1].trim()}|${s[2].trim()}|${s[3].trim()}`)
-            .join(";") + ";";
       }
     }
 
     if (!d.ref_supplier) {
       const pipeSups = [
-        ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]*)/g),
+        ...text.matchAll(/([A-Z][A-Z0-9 ,\.&]+?)\|([A-Z0-9]{5})\|([^|;\n]+)/g),
       ];
       if (pipeSups.length > 0) {
         d.ref_supplier = pipeSups[0][1].trim();
@@ -281,10 +269,6 @@
         d.all_suppliers = pipeSups
           .map((s) => `${s[1].trim()} (${s[2]}) P/N: ${s[3].trim()}`)
           .join(" · ");
-        d.suppliers =
-          pipeSups
-            .map((s) => `${s[1].trim()}|${s[2]}|${s[3].trim()}`)
-            .join(";") + ";";
       }
     }
 
