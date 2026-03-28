@@ -39,8 +39,42 @@
         setLoading(false);
         return;
       }
-      viGetByNSN(nsn).then((e) => {
-        setEntries(e);
+      viGetByNSN(nsn).then(async (e) => {
+        // If no existing entries, auto-seed from the parsed supplier list on the record
+        if (e.length === 0 && record.all_suppliers) {
+          const pipe = [
+            ...(record.all_suppliers || "").matchAll(
+              /([^(]+)\s+\(([A-Z0-9]{5})\)\s+P\/N:\s+([^\s·]+)/g,
+            ),
+          ];
+          const seeded = [];
+          for (const m of pipe) {
+            const vname = m[1].trim();
+            const cage = m[2].trim();
+            const pn = m[3].trim();
+            const vid = cage.toLowerCase();
+            const rec = {
+              id: nsn + "::" + vid + "::" + Date.now() + Math.random(),
+              nsn,
+              fsc,
+              vendor_id: vid,
+              vendor_name: vname,
+              part_number: pn,
+              unit_price: null,
+              lead_time: "",
+              moq: "",
+              notes: "Auto-seeded from DIBBS supplier list",
+              status: "pending",
+              sol_number: record.sol_number,
+              last_updated: new Date().toLocaleDateString(),
+            };
+            await viSave(rec);
+            seeded.push(rec);
+          }
+          setEntries(seeded.length ? seeded : e);
+        } else {
+          setEntries(e);
+        }
         setLoading(false);
       });
     }, [nsn]);

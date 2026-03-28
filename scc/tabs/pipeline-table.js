@@ -823,6 +823,19 @@ Rules:
     const [bidBand, setBidBand] = usePState("All");
     const [search, setSearch] = usePState("");
     const [showIngest, setShowIngest] = usePState(false);
+    const [noSourceModal, setNoSourceModal] = usePState(null);
+    const NS_PRESETS = [
+      "Incumbent locked — competitor owns NSN at unbeatable price",
+      "OEM/manufacturer controlled — no dealer path",
+      "Delivery window impossible",
+      "No supplier intel — cannot source",
+      "Restricted set-aside — not eligible",
+      "First article requirement",
+      "AbilityOne mandatory source",
+      "FOB Origin — logistics risk",
+      "Pharmaceutical / regulated supply",
+      "No margin after FE fees",
+    ];
 
     // ── Inject solPulse keyframe once ────────────────────────────────────
     usePEffect(() => {
@@ -953,12 +966,34 @@ Rules:
     };
 
     const handleStatus = async (sol_number, status) => {
+      if (status === "No Source") {
+        setNoSourceModal({ sol_number, customReason: "" });
+        return;
+      }
       const updated = rows.map((r) =>
         r.sol_number === sol_number ? { ...r, status } : r,
       );
       setRows(updated);
       await dbSave(updated.find((r) => r.sol_number === sol_number));
       showToast(sol_number + " → " + status);
+    };
+
+    const confirmNoSource = async (sol_number, reason) => {
+      const updated = rows.map((r) =>
+        r.sol_number === sol_number
+          ? {
+              ...r,
+              status: "No Source",
+              notes: reason
+                ? "[No-Source] " + reason + (r.notes ? "\n" + r.notes : "")
+                : r.notes,
+            }
+          : r,
+      );
+      setRows(updated);
+      await dbSave(updated.find((r) => r.sol_number === sol_number));
+      showToast(sol_number + " → No Source");
+      setNoSourceModal(null);
     };
     const handleDelete = async (sol_number) => {
       if (!confirm("Delete " + sol_number + "?")) return;
@@ -1005,6 +1040,171 @@ Rules:
           onClose: () => setShowIngest(false),
           showToast,
         }),
+
+      // ── No Source Modal ───────────────────────────────────────────────
+      noSourceModal &&
+        hP(
+          "div",
+          {
+            style: {
+              position: "fixed",
+              inset: 0,
+              zIndex: 9999,
+              background: "rgba(0,0,0,.72)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            },
+            onClick: () => setNoSourceModal(null),
+          },
+          hP(
+            "div",
+            {
+              style: {
+                background: "#1a0a0e",
+                border: "1px solid rgba(201,168,76,.35)",
+                borderTop: "3px solid rgba(231,76,60,.7)",
+                padding: "28px 32px",
+                width: "480px",
+                maxWidth: "92vw",
+                boxShadow: "0 24px 60px rgba(0,0,0,.8)",
+              },
+              onClick: (e) => e.stopPropagation(),
+            },
+            hP(
+              "div",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "13px",
+                  letterSpacing: ".14em",
+                  color: "rgba(231,76,60,.9)",
+                  textTransform: "uppercase",
+                  marginBottom: "4px",
+                },
+              },
+              "No Source — " + noSourceModal.sol_number,
+            ),
+            hP(
+              "div",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "11px",
+                  color: "var(--body-faint)",
+                  marginBottom: "18px",
+                },
+              },
+              "Select reason or type below. Saved to record notes.",
+            ),
+
+            // Preset buttons
+            hP(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  marginBottom: "16px",
+                },
+              },
+              ...NS_PRESETS.map((p) =>
+                hP(
+                  "button",
+                  {
+                    key: p,
+                    onClick: () =>
+                      setNoSourceModal((m) => ({ ...m, customReason: p })),
+                    style: {
+                      textAlign: "left",
+                      background:
+                        noSourceModal.customReason === p
+                          ? "rgba(231,76,60,.18)"
+                          : "rgba(255,255,255,.03)",
+                      border:
+                        "1px solid " +
+                        (noSourceModal.customReason === p
+                          ? "rgba(231,76,60,.6)"
+                          : "rgba(201,168,76,.12)"),
+                      color:
+                        noSourceModal.customReason === p
+                          ? "rgba(231,76,60,.95)"
+                          : "var(--body-dim)",
+                      fontFamily: "Cormorant Garamond,serif",
+                      fontSize: "14px",
+                      padding: "7px 12px",
+                      cursor: "pointer",
+                      transition: "all .15s",
+                    },
+                  },
+                  p,
+                ),
+              ),
+            ),
+
+            // Free text
+            hP("textarea", {
+              placeholder: "Or type a custom reason…",
+              value: noSourceModal.customReason,
+              onChange: (e) =>
+                setNoSourceModal((m) => ({
+                  ...m,
+                  customReason: e.target.value,
+                })),
+              style: {
+                width: "100%",
+                minHeight: "52px",
+                resize: "vertical",
+                background: "rgba(0,0,0,.3)",
+                border: "1px solid rgba(201,168,76,.2)",
+                color: "var(--alabaster)",
+                fontFamily: "Cormorant Garamond,serif",
+                fontSize: "14px",
+                padding: "8px 10px",
+                marginBottom: "16px",
+                boxSizing: "border-box",
+              },
+            }),
+
+            // Buttons
+            hP(
+              "div",
+              { style: { display: "flex", gap: "10px" } },
+              hP(
+                "button",
+                {
+                  className: "btn btn-primary",
+                  onClick: () =>
+                    confirmNoSource(
+                      noSourceModal.sol_number,
+                      noSourceModal.customReason,
+                    ),
+                  style: { fontSize: "12px", padding: "10px 28px" },
+                },
+                hP("span", { className: "glint" }),
+                "Confirm No Source",
+              ),
+              hP(
+                "button",
+                {
+                  onClick: () => setNoSourceModal(null),
+                  style: {
+                    background: "transparent",
+                    border: "1px solid var(--border-subtle)",
+                    color: "var(--body-dim)",
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "10px",
+                    letterSpacing: ".1em",
+                    padding: "10px 20px",
+                    cursor: "pointer",
+                  },
+                },
+                "Cancel",
+              ),
+            ),
+          ),
+        ),
       hP(
         "div",
         { className: "pipe-header" },

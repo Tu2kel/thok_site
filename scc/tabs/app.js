@@ -455,7 +455,7 @@
     const [highlightSol, setHighlightSol] = useState(null);
 
     const goPipeline = (sol_number) => {
-      setFilter("All");          // ensure sol is visible regardless of active filter
+      setFilter("All"); // ensure sol is visible regardless of active filter
       setHighlightSol(sol_number);
       setTab("pipeline");
     };
@@ -630,6 +630,16 @@
         status: "New",
         date_added: new Date().toLocaleDateString(),
         notes: "",
+        // Pre-seed supplier intel drawer from parsed ref supplier
+        supplier_poc: parsed.ref_supplier || "",
+        supplier_moq: "",
+        supplier_website: "",
+        supplier_phone: "",
+        supplier_email: "",
+        supplier_quote_price: "",
+        supplier_quote_date: "",
+        supplier_quote_expires: "",
+        supplier_lead_time: "",
       });
       showToast(parsed.sol_number + " saved to pipeline");
       setBoxA("");

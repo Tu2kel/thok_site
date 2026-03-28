@@ -15,7 +15,7 @@
 
   // ── DRAWER ───────────────────────────────────────────────────────────
   function Drawer({ record, onSave, showToast }) {
-    const { DrawerSourcePanel } = window.SCC_TABS;
+    const { DrawerSourcePanel, VendorIntelPanel } = window.SCC_TABS;
     const [dtab, setDtab] = usePState("supplier");
     const [form, setForm] = usePState({
       supplier_website: "",
