@@ -13,7 +13,8 @@
   } = React;
 
   function DrawerSourcePanel({ record }) {
-    const { FSC_LANES_MAP, DISTRIBUTORS, getDistsByFSC } = window.SCC_DIST;
+    const { FSC_LANES_MAP, DISTRIBUTORS, getDistsByFSC, distSave } =
+      window.SCC_DIST;
     const isBlocked = window.SCC_TABS.isBlocked || (() => null);
     const fsc = record.fsc || "";
     const nsn = record.nsn || "";
@@ -21,6 +22,32 @@
     const mfr = record.ref_supplier || "";
     const dists = getDistsByFSC(fsc).slice(0, 12);
     const lane = FSC_LANES_MAP[String(fsc)] || "FSC " + fsc;
+
+    // Track per-distributor fetching state: { [distId]: "loading" | "done" | "fail" }
+    const [fetchState, setFetchState] = useSourceState({});
+
+    const fetchDistPhone = async (d) => {
+      if (!d.website) return;
+      setFetchState((s) => ({ ...s, [d.id]: "loading" }));
+      try {
+        const res = await fetch("/.netlify/functions/fetch-phone", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: d.website }),
+        });
+        const data = await res.json();
+        if (data.phone) {
+          await distSave({ ...d, phone: data.phone });
+          // Update local display without full reload
+          d.phone = data.phone;
+          setFetchState((s) => ({ ...s, [d.id]: "done" }));
+        } else {
+          setFetchState((s) => ({ ...s, [d.id]: "fail" }));
+        }
+      } catch {
+        setFetchState((s) => ({ ...s, [d.id]: "fail" }));
+      }
+    };
 
     const btnStyle = {
       display: "inline-flex",
@@ -400,56 +427,137 @@
             gap: "8px",
           },
         },
-        ...(dists.length ? dists : DISTRIBUTORS.slice(0, 12)).map((d) =>
-          hS(
-            "a",
+        ...(dists.length ? dists : DISTRIBUTORS.slice(0, 12)).map((d) => {
+          const fs = fetchState[d.id];
+          return hS(
+            "div",
             {
               key: d.id,
-              href:
-                d.search_url +
-                (part
-                  ? encodeURIComponent(part)
-                  : nsn
-                    ? encodeURIComponent(nsn)
-                    : ""),
-              target: "_blank",
               style: {
-                ...btnStyle,
-                justifyContent: "space-between",
-                padding: "8px 12px",
-                textDecoration: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
               },
             },
+            // ── Distributor link button ──
             hS(
-              "span",
+              "a",
               {
+                href:
+                  d.search_url +
+                  (part
+                    ? encodeURIComponent(part)
+                    : nsn
+                      ? encodeURIComponent(nsn)
+                      : ""),
+                target: "_blank",
                 style: {
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "9px",
-                  letterSpacing: ".06em",
-                  color: "var(--gold-solid)",
+                  ...btnStyle,
+                  justifyContent: "space-between",
+                  padding: "8px 12px",
+                  textDecoration: "none",
                 },
               },
-              d.name,
+              hS(
+                "span",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".06em",
+                    color: "var(--gold-solid)",
+                  },
+                },
+                d.name,
+              ),
+              hS(
+                "span",
+                {
+                  style: {
+                    fontSize: "8px",
+                    color:
+                      d.friction === "low"
+                        ? "#3dd68c"
+                        : d.friction === "medium"
+                          ? "#f5c542"
+                          : "#ff6b7a",
+                    letterSpacing: ".04em",
+                  },
+                },
+                "T" + d.tier,
+              ),
             ),
+            // ── Phone row ──
             hS(
-              "span",
+              "div",
               {
                 style: {
-                  fontSize: "8px",
-                  color:
-                    d.friction === "low"
-                      ? "#3dd68c"
-                      : d.friction === "medium"
-                        ? "#f5c542"
-                        : "#ff6b7a",
-                  letterSpacing: ".04em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  minHeight: "22px",
                 },
               },
-              "T" + d.tier,
+              d.phone
+                ? hS(
+                    "a",
+                    {
+                      href: "tel:" + d.phone.replace(/\D/g, ""),
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "11px",
+                        color: "var(--accent-green)",
+                        textDecoration: "none",
+                        letterSpacing: ".04em",
+                        flex: 1,
+                      },
+                    },
+                    "📞 " + d.phone,
+                  )
+                : hS(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "10px",
+                        color: "var(--body-faint)",
+                        flex: 1,
+                        fontStyle: "italic",
+                      },
+                    },
+                    fs === "fail" ? "No # found" : "No phone",
+                  ),
+              // Fetch button — only if website exists and phone not yet known
+              d.website &&
+                !d.phone &&
+                hS(
+                  "button",
+                  {
+                    onClick: (e) => {
+                      e.preventDefault();
+                      fetchDistPhone(d);
+                    },
+                    disabled: fs === "loading",
+                    title: "Fetch phone from " + d.website,
+                    style: {
+                      padding: "2px 6px",
+                      fontSize: "10px",
+                      background: "rgba(201,168,76,.12)",
+                      border: "1px solid rgba(201,168,76,.3)",
+                      color:
+                        fs === "loading"
+                          ? "var(--gold-dim)"
+                          : "var(--gold-solid)",
+                      cursor: fs === "loading" ? "wait" : "pointer",
+                      borderRadius: "2px",
+                      flexShrink: 0,
+                    },
+                  },
+                  fs === "loading" ? "…" : "📞?",
+                ),
             ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   }
