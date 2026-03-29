@@ -12,6 +12,230 @@
     useEffect: useSourceEffect,
   } = React;
 
+  // ── CAGE phone helpers ────────────────────────────────────────────────
+  async function cagePhoneGet(cage) {
+    try {
+      const res = await fetch("/.netlify/functions/cage-phones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cagePhoneGet", payload: { cage } }),
+      });
+      const data = await res.json();
+      return data.result || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function cagePhoneSave(cage, name, phone) {
+    try {
+      await fetch("/.netlify/functions/cage-phones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "cagePhoneSave",
+          payload: { cage, name, phone },
+        }),
+      });
+    } catch {}
+  }
+
+  async function fetchPhoneFromUrl(url) {
+    try {
+      const res = await fetch("/.netlify/functions/fetch-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      return data.phone || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ── SUPPLIER CARD (DLA Approved Source) ──────────────────────────────
+  function SupplierCard({ s, isBlocked, gsaUrl }) {
+    const blocked = isBlocked(s.name);
+    const [phone, setPhone] = useSourceState(null);
+    const [fetchSt, setFetchSt] = useSourceState("idle");
+
+    // On mount — check cage_phones collection
+    useSourceEffect(() => {
+      cagePhoneGet(s.cage).then((rec) => {
+        if (rec && rec.phone) setPhone(rec.phone);
+      });
+    }, [s.cage]);
+
+    const handleFetch = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setFetchSt("loading");
+      const found = await fetchPhoneFromUrl(
+        "https://www.google.com/search?q=" +
+          encodeURIComponent(s.name + " phone number contact us"),
+      );
+      if (found) {
+        setPhone(found);
+        await cagePhoneSave(s.cage, s.name, found);
+        setFetchSt("idle");
+      } else {
+        setFetchSt("fail");
+      }
+    };
+
+    return hS(
+      "div",
+      {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+        },
+      },
+      hS(
+        "a",
+        {
+          href: blocked ? undefined : gsaUrl,
+          target: blocked ? undefined : "_blank",
+          style: {
+            display: "block",
+            padding: "10px 12px",
+            background: blocked
+              ? "rgba(231,76,60,.08)"
+              : "rgba(61,214,140,.06)",
+            border:
+              "1px solid " +
+              (blocked ? "rgba(231,76,60,.4)" : "rgba(61,214,140,.25)"),
+            borderRadius: "3px",
+            textDecoration: "none",
+            cursor: blocked ? "default" : "pointer",
+            transition: "background .15s",
+          },
+        },
+        hS(
+          "div",
+          {
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "9px",
+              letterSpacing: ".06em",
+              color: blocked ? "var(--accent-red-soft)" : "var(--accent-green)",
+              marginBottom: "3px",
+              fontWeight: "700",
+            },
+          },
+          s.name,
+        ),
+        hS(
+          "div",
+          {
+            style: {
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "10px",
+              color: "var(--body-faint)",
+            },
+          },
+          "CAGE " + s.cage + " · " + s.pn,
+        ),
+        !blocked &&
+          hS(
+            "div",
+            {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: "8px",
+                letterSpacing: ".08em",
+                color: "var(--gold-dim)",
+                marginTop: "3px",
+              },
+            },
+            "Search →",
+          ),
+        blocked &&
+          hS(
+            "div",
+            {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: "8px",
+                letterSpacing: ".08em",
+                color: "rgba(231,76,60,.7)",
+                marginTop: "3px",
+              },
+            },
+            "BLOCKED — do not contact direct",
+          ),
+      ),
+      // ── Phone row ──
+      !blocked &&
+        hS(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              minHeight: "20px",
+            },
+          },
+          phone
+            ? hS(
+                "a",
+                {
+                  href: "tel:" + phone.replace(/\D/g, ""),
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "11px",
+                    color: "var(--accent-green)",
+                    textDecoration: "none",
+                    letterSpacing: ".04em",
+                    flex: 1,
+                  },
+                },
+                "📞 " + phone,
+              )
+            : hS(
+                "span",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "10px",
+                    color: "var(--body-faint)",
+                    fontStyle: "italic",
+                    flex: 1,
+                  },
+                },
+                fetchSt === "fail" ? "No # found" : "No phone",
+              ),
+          !phone &&
+            hS(
+              "button",
+              {
+                onClick: handleFetch,
+                disabled: fetchSt === "loading",
+                title: "Find phone for " + s.name,
+                style: {
+                  padding: "2px 6px",
+                  fontSize: "10px",
+                  background: "rgba(201,168,76,.12)",
+                  border: "1px solid rgba(201,168,76,.3)",
+                  color:
+                    fetchSt === "loading"
+                      ? "var(--gold-dim)"
+                      : "var(--gold-solid)",
+                  cursor: fetchSt === "loading" ? "wait" : "pointer",
+                  borderRadius: "2px",
+                  flexShrink: 0,
+                },
+              },
+              fetchSt === "loading" ? "…" : "📞?",
+            ),
+        ),
+    );
+  }
+
+  // ── MAIN PANEL ────────────────────────────────────────────────────────
   function DrawerSourcePanel({ record }) {
     const { FSC_LANES_MAP, DISTRIBUTORS, getDistsByFSC, distSave } =
       window.SCC_DIST;
@@ -23,7 +247,6 @@
     const dists = getDistsByFSC(fsc).slice(0, 12);
     const lane = FSC_LANES_MAP[String(fsc)] || "FSC " + fsc;
 
-    // Track per-distributor fetching state: { [distId]: "loading" | "done" | "fail" }
     const [fetchState, setFetchState] = useSourceState({});
 
     const fetchDistPhone = async (d) => {
@@ -38,7 +261,6 @@
         const data = await res.json();
         if (data.phone) {
           await distSave({ ...d, phone: data.phone });
-          // Update local display without full reload
           d.phone = data.phone;
           setFetchState((s) => ({ ...s, [d.id]: "done" }));
         } else {
@@ -87,7 +309,6 @@
     return hS(
       "div",
       null,
-      // ── Blocked manufacturer warning ──
       blockedHit &&
         hS(
           "div",
@@ -251,89 +472,16 @@
                 gap: "8px",
               },
             },
-            ...allSuppliers.map((s) => {
-              const blocked = isBlocked(s.name);
-              const gsaUrl =
-                "https://www.google.com/search?q=" +
-                encodeURIComponent(s.name + " " + s.pn);
-              return hS(
-                "a",
-                {
-                  key: s.cage + s.pn,
-                  href: blocked ? undefined : gsaUrl,
-                  target: blocked ? undefined : "_blank",
-                  style: {
-                    display: "block",
-                    padding: "10px 12px",
-                    background: blocked
-                      ? "rgba(231,76,60,.08)"
-                      : "rgba(61,214,140,.06)",
-                    border:
-                      "1px solid " +
-                      (blocked ? "rgba(231,76,60,.4)" : "rgba(61,214,140,.25)"),
-                    borderRadius: "3px",
-                    textDecoration: "none",
-                    cursor: blocked ? "default" : "pointer",
-                    transition: "background .15s",
-                  },
-                },
-                hS(
-                  "div",
-                  {
-                    style: {
-                      fontFamily: "Cinzel,serif",
-                      fontSize: "9px",
-                      letterSpacing: ".06em",
-                      color: blocked
-                        ? "var(--accent-red-soft)"
-                        : "var(--accent-green)",
-                      marginBottom: "3px",
-                      fontWeight: "700",
-                    },
-                  },
-                  s.name,
-                ),
-                hS(
-                  "div",
-                  {
-                    style: {
-                      fontFamily: "JetBrains Mono,monospace",
-                      fontSize: "10px",
-                      color: "var(--body-faint)",
-                    },
-                  },
-                  "CAGE " + s.cage + " · " + s.pn,
-                ),
-                !blocked &&
-                  hS(
-                    "div",
-                    {
-                      style: {
-                        fontFamily: "Cinzel,serif",
-                        fontSize: "8px",
-                        letterSpacing: ".08em",
-                        color: "var(--gold-dim)",
-                        marginTop: "3px",
-                      },
-                    },
-                    "Search →",
-                  ),
-                blocked &&
-                  hS(
-                    "div",
-                    {
-                      style: {
-                        fontFamily: "Cinzel,serif",
-                        fontSize: "8px",
-                        letterSpacing: ".08em",
-                        color: "rgba(231,76,60,.7)",
-                        marginTop: "3px",
-                      },
-                    },
-                    "BLOCKED — do not contact direct",
-                  ),
-              );
-            }),
+            ...allSuppliers.map((s) =>
+              hS(SupplierCard, {
+                key: s.cage + s.pn,
+                s,
+                isBlocked,
+                gsaUrl:
+                  "https://www.google.com/search?q=" +
+                  encodeURIComponent(s.name + " " + s.pn),
+              }),
+            ),
           ),
         ),
       part &&
@@ -433,13 +581,8 @@
             "div",
             {
               key: d.id,
-              style: {
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              },
+              style: { display: "flex", flexDirection: "column", gap: "4px" },
             },
-            // ── Distributor link button ──
             hS(
               "a",
               {
@@ -487,7 +630,6 @@
                 "T" + d.tier,
               ),
             ),
-            // ── Phone row ──
             hS(
               "div",
               {
@@ -527,7 +669,6 @@
                     },
                     fs === "fail" ? "No # found" : "No phone",
                   ),
-              // Fetch button — only if website exists and phone not yet known
               d.website &&
                 !d.phone &&
                 hS(
@@ -561,10 +702,6 @@
       ),
     );
   }
-
-  // ── FULL SOURCE TAB ───────────────────────────────────────────────────
-
-  // ── VENDOR ROLODEX ───────────────────────────────────────────────────
 
   window.SCC_TABS = window.SCC_TABS || {};
   window.SCC_TABS.DrawerSourcePanel = DrawerSourcePanel;
