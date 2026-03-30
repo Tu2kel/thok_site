@@ -16,14 +16,6 @@
   // ── VENDOR DATABASE ────────────────────────────────────────────────────
   const RFQ_VENDORS = [
     {
-      id: "kanebridge",
-      name: "Kanebridge Corporation",
-      email: "quotes@kanebridge.com",
-      fsc: ["5305", "5306", "5310", "5315", "5320", "5340"],
-      tier: 1,
-      prefixes: ["MS", "NAS", "AN", "BAC"],
-    },
-    {
       id: "efi",
       name: "Electronic Fasteners Inc",
       email: "sales@electronicfasteners.com",

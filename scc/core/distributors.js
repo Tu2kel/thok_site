@@ -13,6 +13,7 @@
   let _fscMap = {}; // fsc → [id, id, ...]  rebuilt from cache
   let _ready = false;
   let _readyCbs = [];
+  let _needsSeed = false;
 
   function onReady(cb) {
     if (_ready) {
@@ -52,6 +53,8 @@
   }
 
   // ── Initialize: load all from Mongo into cache ────────────────────────
+  //  Source of truth is MongoDB.
+  //  Seed via SCC Source tab → Distributor DB → paste dist-seed.json → Load
   async function _init() {
     try {
       const records = await _call("distGetAll");
@@ -62,12 +65,17 @@
           `[SCC_DIST] Loaded ${_cache.length} distributors from MongoDB.`,
         );
       } else {
+        _needsSeed = true;
         console.warn(
-          "[SCC_DIST] MongoDB returned empty — check collection or run migration.",
+          "[SCC_DIST] Distributor DB empty — seed required. Use Source tab → Distributor DB.",
         );
       }
     } catch (err) {
-      console.error("[SCC_DIST] Failed to load from MongoDB:", err.message);
+      _needsSeed = true;
+      console.warn(
+        "[SCC_DIST] MongoDB unavailable (Live Server?) — seed required.",
+        err.message,
+      );
     }
     _setReady();
   }
@@ -121,6 +129,16 @@
     5120: "Power Tools",
     4910: "Shop Equipment",
     4940: "Maintenance Equipment",
+    1730: "Aircraft Ground Servicing",
+    1740: "Airfield Specialized Trucks",
+    1080: "Aerial Delivery/Parachute",
+    1650: "Aircraft Hydraulic/Vacuum",
+    1660: "Aircraft Air Conditioning",
+    2320: "Military Trucks/Vehicles",
+    2530: "Vehicle Brake/Steering/Axle",
+    2540: "Motor Vehicle Components",
+    2910: "Engine Fuel System",
+    2940: "Engine Cooling/Filters",
   };
 
   // ── Synchronous helpers (read from cache) ─────────────────────────────
@@ -128,9 +146,15 @@
   function getDistsByFSC(fsc) {
     const key = String(fsc);
     const ids = _fscMap[key] || [];
-    if (ids.length)
-      return ids.map((id) => _cache.find((d) => d.id === id)).filter(Boolean);
-    return _cache.filter((d) => (d.fsc || []).includes(key)).slice(0, 10);
+    const raw = ids.length
+      ? ids.map((id) => _cache.find((d) => d.id === id)).filter(Boolean)
+      : _cache.filter((d) => (d.fsc || []).includes(key));
+    // Preferred-alts first, sub-sorted by priority (1=highest), then legacy
+    const preferred = raw
+      .filter((d) => (d.tags || []).includes("preferred-alt"))
+      .sort((a, b) => (a.priority || 9) - (b.priority || 9));
+    const others = raw.filter((d) => !(d.tags || []).includes("preferred-alt"));
+    return [...preferred, ...others];
   }
 
   function scoreAndRank(query, fsc, partNum) {
@@ -193,6 +217,11 @@
         if (!partNum && fscKey && (d.tags || []).includes("all-open")) {
           score += 20;
           relevanceHits++;
+        }
+
+        // Preferred-alt bonus — surfaces above same-tier legacy companies
+        if ((d.tags || []).includes("preferred-alt")) {
+          score += 40;
         }
 
         if (relevanceHits > 0) {
@@ -291,6 +320,9 @@
   // ── Expose public API ─────────────────────────────────────────────────
   window.SCC_DIST = {
     // Read — synchronous (from cache)
+    get needsSeed() {
+      return _needsSeed;
+    },
     get DISTRIBUTORS() {
       return _cache;
     },

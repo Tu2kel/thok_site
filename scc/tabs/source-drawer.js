@@ -244,7 +244,7 @@
     const nsn = record.nsn || "";
     const part = record.ref_part_number || "";
     const mfr = record.ref_supplier || "";
-    const dists = getDistsByFSC(fsc).slice(0, 12);
+    const dists = getDistsByFSC(fsc).slice(0, 20);
     const lane = FSC_LANES_MAP[String(fsc)] || "FSC " + fsc;
 
     const [fetchState, setFetchState] = useSourceState({});
@@ -586,13 +586,25 @@
             hS(
               "a",
               {
-                href:
-                  d.search_url +
-                  (part
-                    ? encodeURIComponent(part)
-                    : nsn
-                      ? encodeURIComponent(nsn)
-                      : ""),
+                href: (() => {
+                  // nsn_search: "full" → nsn_url + raw NSN with dashes
+                  // nsn_search: "niin" → nsn_url + last 9 chars of NSN
+                  // else: P/N first, NSN fallback
+                  if (d.nsn_search === "full" && d.nsn_url && nsn) {
+                    return d.nsn_url + nsn;
+                  }
+                  if (d.nsn_search === "niin" && d.nsn_url && nsn) {
+                    const niin = nsn.length >= 9 ? nsn.slice(-9) : nsn;
+                    return d.nsn_url + niin;
+                  }
+                  const query =
+                    d.search_by === "nsn"
+                      ? nsn || part || ""
+                      : part || nsn || "";
+                  return (
+                    d.search_url + (query ? encodeURIComponent(query) : "")
+                  );
+                })(),
                 target: "_blank",
                 style: {
                   ...btnStyle,
@@ -614,20 +626,74 @@
                 d.name,
               ),
               hS(
-                "span",
+                "div",
                 {
-                  style: {
-                    fontSize: "8px",
-                    color:
-                      d.friction === "low"
-                        ? "#3dd68c"
-                        : d.friction === "medium"
-                          ? "#f5c542"
-                          : "#ff6b7a",
-                    letterSpacing: ".04em",
-                  },
+                  style: { display: "flex", gap: "4px", alignItems: "center" },
                 },
-                "T" + d.tier,
+                (d.nsn_search || d.search_by === "nsn") &&
+                  hS(
+                    "span",
+                    {
+                      style: {
+                        fontSize: "7px",
+                        fontFamily: "JetBrains Mono,monospace",
+                        color:
+                          d.nsn_search === "full"
+                            ? "#3dd68c"
+                            : d.nsn_search === "niin"
+                              ? "#7eb8f7"
+                              : "var(--gold-dim)",
+                        letterSpacing: ".04em",
+                        background:
+                          d.nsn_search === "full"
+                            ? "rgba(61,214,140,.12)"
+                            : d.nsn_search === "niin"
+                              ? "rgba(126,184,247,.12)"
+                              : "rgba(201,168,76,.1)",
+                        padding: "1px 4px",
+                        borderRadius: "2px",
+                        border:
+                          d.nsn_search === "full"
+                            ? "1px solid rgba(61,214,140,.3)"
+                            : d.nsn_search === "niin"
+                              ? "1px solid rgba(126,184,247,.3)"
+                              : "none",
+                      },
+                    },
+                    d.nsn_search === "full"
+                      ? "NSN✓"
+                      : d.nsn_search === "niin"
+                        ? "NIIN"
+                        : "NSN",
+                  ),
+                d.priority === 1 &&
+                  hS(
+                    "span",
+                    {
+                      style: {
+                        fontSize: "8px",
+                        color: "#3dd68c",
+                        letterSpacing: ".04em",
+                      },
+                    },
+                    "★",
+                  ),
+                hS(
+                  "span",
+                  {
+                    style: {
+                      fontSize: "8px",
+                      color:
+                        d.friction === "low"
+                          ? "#3dd68c"
+                          : d.friction === "medium"
+                            ? "#f5c542"
+                            : "#ff6b7a",
+                      letterSpacing: ".04em",
+                    },
+                  },
+                  "T" + d.tier,
+                ),
               ),
             ),
             hS(
