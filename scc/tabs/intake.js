@@ -80,17 +80,17 @@
                 width: "100%",
               },
             },
-            h("option", { value: "Standard" }, "Standard — 30%"),
-            h("option", { value: "Fast Award" }, "Fast Award — 40%"),
+            h("option", { value: "Standard" }, "Standard — 27.5%"),
+            h("option", { value: "Fast Award" }, "Fast Award — 30%"),
             h(
               "option",
               { value: "Low Hanging Fruit" },
-              "Low Hanging Fruit — 42.5%",
+              "Low Hanging Fruit — 35%",
             ),
             h(
               "option",
               { value: "Small Business Set-Aside" },
-              "Small Business Set-Aside — 35%",
+              "Small Business Set-Aside — 30%",
             ),
           ),
           h(
