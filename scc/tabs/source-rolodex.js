@@ -82,7 +82,7 @@
     );
 
     const ss = (status) =>
-      (VI_STATUS_STYLE || {})[status] || {
+      ((window.SCC_TABS && window.SCC_TABS.VI_STATUS_STYLE) || {})[status] || {
         bg: "transparent",
         border: "rgba(201,168,76,.3)",
         color: "var(--gold-solid)",
