@@ -11,7 +11,10 @@
   }
 
   function isListing(text) {
-    return /SPE\w+.*?(AI|Send|Save)/i.test((text || "").split("\n")[0]);
+    if (!text) return false;
+    // Match SPE sol number in first 3 lines, or Hist. marker (Navigator format)
+    const top = text.split("\n").slice(0, 3).join(" ");
+    return /\bSPE[A-Z0-9]/i.test(top) || /\bHist\./i.test(text);
   }
 
   function parseListing(text) {

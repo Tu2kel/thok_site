@@ -6,10 +6,10 @@
   // ═══════════════════════════════════════════════════════════════════════
 
   const TIER_MARGINS = {
-    "Fast Award": 0.3,
-    "Low Hanging Fruit": 0.35,
-    Standard: 0.275,
-    "Small Business Set-Aside": 0.3,
+    Standard: 0.3,
+    "Fast Award": 0.4,
+    "Low Hanging Fruit": 0.425,
+    "Small Business Set-Aside": 0.35,
   };
 
   const STATUSES = [
