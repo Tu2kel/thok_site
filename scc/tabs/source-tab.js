@@ -19,6 +19,7 @@
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
     const [dragging, setDragging] = useState(false);
+    const [collapsed, setCollapsed] = useState({});
 
     // Load current cache on mount
     useEffect(() => {
@@ -388,7 +389,7 @@
         ),
       ),
 
-      // -- Tiered card grid --
+      // -- Tiered card grid (collapsible) --
       (() => {
         if (dists.length === 0) return null;
         const isPreferred = (d) => (d.tags || []).includes("preferred-alt");
@@ -398,41 +399,104 @@
         const p2 = preferred.filter((d) => (d.priority || 9) === 2);
         const p3 = preferred.filter((d) => (d.priority || 9) >= 3);
 
-        const tierLabel = (text, count, color, sub) =>
-          h(
+        const onToggle = (id) =>
+          setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+
+        const CollapsibleTier = ({
+          id,
+          label,
+          count,
+          color,
+          sub,
+          items,
+          op,
+        }) => {
+          if (!items || items.length === 0) return null;
+          const open = !collapsed[id];
+          return h(
             "div",
-            {
-              style: {
-                fontFamily: "Cinzel,serif",
-                fontSize: sub ? "7px" : "8px",
-                letterSpacing: ".15em",
-                textTransform: "uppercase",
-                color: color || "var(--gold-dim)",
-                marginTop: sub ? "10px" : "18px",
-                marginBottom: "8px",
-                paddingLeft: sub ? "4px" : "0",
-                borderLeft: sub
-                  ? "3px solid " + (color || "rgba(201,168,76,.3)")
-                  : "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              },
-            },
-            text,
+            null,
             h(
-              "span",
+              "div",
               {
+                onClick: () => onToggle(id),
                 style: {
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "var(--body-faint)",
-                  letterSpacing: 0,
+                  fontFamily: "Cinzel,serif",
+                  fontSize: sub ? "7px" : "8px",
+                  letterSpacing: ".15em",
+                  textTransform: "uppercase",
+                  color: color || "var(--gold-dim)",
+                  marginTop: sub ? "10px" : "18px",
+                  marginBottom: open ? "8px" : "4px",
+                  paddingLeft: sub ? "4px" : "0",
+                  borderLeft: sub
+                    ? "3px solid " + (color || "rgba(201,168,76,.3)")
+                    : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                  userSelect: "none",
                 },
               },
-              "(" + count + ")",
+              h(
+                "span",
+                {
+                  style: {
+                    fontSize: "8px",
+                    color: color || "var(--gold-dim)",
+                    display: "inline-block",
+                    transform: open ? "rotate(90deg)" : "rotate(0deg)",
+                    transition: "transform .15s",
+                    marginRight: "1px",
+                  },
+                },
+                "\u25B6",
+              ),
+              label,
+              h(
+                "span",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "9px",
+                    color: "var(--body-faint)",
+                    letterSpacing: 0,
+                  },
+                },
+                "(" + count + ")",
+              ),
+              !open &&
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "8px",
+                      color: "var(--body-faint)",
+                      fontStyle: "italic",
+                      letterSpacing: 0,
+                    },
+                  },
+                  "\u2014 collapsed",
+                ),
             ),
+            open &&
+              h(
+                "div",
+                {
+                  style: {
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
+                    gap: "8px",
+                    marginBottom: "6px",
+                    opacity: op || 1,
+                  },
+                },
+                ...items.map(renderDistCard),
+              ),
           );
+        };
 
         const renderDistCard = (d) => {
           const pref = isPreferred(d);
@@ -458,7 +522,6 @@
                 gap: "5px",
               },
             },
-            // Name + NSN badge
             h(
               "div",
               {
@@ -526,7 +589,6 @@
                   ),
               ),
             ),
-            // Tags
             h(
               "div",
               {
@@ -541,7 +603,6 @@
                 .slice(0, 4)
                 .join(" \u00B7") || "\u00A0",
             ),
-            // FSCs
             h(
               "div",
               {
@@ -556,7 +617,6 @@
                   ? " +" + ((d.fsc || []).length - 5)
                   : ""),
             ),
-            // Phone + delete
             h(
               "div",
               {
@@ -615,21 +675,6 @@
           );
         };
 
-        const grid = (items, op) =>
-          h(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
-                gap: "8px",
-                marginBottom: "6px",
-                opacity: op || 1,
-              },
-            },
-            ...items.map(renderDistCard),
-          );
-
         return h(
           "div",
           null,
@@ -637,51 +682,55 @@
             h(
               "div",
               null,
-              tierLabel("Preferred Sources", preferred.length, "#3dd68c"),
-              p1.length > 0 &&
+              h(CollapsibleTier, {
+                id: "preferred",
+                label: "Preferred Sources",
+                count: preferred.length,
+                color: "#3dd68c",
+                sub: false,
+                items: preferred,
+              }),
+              !collapsed["preferred"] &&
                 h(
                   "div",
-                  null,
-                  tierLabel(
-                    "P1 \u2014 Broadest \u00B7 Hit First",
-                    p1.length,
-                    "#3dd68c",
-                    true,
-                  ),
-                  grid(p1),
-                ),
-              p2.length > 0 &&
-                h(
-                  "div",
-                  null,
-                  tierLabel(
-                    "P2 \u2014 Lane Specialists",
-                    p2.length,
-                    "var(--gold-solid)",
-                    true,
-                  ),
-                  grid(p2),
-                ),
-              p3.length > 0 &&
-                h(
-                  "div",
-                  null,
-                  tierLabel(
-                    "P3 \u2014 Need Account",
-                    p3.length,
-                    "var(--body-faint)",
-                    true,
-                  ),
-                  grid(p3),
+                  { style: { paddingLeft: "8px" } },
+                  h(CollapsibleTier, {
+                    id: "p1",
+                    label: "P1 \u2014 Broadest \u00B7 Hit First",
+                    count: p1.length,
+                    color: "#3dd68c",
+                    sub: true,
+                    items: p1,
+                  }),
+                  h(CollapsibleTier, {
+                    id: "p2",
+                    label: "P2 \u2014 Lane Specialists",
+                    count: p2.length,
+                    color: "var(--gold-solid)",
+                    sub: true,
+                    items: p2,
+                  }),
+                  h(CollapsibleTier, {
+                    id: "p3",
+                    label: "P3 \u2014 Need Account",
+                    count: p3.length,
+                    color: "var(--body-faint)",
+                    sub: true,
+                    items: p3,
+                    op: 0.85,
+                  }),
                 ),
             ),
           others.length > 0 &&
-            h(
-              "div",
-              null,
-              tierLabel("Other Distributors", others.length, "var(--gold-dim)"),
-              grid(others, 0.65),
-            ),
+            h(CollapsibleTier, {
+              id: "others",
+              label: "Other Distributors",
+              count: others.length,
+              color: "var(--gold-dim)",
+              sub: false,
+              items: others,
+              op: 0.65,
+            }),
         );
       })(),
 
