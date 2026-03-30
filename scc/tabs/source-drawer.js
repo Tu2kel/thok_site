@@ -551,7 +551,7 @@
           ),
         ),
       (() => {
-        const allDists = dists.length ? dists : DISTRIBUTORS.slice(0, 20);
+        const allDists = dists;
         const preferred = allDists.filter((d) =>
           (d.tags || []).includes("preferred-alt"),
         );
