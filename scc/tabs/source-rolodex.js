@@ -12,16 +12,31 @@
     useEffect: useSourceEffect,
   } = React;
 
+  async function lookupCagePhone(cage) {
+    try {
+      const res = await fetch("/.netlify/functions/cage-phones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cagePhoneGet", payload: { cage } }),
+      });
+      const data = await res.json();
+      return data.result?.phone || null;
+    } catch {
+      return null;
+    }
+  }
+
   function VendorRolodex() {
-    const VI_STATUS_STYLE = window.SCC_TABS.VI_STATUS_STYLE;
     const { viGetAll, viSave, viDelete } = window.SCC_DB;
     const VI_STATUSES = ["confirmed", "quoted", "pending", "no_stock"];
 
     const [entries, setEntries] = useSourceState([]);
-    const [loading, setLoading] = useSourceState(true);
+    const [loading, setLoading] = useSourceState(false);
     const [search, setSearch] = useSourceState("");
+    const [vendorPhones, setVendorPhones] = useSourceState({});
 
     useSourceEffect(() => {
+      setLoading(true);
       viGetAll().then((e) => {
         setEntries(e || []);
         setLoading(false);
@@ -212,19 +227,79 @@
                   justifyContent: "space-between",
                   alignItems: "center",
                   background: "rgba(201,168,76,.04)",
+                  flexWrap: "wrap",
+                  gap: "8px",
                 },
               },
               hS(
-                "span",
+                "div",
                 {
                   style: {
-                    fontFamily: "Cinzel,serif",
-                    fontSize: "13px",
-                    letterSpacing: ".08em",
-                    color: "var(--gold-solid)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    flexWrap: "wrap",
                   },
                 },
-                vendorName,
+                hS(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "13px",
+                      letterSpacing: ".08em",
+                      color: "var(--gold-solid)",
+                    },
+                  },
+                  vendorName,
+                ),
+                // Phone: look up first CAGE in this vendor's records
+                (() => {
+                  const cage = records[0]?.cage;
+                  const phone = vendorPhones[vendorName];
+                  if (phone)
+                    return hS(
+                      "a",
+                      {
+                        href: "tel:" + phone.replace(/\D/g, ""),
+                        onClick: (e) => e.stopPropagation(),
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "11px",
+                          color: "var(--accent-green)",
+                          textDecoration: "none",
+                          letterSpacing: ".04em",
+                        },
+                      },
+                      "📞 " + phone,
+                    );
+                  if (cage && !phone)
+                    return hS(
+                      "button",
+                      {
+                        onClick: () =>
+                          lookupCagePhone(cage).then((p) => {
+                            if (p)
+                              setVendorPhones((prev) => ({
+                                ...prev,
+                                [vendorName]: p,
+                              }));
+                          }),
+                        style: {
+                          padding: "2px 8px",
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "9px",
+                          background: "rgba(201,168,76,.1)",
+                          border: "1px solid rgba(201,168,76,.25)",
+                          color: "var(--gold-dim)",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                        },
+                      },
+                      "📞?",
+                    );
+                  return null;
+                })(),
               ),
               hS(
                 "span",
@@ -443,7 +518,34 @@
                       ),
                       hS(
                         "td",
-                        { style: { padding: "8px 12px", textAlign: "center" } },
+                        {
+                          style: {
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            whiteSpace: "nowrap",
+                          },
+                        },
+                        vendorPhones[e.vendor_name]
+                          ? hS(
+                              "a",
+                              {
+                                href:
+                                  "tel:" +
+                                  vendorPhones[e.vendor_name].replace(
+                                    /\D/g,
+                                    "",
+                                  ),
+                                style: {
+                                  fontFamily: "JetBrains Mono,monospace",
+                                  fontSize: "10px",
+                                  color: "var(--accent-green)",
+                                  textDecoration: "none",
+                                  marginRight: "10px",
+                                },
+                              },
+                              "Call",
+                            )
+                          : null,
                         hS(
                           "button",
                           {

@@ -388,243 +388,302 @@
         ),
       ),
 
-      // ── Current records table ──
-      dists.length > 0 &&
-        h(
-          "div",
-          {
-            style: {
-              border: "1px solid rgba(201,168,76,.12)",
-              borderRadius: "6px",
-              overflow: "hidden",
-            },
-          },
+      // -- Tiered card grid --
+      (() => {
+        if (dists.length === 0) return null;
+        const isPreferred = (d) => (d.tags || []).includes("preferred-alt");
+        const preferred = filtered.filter(isPreferred);
+        const others = filtered.filter((d) => !isPreferred(d));
+        const p1 = preferred.filter((d) => (d.priority || 9) === 1);
+        const p2 = preferred.filter((d) => (d.priority || 9) === 2);
+        const p3 = preferred.filter((d) => (d.priority || 9) >= 3);
+
+        const tierLabel = (text, count, color, sub) =>
           h(
-            "table",
-            { style: { width: "100%", borderCollapse: "collapse" } },
+            "div",
+            {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: sub ? "7px" : "8px",
+                letterSpacing: ".15em",
+                textTransform: "uppercase",
+                color: color || "var(--gold-dim)",
+                marginTop: sub ? "10px" : "18px",
+                marginBottom: "8px",
+                paddingLeft: sub ? "4px" : "0",
+                borderLeft: sub
+                  ? "3px solid " + (color || "rgba(201,168,76,.3)")
+                  : "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              },
+            },
+            text,
             h(
-              "thead",
-              null,
-              h(
-                "tr",
-                { style: { background: "rgba(201,168,76,.06)" } },
-                ["ID", "Name", "Phone", "FSCs", "P", "Search", ""].map((col) =>
-                  h(
-                    "th",
-                    {
-                      key: col,
-                      style: {
-                        fontFamily: "Cinzel,serif",
-                        fontSize: "8px",
-                        letterSpacing: ".12em",
-                        color: "rgba(201,168,76,.6)",
-                        padding: "8px 10px",
-                        textAlign: "left",
-                        borderBottom: "1px solid rgba(201,168,76,.1)",
-                        whiteSpace: "nowrap",
-                      },
-                    },
-                    col,
-                  ),
-                ),
-              ),
+              "span",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                  letterSpacing: 0,
+                },
+              },
+              "(" + count + ")",
             ),
+          );
+
+        const renderDistCard = (d) => {
+          const pref = isPreferred(d);
+          const borderColor = !pref
+            ? "rgba(201,168,76,.12)"
+            : d.priority === 1
+              ? "rgba(61,214,140,.5)"
+              : d.priority === 2
+                ? "rgba(201,168,76,.4)"
+                : "rgba(160,160,160,.3)";
+          return h(
+            "div",
+            {
+              key: d.id,
+              style: {
+                background: "var(--surface-sheen)",
+                border: "1px solid rgba(201,168,76,.12)",
+                borderLeft: "3px solid " + borderColor,
+                borderRadius: "4px",
+                padding: "10px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "5px",
+              },
+            },
+            // Name + NSN badge
             h(
-              "tbody",
-              null,
-              filtered.map((d, i) =>
-                h(
-                  "tr",
-                  {
-                    key: d.id,
-                    style: {
-                      background:
-                        i % 2 === 0 ? "transparent" : "rgba(255,255,255,.02)",
-                      borderBottom: "1px solid rgba(201,168,76,.06)",
-                    },
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: "6px",
+                },
+              },
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "10px",
+                    letterSpacing: ".06em",
+                    color: "var(--gold-solid)",
+                    lineHeight: 1.3,
                   },
-                  // ID
+                },
+                d.name,
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    gap: "3px",
+                    alignItems: "center",
+                    flexShrink: 0,
+                  },
+                },
+                d.nsn_search === "full" &&
                   h(
-                    "td",
+                    "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "10px",
-                        color: "var(--gold-dim)",
-                        padding: "7px 10px",
-                        whiteSpace: "nowrap",
+                        fontSize: "7px",
+                        color: "#3dd68c",
+                        background: "rgba(61,214,140,.12)",
+                        border: "1px solid rgba(61,214,140,.3)",
+                        padding: "1px 4px",
+                        borderRadius: "2px",
                       },
                     },
-                    d.id,
+                    "NSN\u2713",
                   ),
-                  // Name + tags
+                d.nsn_search === "niin" &&
                   h(
-                    "td",
-                    { style: { padding: "7px 10px" } },
-                    h(
-                      "div",
-                      {
-                        style: {
-                          fontFamily: "Cinzel,serif",
-                          fontSize: "10px",
-                          color: "var(--gold-solid)",
-                          marginBottom: "2px",
-                        },
-                      },
-                      d.name,
-                    ),
-                    h(
-                      "div",
-                      {
-                        style: {
-                          fontFamily: "JetBrains Mono,monospace",
-                          fontSize: "9px",
-                          color: "var(--body-faint)",
-                        },
-                      },
-                      (d.tags || [])
-                        .filter((t) => t !== "preferred-alt")
-                        .slice(0, 4)
-                        .join(" · "),
-                    ),
-                  ),
-                  // Phone
-                  h(
-                    "td",
+                    "span",
                     {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "7px",
+                        color: "#7eb8f7",
+                        background: "rgba(126,184,247,.12)",
+                        border: "1px solid rgba(126,184,247,.3)",
+                        padding: "1px 4px",
+                        borderRadius: "2px",
+                      },
+                    },
+                    "NIIN",
+                  ),
+              ),
+            ),
+            // Tags
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                },
+              },
+              (d.tags || [])
+                .filter((t) => t !== "preferred-alt")
+                .slice(0, 4)
+                .join(" \u00B7") || "\u00A0",
+            ),
+            // FSCs
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "rgba(201,168,76,.45)",
+                },
+              },
+              (d.fsc || []).slice(0, 5).join(", ") +
+                ((d.fsc || []).length > 5
+                  ? " +" + ((d.fsc || []).length - 5)
+                  : ""),
+            ),
+            // Phone + delete
+            h(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: "2px",
+                },
+              },
+              d.phone
+                ? h(
+                    "a",
+                    {
+                      href: "tel:" + d.phone.replace(/[^0-9]/g, ""),
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
                         fontSize: "10px",
                         color: "var(--accent-green)",
-                        padding: "7px 10px",
-                        whiteSpace: "nowrap",
+                        textDecoration: "none",
                       },
                     },
-                    d.phone
-                      ? h(
-                          "a",
-                          {
-                            href: "tel:" + d.phone.replace(/\D/g, ""),
-                            style: { color: "inherit", textDecoration: "none" },
-                          },
-                          d.phone,
-                        )
-                      : "—",
-                  ),
-                  // FSCs
-                  h(
-                    "td",
+                    "\uD83D\uDCDE " + d.phone,
+                  )
+                : h(
+                    "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
                         fontSize: "9px",
                         color: "var(--body-faint)",
-                        padding: "7px 10px",
-                        maxWidth: "140px",
+                        fontStyle: "italic",
                       },
                     },
-                    (d.fsc || []).slice(0, 6).join(", ") +
-                      ((d.fsc || []).length > 6
-                        ? " +" + ((d.fsc || []).length - 6)
-                        : ""),
+                    "No phone",
                   ),
-                  // Priority badge
-                  h(
-                    "td",
-                    { style: { padding: "7px 10px", textAlign: "center" } },
-                    h(
-                      "span",
-                      {
-                        style: {
-                          fontFamily: "Cinzel,serif",
-                          fontSize: "9px",
-                          color:
-                            d.priority === 1
-                              ? "#3dd68c"
-                              : d.priority === 2
-                                ? "var(--gold-solid)"
-                                : "var(--body-faint)",
-                        },
-                      },
-                      d.priority === 1 ? "★" : d.priority === 2 ? "P2" : "P3",
-                    ),
-                  ),
-                  // Search mode
-                  h(
-                    "td",
-                    { style: { padding: "7px 10px" } },
-                    d.nsn_search === "full"
-                      ? h(
-                          "span",
-                          {
-                            style: {
-                              fontFamily: "JetBrains Mono,monospace",
-                              fontSize: "8px",
-                              color: "#3dd68c",
-                              background: "rgba(61,214,140,.12)",
-                              border: "1px solid rgba(61,214,140,.3)",
-                              padding: "1px 5px",
-                              borderRadius: "2px",
-                            },
-                          },
-                          "NSN✓",
-                        )
-                      : d.nsn_search === "niin"
-                        ? h(
-                            "span",
-                            {
-                              style: {
-                                fontFamily: "JetBrains Mono,monospace",
-                                fontSize: "8px",
-                                color: "#7eb8f7",
-                                background: "rgba(126,184,247,.12)",
-                                border: "1px solid rgba(126,184,247,.3)",
-                                padding: "1px 5px",
-                                borderRadius: "2px",
-                              },
-                            },
-                            "NIIN",
-                          )
-                        : h(
-                            "span",
-                            {
-                              style: {
-                                fontFamily: "JetBrains Mono,monospace",
-                                fontSize: "8px",
-                                color: "var(--body-faint)",
-                              },
-                            },
-                            "P/N",
-                          ),
-                  ),
-                  // Delete
-                  h(
-                    "td",
-                    { style: { padding: "7px 10px", textAlign: "right" } },
-                    h(
-                      "button",
-                      {
-                        onClick: () => handleDelete(d.id),
-                        title: "Remove " + d.id,
-                        style: {
-                          padding: "2px 8px",
-                          fontFamily: "JetBrains Mono,monospace",
-                          fontSize: "9px",
-                          background: "rgba(231,76,60,.08)",
-                          border: "1px solid rgba(231,76,60,.3)",
-                          color: "rgba(231,76,60,.7)",
-                          borderRadius: "3px",
-                          cursor: "pointer",
-                        },
-                      },
-                      "×",
-                    ),
-                  ),
-                ),
+              h(
+                "button",
+                {
+                  onClick: () => handleDelete(d.id),
+                  title: "Remove " + d.id,
+                  style: {
+                    padding: "1px 6px",
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "9px",
+                    background: "rgba(231,76,60,.08)",
+                    border: "1px solid rgba(231,76,60,.25)",
+                    color: "rgba(231,76,60,.6)",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                  },
+                },
+                "\u00D7",
               ),
             ),
-          ),
-        ),
+          );
+        };
+
+        const grid = (items, op) =>
+          h(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
+                gap: "8px",
+                marginBottom: "6px",
+                opacity: op || 1,
+              },
+            },
+            ...items.map(renderDistCard),
+          );
+
+        return h(
+          "div",
+          null,
+          preferred.length > 0 &&
+            h(
+              "div",
+              null,
+              tierLabel("Preferred Sources", preferred.length, "#3dd68c"),
+              p1.length > 0 &&
+                h(
+                  "div",
+                  null,
+                  tierLabel(
+                    "P1 \u2014 Broadest \u00B7 Hit First",
+                    p1.length,
+                    "#3dd68c",
+                    true,
+                  ),
+                  grid(p1),
+                ),
+              p2.length > 0 &&
+                h(
+                  "div",
+                  null,
+                  tierLabel(
+                    "P2 \u2014 Lane Specialists",
+                    p2.length,
+                    "var(--gold-solid)",
+                    true,
+                  ),
+                  grid(p2),
+                ),
+              p3.length > 0 &&
+                h(
+                  "div",
+                  null,
+                  tierLabel(
+                    "P3 \u2014 Need Account",
+                    p3.length,
+                    "var(--body-faint)",
+                    true,
+                  ),
+                  grid(p3),
+                ),
+            ),
+          others.length > 0 &&
+            h(
+              "div",
+              null,
+              tierLabel("Other Distributors", others.length, "var(--gold-dim)"),
+              grid(others, 0.65),
+            ),
+        );
+      })(),
 
       // ── Empty state ──
       dists.length === 0 &&
