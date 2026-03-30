@@ -550,38 +550,76 @@
             ),
           ),
         ),
-      hS(
-        "div",
-        {
-          style: {
-            fontFamily: "Cinzel,serif",
-            fontSize: "8px",
-            letterSpacing: ".15em",
-            textTransform: "uppercase",
-            color: "var(--gold-dim)",
-            marginBottom: "10px",
-          },
-        },
-        dists.length
-          ? dists.length + " Matched Distributors — FSC " + fsc + " · " + lane
-          : "All Distributors",
-      ),
-      hS(
-        "div",
-        {
-          style: {
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
-            gap: "8px",
-          },
-        },
-        ...(dists.length ? dists : DISTRIBUTORS.slice(0, 12)).map((d) => {
+      (() => {
+        const allDists = dists.length ? dists : DISTRIBUTORS.slice(0, 20);
+        const preferred = allDists.filter((d) =>
+          (d.tags || []).includes("preferred-alt"),
+        );
+        const others = allDists.filter(
+          (d) => !(d.tags || []).includes("preferred-alt"),
+        );
+
+        // Split preferred into priority tiers
+        const p1 = preferred.filter((d) => (d.priority || 9) === 1);
+        const p2 = preferred.filter((d) => (d.priority || 9) === 2);
+        const p3 = preferred.filter((d) => (d.priority || 9) === 3);
+
+        const sectionLabel = (text, count, accent, sub) =>
+          hS(
+            "div",
+            {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: sub ? "7px" : "8px",
+                letterSpacing: ".15em",
+                textTransform: "uppercase",
+                color: accent || "var(--gold-dim)",
+                marginBottom: "8px",
+                marginTop: sub ? "10px" : "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                paddingLeft: sub ? "2px" : "0",
+                borderLeft: sub
+                  ? "3px solid " + (accent || "rgba(201,168,76,.3)")
+                  : "none",
+              },
+            },
+            text,
+            hS(
+              "span",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                  letterSpacing: "0",
+                },
+              },
+              "(" + count + ")",
+            ),
+          );
+
+        const renderCard = (d) => {
           const fs = fetchState[d.id];
+          const isPreferred = (d.tags || []).includes("preferred-alt");
           return hS(
             "div",
             {
               key: d.id,
-              style: { display: "flex", flexDirection: "column", gap: "4px" },
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                borderLeft: !isPreferred
+                  ? "2px solid transparent"
+                  : d.priority === 1
+                    ? "2px solid rgba(61,214,140,.5)"
+                    : d.priority === 2
+                      ? "2px solid rgba(201,168,76,.4)"
+                      : "2px solid rgba(160,160,160,.3)",
+                paddingLeft: isPreferred ? "6px" : "0",
+              },
             },
             hS(
               "a",
@@ -764,8 +802,143 @@
                 ),
             ),
           );
-        }),
-      ),
+        };
+
+        return hS(
+          "div",
+          null,
+          // ── Preferred Sources — tiered ──
+          preferred.length > 0 &&
+            hS(
+              "div",
+              null,
+              sectionLabel(
+                "Preferred Sources — verified, drop-ship, no gatekeepers",
+                preferred.length,
+                "#3dd68c",
+              ),
+
+              // P1 — Broadest FSC coverage, lowest friction, hit first
+              p1.length > 0 &&
+                hS(
+                  "div",
+                  null,
+                  sectionLabel(
+                    "P1 — Broadest · Hit First",
+                    p1.length,
+                    "#3dd68c",
+                    true,
+                  ),
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill,minmax(200px,1fr))",
+                        gap: "8px",
+                        marginBottom: "4px",
+                      },
+                    },
+                    ...p1.map(renderCard),
+                  ),
+                ),
+
+              // P2 — Lane specialists + Texas-heavy
+              p2.length > 0 &&
+                hS(
+                  "div",
+                  null,
+                  sectionLabel(
+                    "P2 — Lane Specialists · Texas-Heavy",
+                    p2.length,
+                    "var(--gold-solid)",
+                    true,
+                  ),
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill,minmax(200px,1fr))",
+                        gap: "8px",
+                        marginBottom: "4px",
+                      },
+                    },
+                    ...p2.map(renderCard),
+                  ),
+                ),
+
+              // P3 — Need account or slower friction
+              p3.length > 0 &&
+                hS(
+                  "div",
+                  null,
+                  sectionLabel(
+                    "P3 — Need Account · Slower",
+                    p3.length,
+                    "var(--body-faint)",
+                    true,
+                  ),
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill,minmax(200px,1fr))",
+                        gap: "8px",
+                        opacity: "0.85",
+                        marginBottom: "4px",
+                      },
+                    },
+                    ...p3.map(renderCard),
+                  ),
+                ),
+            ),
+          // ── All Others ──
+          others.length > 0 &&
+            hS(
+              "div",
+              null,
+              sectionLabel(
+                preferred.length > 0
+                  ? "Other Matched Distributors — FSC " + fsc
+                  : "All Distributors — FSC " + fsc,
+                others.length,
+              ),
+              hS(
+                "div",
+                {
+                  style: {
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
+                    gap: "8px",
+                    opacity: 0.75,
+                  },
+                },
+                ...others.map(renderCard),
+              ),
+            ),
+          // ── Empty state ──
+          allDists.length === 0 &&
+            hS(
+              "div",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".15em",
+                  textTransform: "uppercase",
+                  color: "var(--gold-dim)",
+                  marginBottom: "10px",
+                },
+              },
+              "No distributors matched FSC " + fsc,
+            ),
+        );
+      })(),
     );
   }
 
