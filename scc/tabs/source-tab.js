@@ -18,6 +18,7 @@
     const [status, setStatus] = useState(null); // { ok, msg }
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
+    const [dragging, setDragging] = useState(false);
 
     // Load current cache on mount
     useEffect(() => {
@@ -68,6 +69,34 @@
         setLoading(false);
       }
     }, [paste, distBatch, distReloadCache]);
+
+    // ── File / drop ───────────────────────────────────────────────────
+    const readFile = useCallback((file) => {
+      if (!file) return;
+      if (!file.name.endsWith(".json")) {
+        setStatus({ ok: false, msg: "Drop a .json file." });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => setPaste(e.target.result);
+      reader.onerror = () =>
+        setStatus({ ok: false, msg: "Could not read file." });
+      reader.readAsText(file);
+    }, []);
+    const handleDrop = useCallback(
+      (e) => {
+        e.preventDefault();
+        setDragging(false);
+        readFile(e.dataTransfer.files[0]);
+      },
+      [readFile],
+    );
+    const handleDragOver = (e) => {
+      e.preventDefault();
+      setDragging(true);
+    };
+    const handleDragLeave = () => setDragging(false);
+    const handleFileInput = (e) => readFile(e.target.files[0]);
 
     // ── Delete ────────────────────────────────────────────────────────
     const handleDelete = useCallback(
@@ -185,25 +214,132 @@
         h(
           "div",
           { style: label },
-          "Seed / Import — paste dist-seed.json or any JSON array",
+          "Seed / Import — drop dist-seed.json, pick a file, or paste JSON",
         ),
+
+        // ── Drop zone ──
+        h(
+          "div",
+          {
+            onDrop: handleDrop,
+            onDragOver: handleDragOver,
+            onDragLeave: handleDragLeave,
+            style: {
+              border: dragging
+                ? "2px dashed rgba(201,168,76,.8)"
+                : paste.trim()
+                  ? "2px dashed rgba(61,214,140,.5)"
+                  : "2px dashed rgba(201,168,76,.25)",
+              borderRadius: "6px",
+              padding: "20px 16px",
+              marginBottom: "10px",
+              textAlign: "center",
+              background: dragging
+                ? "rgba(201,168,76,.06)"
+                : paste.trim()
+                  ? "rgba(61,214,140,.04)"
+                  : "var(--surface-sheen)",
+              transition: "all .15s",
+              position: "relative",
+            },
+          },
+          h("input", {
+            type: "file",
+            accept: ".json",
+            onChange: handleFileInput,
+            style: {
+              position: "absolute",
+              inset: 0,
+              opacity: 0,
+              cursor: "pointer",
+              width: "100%",
+              height: "100%",
+            },
+          }),
+          paste.trim()
+            ? h(
+                "div",
+                null,
+                h(
+                  "div",
+                  { style: { fontSize: "18px", marginBottom: "4px" } },
+                  "\u2713",
+                ),
+                h(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "9px",
+                      letterSpacing: ".1em",
+                      color: "#3dd68c",
+                    },
+                  },
+                  (() => {
+                    try {
+                      return JSON.parse(paste).length + " records ready";
+                    } catch {
+                      return "JSON loaded — check format";
+                    }
+                  })(),
+                ),
+                h(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "9px",
+                      color: "var(--body-faint)",
+                      marginTop: "4px",
+                    },
+                  },
+                  "Drop another file or click to replace",
+                ),
+              )
+            : h(
+                "div",
+                null,
+                h(
+                  "div",
+                  { style: { fontSize: "22px", marginBottom: "6px" } },
+                  dragging ? "\u2B07" : "\uD83D\uDCC2",
+                ),
+                h(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "10px",
+                      letterSpacing: ".08em",
+                      color: dragging ? "var(--gold-solid)" : "var(--gold-dim)",
+                    },
+                  },
+                  dragging
+                    ? "Drop it"
+                    : "Drop dist-seed.json or click to browse",
+                ),
+              ),
+        ),
+
+        // ── Paste fallback ──
         h("textarea", {
           value: paste,
           onChange: (e) => setPaste(e.target.value),
           placeholder: '[{"id":"zoro","name":"Zoro Tools",...}, ...]',
-          rows: 6,
+          rows: 2,
           style: {
             width: "100%",
             boxSizing: "border-box",
-            padding: "10px 12px",
+            padding: "8px 12px",
             background: "var(--surface-sheen)",
-            border: "1px solid rgba(201,168,76,.2)",
+            border: "1px solid rgba(201,168,76,.15)",
             color: "var(--alabaster)",
             fontFamily: "JetBrains Mono,monospace",
-            fontSize: "11px",
+            fontSize: "10px",
             borderRadius: "4px",
             resize: "vertical",
             marginBottom: "10px",
+            opacity: 0.6,
           },
         }),
         h(
