@@ -24,27 +24,61 @@
     return [...sols];
   }
 
+  const LHF_STORE = "scc_lhf_check";
+
+  function lhfLoad() {
+    try {
+      return JSON.parse(localStorage.getItem(LHF_STORE) || "null") || {};
+    } catch {
+      return {};
+    }
+  }
+  function lhfSave(data) {
+    try {
+      localStorage.setItem(LHF_STORE, JSON.stringify(data));
+    } catch {}
+  }
+  function lhfClear() {
+    try {
+      localStorage.removeItem(LHF_STORE);
+    } catch {}
+  }
+
   function LHFCheckTab({ onSendToIntake }) {
-    const [paste, setPaste] = useState("");
-    const [sols, setSols] = useState([]); // parsed list
-    const [results, setResults] = useState({}); // { sol: "open"|"closed"|"pending"|"skipped" }
-    const [current, setCurrent] = useState(null); // sol being checked
-    const [idx, setIdx] = useState(0); // position in list
-    const [running, setRunning] = useState(false);
-    const [countdown, setCountdown] = useState(0);
-    const [autoAdv, setAutoAdv] = useState(true); // auto-advance after delay
-    const [delay, setDelay] = useState(4); // seconds between opens
+    // ── Hydrate from localStorage on mount ────────────────────────────
+    const saved = lhfLoad();
+
+    const [paste, setPaste] = useState(saved.paste || "");
+    const [sols, setSols] = useState(saved.sols || []);
+    const [results, setResults] = useState(saved.results || {});
+    const [current, setCurrent] = useState(null); // session-only
+    const [idx, setIdx] = useState(saved.idx || 0);
+    const [running, setRunning] = useState(false); // session-only
+    const [countdown, setCountdown] = useState(0); // session-only
+    const [autoAdv, setAutoAdv] = useState(true);
+    const [delay, setDelay] = useState(4);
     const timerRef = useRef(null);
     const tabRef = useRef(null);
 
+    // ── Persist paste + sols + results + idx on every change ──────────
+    useEffect(() => {
+      lhfSave({ paste, sols, results, idx });
+    }, [paste, sols, results, idx]);
+
     // ── Parse on paste change ──────────────────────────────────────────
     useEffect(() => {
+      // Only re-parse if paste actually changed from stored value
       const parsed = parseSols(paste);
-      setSols(parsed);
-      setResults({});
-      setIdx(0);
-      setCurrent(null);
-      setRunning(false);
+      // Don't wipe results if sols didn't change (e.g. on mount restore)
+      const newIds = parsed.join(",");
+      const oldIds = sols.join(",");
+      if (newIds !== oldIds) {
+        setSols(parsed);
+        setResults({});
+        setIdx(0);
+        setCurrent(null);
+        setRunning(false);
+      }
     }, [paste]);
 
     // ── Countdown tick ─────────────────────────────────────────────────
@@ -322,8 +356,13 @@
               "button",
               {
                 onClick: () => {
+                  lhfClear();
                   setPaste("");
                   setSols([]);
+                  setResults({});
+                  setIdx(0);
+                  setCurrent(null);
+                  setRunning(false);
                 },
                 style: {
                   ...btn(
@@ -729,12 +768,20 @@
                   },
                   i + 1 + ".",
                 ),
-                // Sol number
+                // Sol number — clicking opens DIBBS and sets as current
                 h(
                   "a",
                   {
                     href: DIBBS_URL + sol,
                     target: "_blank",
+                    onClick: () => {
+                      setCurrent(sol);
+                      setIdx(i);
+                      setRunning(true);
+                      setCountdown(delay);
+                      if (tabRef.current && !tabRef.current.closed)
+                        tabRef.current.close();
+                    },
                     style: {
                       fontFamily: "JetBrains Mono,monospace",
                       fontSize: "12px",
@@ -800,9 +847,8 @@
                   },
                   statusLabel(status),
                 ),
-                // Quick mark buttons (only on unresolved rows)
-                !status &&
-                  !isCurrent &&
+                // Quick mark buttons — show on current row and unresolved rows
+                (!status || isCurrent) &&
                   h(
                     "div",
                     { style: { display: "flex", gap: "4px" } },
