@@ -1895,6 +1895,8 @@ Rules:
                             );
                           })();
 
+                          const isLHF = diff <= -30;
+
                           return hP(
                             PFrag,
                             null,
@@ -1921,6 +1923,25 @@ Rules:
                               },
                               label,
                             ),
+                            isLHF &&
+                              hP(
+                                "div",
+                                {
+                                  style: {
+                                    display: "inline-block",
+                                    marginTop: "4px",
+                                    padding: "1px 6px",
+                                    fontFamily: "Cinzel,serif",
+                                    fontSize: "7px",
+                                    letterSpacing: ".12em",
+                                    color: "#f5c542",
+                                    background: "rgba(245,197,66,.12)",
+                                    border: "1px solid rgba(245,197,66,.35)",
+                                    borderRadius: "3px",
+                                  },
+                                },
+                                "LHF",
+                              ),
                             enteredLine,
                             addedLine,
                           );

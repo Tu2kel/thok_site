@@ -863,6 +863,26 @@
             hA("span", { className: "glint" }),
             "★ State/Fed",
           ),
+          // LHF Checker tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "lhfcheck" ? " active" : ""),
+              onClick: () => setTab("lhfcheck"),
+              style: {
+                borderColor:
+                  tab === "lhfcheck"
+                    ? "rgba(255,180,50,.6)"
+                    : "rgba(255,180,50,.2)",
+                color:
+                  tab === "lhfcheck"
+                    ? "rgba(255,180,50,1)"
+                    : "rgba(255,180,50,.45)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "\u25C6 LHF Check",
+          ),
           // Backup
           hA(
             "button",
@@ -994,6 +1014,14 @@
         tab === "dealcheck" && hA(window.SCC_TABS.DealCheckTab, null),
 
         tab === "esbd" && hA(EsbdTab, { goAward: goEsbdAward }),
+
+        tab === "lhfcheck" &&
+          hA(window.SCC_TABS.LHFCheckTab, {
+            onSendToIntake: (sols) => {
+              setBoxA(sols.join("\n"));
+              setTab("intake");
+            },
+          }),
 
         tab === "fu" &&
           hA(FUTab, {
