@@ -1365,7 +1365,7 @@ Rules:
                     "th",
                     {
                       title:
-                        "STD=Standard 30% · FAST=Fast Award 40% · LHF=Low Hanging Fruit 42.5% · SB=Small Business Set-Aside 35%  |  Comp: 20% & 25% bid scenarios vs SouthStar 21% min",
+                        "STD=Standard 27.5% · FAST=Fast Award 30% · LHF=Low Hanging Fruit 35% · SB=Small Business Set-Aside 30%  |  Comp: 20% & 25% bid scenarios vs SouthStar 21% min",
                       style: { cursor: "help" },
                     },
                     "Bid Type ⓘ",
@@ -1712,7 +1712,7 @@ Rules:
                                 value: "Standard",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "STD — 30%",
+                              "STD — 27.5%",
                             ),
                             hP(
                               "option",
@@ -1720,7 +1720,7 @@ Rules:
                                 value: "Fast Award",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "FAST — 40%",
+                              "FAST — 30%",
                             ),
                             hP(
                               "option",
@@ -1728,7 +1728,7 @@ Rules:
                                 value: "Low Hanging Fruit",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "LHF — 42.5%",
+                              "LHF — 35%",
                             ),
                             hP(
                               "option",
@@ -1736,7 +1736,7 @@ Rules:
                                 value: "Small Business Set-Aside",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "SB — 35%",
+                              "SB — 30%",
                             ),
                           ),
                           hP(
