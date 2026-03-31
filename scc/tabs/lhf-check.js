@@ -55,8 +55,8 @@
     const [idx, setIdx] = useState(saved.idx || 0);
     const [running, setRunning] = useState(false); // session-only
     const [countdown, setCountdown] = useState(0); // session-only
-    const [autoAdv, setAutoAdv] = useState(true);
-    const [delay, setDelay] = useState(4);
+    const [autoAdv, setAutoAdv] = useState(false);
+    const [delay, setDelay] = useState(15);
     const timerRef = useRef(null);
     const tabRef = useRef(null);
 
@@ -614,7 +614,7 @@
                           padding: "2px 4px",
                         },
                       },
-                      [3, 4, 5, 8, 10].map((v) =>
+                      [10, 15, 20, 30, 45].map((v) =>
                         h("option", { key: v, value: v }, v + "s"),
                       ),
                     ),
@@ -856,10 +856,14 @@
                       "button",
                       {
                         onClick: () => {
-                          setResults((r) => ({ ...r, [sol]: "open" }));
-                          if (isNext) {
-                            const n = findNext(i + 1);
-                            if (n !== null) setIdx(n);
+                          if (isCurrent) {
+                            markAndAdvance("open");
+                          } else {
+                            setResults((r) => ({ ...r, [sol]: "open" }));
+                            if (isNext) {
+                              const n = findNext(i + 1);
+                              if (n !== null) setIdx(n);
+                            }
                           }
                         },
                         style: {
@@ -879,10 +883,14 @@
                       "button",
                       {
                         onClick: () => {
-                          setResults((r) => ({ ...r, [sol]: "closed" }));
-                          if (isNext) {
-                            const n = findNext(i + 1);
-                            if (n !== null) setIdx(n);
+                          if (isCurrent) {
+                            markAndAdvance("closed");
+                          } else {
+                            setResults((r) => ({ ...r, [sol]: "closed" }));
+                            if (isNext) {
+                              const n = findNext(i + 1);
+                              if (n !== null) setIdx(n);
+                            }
                           }
                         },
                         style: {
