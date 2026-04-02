@@ -551,7 +551,7 @@
           ),
         ),
       (() => {
-        const allDists = dists;
+        const allDists = dists.length ? dists : DISTRIBUTORS.slice(0, 20);
         const preferred = allDists.filter((d) =>
           (d.tags || []).includes("preferred-alt"),
         );
@@ -639,6 +639,13 @@
                     d.search_by === "nsn"
                       ? nsn || part || ""
                       : part || nsn || "";
+                  if (!d.search_url) {
+                    const site = d.website ? "site:" + d.website + " " : "";
+                    return (
+                      "https://www.google.com/search?q=" +
+                      encodeURIComponent(site + (query || d.name))
+                    );
+                  }
                   return (
                     d.search_url + (query ? encodeURIComponent(query) : "")
                   );
