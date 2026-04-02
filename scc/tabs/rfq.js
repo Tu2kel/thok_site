@@ -345,6 +345,9 @@
         });
       }
 
+      const shipToM = line.match(/SHIPTO:(.+)$/);
+      const shipTo = shipToM ? shipToM[1].trim() : null;
+
       results.push({
         sol,
         itemName,
@@ -356,6 +359,7 @@
         deliveryDays,
         unitPrice,
         suppliers,
+        shipTo,
       });
     }
     return results;
@@ -542,18 +546,26 @@
             source: "navigator",
           };
         }
-        map[sup.cage].sols.push({
-          sol: row.sol,
-          itemName: row.itemName,
-          qty: row.qty,
-          uoi: row.uoi,
-          nsn: row.nsn,
-          fsc: row.fsc,
-          partNo: sup.partNo,
-          quoteDue: row.quoteDue,
-          deliveryDays: row.deliveryDays,
-          unitPrice: row.unitPrice,
-        });
+        // Deduplicate by sol+NSN -- same NSN from multiple pending VI entries = one line item
+        const dupKey = (row.sol || "") + "::" + (row.nsn || "");
+        const alreadyAdded = map[sup.cage].sols.some(
+          (s) => (s.sol || "") + "::" + (s.nsn || "") === dupKey,
+        );
+        if (!alreadyAdded) {
+          map[sup.cage].sols.push({
+            sol: row.sol,
+            itemName: row.itemName,
+            qty: row.qty,
+            uoi: row.uoi,
+            nsn: row.nsn,
+            fsc: row.fsc,
+            partNo: sup.partNo,
+            quoteDue: row.quoteDue,
+            deliveryDays: row.deliveryDays,
+            unitPrice: row.unitPrice,
+            shipTo: row.shipTo || null,
+          });
+        }
       }
     }
     return Object.values(map).sort((a, b) => {
@@ -599,7 +611,6 @@
       day: "numeric",
     });
     const del = sols[0]?.deliveryDays || solMeta.delivDays || "30";
-    const ship = solMeta.shipTo || "[SHIP-TO LOCATION]";
 
     let lines = "";
     sols.forEach((s, i) => {
@@ -613,26 +624,38 @@
           s.fsc +
           (FSC_NAMES[s.fsc] ? " · " + FSC_NAMES[s.fsc] + ")" : ")")
         : "";
-      const pn = s.partNo ? "  Your P/N: " + s.partNo : "";
-      const sol = s.sol ? "  Sol: " + s.sol : "";
+      const pn = s.partNo ? "\n  Your P/N: " + s.partNo : "";
+      const solNum = s.sol ? "  Sol: " + s.sol : "";
       const due = s.quoteDue ? "  Due: " + s.quoteDue : "";
       const price = s.unitPrice ? "  Gov Ref: $" + s.unitPrice.toFixed(2) : "";
+      const itemDel = s.deliveryDays || del;
+      const itemShip = s.shipTo || solMeta.shipTo || "[SHIP-TO LOCATION]";
       lines +=
         "  ITEM " +
         idx +
         ": " +
         id +
         fscLbl +
-        "\n  Desc: " +
+        "\n" +
+        "  Desc: " +
         desc +
-        "\n  Qty: " +
+        "\n" +
+        "  Qty: " +
         qty +
         " " +
         uoi +
         pn +
-        sol +
+        "\n" +
+        "  Sol: " +
+        (s.sol || "—") +
         due +
         price +
+        "\n" +
+        "  Delivery: " +
+        itemDel +
+        " days ARO\n" +
+        "  Ship-to: " +
+        itemShip +
         "\n\n";
     });
 
@@ -640,19 +663,15 @@
       today +
       "\n\nTo the Government Sales / Quotes Team at " +
       name +
-      ",\n\nMy name is Anthony Kel, and I represent The House of Kel LLC (DBA Imperio Talent Solutions) — a verified Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE Code 152U4, based in Killeen, Texas.\n\nWe are currently responding to one or more DLA/DoD solicitations and are requesting pricing and availability on the following " +
+      ",\n\nMy name is Anthony Kelley, and I represent The House of Kel LLC (DBA Imperio Talent Solutions) — a verified Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE Code 152U4, based in Killeen, Texas.\n\nWe are currently responding to one or more DLA/DoD solicitations and are requesting pricing and availability on the following " +
       sols.length +
       " line item" +
       (sols.length !== 1 ? "s" : "") +
       " for which your company (" +
       (supplier.cage || "—") +
-      ") appears as a registered supplier:\n\n" +
+      ") appears as a registered supplier. Each item includes its own delivery requirement and ship-to address.\n\n" +
       lines +
-      "Delivery Requirement: " +
-      del +
-      " days ARO\nShip-to: " +
-      ship +
-      "\nDelivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kel\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.imperiovita.co\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kel\nImperio Talent Solutions | Supply Chain Command"
+      "Delivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kelley\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.imperiovita.co\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kelley\nImperio Talent Solutions | The House of Kel LLC"
     );
   }
 
@@ -1389,28 +1408,33 @@
         const viMap = {};
         for (const vi of allVI) {
           if (!vi.sol_number) continue;
-          if (vi.status === "no_stock" || vi.status === "pending") continue;
           if (!viMap[vi.sol_number]) viMap[vi.sol_number] = [];
           viMap[vi.sol_number].push(vi);
         }
 
-        // Only sols that have at least one usable VI entry
-        const sourceable = activeSols.filter(
-          (r) => viMap[r.sol_number] && viMap[r.sol_number].length > 0,
-        );
+        // Blast targets = sols WITHOUT a confirmed or quoted supplier yet
+        // If you already have the quote, you're bidding not blasting
+        const sourceable = activeSols.filter((r) => {
+          const vis = viMap[r.sol_number] || [];
+          return !vis.some(
+            (v) => v.status === "confirmed" || v.status === "quoted",
+          );
+        });
 
         if (!sourceable.length) {
           alert(
-            "No active solicitations with confirmed or quoted suppliers found. Add vendor intel entries first.",
+            "All active solicitations already have confirmed or quoted suppliers. Nothing left to blast.",
           );
           setLoadingPipeline(false);
           return;
         }
 
         // Format each sol as Navigator export string the parser understands
-        // Format: Save  SOL  ITEMNAME  QTY UI  $UNIT Hist. $EXTENDED  QUOTEDUE  DELDAYS  NSN13  SA  Char. COTS  Quote N  FOB  FOB  POSTED  SEQ  Details+AI Info  NAME|CAGE|PN|;
+        // Supplier pipe block: use pending VI entries (named from DIBBS) if they exist, else fall back to sol's parsed supplier list
         const lines = sourceable.map((sol) => {
-          const viEntries = viMap[sol.sol_number];
+          const pendingVI = (viMap[sol.sol_number] || []).filter(
+            (v) => v.status === "pending",
+          );
           const nsn13 = (sol.nsn || "").replace(/-/g, "");
           const qty = sol.quantity || 1;
           const ui = sol.unit_of_issue || "EA";
@@ -1424,18 +1448,40 @@
           const fob = sol.fob || "Dest.";
           const posted = sol.posted_date || "01/01/26";
 
-          // Build supplier pipe block from VI entries
-          const supBlock =
-            viEntries
-              .map((vi) => {
-                const cage = (vi.vendor_id || "00000").toUpperCase();
-                const name = (vi.vendor_name || "VENDOR").toUpperCase();
-                const pn = vi.part_number || sol.ref_part_number || nsn13;
-                return `${name}|${cage}|${pn}|`;
-              })
-              .join(";") + ";";
+          // Build supplier pipe block -- pending VI first, then fall back to DIBBS parsed list on the sol
+          let supBlock;
+          if (pendingVI.length > 0) {
+            supBlock =
+              pendingVI
+                .map((vi) => {
+                  const cage = (vi.vendor_id || "00000").toUpperCase();
+                  const name = (vi.vendor_name || "VENDOR").toUpperCase();
+                  const pn = vi.part_number || sol.ref_part_number || nsn13;
+                  return `${name}|${cage}|${pn}|`;
+                })
+                .join(";") + ";";
+          } else {
+            // Parse supplier block from sol.all_suppliers (format: "NAME (CAGE) P/N: PN · ...")
+            const rawSups = [
+              ...(sol.all_suppliers || "").matchAll(
+                /([^(]+)\s+\(([A-Z0-9]{5})\)\s+P\/N:\s+([^\s·]+)/g,
+              ),
+            ];
+            if (rawSups.length > 0) {
+              supBlock =
+                rawSups
+                  .map(
+                    (m) =>
+                      `${m[1].trim().toUpperCase()}|${m[2].trim()}|${m[3].trim()}|`,
+                  )
+                  .join(";") + ";";
+            } else {
+              supBlock = `SUPPLIER UNKNOWN|00000|${nsn13}|;`;
+            }
+          }
 
-          return `Save\t${sol.sol_number}\t${itemName}\t${qty} ${ui}\t$${unitP} Hist. $${extP}\t${qDue}\t${delD}\t${nsn13}\tY\tChar. COTS\tQuote N\t${fob}\t${fob}\t${posted}\t001\tDetails+AI Info\t${supBlock}`;
+          const shipTo = sol.ship_to ? sol.ship_to.replace(/\t/g, " ") : "";
+          return `Save\t${sol.sol_number}\t${itemName}\t${qty} ${ui}\t$${unitP} Hist. $${extP}\t${qDue}\t${delD}\t${nsn13}\tY\tChar. COTS\tQuote N\t${fob}\t${fob}\t${posted}\t001\tDetails+AI Info\t${supBlock}\tSHIPTO:${shipTo}`;
         });
 
         const builtText = lines.join("\n");
