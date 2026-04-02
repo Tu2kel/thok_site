@@ -1361,9 +1361,104 @@
     const [emailOverrides, setEmailOverrides] = useState({});
     const [sentSet, setSentSet] = useState(new Set());
     const [parsed, setParsed] = useState(false);
+    const [loadingPipeline, setLoadingPipeline] = useState(false);
+    const [pipelineStats, setPipelineStats] = useState(null); // { sols, vendors }
 
     const sentCount = sentSet.size;
     const totalCount = entries.length;
+
+    // ── LOAD FROM PIPELINE ─────────────────────────────────────────────────
+    const handleLoadFromPipeline = async () => {
+      setLoadingPipeline(true);
+      try {
+        const { dbGetAll, viGetAll } = window.SCC_DB;
+        const [allSols, allVI] = await Promise.all([dbGetAll(), viGetAll()]);
+
+        // Active sols only — exclude No Source, Lost, Awarded, Archived
+        const SKIP_STATUS = new Set([
+          "No Source",
+          "Lost",
+          "Awarded",
+          "Archive",
+          "Archived",
+          "Delete",
+        ]);
+        const activeSols = allSols.filter((r) => !SKIP_STATUS.has(r.status));
+
+        // Group VI by sol_number, keep confirmed + quoted entries only
+        const viMap = {};
+        for (const vi of allVI) {
+          if (!vi.sol_number) continue;
+          if (vi.status === "no_stock" || vi.status === "pending") continue;
+          if (!viMap[vi.sol_number]) viMap[vi.sol_number] = [];
+          viMap[vi.sol_number].push(vi);
+        }
+
+        // Only sols that have at least one usable VI entry
+        const sourceable = activeSols.filter(
+          (r) => viMap[r.sol_number] && viMap[r.sol_number].length > 0,
+        );
+
+        if (!sourceable.length) {
+          alert(
+            "No active solicitations with confirmed or quoted suppliers found. Add vendor intel entries first.",
+          );
+          setLoadingPipeline(false);
+          return;
+        }
+
+        // Format each sol as Navigator export string the parser understands
+        // Format: Save  SOL  ITEMNAME  QTY UI  $UNIT Hist. $EXTENDED  QUOTEDUE  DELDAYS  NSN13  SA  Char. COTS  Quote N  FOB  FOB  POSTED  SEQ  Details+AI Info  NAME|CAGE|PN|;
+        const lines = sourceable.map((sol) => {
+          const viEntries = viMap[sol.sol_number];
+          const nsn13 = (sol.nsn || "").replace(/-/g, "");
+          const qty = sol.quantity || 1;
+          const ui = sol.unit_of_issue || "EA";
+          const unitP = sol.unit_price ? sol.unit_price.toFixed(2) : "0.00";
+          const extP = sol.extended_price
+            ? sol.extended_price.toFixed(2)
+            : (parseFloat(unitP) * qty).toFixed(2);
+          const qDue = sol.quote_due || "12/31/26";
+          const delD = sol.delivery_days || 30;
+          const itemName = (sol.item_name || sol.nsn || "ITEM").toUpperCase();
+          const fob = sol.fob || "Dest.";
+          const posted = sol.posted_date || "01/01/26";
+
+          // Build supplier pipe block from VI entries
+          const supBlock =
+            viEntries
+              .map((vi) => {
+                const cage = (vi.vendor_id || "00000").toUpperCase();
+                const name = (vi.vendor_name || "VENDOR").toUpperCase();
+                const pn = vi.part_number || sol.ref_part_number || nsn13;
+                return `${name}|${cage}|${pn}|`;
+              })
+              .join(";") + ";";
+
+          return `Save\t${sol.sol_number}\t${itemName}\t${qty} ${ui}\t$${unitP} Hist. $${extP}\t${qDue}\t${delD}\t${nsn13}\tY\tChar. COTS\tQuote N\t${fob}\t${fob}\t${posted}\t001\tDetails+AI Info\t${supBlock}`;
+        });
+
+        const builtText = lines.join("\n");
+        setRawText(builtText);
+        setMode("navigator");
+        setPipelineStats({
+          sols: sourceable.length,
+          vendors: Object.values(viMap).reduce((s, arr) => s + arr.length, 0),
+        });
+
+        // Auto-generate
+        const rows = parseNavigatorRows(builtText);
+        if (rows.length) {
+          const sups = buildSupplierMap(rows);
+          setEntries(sups);
+          setParsed(true);
+        }
+      } catch (err) {
+        console.error("Pipeline load error:", err);
+        alert("Error loading from pipeline: " + err.message);
+      }
+      setLoadingPipeline(false);
+    };
 
     const handleGenerate = () => {
       if (!rawText.trim()) return;
@@ -1405,6 +1500,7 @@
       setDueDate("");
       setDelivDays("30");
       setShipTo("");
+      setPipelineStats(null);
     };
 
     const toggleSent = (id) =>
@@ -1499,60 +1595,121 @@
             "Bulk vendor outreach — paste Navigator export or supply list, fire RSQ emails in one pass",
           ),
         ),
-        parsed &&
+        h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              flexWrap: "wrap",
+            },
+          },
+          // Pipeline load button — always visible
           h(
-            "div",
-            { style: { display: "flex", alignItems: "center", gap: "12px" } },
+            "button",
+            {
+              onClick: handleLoadFromPipeline,
+              disabled: loadingPipeline,
+              title:
+                "Pull all active solicitations with confirmed/quoted suppliers from your pipeline",
+              style: {
+                background: loadingPipeline
+                  ? "rgba(61,214,140,.08)"
+                  : "rgba(61,214,140,.12)",
+                border:
+                  "1px solid rgba(61,214,140," +
+                  (loadingPipeline ? ".2" : ".4") +
+                  ")",
+                color: loadingPipeline
+                  ? "rgba(61,214,140,.4)"
+                  : "var(--accent-green)",
+                fontFamily: "Cinzel,serif",
+                fontSize: "9px",
+                letterSpacing: ".16em",
+                textTransform: "uppercase",
+                padding: "7px 16px",
+                cursor: loadingPipeline ? "not-allowed" : "pointer",
+                transition: "all .2s",
+              },
+            },
+            loadingPipeline ? "⟳ Loading…" : "⬇ Load from Pipeline",
+          ),
+          pipelineStats &&
+            !parsed &&
             h(
-              "div",
+              "span",
               {
                 style: {
                   fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "12px",
-                  color: "var(--gold-dim)",
-                  display: "flex",
-                  gap: "16px",
+                  fontSize: "11px",
+                  color: "var(--body-faint)",
                 },
               },
+              pipelineStats.sols +
+                " sols · " +
+                pipelineStats.vendors +
+                " vendors loaded",
+            ),
+          parsed &&
+            h(
+              Frag,
+              null,
               h(
-                "span",
-                null,
-                h("b", { style: { color: "var(--gold-solid)" } }, totalCount),
-                " vendor" + (totalCount !== 1 ? "s" : ""),
-              ),
-              h(
-                "span",
-                null,
-                h("b", { style: { color: "var(--accent-green)" } }, sentCount),
-                " sent",
-              ),
-              flaggedHigh > 0 &&
+                "div",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "12px",
+                    color: "var(--gold-dim)",
+                    display: "flex",
+                    gap: "16px",
+                  },
+                },
                 h(
                   "span",
                   null,
-                  h("b", { style: { color: "var(--red)" } }, flaggedHigh),
-                  " mfr flags",
+                  h("b", { style: { color: "var(--gold-solid)" } }, totalCount),
+                  " vendor" + (totalCount !== 1 ? "s" : ""),
                 ),
-            ),
-            h(
-              "button",
-              {
-                onClick: handleClear,
-                style: {
-                  background: "transparent",
-                  border: "1px solid var(--border-subtle)",
-                  color: "var(--body-dim)",
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "9px",
-                  letterSpacing: ".16em",
-                  textTransform: "uppercase",
-                  padding: "7px 14px",
-                  cursor: "pointer",
+                h(
+                  "span",
+                  null,
+                  h(
+                    "b",
+                    { style: { color: "var(--accent-green)" } },
+                    sentCount,
+                  ),
+                  " sent",
+                ),
+                flaggedHigh > 0 &&
+                  h(
+                    "span",
+                    null,
+                    h("b", { style: { color: "var(--red)" } }, flaggedHigh),
+                    " mfr flags",
+                  ),
+              ),
+              h(
+                "button",
+                {
+                  onClick: handleClear,
+                  style: {
+                    background: "transparent",
+                    border: "1px solid var(--border-subtle)",
+                    color: "var(--body-dim)",
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".16em",
+                    textTransform: "uppercase",
+                    padding: "7px 14px",
+                    cursor: "pointer",
+                  },
                 },
-              },
-              "Clear All",
+                "Clear All",
+              ),
             ),
-          ),
+        ),
       ),
 
       // ── Input section ──
@@ -1945,9 +2102,48 @@
                 maxWidth: "520px",
                 margin: "0 auto",
                 lineHeight: "1.7",
+                marginBottom: "32px",
               },
             },
-            "Paste a Navigator export or raw supply list above. The engine parses every line, groups by vendor, and generates ready-to-fire RSQ emails — one per vendor, all line items batched.",
+            "Load directly from your active pipeline — any sol with a confirmed or quoted supplier gets pulled automatically. Or paste a Navigator export above.",
+          ),
+          h(
+            "button",
+            {
+              onClick: handleLoadFromPipeline,
+              disabled: loadingPipeline,
+              style: {
+                background: loadingPipeline
+                  ? "rgba(61,214,140,.06)"
+                  : "rgba(61,214,140,.14)",
+                border:
+                  "1px solid rgba(61,214,140," +
+                  (loadingPipeline ? ".2" : ".5") +
+                  ")",
+                color: loadingPipeline
+                  ? "rgba(61,214,140,.4)"
+                  : "var(--accent-green)",
+                fontFamily: "Cinzel,serif",
+                fontSize: "11px",
+                letterSpacing: ".22em",
+                textTransform: "uppercase",
+                fontWeight: "700",
+                padding: "14px 36px",
+                cursor: loadingPipeline ? "not-allowed" : "pointer",
+                transition: "all .2s",
+              },
+              onMouseEnter: (e) => {
+                if (!loadingPipeline) {
+                  e.target.style.background = "rgba(61,214,140,.22)";
+                  e.target.style.transform = "translateY(-1px)";
+                }
+              },
+              onMouseLeave: (e) => {
+                e.target.style.background = "rgba(61,214,140,.14)";
+                e.target.style.transform = "";
+              },
+            },
+            loadingPipeline ? "⟳ Loading Pipeline…" : "⬇ Load from Pipeline",
           ),
         ),
     );
