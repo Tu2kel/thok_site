@@ -229,6 +229,188 @@ Imperio Talent Solutions | CAGE 152U4<br>
                   fontSize: "13px",
                 },
               },
+              "Bid Price Calculator",
+            ),
+            // ── BID PRICE RECOMMENDATION PANEL ──────────────────────────
+            (() => {
+              const { calcBidMath, fmt } = window.SCC_MATH;
+              const qty = parseFloat(record.quantity) || 1;
+              const extPrice = parseFloat(record.unit_price) || 0;
+              const rawCost = parseFloat(form.supplier_quote_price) || 0;
+              const TIERS = [
+                { label: "20%", pct: 0.2, color: "#7eb8f7" },
+                { label: "25%", pct: 0.25, color: "#9ab8ff" },
+                { label: "27.5%", pct: 0.275, color: "#C9A84C" },
+                { label: "30%", pct: 0.3, color: "#f9f295" },
+                { label: "35%", pct: 0.35, color: "#3dd68c" },
+                { label: "40%", pct: 0.4, color: "#a8e6cf" },
+              ];
+
+              const hasCost = rawCost > 0;
+              const histUnit = extPrice;
+
+              return hP(
+                "div",
+                {
+                  style: {
+                    background: "var(--surface-inset)",
+                    border: "1px solid rgba(201,168,76,.2)",
+                    borderRadius: "6px",
+                    padding: "14px 16px",
+                    marginBottom: "16px",
+                  },
+                },
+                // label
+                hP(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "8.5px",
+                      letterSpacing: ".15em",
+                      color: "var(--gold-dim)",
+                      textTransform: "uppercase",
+                      marginBottom: "10px",
+                    },
+                  },
+                  hasCost
+                    ? "Supplier Cost: " + fmt(rawCost) + "/ea · Qty " + qty
+                    : "Enter Supplier Quote Price in the Supplier tab to see bid recommendations",
+                ),
+                hasCost &&
+                  hP(
+                    "div",
+                    {
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: "8px",
+                      },
+                    },
+                    ...TIERS.map(({ label, pct, color }) => {
+                      const bidUnit = +(rawCost / (1 - pct)).toFixed(2);
+                      const bidTotal = +(bidUnit * qty).toFixed(2);
+                      const gp = bidTotal - rawCost * qty;
+                      const feAmt = bidTotal >= 10000 ? bidTotal * 0.075 : 0;
+                      const net = +(gp - feAmt).toFixed(2);
+                      const netPct = ((net / bidTotal) * 100).toFixed(1);
+                      const beatsHist = histUnit > 0 && bidUnit <= histUnit;
+
+                      return hP(
+                        "div",
+                        {
+                          style: {
+                            background: "rgba(0,0,0,.25)",
+                            border: "1px solid " + color + "33",
+                            borderRadius: "5px",
+                            padding: "10px 10px 8px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "4px",
+                          },
+                        },
+                        // tier label
+                        hP(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "Cinzel,serif",
+                              fontSize: "9px",
+                              letterSpacing: ".12em",
+                              color: color,
+                              fontWeight: 700,
+                              marginBottom: "2px",
+                            },
+                          },
+                          label + " MARGIN",
+                        ),
+                        // bid price
+                        hP(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "17px",
+                              color: color,
+                              fontWeight: 700,
+                              lineHeight: 1,
+                            },
+                          },
+                          fmt(bidUnit),
+                        ),
+                        hP(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "9.5px",
+                              color: "var(--body-faint)",
+                            },
+                          },
+                          "per ea",
+                        ),
+                        // total
+                        hP(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "11px",
+                              color: "var(--alabaster)",
+                              marginTop: "4px",
+                            },
+                          },
+                          "Total: " + fmt(bidTotal),
+                        ),
+                        // net after FE
+                        hP(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "10px",
+                              color: net > 0 ? "#3dd68c" : "#e74c3c",
+                            },
+                          },
+                          "Net: " +
+                            fmt(net) +
+                            " (" +
+                            netPct +
+                            "%)" +
+                            (bidTotal >= 10000 ? " after FE" : ""),
+                        ),
+                        // vs hist
+                        histUnit > 0 &&
+                          hP(
+                            "div",
+                            {
+                              style: {
+                                fontFamily: "JetBrains Mono,monospace",
+                                fontSize: "9px",
+                                marginTop: "3px",
+                                color: beatsHist ? "#3dd68c" : "#e74c3c",
+                              },
+                            },
+                            beatsHist
+                              ? "✓ under hist " + fmt(histUnit)
+                              : "✗ over hist " + fmt(histUnit),
+                          ),
+                      );
+                    }),
+                  ),
+              );
+            })(),
+            hP(
+              "div",
+              {
+                className: "drawer-section-title",
+                style: {
+                  color: "var(--accent-green-dim)",
+                  borderColor: "rgba(93,187,122,.25)",
+                  fontSize: "13px",
+                  marginTop: "8px",
+                },
+              },
               "Bid & Outcome",
             ),
             hP(
