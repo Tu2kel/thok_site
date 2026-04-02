@@ -15,7 +15,8 @@
 
   // ── DRAWER ───────────────────────────────────────────────────────────
   function Drawer({ record, onSave, showToast }) {
-    const { DrawerSourcePanel, VendorIntelPanel } = window.SCC_TABS;
+    const { DrawerSourcePanel, VendorIntelPanel, AwardsIntelPanel } =
+      window.SCC_TABS;
     const [dtab, setDtab] = usePState("supplier");
     const [form, setForm] = usePState({
       supplier_website: "",
@@ -122,6 +123,7 @@ Imperio Talent Solutions | CAGE 152U4<br>
       ["bid", "Bid & Outcome"],
       ["quotes", "Quote History"],
       ["nsn", "NSN Intel"],
+      ["awards_intel", "⬡ Awards Intel"],
       ["source", "◆ Source"],
       ["email", "Email"],
     ];
@@ -172,6 +174,28 @@ Imperio Talent Solutions | CAGE 152U4<br>
               record,
               showToast: showToast || (() => {}),
             }),
+          ),
+
+        dtab === "awards_intel" &&
+          hP(
+            PFrag,
+            null,
+            hP(
+              "div",
+              {
+                className: "drawer-section-title",
+                style: {
+                  color: "var(--amber)",
+                  borderColor: "rgba(243,156,18,.25)",
+                  fontSize: "13px",
+                },
+              },
+              "⬡ Awards Intel — " +
+                (record.nsn || "No NSN") +
+                " · FSC " +
+                (record.fsc || "—"),
+            ),
+            hP(AwardsIntelPanel, { record }),
           ),
 
         dtab === "supplier" &&
