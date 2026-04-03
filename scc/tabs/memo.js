@@ -35,6 +35,25 @@
 
   const DIVIDER_TOKEN = "\n---DIV---\n";
 
+  const MEMO_STORE = "scc_memo_v1";
+  function memoLoad() {
+    try {
+      return JSON.parse(localStorage.getItem(MEMO_STORE) || "null") || {};
+    } catch {
+      return {};
+    }
+  }
+  function memoSave(data) {
+    try {
+      localStorage.setItem(MEMO_STORE, JSON.stringify(data));
+    } catch {}
+  }
+  function memoClear() {
+    try {
+      localStorage.removeItem(MEMO_STORE);
+    } catch {}
+  }
+
   // ── Render body text → HTML with gold dividers ───────────────────────
   function renderBodyHTML(raw) {
     if (!raw.trim()) return "";
@@ -299,58 +318,42 @@
             },
           },
           ...[
-            ["Date", to && "Date", date],
-            ["To", null, to],
-            [
-              "From",
-              null,
-              "Anthony K. Kelley Sr., Founder & CEO — Imperio Talent Solutions",
-            ],
-            ["Re", null, re],
+            ["Date", date],
+            ["To", to],
+            ["Re", re],
           ]
-            .map(([lbl, ,]) => lbl)
-            .filter((v, i, a) => a.indexOf(v) === i)
-            .flatMap((lbl) => {
-              const val =
-                lbl === "Date"
-                  ? date
-                  : lbl === "To"
-                    ? to
-                    : lbl === "From"
-                      ? "Anthony K. Kelley Sr., Founder & CEO — Imperio Talent Solutions"
-                      : re;
-              return [
-                hM(
-                  "span",
-                  {
-                    key: lbl + "L",
-                    style: {
-                      fontFamily: "Cinzel,serif",
-                      fontSize: "7px",
-                      letterSpacing: ".2em",
-                      textTransform: "uppercase",
-                      color: IV.goldDim,
-                      whiteSpace: "nowrap",
-                      paddingTop: "2px",
-                    },
+            .filter(([, val]) => val && val.trim())
+            .flatMap(([lbl, val]) => [
+              hM(
+                "span",
+                {
+                  key: lbl + "L",
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "7px",
+                    letterSpacing: ".2em",
+                    textTransform: "uppercase",
+                    color: IV.goldDim,
+                    whiteSpace: "nowrap",
+                    paddingTop: "2px",
                   },
-                  lbl,
-                ),
-                hM(
-                  "span",
-                  {
-                    key: lbl + "V",
-                    style: {
-                      fontFamily: "Cormorant Garamond,serif",
-                      fontSize: "13.5px",
-                      color: IV.bodyColor,
-                      letterSpacing: ".02em",
-                    },
+                },
+                lbl,
+              ),
+              hM(
+                "span",
+                {
+                  key: lbl + "V",
+                  style: {
+                    fontFamily: "Cormorant Garamond,serif",
+                    fontSize: "13.5px",
+                    color: IV.bodyColor,
+                    letterSpacing: ".02em",
                   },
-                  val || "—",
-                ),
-              ];
-            }),
+                },
+                val || "—",
+              ),
+            ]),
         ),
         hM("div", {
           style: { height: "1px", background: IV.goldRule, margin: "12px 0 0" },
@@ -503,7 +506,36 @@
       }),
     );
     const [body, setBody] = useMState("");
+    const [hydrated, setHydrated] = useMState(false);
     const bodyRef = useMRef(null);
+
+    // Hydrate from localStorage on every mount (tab switches remount)
+    React.useEffect(() => {
+      const s = memoLoad();
+      if (s.to !== undefined) setTo(s.to);
+      if (s.re !== undefined) setRe(s.re);
+      if (s.date !== undefined) setDate(s.date);
+      if (s.body !== undefined) setBody(s.body);
+      setHydrated(true);
+    }, []);
+
+    // Persist on every field change
+    const updTo = (v) => {
+      setTo(v);
+      memoSave({ ...memoLoad(), to: v });
+    };
+    const updRe = (v) => {
+      setRe(v);
+      memoSave({ ...memoLoad(), re: v });
+    };
+    const updDate = (v) => {
+      setDate(v);
+      memoSave({ ...memoLoad(), date: v });
+    };
+    const updBody = (v) => {
+      setBody(v);
+      memoSave({ ...memoLoad(), body: v });
+    };
 
     const bodyHTML = renderBodyHTML(body);
 
@@ -515,7 +547,7 @@
         v = ta.value;
       const before = v.substring(0, s).replace(/\n*$/, "\n");
       const after = v.substring(e).replace(/^\n*/, "\n");
-      setBody(before + DIVIDER_TOKEN + after);
+      updBody(before + DIVIDER_TOKEN + after);
       setTimeout(() => {
         ta.focus();
         const pos = before.length + DIVIDER_TOKEN.length;
@@ -527,16 +559,16 @@
 
     const handleClear = () => {
       if (!confirm("Clear memo?")) return;
+      const fresh = new Date().toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
       setTo("");
       setRe("");
       setBody("");
-      setDate(
-        new Date().toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        }),
-      );
+      setDate(fresh);
+      memoClear();
     };
 
     const inp = {
@@ -637,7 +669,7 @@
             style: inp,
             value: to,
             placeholder: "Recipient",
-            onChange: (e) => setTo(e.target.value),
+            onChange: (e) => updTo(e.target.value),
           }),
         ),
         hM(
@@ -648,7 +680,7 @@
             style: inp,
             value: re,
             placeholder: "Subject / Re:",
-            onChange: (e) => setRe(e.target.value),
+            onChange: (e) => updRe(e.target.value),
           }),
         ),
         hM(
@@ -659,7 +691,7 @@
             style: inp,
             value: date,
             placeholder: "Date",
-            onChange: (e) => setDate(e.target.value),
+            onChange: (e) => updDate(e.target.value),
           }),
         ),
 
@@ -675,7 +707,7 @@
         hM("textarea", {
           ref: bodyRef,
           value: body,
-          onChange: (e) => setBody(e.target.value),
+          onChange: (e) => updBody(e.target.value),
           placeholder:
             "Type memo content…\n\nUse the button below to insert a gold section divider at the cursor.",
           style: {
