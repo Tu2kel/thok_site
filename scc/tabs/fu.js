@@ -21,7 +21,7 @@
       subject: "Following Up — Imperio Talent Solutions",
       body: `Hi {name},
 
-I hope this message finds you well. I wanted to follow up on my previous outreach regarding potential partnership opportunities between Imperio Talent Solutions and {company}.
+I'm circling back on my earlier outreach to {company}. Wanted to make sure this didn't get buried — happy to connect when timing works.
 
 As a Service-Disabled Veteran-Owned Small Business (SDVOSB), we specialize in federal supply chain fulfillment and staffing across multiple verticals.
 
@@ -1370,6 +1370,7 @@ anthony@imperiovita.co`,
     const imgRef = useRef();
     const csvRef = useRef();
     const bodyRef = useRef();
+    const cursorRef = useRef(null); // cached cursor position
 
     const _showToast = showToast || ((m) => console.log(m));
 
@@ -1414,13 +1415,15 @@ anthony@imperiovita.co`,
         setBody((prev) => prev + tag);
         return;
       }
-      const s = ta.selectionStart,
-        e = ta.selectionEnd;
-      const next = ta.value.slice(0, s) + tag + ta.value.slice(e);
+      // Use cached cursor pos (set onBlur) — clicking a chip moves focus away
+      const pos =
+        cursorRef.current !== null ? cursorRef.current : ta.value.length;
+      const next = ta.value.slice(0, pos) + tag + ta.value.slice(pos);
       setBody(next);
+      cursorRef.current = pos + tag.length;
       setTimeout(() => {
-        ta.selectionStart = ta.selectionEnd = s + tag.length;
         ta.focus();
+        ta.selectionStart = ta.selectionEnd = pos + tag.length;
       }, 0);
     }
 
@@ -1861,6 +1864,15 @@ anthony@imperiovita.co`,
                 },
                 value: body,
                 onChange: (e) => setBody(e.target.value),
+                onBlur: (e) => {
+                  cursorRef.current = e.target.selectionStart;
+                },
+                onKeyUp: (e) => {
+                  cursorRef.current = e.target.selectionStart;
+                },
+                onClick: (e) => {
+                  cursorRef.current = e.target.selectionStart;
+                },
               }),
               h(
                 "div",
@@ -1973,7 +1985,7 @@ anthony@imperiovita.co`,
           },
         },
         h("img", {
-          src: "../THOK_Site/images/thok_logo.png",
+          src: "thok_logo_transparent.png",
           alt: "THOK",
           style: {
             width: "90px",

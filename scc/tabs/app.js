@@ -438,6 +438,7 @@
       MemoTab,
       FUTab,
       EsbdTab,
+      LHFCheckTab,
     } = window.SCC_TABS;
 
     const [tab, setTab] = useState("dashboard");
@@ -843,6 +844,22 @@
             hA("span", { className: "glint" }),
             "◈ Deal Check",
           ),
+          // LHF Quote Checker tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "lhf" ? " active" : ""),
+              onClick: () => setTab("lhf"),
+              style: {
+                borderColor:
+                  tab === "lhf" ? "rgba(201,168,76,.6)" : "rgba(201,168,76,.2)",
+                color:
+                  tab === "lhf" ? "var(--gold-solid)" : "rgba(201,168,76,.4)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "◈ LHF Check",
+          ),
           // State & Federal tab
           hA(
             "button",
@@ -862,26 +879,6 @@
             },
             hA("span", { className: "glint" }),
             "★ State/Fed",
-          ),
-          // LHF Checker tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "lhfcheck" ? " active" : ""),
-              onClick: () => setTab("lhfcheck"),
-              style: {
-                borderColor:
-                  tab === "lhfcheck"
-                    ? "rgba(255,180,50,.6)"
-                    : "rgba(255,180,50,.2)",
-                color:
-                  tab === "lhfcheck"
-                    ? "rgba(255,180,50,1)"
-                    : "rgba(255,180,50,.45)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "\u25C6 LHF Check",
           ),
           // Backup
           hA(
@@ -1013,15 +1010,9 @@
 
         tab === "dealcheck" && hA(window.SCC_TABS.DealCheckTab, null),
 
-        tab === "esbd" && hA(EsbdTab, { goAward: goEsbdAward }),
+        tab === "lhf" && hA(LHFCheckTab, { onSendToIntake: null }),
 
-        tab === "lhfcheck" &&
-          hA(window.SCC_TABS.LHFCheckTab, {
-            onSendToIntake: (sols) => {
-              setBoxA(sols.join("\n"));
-              setTab("intake");
-            },
-          }),
+        tab === "esbd" && hA(EsbdTab, { goAward: goEsbdAward }),
 
         tab === "fu" &&
           hA(FUTab, {
