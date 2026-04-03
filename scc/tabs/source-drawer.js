@@ -54,8 +54,39 @@
     }
   }
 
+  // ── RFQ URL builder ───────────────────────────────────────────────────
+  function buildRfqUrl(
+    record,
+    vendorName,
+    vendorCage,
+    vendorPn,
+    vendorEmail,
+    vendorPhone,
+  ) {
+    const p = new URLSearchParams();
+    if (record.sol_number) p.set("sol", record.sol_number);
+    if (record.item_name) p.set("item", record.item_name);
+    if (record.nsn) p.set("nsn", record.nsn);
+    if (vendorPn || record.ref_part_number)
+      p.set("part", vendorPn || record.ref_part_number);
+    if (record.qty) p.set("qty", record.qty);
+    if (record.unit_issue) p.set("unit", record.unit_issue);
+    if (record.delivery_days) p.set("delivery", record.delivery_days);
+    if (record.quote_due) p.set("quotedue", record.quote_due);
+    // cost ceiling: derive from unit_price (hist) at 27.5% margin — round down
+    if (record.unit_price) {
+      const ceiling = (parseFloat(record.unit_price) * 0.725).toFixed(2);
+      p.set("ceiling", ceiling);
+    }
+    if (vendorName) p.set("vendor", vendorName);
+    if (vendorCage) p.set("cage", vendorCage);
+    if (vendorEmail) p.set("email", vendorEmail);
+    if (vendorPhone) p.set("phone", vendorPhone);
+    return "supplier-rfq-template.html?" + p.toString();
+  }
+
   // ── SUPPLIER CARD (DLA Approved Source) ──────────────────────────────
-  function SupplierCard({ s, isBlocked, gsaUrl }) {
+  function SupplierCard({ s, isBlocked, gsaUrl, record }) {
     const blocked = isBlocked(s.name);
     const [phone, setPhone] = useSourceState(null);
     const [fetchSt, setFetchSt] = useSourceState("idle");
@@ -231,6 +262,33 @@
               },
               fetchSt === "loading" ? "…" : "📞?",
             ),
+        ),
+      // ── RFQ button ──
+      !blocked &&
+        record &&
+        hS(
+          "a",
+          {
+            href: buildRfqUrl(record, s.name, s.cage, s.pn, "", phone || ""),
+            target: "_blank",
+            title: "Open RFQ template pre-filled for " + s.name,
+            style: {
+              display: "block",
+              textAlign: "center",
+              padding: "4px 8px",
+              background: "rgba(201,168,76,.08)",
+              border: "1px solid rgba(201,168,76,.25)",
+              borderRadius: "3px",
+              fontFamily: "Cinzel,serif",
+              fontSize: "8px",
+              letterSpacing: ".12em",
+              textTransform: "uppercase",
+              color: "var(--gold-solid)",
+              textDecoration: "none",
+              cursor: "pointer",
+            },
+          },
+          "📄 Open RFQ",
         ),
     );
   }
@@ -480,6 +538,7 @@
                 gsaUrl:
                   "https://www.google.com/search?q=" +
                   encodeURIComponent(s.name + " " + s.pn),
+                record,
               }),
             ),
           ),
@@ -807,6 +866,38 @@
                   },
                   fs === "loading" ? "…" : "📞?",
                 ),
+            ),
+            // ── RFQ button ──
+            hS(
+              "a",
+              {
+                href: buildRfqUrl(
+                  record,
+                  d.name,
+                  d.cage || "",
+                  "",
+                  d.email || "",
+                  d.phone || "",
+                ),
+                target: "_blank",
+                title: "Open RFQ template pre-filled for " + d.name,
+                style: {
+                  display: "block",
+                  textAlign: "center",
+                  padding: "4px 8px",
+                  background: "rgba(201,168,76,.08)",
+                  border: "1px solid rgba(201,168,76,.25)",
+                  borderRadius: "3px",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".12em",
+                  textTransform: "uppercase",
+                  color: "var(--gold-solid)",
+                  textDecoration: "none",
+                  cursor: "pointer",
+                },
+              },
+              "📄 Open RFQ",
             ),
           );
         };
