@@ -6,7 +6,7 @@
 const { MongoClient } = require("mongodb");
 
 const URI = process.env.MONGODB_URI;
-const DB  = "scc_db";
+const DB = "scc_db";
 
 let client;
 async function getDb() {
@@ -30,13 +30,13 @@ function clean(obj) {
 // Merge arrays without duplicates
 function mergeUnique(existing = [], incoming = []) {
   const set = new Set(existing.map(String));
-  incoming.forEach(v => set.add(String(v)));
+  incoming.forEach((v) => set.add(String(v)));
   return [...set];
 }
 
 exports.handler = async (event) => {
   const headers = {
-    "Access-Control-Allow-Origin":  "*",
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Content-Type": "application/json",
@@ -46,26 +46,33 @@ exports.handler = async (event) => {
     return { statusCode: 204, headers, body: "" };
   }
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: "Method not allowed" }),
+    };
   }
 
   let body;
   try {
     body = JSON.parse(event.body);
   } catch {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: "Invalid JSON" }) };
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: "Invalid JSON" }),
+    };
   }
 
   const { action, payload } = body;
 
   try {
-    const db   = await getDb();
+    const db = await getDb();
     const dist = db.collection("distributors");
 
     let result;
 
     switch (action) {
-
       // ── Get all distributors ──
       case "distGetAll": {
         result = await dist.find({}).sort({ tier: 1, name: 1 }).toArray();
@@ -83,10 +90,13 @@ exports.handler = async (event) => {
           const merged = {
             ...existing,
             ...record,
-            known_nsns:    mergeUnique(existing.known_nsns,    record.known_nsns),
-            part_prefixes: mergeUnique(existing.part_prefixes, record.part_prefixes),
-            fsc:           mergeUnique(existing.fsc,           record.fsc),
-            tags:          mergeUnique(existing.tags,          record.tags),
+            known_nsns: mergeUnique(existing.known_nsns, record.known_nsns),
+            part_prefixes: mergeUnique(
+              existing.part_prefixes,
+              record.part_prefixes,
+            ),
+            fsc: mergeUnique(existing.fsc, record.fsc),
+            tags: mergeUnique(existing.tags, record.tags),
           };
           await dist.replaceOne({ id: record.id }, merged, { upsert: true });
           result = { action: "merged", id: record.id };
@@ -101,7 +111,11 @@ exports.handler = async (event) => {
       case "distBatch": {
         const { records } = payload;
         if (!Array.isArray(records)) {
-          return { statusCode: 400, headers, body: JSON.stringify({ error: "records must be an array" }) };
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: "records must be an array" }),
+          };
         }
         const summary = { inserted: 0, merged: 0, errors: [] };
 
@@ -116,12 +130,17 @@ exports.handler = async (event) => {
               const merged = {
                 ...existing,
                 ...record,
-                known_nsns:    mergeUnique(existing.known_nsns,    record.known_nsns),
-                part_prefixes: mergeUnique(existing.part_prefixes, record.part_prefixes),
-                fsc:           mergeUnique(existing.fsc,           record.fsc),
-                tags:          mergeUnique(existing.tags,          record.tags),
+                known_nsns: mergeUnique(existing.known_nsns, record.known_nsns),
+                part_prefixes: mergeUnique(
+                  existing.part_prefixes,
+                  record.part_prefixes,
+                ),
+                fsc: mergeUnique(existing.fsc, record.fsc),
+                tags: mergeUnique(existing.tags, record.tags),
               };
-              await dist.replaceOne({ id: record.id }, merged, { upsert: true });
+              await dist.replaceOne({ id: record.id }, merged, {
+                upsert: true,
+              });
               summary.merged++;
             } else {
               await dist.insertOne(record);
@@ -140,14 +159,21 @@ exports.handler = async (event) => {
         const { id, nsn, part_numbers } = payload;
         const existing = await dist.findOne({ id });
         if (!existing) {
-          return { statusCode: 404, headers, body: JSON.stringify({ error: `Distributor not found: ${id}` }) };
+          return {
+            statusCode: 404,
+            headers,
+            body: JSON.stringify({ error: `Distributor not found: ${id}` }),
+          };
         }
-        await dist.updateOne({ id }, {
-          $addToSet: {
-            known_nsns:    nsn,
-            part_prefixes: { $each: part_numbers || [] },
-          }
-        });
+        await dist.updateOne(
+          { id },
+          {
+            $addToSet: {
+              known_nsns: nsn,
+              part_prefixes: { $each: part_numbers || [] },
+            },
+          },
+        );
         result = { action: "nsn_added", id, nsn };
         break;
       }
@@ -162,7 +188,10 @@ exports.handler = async (event) => {
       // ── Get distributors that carry a specific NSN ──
       case "distGetByNSN": {
         const { nsn } = payload;
-        result = await dist.find({ known_nsns: nsn }).sort({ tier: 1 }).toArray();
+        result = await dist
+          .find({ known_nsns: nsn })
+          .sort({ tier: 1 })
+          .toArray();
         break;
       }
 
@@ -178,9 +207,14 @@ exports.handler = async (event) => {
       case "distSeedFromArray": {
         const { records } = payload;
         if (!Array.isArray(records)) {
-          return { statusCode: 400, headers, body: JSON.stringify({ error: "records must be an array" }) };
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: "records must be an array" }),
+          };
         }
-        let inserted = 0, skipped = 0;
+        let inserted = 0,
+          skipped = 0;
         for (const record of records) {
           const exists = await dist.findOne({ id: record.id });
           if (!exists) {
@@ -191,6 +225,70 @@ exports.handler = async (event) => {
           }
         }
         result = { inserted, skipped };
+        break;
+      }
+
+      // ── Dedup by name — merge all records with same name into one ──
+      case "distDedup": {
+        const all = await dist.find({}).toArray();
+
+        const groups = {};
+        for (const d of all) {
+          const key = (d.name || "").trim().toLowerCase();
+          if (!key) continue;
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(d);
+        }
+
+        let merged = 0,
+          deleted = 0;
+        for (const [, group] of Object.entries(groups)) {
+          if (group.length < 2) continue;
+
+          group.sort((a, b) => {
+            const score = (r) =>
+              (r.phone ? 10 : 0) +
+              (r.website ? 5 : 0) +
+              (r.email ? 5 : 0) +
+              (r.fsc ? r.fsc.length : 0) +
+              (r.tags ? r.tags.length : 0);
+            return score(b) - score(a);
+          });
+
+          const primary = group[0];
+          const rest = group.slice(1);
+
+          const mergedRecord = { ...primary };
+          for (const r of rest) {
+            mergedRecord.phone = mergedRecord.phone || r.phone;
+            mergedRecord.website = mergedRecord.website || r.website;
+            mergedRecord.email = mergedRecord.email || r.email;
+            mergedRecord.search_url = mergedRecord.search_url || r.search_url;
+            mergedRecord.notes = mergedRecord.notes || r.notes;
+            mergedRecord.fsc = mergeUnique(mergedRecord.fsc, r.fsc);
+            mergedRecord.tags = mergeUnique(mergedRecord.tags, r.tags);
+            mergedRecord.known_nsns = mergeUnique(
+              mergedRecord.known_nsns,
+              r.known_nsns,
+            );
+            mergedRecord.part_prefixes = mergeUnique(
+              mergedRecord.part_prefixes,
+              r.part_prefixes,
+            );
+          }
+
+          await dist.replaceOne({ id: primary.id }, mergedRecord, {
+            upsert: true,
+          });
+          merged++;
+
+          for (const r of rest) {
+            await dist.deleteOne({ id: r.id });
+            deleted++;
+          }
+        }
+
+        result = { merged, deleted };
         break;
       }
 
@@ -207,7 +305,6 @@ exports.handler = async (event) => {
       headers,
       body: JSON.stringify({ ok: true, result: clean(result) }),
     };
-
   } catch (err) {
     console.error("scc-distributors error:", err);
     return {
