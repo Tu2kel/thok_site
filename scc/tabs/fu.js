@@ -1366,6 +1366,9 @@ anthony@imperiovita.co`,
     const [importData, setImportData] = usePState([]);
     const [ocrWorker, setOcrWorker] = usePState(null);
     const [dragging, setDragging] = usePState(false);
+    const [manualEmail, setManualEmail] = usePState("");
+    const [manualName, setManualName] = usePState("");
+    const [manualCompany, setManualCompany] = usePState("");
 
     const imgRef = useRef();
     const csvRef = useRef();
@@ -1389,6 +1392,31 @@ anthony@imperiovita.co`,
       setStatusType(type);
     };
     const clearStatus = () => setStatusMsg("");
+
+    // ── Manual contact add ───────────────────────────────────────────────
+    function handleAddManual() {
+      const email = manualEmail.trim();
+      if (!email || !email.includes("@")) {
+        status("Enter a valid email address.", "error");
+        return;
+      }
+      const contact = {
+        email,
+        contact: manualName.trim() || email.split("@")[0],
+        firstName: (manualName.trim() || email.split("@")[0]).split(" ")[0],
+        company: manualCompany.trim() || "",
+        title: "",
+        source: "manual",
+      };
+      const next = dedupeAdd(contacts, [contact]);
+      setContacts(next);
+      saveContacts(next);
+      setManualEmail("");
+      setManualName("");
+      setManualCompany("");
+      status("Contact added — " + contact.firstName, "success");
+      setTimeout(clearStatus, 2000);
+    }
 
     // ── Template load ────────────────────────────────────────────────────
     function loadTemplate(key) {
@@ -1782,6 +1810,72 @@ anthony@imperiovita.co`,
           ),
         ),
       ),
+      // ── Manual entry row ──────────────────────────────────────────────
+      h(
+        "div",
+        {
+          style: {
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr auto",
+            gap: "10px",
+            alignItems: "flex-end",
+            marginBottom: "18px",
+            padding: "14px 16px",
+            background:
+              "linear-gradient(160deg,#2e2b32 0%,#252328 18%,#1c1a1f 40%,#201e24 60%,#252328 80%,#1c1a1f 100%)",
+            border: "1px solid rgba(201,168,76,.2)",
+          },
+        },
+        h(
+          "div",
+          null,
+          h(Lbl, null, "Email *"),
+          h("input", {
+            type: "email",
+            value: manualEmail,
+            onChange: (e) => setManualEmail(e.target.value),
+            onKeyDown: (e) => e.key === "Enter" && handleAddManual(),
+            placeholder: "contact@company.com",
+            style: { ...fieldStyle, marginBottom: 0, fontSize: "13px" },
+          }),
+        ),
+        h(
+          "div",
+          null,
+          h(Lbl, null, "Name"),
+          h("input", {
+            type: "text",
+            value: manualName,
+            onChange: (e) => setManualName(e.target.value),
+            onKeyDown: (e) => e.key === "Enter" && handleAddManual(),
+            placeholder: "First Last",
+            style: { ...fieldStyle, marginBottom: 0, fontSize: "13px" },
+          }),
+        ),
+        h(
+          "div",
+          null,
+          h(Lbl, null, "Company"),
+          h("input", {
+            type: "text",
+            value: manualCompany,
+            onChange: (e) => setManualCompany(e.target.value),
+            onKeyDown: (e) => e.key === "Enter" && handleAddManual(),
+            placeholder: "Acme Corp",
+            style: { ...fieldStyle, marginBottom: 0, fontSize: "13px" },
+          }),
+        ),
+        h(
+          GBtn,
+          {
+            variant: "gold",
+            onClick: handleAddManual,
+            style: { whiteSpace: "nowrap", alignSelf: "flex-end" },
+          },
+          "+ Add Contact",
+        ),
+      ),
+
       h("input", {
         type: "file",
         ref: imgRef,

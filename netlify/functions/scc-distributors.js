@@ -292,6 +292,14 @@ exports.handler = async (event) => {
         break;
       }
 
+      // ── Purge entire collection ──
+      case "distPurge": {
+        const { count } = await dist.countDocuments({});
+        await dist.deleteMany({});
+        result = { purged: count };
+        break;
+      }
+
       default:
         return {
           statusCode: 400,

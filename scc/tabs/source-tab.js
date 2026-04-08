@@ -70,7 +70,6 @@
       }
     }, [paste, distBatch, distReloadCache]);
 
-    // ── Dedup ─────────────────────────────────────────────────────────
     const [dedupLoading, setDedupLoading] = useState(false);
     const handleDedup = useCallback(async () => {
       if (
@@ -99,6 +98,31 @@
         setStatus({ ok: false, msg: "Dedup error: " + e.message });
       } finally {
         setDedupLoading(false);
+      }
+    }, [distReloadCache]);
+
+    const [purgeLoading, setPurgeLoading] = useState(false);
+    const handlePurge = useCallback(async () => {
+      if (
+        !confirm(
+          "PURGE ALL distributors from MongoDB?\n\nThis deletes every record and cannot be undone. Use only when starting fresh with real contacts.",
+        )
+      )
+        return;
+      setPurgeLoading(true);
+      setStatus(null);
+      try {
+        const result = await window.SCC_DIST.distPurge();
+        await distReloadCache();
+        refresh();
+        setStatus({
+          ok: true,
+          msg: `Purged — ${result.purged || 0} record(s) removed. DB is now empty.`,
+        });
+      } catch (e) {
+        setStatus({ ok: false, msg: "Purge error: " + e.message });
+      } finally {
+        setPurgeLoading(false);
       }
     }, [distReloadCache]);
 
@@ -428,6 +452,34 @@
               },
             },
             dedupLoading ? "Merging\u2026" : "\u26a1 Dedup & Merge",
+          ),
+          h(
+            "button",
+            {
+              onClick: handlePurge,
+              disabled: purgeLoading || dists.length === 0,
+              title:
+                "Delete ALL distributor records from MongoDB — use when starting fresh",
+              style: {
+                padding: "8px 20px",
+                fontFamily: "Cinzel,serif",
+                fontSize: "10px",
+                letterSpacing: ".1em",
+                background: purgeLoading
+                  ? "rgba(180,0,0,.08)"
+                  : "rgba(100,0,0,.25)",
+                border: "1px solid rgba(180,0,0,.5)",
+                color: "#ff6b6b",
+                borderRadius: "4px",
+                cursor:
+                  purgeLoading || dists.length === 0
+                    ? "not-allowed"
+                    : "pointer",
+                marginLeft: "8px",
+                opacity: dists.length === 0 ? 0.4 : 1,
+              },
+            },
+            purgeLoading ? "Purging\u2026" : "\uD83D\uDDD1 Purge All",
           ),
           status &&
             h(

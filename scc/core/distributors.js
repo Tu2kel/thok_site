@@ -317,6 +317,13 @@
     return _cache;
   }
 
+  async function distPurge() {
+    const result = await _call("distPurge", {});
+    _cache = [];
+    _fscMap = {};
+    return result;
+  }
+
   // ── Expose public API ─────────────────────────────────────────────────
   window.SCC_DIST = {
     // Read — synchronous (from cache)
@@ -341,6 +348,7 @@
     distDelete,
     distGetByNSN,
     distReloadCache,
+    distPurge,
   };
 
   // ── Boot ──────────────────────────────────────────────────────────────

@@ -345,9 +345,6 @@
         });
       }
 
-      const shipToM = line.match(/SHIPTO:(.+)$/);
-      const shipTo = shipToM ? shipToM[1].trim() : null;
-
       results.push({
         sol,
         itemName,
@@ -359,7 +356,6 @@
         deliveryDays,
         unitPrice,
         suppliers,
-        shipTo,
       });
     }
     return results;
@@ -546,26 +542,18 @@
             source: "navigator",
           };
         }
-        // Deduplicate by sol+NSN -- same NSN from multiple pending VI entries = one line item
-        const dupKey = (row.sol || "") + "::" + (row.nsn || "");
-        const alreadyAdded = map[sup.cage].sols.some(
-          (s) => (s.sol || "") + "::" + (s.nsn || "") === dupKey,
-        );
-        if (!alreadyAdded) {
-          map[sup.cage].sols.push({
-            sol: row.sol,
-            itemName: row.itemName,
-            qty: row.qty,
-            uoi: row.uoi,
-            nsn: row.nsn,
-            fsc: row.fsc,
-            partNo: sup.partNo,
-            quoteDue: row.quoteDue,
-            deliveryDays: row.deliveryDays,
-            unitPrice: row.unitPrice,
-            shipTo: row.shipTo || null,
-          });
-        }
+        map[sup.cage].sols.push({
+          sol: row.sol,
+          itemName: row.itemName,
+          qty: row.qty,
+          uoi: row.uoi,
+          nsn: row.nsn,
+          fsc: row.fsc,
+          partNo: sup.partNo,
+          quoteDue: row.quoteDue,
+          deliveryDays: row.deliveryDays,
+          unitPrice: row.unitPrice,
+        });
       }
     }
     return Object.values(map).sort((a, b) => {
@@ -611,6 +599,7 @@
       day: "numeric",
     });
     const del = sols[0]?.deliveryDays || solMeta.delivDays || "30";
+    const ship = solMeta.shipTo || "[SHIP-TO LOCATION]";
 
     let lines = "";
     sols.forEach((s, i) => {
@@ -624,38 +613,26 @@
           s.fsc +
           (FSC_NAMES[s.fsc] ? " · " + FSC_NAMES[s.fsc] + ")" : ")")
         : "";
-      const pn = s.partNo ? "\n  Your P/N: " + s.partNo : "";
-      const solNum = s.sol ? "  Sol: " + s.sol : "";
+      const pn = s.partNo ? "  Your P/N: " + s.partNo : "";
+      const sol = s.sol ? "  Sol: " + s.sol : "";
       const due = s.quoteDue ? "  Due: " + s.quoteDue : "";
       const price = s.unitPrice ? "  Gov Ref: $" + s.unitPrice.toFixed(2) : "";
-      const itemDel = s.deliveryDays || del;
-      const itemShip = s.shipTo || solMeta.shipTo || "[SHIP-TO LOCATION]";
       lines +=
         "  ITEM " +
         idx +
         ": " +
         id +
         fscLbl +
-        "\n" +
-        "  Desc: " +
+        "\n  Desc: " +
         desc +
-        "\n" +
-        "  Qty: " +
+        "\n  Qty: " +
         qty +
         " " +
         uoi +
         pn +
-        "\n" +
-        "  Sol: " +
-        (s.sol || "—") +
+        sol +
         due +
         price +
-        "\n" +
-        "  Delivery: " +
-        itemDel +
-        " days ARO\n" +
-        "  Ship-to: " +
-        itemShip +
         "\n\n";
     });
 
@@ -663,15 +640,19 @@
       today +
       "\n\nTo the Government Sales / Quotes Team at " +
       name +
-      ",\n\nMy name is Anthony Kelley, and I represent The House of Kel LLC (DBA Imperio Talent Solutions) — a verified Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE Code 152U4, based in Killeen, Texas.\n\nWe are currently responding to one or more DLA/DoD solicitations and are requesting pricing and availability on the following " +
+      ",\n\nMy name is Anthony Kel, and I represent The House of Kel LLC (DBA Imperio Talent Solutions) — a verified Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE Code 152U4, based in Killeen, Texas.\n\nWe are currently responding to one or more DLA/DoD solicitations and are requesting pricing and availability on the following " +
       sols.length +
       " line item" +
       (sols.length !== 1 ? "s" : "") +
       " for which your company (" +
       (supplier.cage || "—") +
-      ") appears as a registered supplier. Each item includes its own delivery requirement and ship-to address.\n\n" +
+      ") appears as a registered supplier:\n\n" +
       lines +
-      "Delivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kelley\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.imperiovita.co\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kelley\nImperio Talent Solutions | The House of Kel LLC"
+      "Delivery Requirement: " +
+      del +
+      " days ARO\nShip-to: " +
+      ship +
+      "\nDelivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kel\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.imperiovita.co\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kel\nImperio Talent Solutions | Supply Chain Command"
     );
   }
 
@@ -1380,131 +1361,10 @@
     const [emailOverrides, setEmailOverrides] = useState({});
     const [sentSet, setSentSet] = useState(new Set());
     const [parsed, setParsed] = useState(false);
-    const [loadingPipeline, setLoadingPipeline] = useState(false);
-    const [pipelineStats, setPipelineStats] = useState(null); // { sols, vendors }
+    const [manualRFQEmail, setManualRFQEmail] = useState("");
 
     const sentCount = sentSet.size;
     const totalCount = entries.length;
-
-    // ── LOAD FROM PIPELINE ─────────────────────────────────────────────────
-    const handleLoadFromPipeline = async () => {
-      setLoadingPipeline(true);
-      try {
-        const { dbGetAll, viGetAll } = window.SCC_DB;
-        const [allSols, allVI] = await Promise.all([dbGetAll(), viGetAll()]);
-
-        // Active sols only — exclude No Source, Lost, Awarded, Archived
-        const SKIP_STATUS = new Set([
-          "No Source",
-          "Lost",
-          "Awarded",
-          "Archive",
-          "Archived",
-          "Delete",
-        ]);
-        const activeSols = allSols.filter((r) => !SKIP_STATUS.has(r.status));
-
-        // Group VI by sol_number, keep confirmed + quoted entries only
-        const viMap = {};
-        for (const vi of allVI) {
-          if (!vi.sol_number) continue;
-          if (!viMap[vi.sol_number]) viMap[vi.sol_number] = [];
-          viMap[vi.sol_number].push(vi);
-        }
-
-        // Blast targets = sols WITHOUT a confirmed or quoted supplier yet
-        // If you already have the quote, you're bidding not blasting
-        const sourceable = activeSols.filter((r) => {
-          const vis = viMap[r.sol_number] || [];
-          return !vis.some(
-            (v) => v.status === "confirmed" || v.status === "quoted",
-          );
-        });
-
-        if (!sourceable.length) {
-          alert(
-            "All active solicitations already have confirmed or quoted suppliers. Nothing left to blast.",
-          );
-          setLoadingPipeline(false);
-          return;
-        }
-
-        // Format each sol as Navigator export string the parser understands
-        // Supplier pipe block: use pending VI entries (named from DIBBS) if they exist, else fall back to sol's parsed supplier list
-        const lines = sourceable.map((sol) => {
-          const pendingVI = (viMap[sol.sol_number] || []).filter(
-            (v) => v.status === "pending",
-          );
-          const nsn13 = (sol.nsn || "").replace(/-/g, "");
-          const qty = sol.quantity || 1;
-          const ui = sol.unit_of_issue || "EA";
-          const unitP = sol.unit_price ? sol.unit_price.toFixed(2) : "0.00";
-          const extP = sol.extended_price
-            ? sol.extended_price.toFixed(2)
-            : (parseFloat(unitP) * qty).toFixed(2);
-          const qDue = sol.quote_due || "12/31/26";
-          const delD = sol.delivery_days || 30;
-          const itemName = (sol.item_name || sol.nsn || "ITEM").toUpperCase();
-          const fob = sol.fob || "Dest.";
-          const posted = sol.posted_date || "01/01/26";
-
-          // Build supplier pipe block -- pending VI first, then fall back to DIBBS parsed list on the sol
-          let supBlock;
-          if (pendingVI.length > 0) {
-            supBlock =
-              pendingVI
-                .map((vi) => {
-                  const cage = (vi.vendor_id || "00000").toUpperCase();
-                  const name = (vi.vendor_name || "VENDOR").toUpperCase();
-                  const pn = vi.part_number || sol.ref_part_number || nsn13;
-                  return `${name}|${cage}|${pn}|`;
-                })
-                .join(";") + ";";
-          } else {
-            // Parse supplier block from sol.all_suppliers (format: "NAME (CAGE) P/N: PN · ...")
-            const rawSups = [
-              ...(sol.all_suppliers || "").matchAll(
-                /([^(]+)\s+\(([A-Z0-9]{5})\)\s+P\/N:\s+([^\s·]+)/g,
-              ),
-            ];
-            if (rawSups.length > 0) {
-              supBlock =
-                rawSups
-                  .map(
-                    (m) =>
-                      `${m[1].trim().toUpperCase()}|${m[2].trim()}|${m[3].trim()}|`,
-                  )
-                  .join(";") + ";";
-            } else {
-              supBlock = `SUPPLIER UNKNOWN|00000|${nsn13}|;`;
-            }
-          }
-
-          const shipTo = sol.ship_to ? sol.ship_to.replace(/\t/g, " ") : "";
-          return `Save\t${sol.sol_number}\t${itemName}\t${qty} ${ui}\t$${unitP} Hist. $${extP}\t${qDue}\t${delD}\t${nsn13}\tY\tChar. COTS\tQuote N\t${fob}\t${fob}\t${posted}\t001\tDetails+AI Info\t${supBlock}\tSHIPTO:${shipTo}`;
-        });
-
-        const builtText = lines.join("\n");
-        setRawText(builtText);
-        setMode("navigator");
-        setPipelineStats({
-          sols: sourceable.length,
-          vendors: Object.values(viMap).reduce((s, arr) => s + arr.length, 0),
-        });
-
-        // Auto-generate
-        const rows = parseNavigatorRows(builtText);
-        if (rows.length) {
-          const sups = buildSupplierMap(rows);
-          setEntries(sups);
-          setParsed(true);
-        }
-      } catch (err) {
-        console.error("Pipeline load error:", err);
-        alert("Error loading from pipeline: " + err.message);
-      }
-      setLoadingPipeline(false);
-    };
 
     const handleGenerate = () => {
       if (!rawText.trim()) return;
@@ -1546,7 +1406,6 @@
       setDueDate("");
       setDelivDays("30");
       setShipTo("");
-      setPipelineStats(null);
     };
 
     const toggleSent = (id) =>
@@ -1641,121 +1500,60 @@
             "Bulk vendor outreach — paste Navigator export or supply list, fire RSQ emails in one pass",
           ),
         ),
-        h(
-          "div",
-          {
-            style: {
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              flexWrap: "wrap",
-            },
-          },
-          // Pipeline load button — always visible
+        parsed &&
           h(
-            "button",
-            {
-              onClick: handleLoadFromPipeline,
-              disabled: loadingPipeline,
-              title:
-                "Pull all active solicitations with confirmed/quoted suppliers from your pipeline",
-              style: {
-                background: loadingPipeline
-                  ? "rgba(61,214,140,.08)"
-                  : "rgba(61,214,140,.12)",
-                border:
-                  "1px solid rgba(61,214,140," +
-                  (loadingPipeline ? ".2" : ".4") +
-                  ")",
-                color: loadingPipeline
-                  ? "rgba(61,214,140,.4)"
-                  : "var(--accent-green)",
-                fontFamily: "Cinzel,serif",
-                fontSize: "9px",
-                letterSpacing: ".16em",
-                textTransform: "uppercase",
-                padding: "7px 16px",
-                cursor: loadingPipeline ? "not-allowed" : "pointer",
-                transition: "all .2s",
-              },
-            },
-            loadingPipeline ? "⟳ Loading…" : "⬇ Load from Pipeline",
-          ),
-          pipelineStats &&
-            !parsed &&
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "12px" } },
             h(
-              "span",
+              "div",
               {
                 style: {
                   fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "11px",
-                  color: "var(--body-faint)",
+                  fontSize: "12px",
+                  color: "var(--gold-dim)",
+                  display: "flex",
+                  gap: "16px",
                 },
               },
-              pipelineStats.sols +
-                " sols · " +
-                pipelineStats.vendors +
-                " vendors loaded",
+              h(
+                "span",
+                null,
+                h("b", { style: { color: "var(--gold-solid)" } }, totalCount),
+                " vendor" + (totalCount !== 1 ? "s" : ""),
+              ),
+              h(
+                "span",
+                null,
+                h("b", { style: { color: "var(--accent-green)" } }, sentCount),
+                " sent",
+              ),
+              flaggedHigh > 0 &&
+                h(
+                  "span",
+                  null,
+                  h("b", { style: { color: "var(--red)" } }, flaggedHigh),
+                  " mfr flags",
+                ),
             ),
-          parsed &&
             h(
-              Frag,
-              null,
-              h(
-                "div",
-                {
-                  style: {
-                    fontFamily: "JetBrains Mono,monospace",
-                    fontSize: "12px",
-                    color: "var(--gold-dim)",
-                    display: "flex",
-                    gap: "16px",
-                  },
+              "button",
+              {
+                onClick: handleClear,
+                style: {
+                  background: "transparent",
+                  border: "1px solid var(--border-subtle)",
+                  color: "var(--body-dim)",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "9px",
+                  letterSpacing: ".16em",
+                  textTransform: "uppercase",
+                  padding: "7px 14px",
+                  cursor: "pointer",
                 },
-                h(
-                  "span",
-                  null,
-                  h("b", { style: { color: "var(--gold-solid)" } }, totalCount),
-                  " vendor" + (totalCount !== 1 ? "s" : ""),
-                ),
-                h(
-                  "span",
-                  null,
-                  h(
-                    "b",
-                    { style: { color: "var(--accent-green)" } },
-                    sentCount,
-                  ),
-                  " sent",
-                ),
-                flaggedHigh > 0 &&
-                  h(
-                    "span",
-                    null,
-                    h("b", { style: { color: "var(--red)" } }, flaggedHigh),
-                    " mfr flags",
-                  ),
-              ),
-              h(
-                "button",
-                {
-                  onClick: handleClear,
-                  style: {
-                    background: "transparent",
-                    border: "1px solid var(--border-subtle)",
-                    color: "var(--body-dim)",
-                    fontFamily: "Cinzel,serif",
-                    fontSize: "9px",
-                    letterSpacing: ".16em",
-                    textTransform: "uppercase",
-                    padding: "7px 14px",
-                    cursor: "pointer",
-                  },
-                },
-                "Clear All",
-              ),
+              },
+              "Clear All",
             ),
-        ),
+          ),
       ),
 
       // ── Input section ──
@@ -1941,7 +1739,15 @@
           // Generate button
           h(
             "div",
-            { style: { marginTop: "14px" } },
+            {
+              style: {
+                marginTop: "14px",
+                display: "flex",
+                gap: "12px",
+                alignItems: "center",
+                flexWrap: "wrap",
+              },
+            },
             h(
               "button",
               {
@@ -1971,6 +1777,87 @@
                 },
               },
               "⚡ Generate RFQ Emails",
+            ),
+          ),
+
+          // ── Manual email send row ──
+          h(
+            "div",
+            {
+              style: {
+                marginTop: "18px",
+                paddingTop: "16px",
+                borderTop: "1px solid rgba(201,168,76,.12)",
+                display: "flex",
+                gap: "10px",
+                alignItems: "flex-end",
+                flexWrap: "wrap",
+              },
+            },
+            h(
+              "div",
+              { style: { flex: "1", minWidth: "220px" } },
+              h("label", { style: sLabel }, "Send to Specific Email"),
+              h("input", {
+                type: "email",
+                value: manualRFQEmail,
+                onChange: (e) => setManualRFQEmail(e.target.value),
+                placeholder: "quotes@supplier.com",
+                style: sInput,
+              }),
+            ),
+            h(
+              "button",
+              {
+                onClick: () => {
+                  const email = manualRFQEmail.trim();
+                  if (!email || !email.includes("@")) {
+                    alert("Enter a valid email address first.");
+                    return;
+                  }
+                  const subject = "RFQ – Government Solicitation – CAGE 152U4";
+                  const body =
+                    "To the Quotes / Government Sales Team,\n\nMy name is Anthony Kelley Sr., and I represent The House of Kel LLC (DBA Imperio Talent Solutions) — a Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE 152U4, based in Killeen, Texas.\n\nI am requesting pricing and availability on a DLA solicitation requirement" +
+                    (solNum ? " — Solicitation " + solNum : "") +
+                    ".\n\nPlease reply with your best government pricing, unit of issue confirmation, and lead time.\n\nPoint of Contact:\nAnthony Kelley Sr.\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified\n\nVery respectfully,\nAnthony Kelley Sr.\nImperio Talent Solutions";
+                  const encS = encodeURIComponent(subject);
+                  const encB = body
+                    .split("\n")
+                    .map(encodeURIComponent)
+                    .join("%0D%0A");
+                  window.open(
+                    "mailto:" +
+                      encodeURIComponent(email) +
+                      "?subject=" +
+                      encS +
+                      "&body=" +
+                      encB,
+                    "_blank",
+                  );
+                },
+                style: {
+                  background: "transparent",
+                  border: "1px solid rgba(201,168,76,.4)",
+                  color: "var(--gold-solid)",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "9px",
+                  letterSpacing: ".18em",
+                  textTransform: "uppercase",
+                  padding: "10px 20px",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  transition: "all .2s",
+                },
+                onMouseEnter: (e) => {
+                  e.currentTarget.style.background = "rgba(201,168,76,.1)";
+                  e.currentTarget.style.borderColor = "rgba(201,168,76,.7)";
+                },
+                onMouseLeave: (e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.borderColor = "rgba(201,168,76,.4)";
+                },
+              },
+              "✉ Send to This Email",
             ),
           ),
         ),
@@ -2148,48 +2035,9 @@
                 maxWidth: "520px",
                 margin: "0 auto",
                 lineHeight: "1.7",
-                marginBottom: "32px",
               },
             },
-            "Load directly from your active pipeline — any sol with a confirmed or quoted supplier gets pulled automatically. Or paste a Navigator export above.",
-          ),
-          h(
-            "button",
-            {
-              onClick: handleLoadFromPipeline,
-              disabled: loadingPipeline,
-              style: {
-                background: loadingPipeline
-                  ? "rgba(61,214,140,.06)"
-                  : "rgba(61,214,140,.14)",
-                border:
-                  "1px solid rgba(61,214,140," +
-                  (loadingPipeline ? ".2" : ".5") +
-                  ")",
-                color: loadingPipeline
-                  ? "rgba(61,214,140,.4)"
-                  : "var(--accent-green)",
-                fontFamily: "Cinzel,serif",
-                fontSize: "11px",
-                letterSpacing: ".22em",
-                textTransform: "uppercase",
-                fontWeight: "700",
-                padding: "14px 36px",
-                cursor: loadingPipeline ? "not-allowed" : "pointer",
-                transition: "all .2s",
-              },
-              onMouseEnter: (e) => {
-                if (!loadingPipeline) {
-                  e.target.style.background = "rgba(61,214,140,.22)";
-                  e.target.style.transform = "translateY(-1px)";
-                }
-              },
-              onMouseLeave: (e) => {
-                e.target.style.background = "rgba(61,214,140,.14)";
-                e.target.style.transform = "";
-              },
-            },
-            loadingPipeline ? "⟳ Loading Pipeline…" : "⬇ Load from Pipeline",
+            "Paste a Navigator export or raw supply list above. The engine parses every line, groups by vendor, and generates ready-to-fire RSQ emails — one per vendor, all line items batched.",
           ),
         ),
     );
