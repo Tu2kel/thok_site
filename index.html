@@ -3,566 +3,214 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Supply Chain Command — Imperio Talent Solutions</title>
-
-    <!-- ── FONTS ── -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400&display=swap"
-      rel="stylesheet"
+    <title>
+      The House of Kel LLC — Veteran-Owned SDVOSB | Imperio Talent Solutions |
+      Killeen TX
+    </title>
+    <meta
+      name="description"
+      content="The House of Kel LLC is a veteran-owned SDVOSB holding company based in Killeen, TX. Home of Imperio Talent Solutions — federal supply contracting, staffing, and software. CAGE 152U4."
     />
+    <meta name="robots" content="index, follow" />
+    <link rel="icon" href="images/thok32.png" />
 
-    <!-- ── DESIGN SYSTEM ── -->
-    <link rel="stylesheet" href="styles/imperio.css" />
+    <!-- Open Graph -->
+    <meta
+      property="og:title"
+      content="The House of Kel LLC — Imperio Talent Solutions"
+    />
+    <meta
+      property="og:description"
+      content="Veteran-owned SDVOSB. Federal supply contracting, staffing, and software. Killeen, TX. CAGE 152U4."
+    />
+    <meta property="og:url" content="https://thehouseofkel.com/" />
+    <meta property="og:type" content="website" />
 
-    <!-- ── SIDEBAR ── -->
-    <style>
-      #imp-sb {
-        position: fixed;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 48px;
-        background: linear-gradient(
-          160deg,
-          #f5f0e8 0%,
-          #ece7db 25%,
-          #e4ddd0 50%,
-          #ece7db 75%,
-          #f5f0e8 100%
-        );
-        border-right: 1px solid rgba(160, 110, 0, 0.2);
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        z-index: 9999;
-        transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-        overflow: hidden;
-        box-shadow: 3px 0 16px rgba(120, 80, 0, 0.12);
+    <!-- Schema.org Organization -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "The House of Kel LLC",
+        "alternateName": [
+          "Imperio Talent Solutions",
+          "THOK",
+          "Imperio Holdings"
+        ],
+        "url": "https://thehouseofkel.com",
+        "description": "Veteran-owned SDVOSB holding company. Federal supply contracting, staffing, and software. Killeen, TX.",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Killeen",
+          "addressRegion": "TX",
+          "addressCountry": "US"
+        },
+        "telephone": "+12542659335",
+        "email": "anthony@imperiovita.co",
+        "founder": {
+          "@type": "Person",
+          "name": "Anthony Kelley"
+        },
+        "areaServed": "US",
+        "identifier": "CAGE 152U4"
       }
-      #imp-sb.open {
-        width: 194px;
-      }
-
-      /* Top-edge gloss line — matches metallic black surface treatment */
-      #imp-sb::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(160, 110, 0, 0.15) 40%,
-          rgba(160, 110, 0, 0.35) 50%,
-          rgba(160, 110, 0, 0.15) 60%,
-          transparent
-        );
-        pointer-events: none;
-      }
-
-      /* Toggle button */
-      .sb-toggle {
-        height: 52px;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        border-bottom: 1px solid rgba(160, 110, 0, 0.15);
-        transition: background 0.18s;
-        padding: 0 12px;
-        gap: 10px;
-      }
-      .sb-toggle:hover {
-        background: rgba(160, 110, 0, 0.08);
-      }
-      .sb-toggle-icon {
-        font-size: 16px;
-        flex-shrink: 0;
-        width: 24px;
-        text-align: center;
-        background: linear-gradient(
-          to bottom,
-          #cf972d 22%,
-          #f9f295 45%,
-          #e0aa3e 50%,
-          #b8860b 55%,
-          #f9f295 78%
-        );
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
-      .sb-toggle-label {
-        font-family: "Cinzel", serif;
-        font-size: 8px;
-        letter-spacing: 0.28em;
-        text-transform: uppercase;
-        background: linear-gradient(
-          to bottom,
-          #cf972d 22%,
-          #f9f295 45%,
-          #e0aa3e 50%,
-          #b8860b 55%,
-          #f9f295 78%
-        );
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        white-space: nowrap;
-        opacity: 0;
-        transition: opacity 0.12s;
-      }
-      #imp-sb.open .sb-toggle-label {
-        opacity: 1;
-        transition: opacity 0.18s 0.08s;
-      }
-
-      /* Section label */
-      .sb-sec-label {
-        font-family: "Cinzel", serif;
-        font-size: 7px;
-        letter-spacing: 0.26em;
-        text-transform: uppercase;
-        color: rgba(120, 80, 0, 0.55);
-        white-space: nowrap;
-        padding: 12px 12px 5px;
-        display: block;
-        opacity: 0;
-        transition: opacity 0.12s;
-      }
-      #imp-sb.open .sb-sec-label {
-        opacity: 1;
-        transition: opacity 0.18s 0.06s;
-      }
-
-      .sb-divider {
-        height: 1px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(160, 110, 0, 0.2) 30%,
-          rgba(160, 110, 0, 0.2) 70%,
-          transparent
-        );
-        margin: 6px 0;
-      }
-
-      /* Nav links */
-      .sb-link {
-        display: flex;
-        align-items: center;
-        gap: 11px;
-        padding: 9px 12px;
-        text-decoration: none;
-        border-left: 2px solid transparent;
-        transition:
-          background 0.15s,
-          border-color 0.15s;
-        white-space: nowrap;
-        position: relative;
-      }
-      .sb-link:hover {
-        background: rgba(160, 110, 0, 0.06);
-        border-left-color: rgba(120, 80, 0, 0.45);
-      }
-      .sb-link-icon {
-        width: 24px;
-        flex-shrink: 0;
-        text-align: center;
-        font-size: 13px;
-        color: #7a5000;
-      }
-      .sb-link-text {
-        font-family: "Cinzel", serif;
-        font-size: 9.5px;
-        letter-spacing: 0.1em;
-        background: linear-gradient(
-          to bottom,
-          #5a3800 0%,
-          #7a5000 40%,
-          #5a3800 100%
-        );
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        opacity: 0;
-        transition: opacity 0.12s;
-      }
-      #imp-sb.open .sb-link-text {
-        opacity: 1;
-        transition: opacity 0.18s 0.06s;
-      }
-
-      /* Tooltip when collapsed */
-      #imp-sb:not(.open) .sb-link::after {
-        content: attr(data-tip);
-        position: absolute;
-        left: 52px;
-        top: 50%;
-        transform: translateY(-50%);
-        background: linear-gradient(160deg, #f5f0e8 0%, #e8e1d4 100%);
-        border: 1px solid rgba(120, 80, 0, 0.3);
-        font-family: "Cinzel", serif;
-        font-size: 9px;
-        letter-spacing: 0.1em;
-        color: #5a3800;
-        padding: 5px 12px;
-        white-space: nowrap;
-        pointer-events: none;
-        opacity: 0;
-        z-index: 99999;
-      }
-      #imp-sb:not(.open) .sb-link:hover::after {
-        opacity: 1;
-      }
-
-      /* Push app body right */
-      body {
-        padding-left: 48px;
-        transition: padding-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-      body.sb-open {
-        padding-left: 194px;
-      }
-    </style>
-
-    <!-- ── TESSERACT + XLSX (for FU Engine tab) ── -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-    <!-- ── REACT (production — no Babel, no JSX transformer) ── -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  </head>
-  <body>
-    <!-- ══ IMPERIO SIDEBAR — Ecosystem Launcher ══ -->
-    <nav id="imp-sb">
-      <div class="sb-toggle" onclick="sbToggle()" title="Expand">
-        <span class="sb-toggle-icon">◆</span>
-        <span class="sb-toggle-label">Imperio</span>
-      </div>
-
-      <!-- External Tools -->
-      <span class="sb-sec-label">External Tools</span>
-
-      <a
-        class="sb-link"
-        href="https://dibbs.dla.mil"
-        target="_blank"
-        rel="noopener"
-        data-tip="DIBBS / DLA"
-      >
-        <span class="sb-link-icon">⚙</span>
-        <span class="sb-link-text">DIBBS / DLA</span>
-      </a>
-
-      <a
-        class="sb-link"
-        href="https://wawf.eb.mil"
-        target="_blank"
-        rel="noopener"
-        data-tip="WAWF Portal"
-      >
-        <span class="sb-link-icon">⧉</span>
-        <span class="sb-link-text">WAWF Portal</span>
-      </a>
-
-      <a
-        class="sb-link"
-        href="https://sam.gov"
-        target="_blank"
-        rel="noopener"
-        data-tip="SAM.gov"
-      >
-        <span class="sb-link-icon">🔍</span>
-        <span class="sb-link-text">SAM.gov</span>
-      </a>
-
-      <a
-        class="sb-link"
-        href="https://www.txsmartbuy.gov/esbd"
-        target="_blank"
-        rel="noopener"
-        data-tip="ESBD Texas"
-      >
-        <span class="sb-link-icon">★</span>
-        <span class="sb-link-text">ESBD Texas</span>
-      </a>
-
-      <a
-        class="sb-link"
-        href="https://www.nsn.gov"
-        target="_blank"
-        rel="noopener"
-        data-tip="NSN Lookup"
-      >
-        <span class="sb-link-icon">◈</span>
-        <span class="sb-link-text">NSN Lookup</span>
-      </a>
-
-      <div class="sb-divider"></div>
-
-      <!-- Imperio Network -->
-      <span class="sb-sec-label">Imperio Network</span>
-
-      <a
-        class="sb-link"
-        href="https://thehouseofkel.com"
-        target="_blank"
-        rel="noopener"
-        data-tip="Brand Site"
-      >
-        <span class="sb-link-icon">🏛</span>
-        <span class="sb-link-text">Brand Site</span>
-      </a>
-
-      <a
-        class="sb-link"
-        href="https://thehouseofkel.com/contractors"
-        target="_blank"
-        rel="noopener"
-        data-tip="Contractors"
-      >
-        <span class="sb-link-icon">🎖</span>
-        <span class="sb-link-text">Contractors</span>
-      </a>
-
-      <a
-        class="sb-link"
-        href="https://thehouseofkel.com/employers"
-        target="_blank"
-        rel="noopener"
-        data-tip="Employers"
-      >
-        <span class="sb-link-icon">🏢</span>
-        <span class="sb-link-text">Employers</span>
-      </a>
-    </nav>
-
-    <script>
-      function sbToggle() {
-        const sb = document.getElementById("imp-sb");
-        const open = sb.classList.toggle("open");
-        document.body.classList.toggle("sb-open", open);
-        localStorage.setItem("imp-sb-open", open ? "1" : "0");
-      }
-      (function () {
-        if (localStorage.getItem("imp-sb-open") === "1") {
-          document.getElementById("imp-sb").classList.add("open");
-          document.body.classList.add("sb-open");
-        }
-      })();
     </script>
 
-    <!-- React mounts here -->
-    <!-- ══ THOK WATERMARK — outside React, no stacking context issues ══ -->
-    <div
-      id="thok-watermark"
-      style="
-        display: none;
-        position: fixed;
-        top: 100px;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-image: url(assets/thok_logo.png);
-        background-repeat: no-repeat;
-        background-position: center center;
-        background-size: 860px 860px;
-        opacity: 0.09;
-        pointer-events: none;
-        z-index: 9998;
-      "
-    ></div>
-
-    <div id="root"></div>
-
-    <!--
-    ══════════════════════════════════════════════════════════════════════
-    LOAD ORDER — all files are siblings in the same flat folder.
-    Each exposes its API on a window.SCC_* namespace.
-    app.js must be LAST — it destructures all other namespaces.
-
-    Folder layout (scc/):
-      index.html
-      margin-calc.html
-      assets/     — logos, memo.html, supplier-po-template.html
-      styles/     — imperio.css, memo.css
-      core/       — db.js, db-nsn.js, bidmath.js, parser.js, distributors.js
-      tabs/       — all React tab components + app.js (app.js must be last)
-                    pipeline split: pipeline-vi.js → pipeline-drawer.js → pipeline-table.js
-    ══════════════════════════════════════════════════════════════════════
-  -->
-
-    <!-- ── CORE LIBS (no dependencies on each other, load first) ── -->
-    <script src="core/db.js"></script>
-    <script src="core/bidmath.js"></script>
-    <script src="core/parser.js"></script>
-    <script src="core/distributors.js"></script>
-
-    <!-- ── NSN DATABASE (2MB — deferred so it doesn't block initial render) ── -->
-    <!-- Source tab only needs this at user-click time, so defer is safe -->
-    <script src="core/db-nsn.js" defer></script>
-
-    <!-- ── REACT TAB COMPONENTS ── -->
-    <!-- source.js must be before pipeline files — exports DrawerSourcePanel + VI_STATUS_STYLE -->
-    <script src="tabs/backup.js"></script>
-    <script src="tabs/dashboard.js"></script>
-    <script src="tabs/intake.js"></script>
-    <script src="tabs/source-blocked.js"></script>
-    <script src="tabs/source-drawer.js"></script>
-    <script src="tabs/source-rolodex.js"></script>
-    <script src="tabs/source-tab.js"></script>
-    <script src="tabs/pipeline-vi.js"></script>
-    <script src="tabs/awards-intel.js"></script>
-    <script src="tabs/pipeline-drawer.js"></script>
-    <script src="tabs/pipeline-table.js"></script>
-    <script src="tabs/rfq.js"></script>
-    <script src="tabs/awards.js"></script>
-    <script src="tabs/memo.js"></script>
-    <script src="tabs/fu.js"></script>
-    <script src="tabs/esbd.js"></script>
-    <script src="tabs/dealcheck.js"></script>
-
-    <!-- ── APP ROOT — must be last ── -->
-    <script src="tabs/app.js"></script>
-
-    <!-- ── MARGIN CALC OVERLAY ── -->
     <style>
-      #mc-fab {
-        position: fixed;
-        bottom: 28px;
-        right: 28px;
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: linear-gradient(
-          to bottom,
-          #cf972d 22%,
-          #f9f295 45%,
-          #e0aa3e 50%,
-          #b8860b 55%,
-          #f9f295 78%
-        );
-        border: none;
-        cursor: pointer;
-        z-index: 10000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: "Cinzel", serif;
-        font-size: 18px;
-        font-weight: 700;
-        color: #2a000a;
-        box-shadow: 0 2px 16px rgba(201, 168, 76, 0.35);
-        transition:
-          transform 0.15s,
-          box-shadow 0.15s;
-        user-select: none;
-      }
-      #mc-fab:hover {
-        transform: scale(1.08);
-        box-shadow: 0 4px 24px rgba(201, 168, 76, 0.5);
-      }
-      #mc-fab:active {
-        transform: scale(0.96);
+      body {
+        margin: 0;
+        background-color: #000;
+        color: #fff;
+        font-family: "serif", "Times New Roman";
       }
 
-      #mc-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        background: rgba(10, 0, 4, 0.72);
-        backdrop-filter: blur(3px);
-        align-items: center;
-        justify-content: center;
-      }
-      #mc-overlay.open {
+      .logo-intro {
+        height: 100vh;
         display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        background-color: #000;
       }
 
-      #mc-panel {
+      .welcome-static {
+        font-size: 6.5rem;
+        letter-spacing: 10px;
+        margin-bottom: 20px;
+        color: #d4af37;
+      }
+
+      .logo-container {
         position: relative;
-        width: min(680px, 94vw);
-        max-height: 88vh;
-        border-radius: 4px;
-        overflow: hidden;
-        border: 1px solid rgba(201, 168, 76, 0.25);
-        box-shadow: 0 8px 48px rgba(0, 0, 0, 0.7);
-        animation: mcSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
-      }
-      @keyframes mcSlideUp {
-        from {
-          opacity: 0;
-          transform: translateY(32px) scale(0.97);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
-      }
-
-      #mc-panel iframe {
         width: 100%;
-        height: 88vh;
-        border: none;
-        display: block;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
       }
 
-      #mc-close {
-        position: absolute;
-        top: 10px;
-        right: 12px;
-        background: none;
-        border: none;
-        color: rgba(201, 168, 76, 0.6);
-        font-size: 18px;
-        cursor: pointer;
-        z-index: 1;
-        line-height: 1;
-        padding: 4px 6px;
-        transition: color 0.15s;
+      .castle-logo-video {
+        width: 100%;
+        height: auto;
+        display: block;
+        transform: scale(1.1);
+        -webkit-mask-image: radial-gradient(circle, black 50%, transparent 90%);
+        mask-image: radial-gradient(circle, black 50%, transparent 90%);
       }
-      #mc-close:hover {
-        color: #c9a84c;
+
+      .enter-text {
+        margin-top: 30px;
+        text-decoration: none;
+        color: #fff;
+        font-size: 1.2rem;
+        letter-spacing: 8px;
+        border: 1px solid #d4af37;
+        padding: 10px 30px;
+        transition: all 0.4s ease;
+      }
+
+      .enter-text:hover {
+        background-color: #d4af37;
+        color: #000;
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
+      }
+
+      .seo-footer {
+        text-align: center;
+        padding: 10px;
+        font-size: 10px;
+        letter-spacing: 1.5px;
+        color: rgba(180, 140, 50, 0.35);
+        font-family: serif;
+        pointer-events: none;
+      }
+
+      @media (max-width: 768px) {
+        .welcome-static {
+          font-size: 2.5rem;
+          letter-spacing: 4px;
+          margin-bottom: 10px;
+        }
+        #castleLogo {
+          width: 180%;
+          transform: scale(1.1);
+        }
+        .enter-text {
+          font-size: 1rem;
+          padding: 8px 20px;
+        }
       }
     </style>
+  </head>
+  <body>
+    <div class="logo-intro" id="logoIntro">
+      <div class="welcome-static">W E L C O M E</div>
 
-    <button id="mc-fab" title="Margin Calculator">$</button>
-
-    <div id="mc-overlay">
-      <div id="mc-panel">
-        <button id="mc-close" title="Close">✕</button>
-        <iframe src="margin-calc.html" id="mc-frame"></iframe>
+      <div class="logo-container">
+        <video
+          autoplay
+          muted
+          loop
+          playsinline
+          class="castle-logo-video"
+          id="castleLogo"
+        >
+          <source src="./images/thok.mp4" type="video/mp4" />
+        </video>
       </div>
+
+      <div>
+        <p
+          style="
+            color: #c9a84c;
+            font-size: 16px;
+            letter-spacing: 3px;
+            text-align: center;
+            margin-top: 20px;
+          "
+        >
+          THE HOUSE OF KEL LLC
+        </p>
+        <p
+          style="
+            color: #c9a84c;
+            font-size: 16px;
+            letter-spacing: 2px;
+            margin-top: 20px;
+            text-align: center;
+          "
+        >
+          Imperio Ecosystem &bull; Government Contracting &bull; Staffing &bull;
+          Software
+        </p>
+        <p
+          style="
+            color: #888;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 6px;
+            letter-spacing: 1px;
+          "
+        >
+          Veteran-Owned &bull; SDVOSB &bull; VetHUB &bull; United States
+        </p>
+      </div>
+
+      <a href="thok.html" class="enter-text" id="enterText">E N T E R</a>
     </div>
 
+    <!-- Visible to crawlers, unobtrusive on screen -->
+    <p class="seo-footer">
+      The House of Kel LLC &mdash; Imperio Talent Solutions &mdash; SDVOSB
+      &mdash; Federal Supply Contracting &mdash; Killeen, TX &mdash; CAGE 152U4
+    </p>
+
     <script>
-      (function () {
-        const fab = document.getElementById("mc-fab");
-        const overlay = document.getElementById("mc-overlay");
-        const close = document.getElementById("mc-close");
-
-        function openCalc() {
-          overlay.classList.add("open");
-        }
-        function closeCalc() {
-          overlay.classList.remove("open");
-        }
-
-        fab.addEventListener("click", openCalc);
-        close.addEventListener("click", closeCalc);
-        overlay.addEventListener("click", function (e) {
-          if (e.target === overlay) closeCalc();
-        });
-        document.addEventListener("keydown", function (e) {
-          if (e.key === "Escape") closeCalc();
-        });
-      })();
+      window.addEventListener("load", () => {
+        const video = document.getElementById("castleLogo");
+        video.play().catch(() => {});
+      });
     </script>
   </body>
 </html>
