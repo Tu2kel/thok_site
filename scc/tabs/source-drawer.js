@@ -293,6 +293,428 @@
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CATALOG CHECK PANEL — inject into DrawerSourcePanel above distributor list
+  //  Fires catalog-search Netlify function against Zoro, Grainger, MSC in parallel
+  //  Surfaces: Primary (best FSC+price fit) · Backup · Benchmark (everybody's first stop)
+  //
+  //  PASTE THIS BLOCK into source-drawer.js immediately after the
+  //  "Quick Search" section (after the SAM.gov button block closes ~line 611)
+  //  and before the distributor IIFE that starts (() => { const allDists = ...
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── CATALOG CHECK COMPONENT ──────────────────────────────────────────────────
+  // Drop this function definition ABOVE the DrawerSourcePanel function definition
+  // (around line 296 in source-drawer.js), after the fetchDistPhone helper.
+
+  /*
+  INJECT POINT A — function definition (before DrawerSourcePanel):
+  ─────────────────────────────────────────────────────────────────
+*/
+
+  function CatalogCheckPanel({ record, dists }) {
+    const { useState, useEffect, useRef } = React;
+
+    const nsn = (record.nsn || "").replace(/-/g, "");
+    const pn = record.ref_part_number || "";
+    const unitPrice = parseFloat(record.unit_price) || 0;
+
+    const [status, setStatus] = useState("idle"); // idle | loading | done | error
+    const [results, setResults] = useState([]);
+    const [routing, setRouting] = useState(null);
+    const hasFired = useRef(false);
+
+    // ── Price-tier routing ────────────────────────────────────────────────────
+    // Slot each distributor into Primary / Backup / Benchmark based on min_unit/max_unit
+    // and whether benchmark:true is set. Benchmark always goes to slot 3.
+    function buildRouting(distList, price) {
+      const inRange = distList.filter((d) => {
+        const min = d.min_unit != null ? d.min_unit : 0;
+        const max = d.max_unit != null ? d.max_unit : Infinity;
+        return price >= min && price <= max && !d.benchmark;
+      });
+      const benchmarks = distList.filter((d) => d.benchmark);
+      // Sort in-range by priority (lower = better), then tier
+      inRange.sort(
+        (a, b) =>
+          (a.priority || 9) - (b.priority || 9) ||
+          (a.tier || 9) - (b.tier || 9),
+      );
+      return {
+        primary: inRange[0] || null,
+        backup: inRange[1] || null,
+        benchmark: benchmarks[0] || null,
+      };
+    }
+
+    // ── Fire catalog search ───────────────────────────────────────────────────
+    async function runSearch() {
+      if (!nsn && !pn) return;
+      setStatus("loading");
+      try {
+        const res = await fetch("/.netlify/functions/catalog-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pn: pn || "", nsn: nsn || "" }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Search failed");
+        setResults(data.results || []);
+        setStatus("done");
+      } catch (err) {
+        setStatus("error");
+      }
+    }
+
+    // Auto-fire on mount if NSN or P/N present
+    useEffect(() => {
+      if (!hasFired.current && (nsn || pn)) {
+        hasFired.current = true;
+        runSearch();
+      }
+      // Routing is sync — build from dists whenever they're available
+      if (dists && dists.length && unitPrice >= 0) {
+        setRouting(buildRouting(dists, unitPrice));
+      }
+    }, []);
+
+    // ── Styles ────────────────────────────────────────────────────────────────
+    const S = {
+      section: {
+        marginBottom: "18px",
+        background: "rgba(0,0,0,.18)",
+        border: "1px solid rgba(201,168,76,.12)",
+        borderRadius: "4px",
+        overflow: "hidden",
+      },
+      header: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "8px 12px",
+        borderBottom: "1px solid rgba(201,168,76,.1)",
+        background: "rgba(201,168,76,.04)",
+      },
+      headerLabel: {
+        fontFamily: "Cinzel,serif",
+        fontSize: "8px",
+        letterSpacing: ".18em",
+        textTransform: "uppercase",
+        color: "var(--gold-dim)",
+      },
+      body: {
+        padding: "10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+      },
+      slot: (accent) => ({
+        display: "flex",
+        flexDirection: "column",
+        gap: "3px",
+        padding: "8px 10px",
+        borderLeft: "3px solid " + accent,
+        background: "rgba(0,0,0,.12)",
+      }),
+      slotLabel: (accent) => ({
+        fontFamily: "Cinzel,serif",
+        fontSize: "7px",
+        letterSpacing: ".18em",
+        textTransform: "uppercase",
+        color: accent,
+        marginBottom: "1px",
+      }),
+      slotName: {
+        fontFamily: "Cinzel,serif",
+        fontSize: "10px",
+        letterSpacing: ".04em",
+        color: "var(--gold-solid)",
+      },
+      slotMeta: {
+        fontFamily: "JetBrains Mono,monospace",
+        fontSize: "9px",
+        color: "var(--body-faint)",
+      },
+      resultRow: (found) => ({
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        padding: "6px 10px",
+        background: found ? "rgba(61,214,140,.04)" : "rgba(0,0,0,.1)",
+        border:
+          "1px solid " +
+          (found ? "rgba(61,214,140,.15)" : "rgba(255,255,255,.05)"),
+        borderRadius: "3px",
+      }),
+      badge: (found) => ({
+        fontFamily: "JetBrains Mono,monospace",
+        fontSize: "9px",
+        padding: "2px 6px",
+        borderRadius: "2px",
+        background: found ? "rgba(61,214,140,.15)" : "rgba(255,107,122,.1)",
+        color: found ? "#3dd68c" : "#ff6b7a",
+        flexShrink: 0,
+      }),
+      price: {
+        fontFamily: "JetBrains Mono,monospace",
+        fontSize: "11px",
+        color: "var(--gold-solid)",
+        flexShrink: 0,
+      },
+      link: {
+        fontFamily: "Cinzel,serif",
+        fontSize: "8px",
+        letterSpacing: ".06em",
+        color: "var(--gold-dim)",
+        textDecoration: "none",
+        marginLeft: "auto",
+      },
+      supplierName: {
+        fontFamily: "Cinzel,serif",
+        fontSize: "9px",
+        letterSpacing: ".04em",
+        color: "var(--body-muted)",
+        flex: 1,
+      },
+      rerunBtn: {
+        padding: "2px 8px",
+        fontFamily: "Cinzel,serif",
+        fontSize: "7px",
+        letterSpacing: ".1em",
+        background: "transparent",
+        border: "1px solid rgba(201,168,76,.25)",
+        color: "var(--gold-dim)",
+        cursor: "pointer",
+        borderRadius: "2px",
+      },
+    };
+
+    // ── Routing slots ─────────────────────────────────────────────────────────
+    const RoutingSlots = () => {
+      if (!routing) return null;
+      const slots = [
+        {
+          key: "primary",
+          label: "Primary",
+          accent: "#3dd68c",
+          dist: routing.primary,
+        },
+        {
+          key: "backup",
+          label: "Backup",
+          accent: "var(--gold-solid)",
+          dist: routing.backup,
+        },
+        {
+          key: "benchmark",
+          label: "Benchmark — Everyone Goes Here",
+          accent: "rgba(160,160,160,.5)",
+          dist: routing.benchmark,
+        },
+      ];
+      return hS(
+        "div",
+        { style: S.section },
+        hS(
+          "div",
+          { style: S.header },
+          hS(
+            "span",
+            { style: S.headerLabel },
+            "Sourcing Target — by Price Tier",
+          ),
+          unitPrice > 0 &&
+            hS(
+              "span",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                },
+              },
+              "Hist. $" + unitPrice.toFixed(2),
+            ),
+        ),
+        hS(
+          "div",
+          { style: S.body },
+          ...slots.map(({ key, label, accent, dist }) =>
+            hS(
+              "div",
+              { key, style: S.slot(accent) },
+              hs("span", { style: S.slotLabel(accent) }, label),
+              dist
+                ? hS(
+                    React.Fragment,
+                    null,
+                    hS("span", { style: S.slotName }, dist.name),
+                    hS(
+                      "span",
+                      { style: S.slotMeta },
+                      [
+                        dist.min_unit != null && dist.max_unit != null
+                          ? "$" +
+                            dist.min_unit +
+                            "–$" +
+                            dist.max_unit +
+                            " range"
+                          : null,
+                        dist.phone || null,
+                        dist.fsc && dist.fsc.includes(record.fsc)
+                          ? "FSC " + record.fsc + " ✓"
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · "),
+                    ),
+                  )
+                : hS(
+                    "span",
+                    { style: { ...S.slotMeta, fontStyle: "italic" } },
+                    "No distributor matched this price range — add one in Source tab",
+                  ),
+            ),
+          ),
+        ),
+      );
+    };
+
+    // ── Live catalog results ──────────────────────────────────────────────────
+    const CatalogResults = () => {
+      const query = pn || nsn;
+      return hS(
+        "div",
+        { style: S.section },
+        hS(
+          "div",
+          { style: S.header },
+          hS(
+            "span",
+            { style: S.headerLabel },
+            status === "loading"
+              ? "Checking catalogs…"
+              : status === "done"
+                ? "Catalog Check — " + query
+                : status === "error"
+                  ? "Catalog Check — Error"
+                  : "Catalog Check",
+          ),
+          status !== "loading" &&
+            hS(
+              "button",
+              {
+                style: S.rerunBtn,
+                onClick: runSearch,
+              },
+              status === "idle" ? "Run Check" : "Recheck",
+            ),
+        ),
+        status === "loading" &&
+          hS(
+            "div",
+            {
+              style: {
+                padding: "16px 12px",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "9px",
+                color: "var(--gold-dim)",
+                letterSpacing: ".08em",
+              },
+            },
+            "Querying Zoro · Grainger · MSC…",
+          ),
+        status === "done" &&
+          hS(
+            "div",
+            { style: S.body },
+            ...results.map((r) =>
+              hS(
+                "div",
+                { key: r.supplier, style: S.resultRow(r.found) },
+                hS(
+                  "span",
+                  { style: S.badge(r.found) },
+                  r.found ? "FOUND" : "NOT FOUND",
+                ),
+                hS("span", { style: S.supplierName }, r.supplier),
+                r.found && r.price
+                  ? hS("span", { style: S.price }, "$" + r.price.toFixed(2))
+                  : r.found
+                    ? hS(
+                        "span",
+                        { style: { ...S.slotMeta, flexShrink: 0 } },
+                        r.stock || "Check site",
+                      )
+                    : null,
+                r.found && r.url
+                  ? hS(
+                      "a",
+                      { href: r.url, target: "_blank", style: S.link },
+                      "View →",
+                    )
+                  : r.url
+                    ? hS(
+                        "a",
+                        { href: r.url, target: "_blank", style: S.link },
+                        "Search →",
+                      )
+                    : null,
+              ),
+            ),
+          ),
+        status === "error" &&
+          hS(
+            "div",
+            {
+              style: {
+                padding: "12px",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "9px",
+                color: "#ff6b7a",
+              },
+            },
+            "Search failed — check Netlify function logs.",
+          ),
+        status === "idle" &&
+          !nsn &&
+          !pn &&
+          hS(
+            "div",
+            {
+              style: {
+                padding: "12px",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "9px",
+                color: "var(--body-faint)",
+                fontStyle: "italic",
+              },
+            },
+            "No P/N or NSN on this record — nothing to search.",
+          ),
+      );
+    };
+
+    return hS(
+      React.Fragment,
+      null,
+      hS(RoutingSlots, null),
+      hS(CatalogResults, null),
+    );
+  }
+
+  /*
+  INJECT POINT B — usage inside DrawerSourcePanel render return
+  ──────────────────────────────────────────────────────────────
+  After the "Quick Search" block (~line 611) and before the distributor IIFE,
+  add this line inside the return hS(...) chain:
+
+      hS(CatalogCheckPanel, { record, dists }),
+
+  Where `dists` is the already-computed array from:
+      const dists = getDistsByFSC(fsc).slice(0, 20);
+*/
+
   // ── MAIN PANEL ────────────────────────────────────────────────────────
   function DrawerSourcePanel({ record }) {
     const { FSC_LANES_MAP, DISTRIBUTORS, getDistsByFSC, distSave } =
@@ -609,6 +1031,7 @@
             ),
           ),
         ),
+      hS(CatalogCheckPanel, { record, dists }),
       (() => {
         const allDists = dists.length ? dists : DISTRIBUTORS.slice(0, 20);
         const preferred = allDists.filter((d) =>
