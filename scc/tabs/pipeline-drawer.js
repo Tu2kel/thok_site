@@ -15,8 +15,10 @@
 
   // ── DRAWER ───────────────────────────────────────────────────────────
   function Drawer({ record, onSave, showToast }) {
-    const { DrawerSourcePanel, VendorIntelPanel, AwardsIntelPanel } =
-      window.SCC_TABS;
+    // Components resolved at render time to avoid load-order undefined errors
+    const DrawerSourcePanel = window.SCC_TABS.DrawerSourcePanel || null;
+    const VendorIntelPanel = window.SCC_TABS.VendorIntelPanel || null;
+    const AwardsIntelPanel = window.SCC_TABS.AwardsIntelPanel || null;
     const [dtab, setDtab] = usePState("supplier");
     const [form, setForm] = usePState({
       supplier_website: "",
@@ -170,10 +172,23 @@ Imperio Talent Solutions | CAGE 152U4<br>
                 " · FSC " +
                 (record.fsc || "—"),
             ),
-            hP(VendorIntelPanel, {
-              record,
-              showToast: showToast || (() => {}),
-            }),
+            VendorIntelPanel
+              ? hP(VendorIntelPanel, {
+                  record,
+                  showToast: showToast || (() => {}),
+                })
+              : hP(
+                  "div",
+                  {
+                    style: {
+                      color: "var(--amber)",
+                      padding: "20px",
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "12px",
+                    },
+                  },
+                  "Vendor Intel loading...",
+                ),
           ),
 
         dtab === "awards_intel" &&
@@ -195,7 +210,20 @@ Imperio Talent Solutions | CAGE 152U4<br>
                 " · FSC " +
                 (record.fsc || "—"),
             ),
-            hP(AwardsIntelPanel, { record }),
+            AwardsIntelPanel
+              ? hP(AwardsIntelPanel, { record })
+              : hP(
+                  "div",
+                  {
+                    style: {
+                      color: "var(--amber)",
+                      padding: "20px",
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "12px",
+                    },
+                  },
+                  "Awards Intel loading...",
+                ),
           ),
 
         dtab === "supplier" &&
@@ -648,7 +676,20 @@ Imperio Talent Solutions | CAGE 152U4<br>
                 " · FSC " +
                 (record.fsc || "—"),
             ),
-            hP(DrawerSourcePanel, { record }),
+            DrawerSourcePanel
+              ? hP(DrawerSourcePanel, { record })
+              : hP(
+                  "div",
+                  {
+                    style: {
+                      color: "var(--amber)",
+                      padding: "20px",
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "12px",
+                    },
+                  },
+                  "Source panel loading...",
+                ),
           ),
 
         dtab === "email" &&
