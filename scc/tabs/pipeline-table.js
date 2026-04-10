@@ -940,22 +940,7 @@ Rules:
             const costUnit = r.supplier_quote_price
               ? parseFloat(r.supplier_quote_price)
               : govUnit * (1 - tierMargin);
-            const estBidTotal =
-              costUnit > 0
-                ? +((costUnit / (1 - tierMargin)) * qty).toFixed(2)
-                : govUnit * qty;
-            const selfFunded = estBidTotal < 10000;
-            const m = calcBidMath(
-              costUnit,
-              qty,
-              tierMargin,
-              0,
-              0,
-              0,
-              60,
-              !selfFunded,
-              selfFunded,
-            );
+            const m = calcBidMath(costUnit, qty, tierMargin, 0, 0, 0);
             return m.net;
           };
           const aN = calcNet(a);
@@ -1396,7 +1381,7 @@ Rules:
                     "th",
                     {
                       title:
-                        "STD=Standard 30% · FAST=Fast Award 40% · LHF=Low Hanging Fruit 42.5% · SB=Small Business Set-Aside 35%  |  Comp: 20% & 25% bid scenarios vs SouthStar 21% min",
+                        "STD=Standard 27.5% · FAST=Fast Award 35% · LHF=Low Hanging Fruit 40% · SB=Small Business Set-Aside 30%  |  Comp: 20% & 25% bid scenarios vs SouthStar 21% min",
                       style: { cursor: "help" },
                     },
                     "Bid Type ⓘ",
@@ -1590,26 +1575,11 @@ Rules:
                   const costUnit = r.supplier_quote_price
                     ? parseFloat(r.supplier_quote_price)
                     : govUnit * 0.7;
-                  const estBidTotal =
-                    costUnit > 0
-                      ? +((costUnit / (1 - tierMargin)) * qty).toFixed(2)
-                      : govUnit * qty;
-                  const selfFunded = estBidTotal < 10000;
-                  const m = calcBidMath(
-                    costUnit,
-                    qty,
-                    tierMargin,
-                    0,
-                    0,
-                    0,
-                    60,
-                    !selfFunded,
-                    selfFunded,
-                  );
-                  const meetsM = m.netPct >= tierMargin * 100 - 7.5 - 0.5;
+                  const m = calcBidMath(costUnit, qty, tierMargin, 0, 0, 0);
+                  const meetsM = m.gpPct >= tierMargin * 100 - 0.5;
                   const mcls = meetsM
                     ? "var(--green)"
-                    : m.netPct >= 13
+                    : m.gpPct >= 21
                       ? "var(--amber)"
                       : "var(--red)";
                   const TIER_ABBR = {
@@ -1619,32 +1589,8 @@ Rules:
                     "Small Business Set-Aside": "SB",
                   };
                   const abbr = TIER_ABBR[tier] || "STD";
-                  const bid20 = +(costUnit / 0.8).toFixed(2);
-                  const bid25 = +(costUnit / 0.75).toFixed(2);
-                  const sf20 = bid20 * qty < 10000;
-                  const sf25 = bid25 * qty < 10000;
-                  const m20 = calcBidMath(
-                    costUnit,
-                    qty,
-                    0.2,
-                    0,
-                    0,
-                    0,
-                    60,
-                    !sf20,
-                    sf20,
-                  );
-                  const m25 = calcBidMath(
-                    costUnit,
-                    qty,
-                    0.25,
-                    0,
-                    0,
-                    0,
-                    60,
-                    !sf25,
-                    sf25,
-                  );
+                  const m20 = calcBidMath(costUnit, qty, 0.2, 0, 0, 0);
+                  const m25 = calcBidMath(costUnit, qty, 0.25, 0, 0, 0);
 
                   // ── Blocked manufacturer check ──────────────────────
                   const isBlocked = window.SCC_TABS.isBlocked;
@@ -1830,7 +1776,7 @@ Rules:
                                 value: "Standard",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "STD — 30%",
+                              "STD — 27.5%",
                             ),
                             hP(
                               "option",
@@ -1838,7 +1784,7 @@ Rules:
                                 value: "Fast Award",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "FAST — 40%",
+                              "FAST — 35%",
                             ),
                             hP(
                               "option",
@@ -1846,7 +1792,7 @@ Rules:
                                 value: "Low Hanging Fruit",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "LHF — 42.5%",
+                              "LHF — 40%",
                             ),
                             hP(
                               "option",
@@ -1854,7 +1800,7 @@ Rules:
                                 value: "Small Business Set-Aside",
                                 style: { background: "var(--surface-inset)" },
                               },
-                              "SB — 35%",
+                              "SB — 30%",
                             ),
                           ),
                           hP(
