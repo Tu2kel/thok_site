@@ -33,7 +33,7 @@ async function searchZoro(query) {
           Referer: "https://www.zoro.com/",
         },
         signal: AbortSignal.timeout(8000),
-      }
+      },
     );
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
@@ -44,10 +44,7 @@ async function searchZoro(query) {
     }
     const first = items[0];
     const price =
-      first?.price ||
-      first?.listPrice ||
-      first?.pricing?.listPrice ||
-      null;
+      first?.price || first?.listPrice || first?.pricing?.listPrice || null;
     const sku = first?.sku || first?.itemId || "";
     const slug = first?.slug || first?.url || "";
     const productUrl = slug
@@ -80,13 +77,15 @@ async function searchZoroHtml(query) {
     {
       headers: { "User-Agent": UA, Accept: "text/html" },
       signal: AbortSignal.timeout(8000),
-    }
+    },
   );
   const html = await res.text();
   // Extract price from HTML — Zoro renders price in data attributes / JSON-LD
   const priceMatch = html.match(/"price"\s*:\s*"?([\d.]+)"?/);
   const skuMatch = html.match(/"sku"\s*:\s*"([^"]+)"/);
-  const urlMatch = html.match(/"url"\s*:\s*"(https:\/\/www\.zoro\.com\/[^"]+)"/);
+  const urlMatch = html.match(
+    /"url"\s*:\s*"(https:\/\/www\.zoro\.com\/[^"]+)"/,
+  );
   const found = !!priceMatch || html.includes("Add to Cart");
   return {
     supplier: "Zoro",
@@ -116,7 +115,7 @@ async function searchGrainger(query) {
           "X-Requested-With": "XMLHttpRequest",
         },
         signal: AbortSignal.timeout(8000),
-      }
+      },
     );
     if (!res.ok) throw new Error("HTTP " + res.status);
     // Try JSON first
@@ -152,9 +151,7 @@ async function searchGrainger(query) {
     return {
       supplier: "Grainger",
       found,
-      price: priceMatch
-        ? parseFloat(priceMatch[1].replace(/,/g, ""))
-        : null,
+      price: priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : null,
       stock: html.includes("In Stock") ? "In Stock" : found ? "Check" : null,
       url:
         "https://www.grainger.com/search?searchQuery=" +
@@ -190,21 +187,19 @@ async function searchMSC(query) {
           Accept: "application/json, text/html",
         },
         signal: AbortSignal.timeout(8000),
-      }
+      },
     );
     if (!res.ok) throw new Error("HTTP " + res.status);
     const html = await res.text();
     // MSC embeds product data in page JSON
     const jsonMatch = html.match(
-      /window\.__INITIAL_STATE__\s*=\s*({.+?});\s*<\/script>/s
+      /window\.__INITIAL_STATE__\s*=\s*({.+?});\s*<\/script>/s,
     );
     if (jsonMatch) {
       try {
         const state = JSON.parse(jsonMatch[1]);
         const products =
-          state?.search?.searchResults?.products ||
-          state?.products?.list ||
-          [];
+          state?.search?.searchResults?.products || state?.products?.list || [];
         if (products.length) {
           const first = products[0];
           const price =
@@ -234,9 +229,7 @@ async function searchMSC(query) {
     return {
       supplier: "MSC Industrial",
       found,
-      price: priceMatch
-        ? parseFloat(priceMatch[1].replace(/,/g, ""))
-        : null,
+      price: priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : null,
       stock: html.includes("In Stock") ? "In Stock" : found ? "Check" : null,
       url:
         "https://www.mscdirect.com/browse/tn?searchterm=" +
@@ -309,7 +302,7 @@ exports.handler = async (event) => {
           stock: null,
           url: null,
           error: r.reason?.message || "Failed",
-        }
+        },
   );
 
   return {
