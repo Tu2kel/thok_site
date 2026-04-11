@@ -722,12 +722,14 @@ Imperio Talent Solutions | CAGE 152U4<br>
         }),
       );
 
+    // ── CHANGE 1: Added ["awards_intel", "◇ Awards Intel"] to DRAWER_TABS ──
     const DRAWER_TABS = [
       ["supplier", "Supplier Intel"],
       ["vendor_intel", "◆ Vendor Intel"],
       ["bid", "Bid & Outcome"],
       ["quotes", "Quote History"],
       ["nsn", "NSN Intel"],
+      ["awards_intel", "◇ Awards Intel"],
       ["source", "◆ Source"],
       ["email", "Email"],
     ];
@@ -1027,6 +1029,29 @@ Imperio Talent Solutions | CAGE 152U4<br>
               hP("span", { className: "glint" }),
               "Save Details",
             ),
+          ),
+
+        // ── CHANGE 2: Awards Intel drawer tab render branch ──
+        dtab === "awards_intel" &&
+          hP(
+            PFrag,
+            null,
+            hP(
+              "div",
+              {
+                className: "drawer-section-title",
+                style: {
+                  color: "var(--amber)",
+                  borderColor: "rgba(201,168,76,.25)",
+                  fontSize: "13px",
+                },
+              },
+              "◇ Awards Intel — " +
+                (record.nsn || "No NSN") +
+                " · FSC " +
+                (record.fsc || "—"),
+            ),
+            hP(window.SCC_TABS.AwardsIntelPanel, { record }),
           ),
 
         dtab === "source" &&
@@ -1960,10 +1985,8 @@ Rules:
     const [search, setSearch] = usePState("");
     const [showIngest, setShowIngest] = usePState(false);
 
-    // ── Date sort — 'due' or 'entered', direction 'asc'/'desc'/null ──
-    // null = no sort active (default pipeline order)
-    const [sortCol, setSortCol] = usePState(null); // 'due' | 'entered' | null
-    const [sortDir, setSortDir] = usePState("asc"); // 'asc' | 'desc'
+    const [sortCol, setSortCol] = usePState(null);
+    const [sortDir, setSortDir] = usePState("asc");
 
     const cycleSort = (col) => {
       if (sortCol !== col) {
@@ -1974,10 +1997,9 @@ Rules:
       } else {
         setSortCol(null);
         setSortDir("asc");
-      } // third click clears
+      }
     };
 
-    // Parse MM/DD/YY or loose date string → ms timestamp for comparison
     const parseDateMs = (s) => {
       if (!s) return Infinity;
       if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)) {
@@ -2086,12 +2108,10 @@ Rules:
       showToast(sol_number + " archived");
     };
 
-    // ── helper: format date_added as MM/DD/YY ──────────────────────────
     const fmtDateAdded = (raw) => {
       if (!raw) return null;
-      // Handles both "3/11/2026" (toLocaleDateString) and ISO strings
       const d = new Date(raw);
-      if (isNaN(d)) return raw; // pass through if unparseable
+      if (isNaN(d)) return raw;
       const mm = String(d.getMonth() + 1).padStart(2, "0");
       const dd = String(d.getDate()).padStart(2, "0");
       const yy = String(d.getFullYear()).slice(2);
@@ -2430,7 +2450,6 @@ Rules:
                   const m20 = calcBidMath(costUnit, qty, 0.2, 0, 0, 0);
                   const m25 = calcBidMath(costUnit, qty, 0.25, 0, 0, 0);
 
-                  // ── Blocked manufacturer check ──────────────────────
                   const isBlocked = window.SCC_TABS.isBlocked;
                   const blockedHit = isBlocked
                     ? isBlocked(r.ref_supplier)
@@ -2703,7 +2722,6 @@ Rules:
                         fmt(m.net),
                       ),
 
-                      // ── DUE CELL — 4 lines: date / urgency / Entered: MM/DD/YY / + Xd ago ──
                       hP(
                         "td",
                         null,
@@ -2735,7 +2753,6 @@ Rules:
                                   ? "TOMORROW"
                                   : diff + "d left";
 
-                          // Entered line — always show if date_added exists
                           const enteredFmt = fmtDateAdded(r.date_added);
                           const enteredLine = enteredFmt
                             ? hP(
@@ -2753,7 +2770,6 @@ Rules:
                               )
                             : null;
 
-                          // + Xd ago line
                           const addedLine = (() => {
                             if (!r.date_added) return null;
                             const a = new Date(r.date_added);
