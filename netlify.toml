@@ -1,0 +1,7 @@
+[build]
+  publish = "thok_site"
+  functions = "netlify/functions"
+  command = ""
+
+[functions]
+  node_bundler = "esbuild"
