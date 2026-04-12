@@ -82,9 +82,6 @@
     const pscResults = await postAwards({
       filters: {
         award_type_codes: ["A", "B", "C", "D"],
-        program_activities: [],
-        // DLA awarding agency toptier code
-        awarding_agency_codes: ["97"], // DoD / DLA rolls under 97
         psc_codes: {
           require: [[psc]],
         },
