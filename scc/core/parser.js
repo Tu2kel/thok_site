@@ -14,7 +14,7 @@
     if (!text) return false;
     // Match SPE sol number in first 3 lines, or Hist. marker (Navigator format)
     const top = text.split("\n").slice(0, 3).join(" ");
-    return /\bSPE[A-Z0-9]/i.test(top) || /\bHist\./i.test(text);
+    return /\bSP[A-Z][A-Z0-9]/i.test(top) || /\bHist\./i.test(text);
   }
 
   function parseListing(text) {
@@ -57,7 +57,12 @@
           qIdx > 0
             ? chunk.substring(0, qIdx).trim()
             : chunk.split(/[\t]{2,}|\s{3,}/)[0].trim();
-        d.item_name = raw.replace(/[\s\d]+$/, "").trim() || null;
+        const cleaned = raw
+          .replace(/[\t]+/g, " ")
+          .replace(/\s+/g, " ")
+          .replace(/[\s\d]+$/, "")
+          .trim();
+        d.item_name = cleaned || null;
       }
     }
 
