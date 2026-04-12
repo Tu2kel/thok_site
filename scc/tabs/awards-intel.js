@@ -47,7 +47,19 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error("USASpending API returned " + res.status);
+    if (!res.ok) {
+      let errBody = "";
+      try {
+        errBody = await res.text();
+      } catch (_) {}
+      console.error("USASpending 4xx body:", errBody);
+      throw new Error(
+        "USASpending API returned " +
+          res.status +
+          " — " +
+          errBody.slice(0, 200),
+      );
+    }
     const data = await res.json();
     return data.results || [];
   }
