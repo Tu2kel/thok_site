@@ -597,11 +597,16 @@
         listingText = boxA;
         aiText = boxB;
       }
+      // Run both parsers on both inputs, then merge:
+      // listing parse wins; AI fills only missing/null fields.
+      // If only one box has content, run both parsers on it.
       let data = listingText ? parseListing(listingText) : {};
-      if (aiText.trim()) {
-        const ai = parseAIText(aiText);
+      const aiSrc = aiText.trim() || listingText;
+      if (aiSrc) {
+        const ai = parseAIText(aiSrc);
         Object.entries(ai).forEach(([k, v]) => {
-          if (v) data[k] = v;
+          if (v !== null && v !== undefined && v !== "" && !data[k])
+            data[k] = v;
         });
       }
       if (data.unit_price && data.quote_due) {
