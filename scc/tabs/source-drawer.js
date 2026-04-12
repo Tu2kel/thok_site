@@ -82,7 +82,7 @@
     if (vendorCage) p.set("cage", vendorCage);
     if (vendorEmail) p.set("email", vendorEmail);
     if (vendorPhone) p.set("phone", vendorPhone);
-    return "/supplier-rfq-template.html?" + p.toString();
+    return "supplier-rfq-template.html?" + p.toString();
   }
 
   // ── SUPPLIER CARD (DLA Approved Source) ──────────────────────────────
@@ -102,12 +102,17 @@
       e.preventDefault();
       e.stopPropagation();
       setFetchSt("loading");
-      // Try SAM.gov public entity search API — returns JSON with phone
-      const samUrl =
-        "https://sam.gov/api/prod/sgs/v1/search/?index=ei&q=" +
-        encodeURIComponent(s.cage) +
-        "&pageSize=1";
-      const found = await fetchPhoneFromUrl(samUrl);
+      // Open Google search as immediate fallback so user always gets something
+      window.open(
+        "https://www.google.com/search?q=" +
+          encodeURIComponent(s.name + " " + s.cage + " phone number"),
+        "_blank",
+      );
+      // Hit DLA CAGE lookup — real HTML, no auth required
+      const dlaUrl =
+        "https://cage.dla.mil/Search/CageSearchResults?searchType=cage&cageCode=" +
+        encodeURIComponent(s.cage);
+      const found = await fetchPhoneFromUrl(dlaUrl);
       if (found) {
         setPhone(found);
         await cagePhoneSave(s.cage, s.name, found);
