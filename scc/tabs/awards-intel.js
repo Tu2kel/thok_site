@@ -95,7 +95,7 @@
       filters: {
         award_type_codes: ["A", "B", "C", "D"],
         psc_codes: {
-          require: [[psc]],
+          require: [["Product", psc]],
         },
         time_period: [{ start_date: "2020-01-01", end_date: "2026-12-31" }],
       },
