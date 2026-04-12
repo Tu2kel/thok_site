@@ -21,48 +21,86 @@
   const USA_SPENDING_URL =
     "https://api.usaspending.gov/api/v2/search/spending_by_award/";
 
-  async function fetchAwardHistory(nsn) {
-    if (!nsn) return [];
+  const AWARD_FIELDS = [
+    "Award ID",
+    "Recipient Name",
+    "recipient_id",
+    "Award Amount",
+    "Start Date",
+    "End Date",
+    "Award Type",
+    "Awarding Agency",
+    "Awarding Sub Agency",
+    "Description",
+    "Period of Performance Current End Date",
+  ];
 
-    // Try both dashed and undashed formats as keywords
-    const nsnDashed = nsn.includes("-")
-      ? nsn
-      : nsn.replace(/(\d{4})(\d{2})(\d{3})(\d{4})/, "$1-$2-$3-$4");
-    const nsnRaw = nsn.replace(/-/g, "");
+  // FSC → PSC is a direct 1:1 mapping for DLA (FSC == PSC for supply items)
+  function fscToPsc(nsn) {
+    const raw = nsn.replace(/-/g, "");
+    return raw.slice(0, 4); // first 4 digits = FSC = PSC
+  }
 
-    const body = {
-      filters: {
-        keywords: [nsnDashed, nsnRaw],
-        award_type_codes: ["A", "B", "C", "D"], // contracts only
-      },
-      fields: [
-        "Award ID",
-        "Recipient Name",
-        "recipient_id",
-        "Award Amount",
-        "Start Date",
-        "End Date",
-        "Award Type",
-        "Awarding Agency",
-        "Awarding Sub Agency",
-        "Description",
-        "Period of Performance Current End Date",
-      ],
-      page: 1,
-      limit: 10,
-      sort: "Start Date",
-      order: "desc",
-    };
-
+  async function postAwards(body) {
     const res = await fetch(USA_SPENDING_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
     if (!res.ok) throw new Error("USASpending API returned " + res.status);
     const data = await res.json();
     return data.results || [];
+  }
+
+  async function fetchAwardHistory(nsn) {
+    if (!nsn) return { results: [], mode: "none" };
+
+    // ── Stage 1: NSN keyword search ──────────────────────────────────────
+    const nsnDashed = nsn.includes("-")
+      ? nsn
+      : nsn.replace(/(\d{4})(\d{2})(\d{3})(\d{4})/, "$1-$2-$3-$4");
+    const nsnRaw = nsn.replace(/-/g, "");
+
+    const nsnResults = await postAwards({
+      filters: {
+        keywords: [nsnDashed, nsnRaw],
+        award_type_codes: ["A", "B", "C", "D"],
+      },
+      fields: AWARD_FIELDS,
+      page: 1,
+      limit: 10,
+      sort: "Start Date",
+      order: "desc",
+    });
+
+    if (nsnResults.length > 0) {
+      return { results: nsnResults, mode: "nsn" };
+    }
+
+    // ── Stage 2: PSC + DLA awarding agency fallback ──────────────────────
+    const psc = fscToPsc(nsn);
+    const pscResults = await postAwards({
+      filters: {
+        award_type_codes: ["A", "B", "C", "D"],
+        program_activities: [],
+        // DLA awarding agency toptier code
+        awarding_agency_codes: ["97"], // DoD / DLA rolls under 97
+        psc_codes: {
+          require: [[psc]],
+        },
+        time_period: [{ start_date: "2020-01-01", end_date: "2026-12-31" }],
+      },
+      fields: AWARD_FIELDS,
+      page: 1,
+      limit: 15,
+      sort: "Start Date",
+      order: "desc",
+    });
+
+    return {
+      results: pscResults,
+      mode: pscResults.length > 0 ? "psc" : "none",
+    };
   }
 
   // ── SCORING ENGINE ─────────────────────────────────────────────────────
@@ -177,9 +215,11 @@
     const [awards, setAwards] = useState([]);
     const [score, setScore] = useState(null);
     const [errorMsg, setErrorMsg] = useState("");
+    const [queryMode, setQueryMode] = useState(null); // "nsn" | "psc" | "none"
     const fetchedNsn = useRef(null);
 
     const nsn = record.nsn || "";
+    const fsc = record.fsc || nsn.replace(/-/g, "").slice(0, 4);
     const histPrice = parseFloat(record.unit_price) || null;
 
     const runFetch = async () => {
@@ -187,10 +227,12 @@
       setStatus("loading");
       setAwards([]);
       setScore(null);
+      setQueryMode(null);
       setErrorMsg("");
       try {
-        const results = await fetchAwardHistory(nsn);
+        const { results, mode } = await fetchAwardHistory(nsn);
         setAwards(results);
+        setQueryMode(mode);
         setScore(scoreAwards(results, histPrice));
         setStatus("done");
       } catch (e) {
@@ -359,6 +401,35 @@
     return h(
       "div",
       { style: { animation: "fadeUp .4s ease both" } },
+
+      // ── Query mode indicator ──
+      queryMode &&
+        h(
+          "div",
+          {
+            style: {
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "9px",
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              color:
+                queryMode === "nsn"
+                  ? "var(--accent-green)"
+                  : queryMode === "psc"
+                    ? "var(--amber)"
+                    : "var(--body-faint)",
+              marginBottom: "10px",
+              opacity: 0.75,
+            },
+          },
+          queryMode === "nsn"
+            ? "● NSN match — exact history for " + nsn
+            : queryMode === "psc"
+              ? "◎ PSC fallback — FSC " +
+                fsc +
+                " lane (no NSN-specific history)"
+              : "○ No award history found in either pass",
+        ),
 
       // ── Score badge ──
       score &&
