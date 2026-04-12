@@ -82,7 +82,7 @@
     if (vendorCage) p.set("cage", vendorCage);
     if (vendorEmail) p.set("email", vendorEmail);
     if (vendorPhone) p.set("phone", vendorPhone);
-    return "supplier-rfq-template.html?" + p.toString();
+    return "/supplier-rfq-template.html?" + p.toString();
   }
 
   // ── SUPPLIER CARD (DLA Approved Source) ──────────────────────────────
@@ -102,10 +102,12 @@
       e.preventDefault();
       e.stopPropagation();
       setFetchSt("loading");
-      const found = await fetchPhoneFromUrl(
-        "https://www.google.com/search?q=" +
-          encodeURIComponent(s.name + " phone number contact us"),
-      );
+      // Try SAM.gov public entity search API — returns JSON with phone
+      const samUrl =
+        "https://sam.gov/api/prod/sgs/v1/search/?index=ei&q=" +
+        encodeURIComponent(s.cage) +
+        "&pageSize=1";
+      const found = await fetchPhoneFromUrl(samUrl);
       if (found) {
         setPhone(found);
         await cagePhoneSave(s.cage, s.name, found);
