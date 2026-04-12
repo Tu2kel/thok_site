@@ -21,7 +21,7 @@
     const d = {};
 
     // Sol number — handles SPE2DS26T6498, SPE2DS-26-T-6498, and paste artifacts missing leading S
-    const solFull = text.match(/\b(SPE[A-Z0-9][A-Z0-9\-]*[A-Z0-9])\b/i);
+    const solFull = text.match(/\b(SP[A-Z][A-Z0-9][A-Z0-9\-]*[A-Z0-9])\b/i);
     const solPartial = text.match(/\b(PE[0-9][A-Z0-9\-]{6,})\b/i);
     if (solFull) {
       d.sol_number = solFull[1].toUpperCase();
