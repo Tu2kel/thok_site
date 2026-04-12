@@ -543,7 +543,7 @@
             hS(
               "div",
               { key, style: S.slot(accent) },
-              hs("span", { style: S.slotLabel(accent) }, label),
+              hS("span", { style: S.slotLabel(accent) }, label),
               dist
                 ? hS(
                     React.Fragment,
