@@ -82,6 +82,7 @@
     if (vendorCage) p.set("cage", vendorCage);
     if (vendorEmail) p.set("email", vendorEmail);
     if (vendorPhone) p.set("phone", vendorPhone);
+    if (record.ship_to) p.set("shipto", record.ship_to);
     return "supplier-rfq-template.html?" + p.toString();
   }
 
@@ -931,6 +932,70 @@
             mfr,
           ),
       ),
+
+      // ── Ship-To Row ──────────────────────────────────────────────────
+      hS(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "10px",
+            padding: "7px 10px",
+            background: "rgba(201,168,76,.05)",
+            border: "1px solid rgba(201,168,76,.14)",
+            borderRadius: "4px",
+          },
+        },
+        hS(
+          "span",
+          {
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "8px",
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              color: "var(--gold-dim)",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            },
+          },
+          "Ship-To",
+        ),
+        hS("input", {
+          type: "text",
+          defaultValue: record.ship_to || "",
+          placeholder: "TBD — see solicitation",
+          onBlur: async (e) => {
+            const val = e.target.value.trim();
+            if (val === (record.ship_to || "")) return;
+            record.ship_to = val;
+            try {
+              await fetch("/.netlify/functions/scc-db", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "upsert",
+                  record: { sol_number: record.sol_number, ship_to: val },
+                }),
+              });
+            } catch {}
+          },
+          style: {
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            borderBottom: "1px solid rgba(201,168,76,.2)",
+            color: "var(--body-text)",
+            fontFamily: "Cormorant Garamond,serif",
+            fontSize: "13px",
+            padding: "2px 4px",
+            outline: "none",
+          },
+        }),
+      ),
+
       // ── Sourcing Action Bar ──────────────────────────────────────────
       hS(
         "div",
