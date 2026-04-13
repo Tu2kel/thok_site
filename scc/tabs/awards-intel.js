@@ -616,23 +616,74 @@
                     marginTop: "4px",
                   },
                 },
-                ...score.awardees.map((name, i) =>
-                  h(
-                    "span",
+                ...score.awardees.map((name, i) => {
+                  const SA = window.SCC_SOURCE_ACTIONS || {};
+                  return h(
+                    "div",
                     {
                       key: i,
                       style: {
-                        ...S.mono,
-                        fontSize: "10px",
-                        padding: "3px 8px",
+                        display: "inline-flex",
+                        alignItems: "center",
                         background: "rgba(201,168,76,.08)",
                         border: "1px solid rgba(201,168,76,.18)",
-                        color: "var(--body-dim)",
+                        gap: "0",
                       },
                     },
-                    name,
-                  ),
-                ),
+                    h(
+                      "span",
+                      {
+                        style: {
+                          ...S.mono,
+                          fontSize: "10px",
+                          padding: "3px 8px",
+                          color: "var(--body-dim)",
+                        },
+                      },
+                      name,
+                    ),
+                    h(
+                      "button",
+                      {
+                        title: "SAM.gov entity lookup",
+                        onClick: () =>
+                          SA.searchAwardee && SA.searchAwardee(name),
+                        style: {
+                          background: "transparent",
+                          border: "none",
+                          borderLeft: "1px solid rgba(201,168,76,.18)",
+                          color: "var(--gold-dim)",
+                          fontFamily: "Cinzel,serif",
+                          fontSize: "8px",
+                          letterSpacing: ".1em",
+                          padding: "3px 6px",
+                          cursor: "pointer",
+                        },
+                      },
+                      "SAM",
+                    ),
+                    h(
+                      "button",
+                      {
+                        title: "USASpending award history",
+                        onClick: () =>
+                          SA.searchUSASpending && SA.searchUSASpending(name),
+                        style: {
+                          background: "transparent",
+                          border: "none",
+                          borderLeft: "1px solid rgba(201,168,76,.18)",
+                          color: "var(--body-faint)",
+                          fontFamily: "Cinzel,serif",
+                          fontSize: "8px",
+                          letterSpacing: ".1em",
+                          padding: "3px 6px",
+                          cursor: "pointer",
+                        },
+                      },
+                      "$",
+                    ),
+                  );
+                }),
               ),
             ),
         ),

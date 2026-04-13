@@ -409,9 +409,8 @@
     <script src="core/parser.js"></script>
     <script src="core/distributors.js"></script>
 
-    <!-- ── NSN DATABASE (2MB — deferred so it doesn't block initial render) ── -->
-    <!-- Source tab only needs this at user-click time, so defer is safe -->
-    <script src="core/db-nsn.js" defer></script>
+    <!-- ── SOURCING ACTION BRIDGE ── -->
+    <script src="core/source-actions.js"></script>
 
     <!-- ── REACT TAB COMPONENTS ── -->
     <!-- source.js must be before pipeline files — exports DrawerSourcePanel + VI_STATUS_STYLE -->

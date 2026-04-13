@@ -931,6 +931,88 @@
             mfr,
           ),
       ),
+      // ── Sourcing Action Bar ──────────────────────────────────────────
+      hS(
+        "div",
+        {
+          style: {
+            display: "flex",
+            gap: "6px",
+            flexWrap: "wrap",
+            marginBottom: "16px",
+            paddingBottom: "14px",
+            borderBottom: "1px solid rgba(201,168,76,.1)",
+          },
+        },
+        nsn &&
+          hS(
+            "button",
+            {
+              title: "Search NSN on Google — distributor results",
+              onClick: () => {
+                const SA = window.SCC_SOURCE_ACTIONS || {};
+                SA.searchNSN && SA.searchNSN(nsn, record.item_name);
+              },
+              style: {
+                background: "transparent",
+                border: "1px solid rgba(201,168,76,.3)",
+                color: "var(--gold-dim)",
+                fontFamily: "Cinzel,serif",
+                fontSize: "8px",
+                letterSpacing: ".12em",
+                textTransform: "uppercase",
+                padding: "5px 12px",
+                cursor: "pointer",
+              },
+            },
+            "⌕ NSN Search",
+          ),
+        hS(
+          "button",
+          {
+            title: "Local/regional supplier search — Texas + government/DLA",
+            onClick: () => {
+              const SA = window.SCC_SOURCE_ACTIONS || {};
+              SA.searchLocal && SA.searchLocal(record.item_name, fsc);
+            },
+            style: {
+              background: "transparent",
+              border: "1px solid rgba(201,168,76,.3)",
+              color: "var(--gold-dim)",
+              fontFamily: "Cinzel,serif",
+              fontSize: "8px",
+              letterSpacing: ".12em",
+              textTransform: "uppercase",
+              padding: "5px 12px",
+              cursor: "pointer",
+            },
+          },
+          "⌕ Local Source",
+        ),
+        nsn &&
+          hS(
+            "button",
+            {
+              title: "DIBBS quote history for this NSN",
+              onClick: () => {
+                const SA = window.SCC_SOURCE_ACTIONS || {};
+                SA.searchDIBBS && SA.searchDIBBS(nsn);
+              },
+              style: {
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,.12)",
+                color: "var(--body-faint)",
+                fontFamily: "Cinzel,serif",
+                fontSize: "8px",
+                letterSpacing: ".12em",
+                textTransform: "uppercase",
+                padding: "5px 12px",
+                cursor: "pointer",
+              },
+            },
+            "⌕ DIBBS History",
+          ),
+      ),
       // ── DLA Approved Sources ──
       allSuppliers.length > 0 &&
         hS(
