@@ -82,7 +82,6 @@
     if (vendorCage) p.set("cage", vendorCage);
     if (vendorEmail) p.set("email", vendorEmail);
     if (vendorPhone) p.set("phone", vendorPhone);
-    if (record.ship_to) p.set("shipto", record.ship_to);
     return "supplier-rfq-template.html?" + p.toString();
   }
 
@@ -331,6 +330,8 @@
     const [results, setResults] = useState([]);
     const [routing, setRouting] = useState(null);
     const hasFired = useRef(false);
+    const [gsaStatus, setGsaStatus] = useState("idle"); // idle | loading | done | empty | error
+    const [gsaResults, setGsaResults] = useState([]);
 
     // ── Price-tier routing ────────────────────────────────────────────────────
     // Slot each distributor into Primary / Backup / Benchmark based on min_unit/max_unit
@@ -359,6 +360,8 @@
     async function runSearch() {
       if (!nsn && !pn) return;
       setStatus("loading");
+      setGsaStatus("idle");
+      setGsaResults([]);
       try {
         const res = await fetch("/.netlify/functions/catalog-search", {
           method: "POST",
@@ -369,6 +372,29 @@
         if (!data.ok) throw new Error(data.error || "Search failed");
         setResults(data.results || []);
         setStatus("done");
+
+        // ── GSA CASCADE — auto-fires when all 3 catalogs return NOT FOUND
+        if (data.allNotFound) {
+          const mfrName =
+            record.suppliers && record.suppliers[0]
+              ? record.suppliers[0].name
+              : record.item_name || "";
+          if (mfrName) {
+            setGsaStatus("loading");
+            try {
+              const gsaRes = await fetch("/.netlify/functions/gsa-search", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ manufacturer: mfrName }),
+              });
+              const gsaData = await gsaRes.json();
+              setGsaResults(gsaData.results || []);
+              setGsaStatus(gsaData.found ? "done" : "empty");
+            } catch {
+              setGsaStatus("error");
+            }
+          }
+        }
       } catch (err) {
         setStatus("error");
       }
@@ -708,6 +734,224 @@
       null,
       hS(RoutingSlots, null),
       hS(CatalogResults, null),
+      // ── GSA CASCADE PANEL — auto-renders on all-NOT FOUND
+      gsaStatus !== "idle" &&
+        hS(
+          "div",
+          {
+            style: {
+              marginBottom: "18px",
+              background: "rgba(0,0,0,.18)",
+              border: "1px solid rgba(100,160,255,.2)",
+              borderRadius: "4px",
+              overflow: "hidden",
+            },
+          },
+          hS(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
+                borderBottom: "1px solid rgba(100,160,255,.12)",
+                background: "rgba(100,160,255,.04)",
+              },
+            },
+            hS(
+              "span",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".18em",
+                  textTransform: "uppercase",
+                  color: "rgba(100,160,255,.8)",
+                },
+              },
+              gsaStatus === "loading"
+                ? "GSA Advantage — Searching..."
+                : gsaStatus === "done"
+                  ? "GSA Advantage — Schedule Items Found"
+                  : gsaStatus === "empty"
+                    ? "GSA Advantage — Not On Schedule"
+                    : "GSA Advantage — Error",
+            ),
+            hS(
+              "a",
+              {
+                href:
+                  "https://www.gsaadvantage.gov/advantage/ws/search/advantage_search?q=0:8" +
+                  encodeURIComponent(
+                    (
+                      (record.suppliers && record.suppliers[0]
+                        ? record.suppliers[0].name
+                        : record.item_name) || ""
+                    )
+                      .toLowerCase()
+                      .split(" ")[0],
+                  ) +
+                  "&db=0&searchType=0",
+                target: "_blank",
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "7px",
+                  letterSpacing: ".1em",
+                  color: "rgba(100,160,255,.6)",
+                  textDecoration: "none",
+                },
+              },
+              "Open GSA →",
+            ),
+          ),
+          gsaStatus === "loading" &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "16px 12px",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "rgba(100,160,255,.6)",
+                  letterSpacing: ".08em",
+                },
+              },
+              "Querying GSA Schedule...",
+            ),
+          gsaStatus === "done" &&
+            gsaResults.length > 0 &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                },
+              },
+              ...gsaResults.map((r, i) =>
+                hS(
+                  "div",
+                  {
+                    key: i,
+                    style: {
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "3px",
+                      padding: "8px 10px",
+                      background: "rgba(100,160,255,.04)",
+                      border: "1px solid rgba(100,160,255,.12)",
+                      borderRadius: "3px",
+                    },
+                  },
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "9px",
+                        color: "rgba(180,210,255,.9)",
+                        letterSpacing: ".04em",
+                      },
+                    },
+                    r.name,
+                  ),
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                      },
+                    },
+                    r.price &&
+                      hS(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "11px",
+                            color: "var(--gold-solid)",
+                          },
+                        },
+                        "from $" + r.price.toFixed(2),
+                      ),
+                    r.partNo &&
+                      hS(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "9px",
+                            color: "var(--body-faint)",
+                          },
+                        },
+                        r.partNo,
+                      ),
+                    r.sources &&
+                      hS(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "9px",
+                            color: "rgba(100,160,255,.6)",
+                          },
+                        },
+                        r.sources,
+                      ),
+                    r.url &&
+                      hS(
+                        "a",
+                        {
+                          href: r.url,
+                          target: "_blank",
+                          style: {
+                            fontFamily: "Cinzel,serif",
+                            fontSize: "8px",
+                            letterSpacing: ".06em",
+                            color: "rgba(100,160,255,.7)",
+                            textDecoration: "none",
+                            marginLeft: "auto",
+                          },
+                        },
+                        "View →",
+                      ),
+                  ),
+                ),
+              ),
+            ),
+          gsaStatus === "empty" &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "12px",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                  fontStyle: "italic",
+                },
+              },
+              "Not on GSA schedule — OEM likely sells direct or unlisted.",
+            ),
+          gsaStatus === "error" &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "12px",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "#ff6b7a",
+                },
+              },
+              "GSA search failed — check Netlify logs.",
+            ),
+        ),
     );
   }
 
@@ -932,70 +1176,6 @@
             mfr,
           ),
       ),
-
-      // ── Ship-To Row ──────────────────────────────────────────────────
-      hS(
-        "div",
-        {
-          style: {
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            marginBottom: "10px",
-            padding: "7px 10px",
-            background: "rgba(201,168,76,.05)",
-            border: "1px solid rgba(201,168,76,.14)",
-            borderRadius: "4px",
-          },
-        },
-        hS(
-          "span",
-          {
-            style: {
-              fontFamily: "Cinzel,serif",
-              fontSize: "8px",
-              letterSpacing: ".14em",
-              textTransform: "uppercase",
-              color: "var(--gold-dim)",
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            },
-          },
-          "Ship-To",
-        ),
-        hS("input", {
-          type: "text",
-          defaultValue: record.ship_to || "",
-          placeholder: "TBD — see solicitation",
-          onBlur: async (e) => {
-            const val = e.target.value.trim();
-            if (val === (record.ship_to || "")) return;
-            record.ship_to = val;
-            try {
-              await fetch("/.netlify/functions/scc-db", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action: "upsert",
-                  record: { sol_number: record.sol_number, ship_to: val },
-                }),
-              });
-            } catch {}
-          },
-          style: {
-            flex: 1,
-            background: "transparent",
-            border: "none",
-            borderBottom: "1px solid rgba(201,168,76,.2)",
-            color: "var(--body-text)",
-            fontFamily: "Cormorant Garamond,serif",
-            fontSize: "13px",
-            padding: "2px 4px",
-            outline: "none",
-          },
-        }),
-      ),
-
       // ── Sourcing Action Bar ──────────────────────────────────────────
       hS(
         "div",
