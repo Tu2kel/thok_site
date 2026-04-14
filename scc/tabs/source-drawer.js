@@ -332,6 +332,8 @@
     const hasFired = useRef(false);
     const [gsaStatus, setGsaStatus] = useState("idle"); // idle | loading | done | empty | error
     const [gsaResults, setGsaResults] = useState([]);
+    const [scoutStatus, setScoutStatus] = useState("idle"); // idle | loading | done | empty | error
+    const [scoutData, setScoutData] = useState(null);
 
     // ── Price-tier routing ────────────────────────────────────────────────────
     // Slot each distributor into Primary / Backup / Benchmark based on min_unit/max_unit
@@ -393,6 +395,33 @@
             } catch {
               setGsaStatus("error");
             }
+          }
+
+          // ── SUPPLIER SCOUT — fires in parallel on all-NOT FOUND
+          setScoutStatus("loading");
+          setScoutData(null);
+          try {
+            const scoutRes = await fetch("/.netlify/functions/supplier-scout", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                pn: pn || "",
+                nsn: nsn || "",
+                fsc: record.fsc || "",
+                item_name: record.item_name || "",
+                approved_sources: (record.suppliers || []).map((s) => s.name),
+              }),
+            });
+            const scoutJson = await scoutRes.json();
+            setScoutData(scoutJson);
+            setScoutStatus(
+              (scoutJson.claude && scoutJson.claude.length) ||
+                (scoutJson.web && scoutJson.web.length)
+                ? "done"
+                : "empty",
+            );
+          } catch {
+            setScoutStatus("error");
           }
         }
       } catch (err) {
@@ -950,6 +979,303 @@
                 },
               },
               "GSA search failed — check Netlify logs.",
+            ),
+        ),
+      // ── SUPPLIER SCOUT PANEL — named distributor leads + filtered web hits
+      scoutStatus !== "idle" &&
+        hS(
+          "div",
+          {
+            style: {
+              marginBottom: "18px",
+              background: "rgba(0,0,0,.18)",
+              border: "1px solid rgba(201,168,76,.2)",
+              borderRadius: "4px",
+              overflow: "hidden",
+            },
+          },
+          hS(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                padding: "8px 12px",
+                borderBottom: "1px solid rgba(201,168,76,.12)",
+                background: "rgba(201,168,76,.04)",
+              },
+            },
+            hS(
+              "span",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".18em",
+                  textTransform: "uppercase",
+                  color: "var(--gold-dim)",
+                },
+              },
+              scoutStatus === "loading"
+                ? "Supplier Scout — Searching..."
+                : scoutStatus === "done"
+                  ? "Supplier Scout — " +
+                    ((scoutData &&
+                      scoutData.claude &&
+                      scoutData.claude.length) ||
+                      0) +
+                    " AI leads found"
+                  : scoutStatus === "empty"
+                    ? "Supplier Scout — No leads found"
+                    : "Supplier Scout — Error",
+            ),
+          ),
+          scoutStatus === "loading" &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "16px 12px",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--gold-dim)",
+                  letterSpacing: ".08em",
+                },
+              },
+              "Scanning distributors + web sources...",
+            ),
+          scoutStatus === "done" &&
+            scoutData &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                },
+              },
+              // ── AI leads
+              scoutData.claude &&
+                scoutData.claude.length > 0 &&
+                hS(
+                  "div",
+                  null,
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "7px",
+                        letterSpacing: ".18em",
+                        textTransform: "uppercase",
+                        color: "var(--gold-dim)",
+                        marginBottom: "6px",
+                      },
+                    },
+                    "AI Sourcing Leads",
+                  ),
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill,minmax(200px,1fr))",
+                        gap: "8px",
+                      },
+                    },
+                    ...scoutData.claude.map((c, i) =>
+                      hS(
+                        "div",
+                        {
+                          key: i,
+                          style: {
+                            padding: "8px 10px",
+                            background: "rgba(201,168,76,.04)",
+                            border: "1px solid rgba(201,168,76,.15)",
+                            borderRadius: "3px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "3px",
+                          },
+                        },
+                        hS(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "Cinzel,serif",
+                              fontSize: "9px",
+                              color: "var(--gold-solid)",
+                              letterSpacing: ".04em",
+                            },
+                          },
+                          c.name,
+                        ),
+                        c.website &&
+                          hS(
+                            "a",
+                            {
+                              href:
+                                "https://" +
+                                c.website.replace(/^https?:\/\//, ""),
+                              target: "_blank",
+                              style: {
+                                fontFamily: "JetBrains Mono,monospace",
+                                fontSize: "8px",
+                                color: "var(--gold-dim)",
+                                textDecoration: "none",
+                              },
+                            },
+                            c.website,
+                          ),
+                        hS(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "8px",
+                              color: "var(--body-faint)",
+                              lineHeight: "1.4",
+                              marginTop: "2px",
+                            },
+                          },
+                          c.reason,
+                        ),
+                        hS(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "Cinzel,serif",
+                              fontSize: "7px",
+                              letterSpacing: ".1em",
+                              color: "rgba(201,168,76,.4)",
+                              marginTop: "2px",
+                            },
+                          },
+                          (c.type || "distributor").toUpperCase(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              // ── Web hits
+              scoutData.web &&
+                scoutData.web.length > 0 &&
+                hS(
+                  "div",
+                  null,
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "7px",
+                        letterSpacing: ".18em",
+                        textTransform: "uppercase",
+                        color: "var(--body-faint)",
+                        margin: "8px 0 6px",
+                      },
+                    },
+                    "Web Hits — Nationals Excluded",
+                  ),
+                  hS(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      },
+                    },
+                    ...scoutData.web.slice(0, 6).map((w, i) =>
+                      hS(
+                        "div",
+                        {
+                          key: i,
+                          style: {
+                            padding: "6px 8px",
+                            background: "rgba(0,0,0,.15)",
+                            border: "1px solid rgba(255,255,255,.05)",
+                            borderRadius: "3px",
+                          },
+                        },
+                        hS(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "9px",
+                              color: "var(--body-muted)",
+                              marginBottom: "2px",
+                            },
+                          },
+                          w.title,
+                        ),
+                        w.url &&
+                          hS(
+                            "a",
+                            {
+                              href: w.url.startsWith("http")
+                                ? w.url
+                                : "https://" + w.url,
+                              target: "_blank",
+                              style: {
+                                fontFamily: "JetBrains Mono,monospace",
+                                fontSize: "8px",
+                                color: "var(--gold-dim)",
+                                textDecoration: "none",
+                              },
+                            },
+                            w.url,
+                          ),
+                        w.snippet &&
+                          hS(
+                            "div",
+                            {
+                              style: {
+                                fontFamily: "JetBrains Mono,monospace",
+                                fontSize: "8px",
+                                color: "var(--body-faint)",
+                                marginTop: "2px",
+                                lineHeight: "1.4",
+                              },
+                            },
+                            w.snippet.slice(0, 120) +
+                              (w.snippet.length > 120 ? "..." : ""),
+                          ),
+                      ),
+                    ),
+                  ),
+                ),
+            ),
+          scoutStatus === "empty" &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "12px",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                  fontStyle: "italic",
+                },
+              },
+              "No leads found. Try direct manufacturer outreach.",
+            ),
+          scoutStatus === "error" &&
+            hS(
+              "div",
+              {
+                style: {
+                  padding: "12px",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "#ff6b7a",
+                },
+              },
+              "Scout failed — check Netlify logs.",
             ),
         ),
     );
