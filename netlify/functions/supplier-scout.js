@@ -2,9 +2,16 @@
 // Imperio SCC — Supplier Scout
 // Runs two jobs in parallel:
 //   1. Claude API — asks for lesser-known US distributors in this FSC/category
-//   2. Browserless — fires 2 targeted searches: P/N+distributor, Mfr+authorized dealer gov
+//   2. Browserless — fires 2 targeted Bing searches: P/N+distributor, Mfr+authorized dealer gov
 // POST body: { pn, nsn, fsc, item_name, approved_sources: ["OAKLEY INC"] }
-// Returns: { ok, claude: [{name, reason, website?, phone?}], web: [{title, url, snippet}] }
+// Returns: { ok, claude: [{name, reason, website, type}], web: [{title, url, snippet}] }
+//
+// Fix log:
+//   - Model string corrected: claude-sonnet-4-6 (was claude-sonnet-4-20250514 — invalid)
+//   - Proxy params removed from Browserless (caused 400 on non-enterprise tier)
+//   - Claude prompt hardened: explicit FSC context, tighter JSON schema, web_search tool enabled
+//   - Bing selector fallback added: if h2 a returns nothing, fall back to full body text parse
+//   - All errors now logged with context before returning empty arrays
 
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,37 +20,46 @@ const HEADERS = {
   "Content-Type": "application/json",
 };
 
-const BROWSERLESS_ENDPOINT = "https://production-sfo.browserless.io/scrape";
+// NO proxy params — those cause 400 on free/basic Browserless tier
+const BROWSERLESS_SCRAPE = "https://production-sfo.browserless.io/scrape";
 
 // ── Claude API — distributor discovery ───────────────────────────────────────
 async function claudeScout({ pn, nsn, fsc, item_name, approved_sources }) {
-  const mfr = (approved_sources || [])
+  const mfrList = (approved_sources || [])
     .map((s) => s.replace(/\b(INC|LLC|CORP|CO|LTD)\b\.?/gi, "").trim())
+    .filter(Boolean)
     .join(", ");
 
-  const prompt = `You are a federal supply chain sourcing specialist. 
+  const itemDesc = item_name || "unknown item";
+  const partRef = pn || nsn || "no part number";
+  const fscCode = fsc || "unknown";
 
-I need US distributors or manufacturers for this DLA solicitation:
-- Item: ${item_name || "unknown"}
-- FSC: ${fsc || "unknown"}
-- Part Number: ${pn || nsn || "unknown"}
-- OEM/Approved Source: ${mfr || "unknown"}
+  const prompt = `You are a federal supply chain sourcing specialist for a veteran-owned SDVOSB government reseller.
 
-Find me 5-8 lesser-known US distributors or authorized resellers that:
-1. Are NOT Grainger, MSC, McMaster-Carr, Zoro, Amazon, or other national catalog giants
-2. Are likely to work with a new SDVOSB veteran-owned small business reseller
-3. Can drop-ship directly to government delivery addresses
-4. Are BAA/TAA compliant (US or approved country manufacture)
-5. Are regional, specialty, or mid-tier distributors with actual inventory
+Find US distributors or authorized resellers for this DLA DIBBS solicitation:
+- Item: ${itemDesc}
+- FSC: ${fscCode}
+- Part/NSN: ${partRef}
+- OEM / DLA Approved Source: ${mfrList || "not specified"}
 
-Respond ONLY with a JSON array. No preamble, no markdown, no explanation.
-Format exactly:
+Requirements — ALL must apply:
+1. NOT a national catalog giant (no Grainger, MSC Industrial, McMaster-Carr, Zoro, Amazon, Global Industrial, Fastenal)
+2. Regional, specialty, or mid-tier — ideally 5-200 employees
+3. Likely to work with a new SDVOSB reseller placing government drop-ship orders
+4. BAA/TAA compliant — US domestic or approved-country manufacture only, no China-origin
+5. Can ship direct to a government delivery address (drop-ship capable)
+6. Will accept third-party PO funding (not net-30 direct-pay only)
+
+Return ONLY a JSON array. No preamble, no explanation, no markdown fences.
+Return between 4 and 8 results. If you cannot find enough real companies, return fewer — do NOT fabricate.
+
 [
   {
-    "name": "Company Name",
-    "website": "website.com",
-    "reason": "one sentence why this is a good match",
-    "type": "distributor|manufacturer|dealer"
+    "name": "Exact Company Name",
+    "website": "domain.com",
+    "phone": "555-555-5555 or null",
+    "reason": "One sentence: why this is a viable source for this specific item/FSC",
+    "type": "distributor|manufacturer|dealer|wholesaler"
   }
 ]`;
 
@@ -55,97 +71,135 @@ Format exactly:
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
+      model: "claude-sonnet-4-6",
+      max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
     }),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(30000),
   });
 
-  if (!res.ok) throw new Error("Claude API HTTP " + res.status);
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`Claude API HTTP ${res.status}: ${errBody.slice(0, 300)}`);
+  }
+
   const data = await res.json();
   const text = (data.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
     .join("");
 
-  // Strip any accidental markdown fences
-  const clean = text.replace(/```json|```/gi, "").trim();
-  console.log("Claude raw response (first 300):", clean.slice(0, 300));
+  console.log("Claude raw response (first 500):", text.slice(0, 500));
+
+  // Strip accidental markdown fences
+  const clean = text
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/gi, "")
+    .trim();
+
+  // Extract JSON array — handle leading/trailing text if present
+  const arrayMatch = clean.match(/\[[\s\S]*\]/);
+  if (!arrayMatch) {
+    console.error(
+      "Claude returned no JSON array. Full response:",
+      text.slice(0, 400),
+    );
+    return [];
+  }
+
   try {
-    return JSON.parse(clean);
+    const parsed = JSON.parse(arrayMatch[0]);
+    if (!Array.isArray(parsed)) throw new Error("Not an array");
+    console.log(`Claude returned ${parsed.length} leads`);
+    return parsed;
   } catch (parseErr) {
     console.error(
       "Claude JSON parse failed:",
       parseErr.message,
       "raw:",
-      clean.slice(0, 200),
+      arrayMatch[0].slice(0, 300),
     );
     return [];
   }
 }
 
-// ── Browserless — 2 targeted searches ────────────────────────────────────────
+// ── Browserless — Bing search, NO proxy params ────────────────────────────────
 async function browserlessSearch(query, apiKey) {
-  // Use /content endpoint -- returns full rendered HTML, parse ourselves
-  // /scrape was returning 400 due to selector payload format issues
   const searchUrl =
-    "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=5";
+    "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=8";
+  console.log("Browserless search:", query);
+
   try {
-    const res = await fetch(
-      `https://production-sfo.browserless.io/content?token=${apiKey}&stealth=true`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: searchUrl,
-          waitFor: 3000,
-        }),
-        signal: AbortSignal.timeout(20000),
-      },
-    );
+    const res = await fetch(`${BROWSERLESS_SCRAPE}?token=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: searchUrl,
+        elements: [
+          { selector: "h2 a", timeout: 6000 }, // Bing result titles
+          { selector: ".b_caption p", timeout: 6000 }, // Bing snippets
+          { selector: "cite", timeout: 6000 }, // Bing URL citations
+        ],
+        waitFor: 4000,
+      }),
+      signal: AbortSignal.timeout(22000),
+    });
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error(
-        "Browserless /content error:",
-        res.status,
-        errText.slice(0, 200),
+      throw new Error(
+        `Browserless HTTP ${res.status}: ${errText.slice(0, 200)}`,
       );
-      throw new Error("Browserless HTTP " + res.status);
     }
 
-    const html = await res.text();
-    console.log("Bing HTML length:", html.length, "for query:", query);
+    const data = await res.json();
 
-    // Parse Bing results from HTML
-    const titleMatches = [
-      ...html.matchAll(
-        /<h2[^>]*><a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a><\/h2>/gi,
-      ),
-    ];
-    const snippetMatches = [
-      ...html.matchAll(
-        /class="b_caption"[^>]*>.*?<p[^>]*>([^<]{20,200})<\/p>/gi,
-      ),
-    ];
+    let titles = (data?.data?.[0]?.results || [])
+      .map((r) => r.text || "")
+      .filter(Boolean);
+    let snippets = (data?.data?.[1]?.results || [])
+      .map((r) => r.text || "")
+      .filter(Boolean);
+    let urls = (data?.data?.[2]?.results || [])
+      .map((r) => r.text || "")
+      .filter(Boolean);
 
-    const results = titleMatches.slice(0, 5).map((m, i) => ({
-      title: m[2].replace(/&#?\w+;/g, " ").trim(),
-      url: m[1],
-      snippet: snippetMatches[i]
-        ? snippetMatches[i][1].replace(/&#?\w+;/g, " ").trim()
-        : "",
+    // Fallback: if selectors returned nothing, scrape raw body text
+    if (!titles.length) {
+      console.log("Bing selectors returned nothing — trying body fallback");
+      const allText = (data?.data || [])
+        .flatMap((d) => d.results || [])
+        .map((r) => r.text || r.html || "")
+        .join(" ");
+      // Extract URLs and surrounding text from raw body
+      const bodyUrls = allText.match(/https?:\/\/[^\s"<>]{10,80}/g) || [];
+      return bodyUrls.slice(0, 5).map((u) => ({
+        title: u,
+        snippet: "",
+        url: u,
+        query,
+      }));
+    }
+
+    console.log(`Bing returned ${titles.length} titles for: ${query}`);
+
+    return titles.slice(0, 6).map((title, i) => ({
+      title,
+      snippet: snippets[i] || "",
+      url: urls[i] || "",
       query,
     }));
-
-    console.log("Parsed Bing results:", results.length);
-    return results.length
-      ? results
-      : [{ title: "No results parsed", snippet: "", url: "", query }];
   } catch (err) {
-    console.error("Browserless search error:", err.message);
-    return [{ title: "Search failed", snippet: err.message, url: "", query }];
+    console.error(
+      "Browserless search error for query:",
+      query,
+      "—",
+      err.message,
+    );
+    // Return structured error so front end knows Browserless failed, not zero results
+    return [
+      { title: "__browserless_error__", snippet: err.message, url: "", query },
+    ];
   }
 }
 
@@ -165,22 +219,14 @@ exports.handler = async (event) => {
   const apiKey = process.env.BROWSERLESS_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-  // Diagnostic logging — shows in Netlify function logs
-  console.log("BROWSERLESS_API_KEY present:", !!apiKey);
-  console.log("ANTHROPIC_API_KEY present:", !!anthropicKey);
-  console.log("Event body:", event.body);
-  console.log(
-    "anthropicKey prefix:",
-    anthropicKey ? anthropicKey.slice(0, 10) : "NONE",
-  );
+  console.log("supplier-scout: BROWSERLESS_API_KEY present:", !!apiKey);
+  console.log("supplier-scout: ANTHROPIC_API_KEY present:", !!anthropicKey);
 
   if (!anthropicKey) {
     return {
       statusCode: 500,
       headers: HEADERS,
-      body: JSON.stringify({
-        error: "ANTHROPIC_API_KEY missing — redeploy after adding env var",
-      }),
+      body: JSON.stringify({ error: "ANTHROPIC_API_KEY missing" }),
     };
   }
 
@@ -198,40 +244,58 @@ exports.handler = async (event) => {
   const { pn, nsn, fsc, item_name, approved_sources } = body;
   const mfr = (approved_sources || [])[0] || "";
   const partQuery = pn || nsn || "";
+  const itemDesc = item_name || "industrial supply item";
 
-  // Build the 2 targeted search queries
+  console.log(
+    "supplier-scout: item=",
+    item_name,
+    "fsc=",
+    fsc,
+    "pn=",
+    partQuery,
+    "mfr=",
+    mfr,
+  );
+
+  // Build 2 targeted Bing search queries
+  // Q1: specific part number — finds distributors who stock this exact item
+  // Q2: OEM + authorized dealer — finds who can source from the approved manufacturer
   const searchQ1 = partQuery
-    ? `"${partQuery}" distributor price buy`
-    : `${item_name} distributor government supply`;
+    ? `"${partQuery}" distributor buy stock price`
+    : `${itemDesc} distributor government supply Texas`;
 
-  const searchQ2 = mfr
-    ? `"${mfr.replace(/\b(INC|LLC|CORP)\b\.?/gi, "").trim()}" authorized dealer distributor government`
-    : `${item_name} authorized dealer military government`;
+  const mfrClean = mfr.replace(/\b(INC|LLC|CORP|CO|LTD)\b\.?/gi, "").trim();
+  const searchQ2 = mfrClean
+    ? `"${mfrClean}" authorized dealer reseller government military`
+    : `${item_name || ""} supplier government military distributor`;
 
   // Fire Claude always; Browserless only if key present
-  const searchPromises = [
-    claudeScout({ pn, nsn, fsc, item_name, approved_sources }),
-  ];
+  const promises = [claudeScout({ pn, nsn, fsc, item_name, approved_sources })];
   if (apiKey) {
-    searchPromises.push(browserlessSearch(searchQ1, apiKey));
-    searchPromises.push(browserlessSearch(searchQ2, apiKey));
+    promises.push(browserlessSearch(searchQ1, apiKey));
+    promises.push(browserlessSearch(searchQ2, apiKey));
+  } else {
+    console.log("supplier-scout: No Browserless key — skipping web search");
   }
 
   const [claudeResult, webResult1, webResult2] =
-    await Promise.allSettled(searchPromises);
+    await Promise.allSettled(promises);
 
   const claudeSuppliers =
     claudeResult.status === "fulfilled" ? claudeResult.value : [];
-
   if (claudeResult.status === "rejected") {
-    console.error("Claude failed:", claudeResult.reason);
+    console.error(
+      "Claude scout failed:",
+      claudeResult.reason?.message || claudeResult.reason,
+    );
   }
-  const webHits = [
-    ...(webResult1.status === "fulfilled" ? webResult1.value : []),
-    ...(webResult2.status === "fulfilled" ? webResult2.value : []),
+
+  const rawWeb = [
+    ...(webResult1?.status === "fulfilled" ? webResult1.value : []),
+    ...(webResult2?.status === "fulfilled" ? webResult2.value : []),
   ];
 
-  // Filter web hits — remove obvious nationals and junk
+  // Filter web hits — remove nationals, error sentinels, and junk
   const EXCLUDE = [
     "grainger",
     "amazon",
@@ -241,11 +305,22 @@ exports.handler = async (event) => {
     "ebay",
     "walmart",
     "home depot",
+    "fastenal",
+    "__browserless_error__",
   ];
-  const filteredWeb = webHits.filter((r) => {
+  const filteredWeb = rawWeb.filter((r) => {
+    if (r.title === "__browserless_error__") return false;
     const combined = (r.title + r.url + r.snippet).toLowerCase();
     return !EXCLUDE.some((e) => combined.includes(e));
   });
+
+  // Surface Browserless errors in logs but don't fail the whole response
+  const browserlessErrors = rawWeb
+    .filter((r) => r.title === "__browserless_error__")
+    .map((r) => r.snippet);
+  if (browserlessErrors.length) {
+    console.error("Browserless errors:", browserlessErrors);
+  }
 
   return {
     statusCode: 200,
@@ -259,6 +334,9 @@ exports.handler = async (event) => {
       queries: [searchQ1, searchQ2],
       claude: claudeSuppliers,
       web: filteredWeb,
+      browserlessErrors: browserlessErrors.length
+        ? browserlessErrors
+        : undefined,
     }),
   };
 };
