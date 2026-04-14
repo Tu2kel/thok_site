@@ -87,49 +87,62 @@ Format exactly:
 
 // ── Browserless — 2 targeted searches ────────────────────────────────────────
 async function browserlessSearch(query, apiKey) {
-  // Use Bing instead of Google -- Google blocks Browserless even with proxies
+  // Use /content endpoint -- returns full rendered HTML, parse ourselves
+  // /scrape was returning 400 due to selector payload format issues
   const searchUrl =
     "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=5";
   try {
     const res = await fetch(
-      `${BROWSERLESS_ENDPOINT}?token=${apiKey}&proxy=residential&proxyCountry=us&stealth=true`,
+      `https://production-sfo.browserless.io/content?token=${apiKey}&stealth=true`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: searchUrl,
-          elements: [
-            { selector: "h2 a", timeout: 5000 }, // Bing result titles
-            { selector: ".b_caption p", timeout: 5000 }, // Bing snippets
-            { selector: "cite", timeout: 5000 }, // Bing URLs
-          ],
           waitFor: 3000,
         }),
         signal: AbortSignal.timeout(20000),
       },
     );
 
-    if (!res.ok) throw new Error("Browserless HTTP " + res.status);
-    const data = await res.json();
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(
+        "Browserless /content error:",
+        res.status,
+        errText.slice(0, 200),
+      );
+      throw new Error("Browserless HTTP " + res.status);
+    }
 
-    const titles = (data?.data?.[0]?.results || [])
-      .map((r) => r.text || "")
-      .filter(Boolean);
-    const snippets = (data?.data?.[1]?.results || [])
-      .map((r) => r.text || "")
-      .filter(Boolean);
-    const urls = (data?.data?.[2]?.results || [])
-      .map((r) => r.text || "")
-      .filter(Boolean);
+    const html = await res.text();
+    console.log("Bing HTML length:", html.length, "for query:", query);
 
-    console.log("Bing search results for:", query, "titles:", titles.length);
+    // Parse Bing results from HTML
+    const titleMatches = [
+      ...html.matchAll(
+        /<h2[^>]*><a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a><\/h2>/gi,
+      ),
+    ];
+    const snippetMatches = [
+      ...html.matchAll(
+        /class="b_caption"[^>]*>.*?<p[^>]*>([^<]{20,200})<\/p>/gi,
+      ),
+    ];
 
-    return titles.slice(0, 5).map((title, i) => ({
-      title,
-      snippet: snippets[i] || "",
-      url: urls[i] || "",
+    const results = titleMatches.slice(0, 5).map((m, i) => ({
+      title: m[2].replace(/&#?\w+;/g, " ").trim(),
+      url: m[1],
+      snippet: snippetMatches[i]
+        ? snippetMatches[i][1].replace(/&#?\w+;/g, " ").trim()
+        : "",
       query,
     }));
+
+    console.log("Parsed Bing results:", results.length);
+    return results.length
+      ? results
+      : [{ title: "No results parsed", snippet: "", url: "", query }];
   } catch (err) {
     console.error("Browserless search error:", err.message);
     return [{ title: "Search failed", snippet: err.message, url: "", query }];

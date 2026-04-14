@@ -149,7 +149,7 @@ exports.handler = async (event) => {
   try {
     // Route through Browserless — GSA blocks serverless IPs
     const res = await fetch(
-      `https://production-sfo.browserless.io/content?token=${apiKey}&proxy=residential&proxyCountry=us&stealth=true`,
+      `https://production-sfo.browserless.io/content?token=${apiKey}&stealth=true`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
