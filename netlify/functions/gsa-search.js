@@ -17,7 +17,10 @@ const HEADERS = {
 function cleanManufacturerName(raw) {
   return raw
     .toLowerCase()
-    .replace(/\b(inc|llc|corp|co|ltd|company|group|industries|international|mfg|manufacturing)\b\.?/gi, "")
+    .replace(
+      /\b(inc|llc|corp|co|ltd|company|group|industries|international|mfg|manufacturing)\b\.?/gi,
+      "",
+    )
     .replace(/[^a-z0-9\s]/g, "")
     .trim()
     .split(/\s+/)[0]; // First meaningful word is usually enough
@@ -28,11 +31,13 @@ function parseGSAResults(html) {
   const results = [];
 
   // Product name pattern — GSA renders as anchor links in product grid
-  const productPattern = /<a[^>]+href="([^"]*advantag[^"]*)"[^>]*>([^<]{5,120})<\/a>/gi;
+  const productPattern =
+    /<a[^>]+href="([^"]*advantag[^"]*)"[^>]*>([^<]{5,120})<\/a>/gi;
   // Price pattern
   const pricePattern = /\$\s*([\d,]+\.\d{2})/g;
   // Part number pattern — GSA shows Mfr part numbers
-  const partPattern = /(?:Mfr[#\s:]+|Part[#\s:]+|Model[#\s:]+)([A-Z0-9\-]{3,30})/gi;
+  const partPattern =
+    /(?:Mfr[#\s:]+|Part[#\s:]+|Model[#\s:]+)([A-Z0-9\-]{3,30})/gi;
   // Source count
   const sourcePattern = /From\s+(\d+)\s+source/gi;
 
@@ -124,11 +129,17 @@ exports.handler = async (event) => {
     };
   }
 
+  console.log("gsa-search body:", event.body);
+  console.log("manufacturer:", manufacturer);
+
   if (!manufacturer) {
     return {
       statusCode: 400,
       headers: HEADERS,
-      body: JSON.stringify({ error: "manufacturer required" }),
+      body: JSON.stringify({
+        error:
+          "manufacturer required — received: " + JSON.stringify(event.body),
+      }),
     };
   }
 
@@ -147,7 +158,7 @@ exports.handler = async (event) => {
           waitFor: 3000,
         }),
         signal: AbortSignal.timeout(20000),
-      }
+      },
     );
 
     if (!res.ok) {
@@ -155,7 +166,13 @@ exports.handler = async (event) => {
       return {
         statusCode: res.status,
         headers: HEADERS,
-        body: JSON.stringify({ ok: false, manufacturer, query, error: errText, results: [] }),
+        body: JSON.stringify({
+          ok: false,
+          manufacturer,
+          query,
+          error: errText,
+          results: [],
+        }),
       };
     }
 

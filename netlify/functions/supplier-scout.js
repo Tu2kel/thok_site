@@ -138,11 +138,18 @@ exports.handler = async (event) => {
   const apiKey = process.env.BROWSERLESS_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-  if (!apiKey || !anthropicKey) {
+  // Diagnostic logging — shows in Netlify function logs
+  console.log("BROWSERLESS_API_KEY present:", !!apiKey);
+  console.log("ANTHROPIC_API_KEY present:", !!anthropicKey);
+  console.log("Event body:", event.body);
+
+  if (!anthropicKey) {
     return {
       statusCode: 500,
       headers: HEADERS,
-      body: JSON.stringify({ error: "Missing API keys" }),
+      body: JSON.stringify({
+        error: "ANTHROPIC_API_KEY missing — redeploy after adding env var",
+      }),
     };
   }
 
@@ -170,15 +177,24 @@ exports.handler = async (event) => {
     ? `"${mfr.replace(/\b(INC|LLC|CORP)\b\.?/gi, "").trim()}" authorized dealer distributor government`
     : `${item_name} authorized dealer military government`;
 
-  // Fire Claude + both Browserless searches in parallel
-  const [claudeResult, webResult1, webResult2] = await Promise.allSettled([
+  // Fire Claude always; Browserless only if key present
+  const searchPromises = [
     claudeScout({ pn, nsn, fsc, item_name, approved_sources }),
-    browserlessSearch(searchQ1, apiKey),
-    browserlessSearch(searchQ2, apiKey),
-  ]);
+  ];
+  if (apiKey) {
+    searchPromises.push(browserlessSearch(searchQ1, apiKey));
+    searchPromises.push(browserlessSearch(searchQ2, apiKey));
+  }
+
+  const [claudeResult, webResult1, webResult2] =
+    await Promise.allSettled(searchPromises);
 
   const claudeSuppliers =
     claudeResult.status === "fulfilled" ? claudeResult.value : [];
+
+  if (claudeResult.status === "rejected") {
+    console.error("Claude failed:", claudeResult.reason);
+  }
   const webHits = [
     ...(webResult1.status === "fulfilled" ? webResult1.value : []),
     ...(webResult2.status === "fulfilled" ? webResult2.value : []),
