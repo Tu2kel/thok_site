@@ -1,8 +1,9 @@
 // netlify/functions/catalog-search.js
-// Imperio SCC — Catalog Search
-// Hits Zoro, Grainger, MSC public search APIs in parallel for a given P/N or NSN.
+// Imperio SCC — Catalog Search (Browserless-powered)
+// Hits Zoro, Grainger, MSC via Browserless residential proxies.
+// Raw fetch was getting blocked — Browserless handles JS rendering + CAPTCHA + stealth.
 // POST body: { pn: "MS35338-43", nsn: "5310001234567" }
-// Returns: array of { supplier, found, price, stock, url, error }
+// Returns: { ok, query, results: [{ supplier, found, price, stock, url, sku, error }] }
 
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -11,152 +12,117 @@ const HEADERS = {
   "Content-Type": "application/json",
 };
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const BROWSERLESS_ENDPOINT = "https://production-sfo.browserless.io/scrape";
+
+// ── Core Browserless fetch ────────────────────────────────────────────────────
+async function browserlessFetch(url, selectors, apiKey) {
+  const res = await fetch(
+    `${BROWSERLESS_ENDPOINT}?token=${apiKey}&proxy=residential&proxyCountry=us&stealth=true`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        elements: selectors.map((s) => ({ selector: s, timeout: 5000 })),
+        waitFor: 3000,
+      }),
+      signal: AbortSignal.timeout(20000),
+    },
+  );
+  if (!res.ok) throw new Error("Browserless HTTP " + res.status);
+  const data = await res.json();
+  // Flatten all text results
+  const texts = (data?.data || []).map((d) =>
+    (d.results || []).map((r) => r.text || r.html || "").join(" "),
+  );
+  return texts.join(" ");
+}
 
 // ── ZORO ─────────────────────────────────────────────────────────────────────
-// Public search API — no auth required, returns JSON
-async function searchZoro(query) {
-  const url =
-    "https://www.zoro.com/search?q=" +
-    encodeURIComponent(query) +
-    "&page=1&pageSize=3";
+async function searchZoro(query, apiKey) {
+  const searchUrl =
+    "https://www.zoro.com/search?q=" + encodeURIComponent(query);
   try {
-    const res = await fetch(
-      "https://www.zoro.com/api/2.0/search/products?q=" +
-        encodeURIComponent(query) +
-        "&pageSize=3",
-      {
-        headers: {
-          "User-Agent": UA,
-          Accept: "application/json",
-          Referer: "https://www.zoro.com/",
-        },
-        signal: AbortSignal.timeout(8000),
-      },
+    const text = await browserlessFetch(
+      searchUrl,
+      [
+        "[data-testid='product-card']",
+        ".product-card",
+        "[class*='ProductCard']",
+        "[class*='price']",
+        "body",
+      ],
+      apiKey,
     );
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    const items = data?.results || data?.products || [];
-    if (!items.length) {
-      // Fallback: HTML scrape
-      return await searchZoroHtml(query);
-    }
-    const first = items[0];
-    const price =
-      first?.price || first?.listPrice || first?.pricing?.listPrice || null;
-    const sku = first?.sku || first?.itemId || "";
-    const slug = first?.slug || first?.url || "";
-    const productUrl = slug
-      ? "https://www.zoro.com" + (slug.startsWith("/") ? slug : "/" + slug)
-      : "https://www.zoro.com/search?q=" + encodeURIComponent(query);
+
+    const priceMatch = text.match(/\$\s*([\d,]+\.\d{2})/);
+    const skuMatch = text.match(/(?:Item#|SKU|G-)[:\s]?([A-Z0-9]{5,15})/i);
+    const found =
+      !!priceMatch ||
+      text.toLowerCase().includes("add to cart") ||
+      text.toLowerCase().includes("in stock");
+
     return {
       supplier: "Zoro",
-      found: true,
-      price: price ? parseFloat(price) : null,
-      stock: first?.availability?.availableToSell ? "In Stock" : "Check",
-      url: productUrl,
-      sku,
+      found,
+      price: priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : null,
+      stock: text.toLowerCase().includes("in stock")
+        ? "In Stock"
+        : found
+          ? "Check"
+          : null,
+      url: searchUrl,
+      sku: skuMatch ? skuMatch[1] : null,
       error: null,
     };
   } catch (err) {
-    return await searchZoroHtml(query).catch(() => ({
+    return {
       supplier: "Zoro",
       found: false,
       price: null,
       stock: null,
-      url: "https://www.zoro.com/search?q=" + encodeURIComponent(query),
+      url: searchUrl,
+      sku: null,
       error: err.message,
-    }));
+    };
   }
 }
 
-async function searchZoroHtml(query) {
-  const res = await fetch(
-    "https://www.zoro.com/search?q=" + encodeURIComponent(query),
-    {
-      headers: { "User-Agent": UA, Accept: "text/html" },
-      signal: AbortSignal.timeout(8000),
-    },
-  );
-  const html = await res.text();
-  // Extract price from HTML — Zoro renders price in data attributes / JSON-LD
-  const priceMatch = html.match(/"price"\s*:\s*"?([\d.]+)"?/);
-  const skuMatch = html.match(/"sku"\s*:\s*"([^"]+)"/);
-  const urlMatch = html.match(
-    /"url"\s*:\s*"(https:\/\/www\.zoro\.com\/[^"]+)"/,
-  );
-  const found = !!priceMatch || html.includes("Add to Cart");
-  return {
-    supplier: "Zoro",
-    found,
-    price: priceMatch ? parseFloat(priceMatch[1]) : null,
-    stock: html.includes("In Stock") ? "In Stock" : found ? "Check" : null,
-    url: urlMatch
-      ? urlMatch[1]
-      : "https://www.zoro.com/search?q=" + encodeURIComponent(query),
-    sku: skuMatch ? skuMatch[1] : null,
-    error: null,
-  };
-}
-
 // ── GRAINGER ─────────────────────────────────────────────────────────────────
-// Public product search — JSON API, no auth for catalog prices
-async function searchGrainger(query) {
+async function searchGrainger(query, apiKey) {
+  const searchUrl =
+    "https://www.grainger.com/search?searchQuery=" + encodeURIComponent(query);
   try {
-    const res = await fetch(
-      "https://www.grainger.com/search?searchQuery=" +
-        encodeURIComponent(query) +
-        "&sst=1",
-      {
-        headers: {
-          "User-Agent": UA,
-          Accept: "application/json, text/html",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-        signal: AbortSignal.timeout(8000),
-      },
+    const text = await browserlessFetch(
+      searchUrl,
+      [
+        "[class*='ProductCard']",
+        "[class*='product-card']",
+        "[data-testid*='product']",
+        "[class*='price']",
+        "body",
+      ],
+      apiKey,
     );
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    // Try JSON first
-    const ct = res.headers.get("content-type") || "";
-    if (ct.includes("json")) {
-      const data = await res.json();
-      const items =
-        data?.products ||
-        data?.searchResults?.products ||
-        data?.result?.products ||
-        [];
-      if (items.length) {
-        const first = items[0];
-        return {
-          supplier: "Grainger",
-          found: true,
-          price: first?.listPrice ? parseFloat(first.listPrice) : null,
-          stock: first?.availability || "Check",
-          url: first?.pdpUrl
-            ? "https://www.grainger.com" + first.pdpUrl
-            : "https://www.grainger.com/search?searchQuery=" +
-              encodeURIComponent(query),
-          sku: first?.itemNumber || first?.sku || null,
-          error: null,
-        };
-      }
-    }
-    // HTML fallback
-    const html = ct.includes("json") ? "" : await res.text();
-    const priceMatch = html.match(/\$\s*([\d,]+\.\d{2})/);
-    const itemMatch = html.match(/data-item-number="([^"]+)"/);
-    const found = !!priceMatch || html.includes("Add to Cart");
+
+    const priceMatch = text.match(/\$\s*([\d,]+\.\d{2})/);
+    const skuMatch = text.match(/Item\s*#\s*([A-Z0-9]{4,12})/i);
+    const found =
+      !!priceMatch ||
+      text.toLowerCase().includes("add to cart") ||
+      text.toLowerCase().includes("in stock");
+
     return {
       supplier: "Grainger",
       found,
       price: priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : null,
-      stock: html.includes("In Stock") ? "In Stock" : found ? "Check" : null,
-      url:
-        "https://www.grainger.com/search?searchQuery=" +
-        encodeURIComponent(query),
-      sku: itemMatch ? itemMatch[1] : null,
+      stock: text.toLowerCase().includes("in stock")
+        ? "In Stock"
+        : found
+          ? "Check"
+          : null,
+      url: searchUrl,
+      sku: skuMatch ? skuMatch[1] : null,
       error: null,
     };
   } catch (err) {
@@ -165,75 +131,48 @@ async function searchGrainger(query) {
       found: false,
       price: null,
       stock: null,
-      url:
-        "https://www.grainger.com/search?searchQuery=" +
-        encodeURIComponent(query),
+      url: searchUrl,
+      sku: null,
       error: err.message,
     };
   }
 }
 
 // ── MSC INDUSTRIAL ───────────────────────────────────────────────────────────
-// Public search — MSC has a JSON search API
-async function searchMSC(query) {
+async function searchMSC(query, apiKey) {
+  const searchUrl =
+    "https://www.mscdirect.com/browse/tn?searchterm=" +
+    encodeURIComponent(query);
   try {
-    const res = await fetch(
-      "https://www.mscdirect.com/browse/tn?searchterm=" +
-        encodeURIComponent(query) +
-        "&hdrsrh=true",
-      {
-        headers: {
-          "User-Agent": UA,
-          Accept: "application/json, text/html",
-        },
-        signal: AbortSignal.timeout(8000),
-      },
+    const text = await browserlessFetch(
+      searchUrl,
+      [
+        "[class*='product']",
+        "[class*='Product']",
+        "[class*='price']",
+        "[class*='Price']",
+        "body",
+      ],
+      apiKey,
     );
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const html = await res.text();
-    // MSC embeds product data in page JSON
-    const jsonMatch = html.match(
-      /window\.__INITIAL_STATE__\s*=\s*({.+?});\s*<\/script>/s,
-    );
-    if (jsonMatch) {
-      try {
-        const state = JSON.parse(jsonMatch[1]);
-        const products =
-          state?.search?.searchResults?.products || state?.products?.list || [];
-        if (products.length) {
-          const first = products[0];
-          const price =
-            first?.unitPrice ||
-            first?.listPrice ||
-            first?.price?.listPrice ||
-            null;
-          return {
-            supplier: "MSC Industrial",
-            found: true,
-            price: price ? parseFloat(price) : null,
-            stock: first?.availability?.stockStatus || "Check",
-            url: first?.productUrl
-              ? "https://www.mscdirect.com" + first.productUrl
-              : "https://www.mscdirect.com/browse/tn?searchterm=" +
-                encodeURIComponent(query),
-            sku: first?.mscPartNumber || first?.sku || null,
-            error: null,
-          };
-        }
-      } catch {}
-    }
-    // HTML fallback — look for price patterns
-    const priceMatch = html.match(/\$\s*([\d,]+\.\d{2})/);
-    const skuMatch = html.match(/MSC#\s*([\d]+)/);
-    const found = !!priceMatch || html.includes("Add to Cart");
+
+    const priceMatch = text.match(/\$\s*([\d,]+\.\d{2})/);
+    const skuMatch = text.match(/MSC#?\s*:?\s*([\d]{7,10})/i);
+    const found =
+      !!priceMatch ||
+      text.toLowerCase().includes("add to cart") ||
+      text.toLowerCase().includes("in stock");
+
     return {
       supplier: "MSC Industrial",
       found,
       price: priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : null,
-      stock: html.includes("In Stock") ? "In Stock" : found ? "Check" : null,
-      url:
-        "https://www.mscdirect.com/browse/tn?searchterm=" +
-        encodeURIComponent(query),
+      stock: text.toLowerCase().includes("in stock")
+        ? "In Stock"
+        : found
+          ? "Check"
+          : null,
+      url: searchUrl,
       sku: skuMatch ? skuMatch[1] : null,
       error: null,
     };
@@ -243,9 +182,8 @@ async function searchMSC(query) {
       found: false,
       price: null,
       stock: null,
-      url:
-        "https://www.mscdirect.com/browse/tn?searchterm=" +
-        encodeURIComponent(query),
+      url: searchUrl,
+      sku: null,
       error: err.message,
     };
   }
@@ -254,13 +192,22 @@ async function searchMSC(query) {
 // ── HANDLER ───────────────────────────────────────────────────────────────────
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers, body: "" };
+    return { statusCode: 204, headers: HEADERS, body: "" };
   }
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
       headers: HEADERS,
       body: JSON.stringify({ error: "Method not allowed" }),
+    };
+  }
+
+  const apiKey = process.env.BROWSERLESS_API_KEY;
+  if (!apiKey) {
+    return {
+      statusCode: 500,
+      headers: HEADERS,
+      body: JSON.stringify({ error: "BROWSERLESS_API_KEY not configured" }),
     };
   }
 
@@ -275,7 +222,6 @@ exports.handler = async (event) => {
     };
   }
 
-  // Build query — prefer P/N, fallback to NSN (strip dashes for search)
   const query = (pn || "").trim() || (nsn || "").replace(/-/g, "").trim();
   if (!query) {
     return {
@@ -285,14 +231,14 @@ exports.handler = async (event) => {
     };
   }
 
-  // Fire all three in parallel — never let one failure block the others
-  const results = await Promise.allSettled([
-    searchZoro(query),
-    searchGrainger(query),
-    searchMSC(query),
+  // Fire all three in parallel
+  const [zoroResult, graingerResult, mscResult] = await Promise.allSettled([
+    searchZoro(query, apiKey),
+    searchGrainger(query, apiKey),
+    searchMSC(query, apiKey),
   ]);
 
-  const output = results.map((r) =>
+  const output = [zoroResult, graingerResult, mscResult].map((r) =>
     r.status === "fulfilled"
       ? r.value
       : {
@@ -301,13 +247,17 @@ exports.handler = async (event) => {
           price: null,
           stock: null,
           url: null,
+          sku: null,
           error: r.reason?.message || "Failed",
         },
   );
 
+  // Check if ALL returned not found — triggers GSA cascade on front end
+  const allNotFound = output.every((r) => !r.found);
+
   return {
     statusCode: 200,
     headers: HEADERS,
-    body: JSON.stringify({ ok: true, query, results: output }),
+    body: JSON.stringify({ ok: true, query, results: output, allNotFound }),
   };
 };
