@@ -71,13 +71,25 @@ Format exactly:
 
   // Strip any accidental markdown fences
   const clean = text.replace(/```json|```/gi, "").trim();
-  return JSON.parse(clean);
+  console.log("Claude raw response (first 300):", clean.slice(0, 300));
+  try {
+    return JSON.parse(clean);
+  } catch (parseErr) {
+    console.error(
+      "Claude JSON parse failed:",
+      parseErr.message,
+      "raw:",
+      clean.slice(0, 200),
+    );
+    return [];
+  }
 }
 
 // ── Browserless — 2 targeted searches ────────────────────────────────────────
 async function browserlessSearch(query, apiKey) {
+  // Use Bing instead of Google -- Google blocks Browserless even with proxies
   const searchUrl =
-    "https://www.google.com/search?q=" + encodeURIComponent(query) + "&num=5";
+    "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=5";
   try {
     const res = await fetch(
       `${BROWSERLESS_ENDPOINT}?token=${apiKey}&proxy=residential&proxyCountry=us&stealth=true`,
@@ -87,9 +99,9 @@ async function browserlessSearch(query, apiKey) {
         body: JSON.stringify({
           url: searchUrl,
           elements: [
-            { selector: "h3", timeout: 5000 },
-            { selector: ".VwiC3b", timeout: 5000 }, // Google snippet class
-            { selector: "cite", timeout: 5000 }, // URL shown in result
+            { selector: "h2 a", timeout: 5000 }, // Bing result titles
+            { selector: ".b_caption p", timeout: 5000 }, // Bing snippets
+            { selector: "cite", timeout: 5000 }, // Bing URLs
           ],
           waitFor: 3000,
         }),
@@ -100,7 +112,6 @@ async function browserlessSearch(query, apiKey) {
     if (!res.ok) throw new Error("Browserless HTTP " + res.status);
     const data = await res.json();
 
-    // Extract h3 titles, snippets, and cites
     const titles = (data?.data?.[0]?.results || [])
       .map((r) => r.text || "")
       .filter(Boolean);
@@ -111,6 +122,8 @@ async function browserlessSearch(query, apiKey) {
       .map((r) => r.text || "")
       .filter(Boolean);
 
+    console.log("Bing search results for:", query, "titles:", titles.length);
+
     return titles.slice(0, 5).map((title, i) => ({
       title,
       snippet: snippets[i] || "",
@@ -118,6 +131,7 @@ async function browserlessSearch(query, apiKey) {
       query,
     }));
   } catch (err) {
+    console.error("Browserless search error:", err.message);
     return [{ title: "Search failed", snippet: err.message, url: "", query }];
   }
 }
@@ -142,6 +156,10 @@ exports.handler = async (event) => {
   console.log("BROWSERLESS_API_KEY present:", !!apiKey);
   console.log("ANTHROPIC_API_KEY present:", !!anthropicKey);
   console.log("Event body:", event.body);
+  console.log(
+    "anthropicKey prefix:",
+    anthropicKey ? anthropicKey.slice(0, 10) : "NONE",
+  );
 
   if (!anthropicKey) {
     return {
