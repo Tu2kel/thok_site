@@ -92,6 +92,9 @@
               { value: "Small Business Set-Aside" },
               "Small Business Set-Aside — 30%",
             ),
+            h("option", { value: "Floor 8%" }, "Floor — 8%"),
+            h("option", { value: "Floor 10%" }, "Floor — 10%"),
+            h("option", { value: "Floor 15%" }, "Floor — 15%"),
           ),
           h(
             "span",

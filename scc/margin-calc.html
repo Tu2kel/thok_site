@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Margin Calculator — Supply Chain Command</title>
+    <title>Margin Calculator — SCC</title>
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -17,12 +17,56 @@
         padding: 0;
       }
 
-      :root {
-        --imperial-red: #2a000a;
-        --metallic-black: #111012;
-        --metallic-black-surface: #1a181b;
-        --gold-solid: #c9a84c;
-        --gold-gradient: linear-gradient(
+      body {
+        background: linear-gradient(
+          160deg,
+          #2a0010 0%,
+          #180008 35%,
+          #0e000a 65%,
+          #120010 100%
+        );
+        color: #f5f0e8;
+        font-family: "Cormorant Garamond", serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 32px 16px 48px;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 500px;
+        background: linear-gradient(
+          160deg,
+          #2e1020 0%,
+          #1c0810 40%,
+          #110008 100%
+        );
+        border: 1px solid rgba(201, 168, 76, 0.22);
+        border-radius: 6px;
+        padding: 28px 28px 32px;
+        box-shadow:
+          0 8px 48px rgba(0, 0, 0, 0.6),
+          0 0 0 1px rgba(201, 168, 76, 0.05) inset;
+      }
+
+      .eyebrow {
+        font-family: "Cinzel", serif;
+        font-size: 7.5px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: rgba(201, 168, 76, 0.45);
+        margin-bottom: 6px;
+        text-align: center;
+      }
+
+      h1 {
+        font-family: "Cinzel", serif;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        background: linear-gradient(
           to bottom,
           #cf972d 22%,
           #f9f295 45%,
@@ -30,489 +74,443 @@
           #b8860b 55%,
           #f9f295 78%
         );
-        --gold-border: rgba(201, 168, 76, 0.2);
-        --gold-dim: rgba(201, 168, 76, 0.45);
-        --alabaster: #f5f0e8;
-        --white-dim: rgba(245, 240, 232, 0.55);
-        --green: #3a8e5d;
-        --accent-green: #3dd68c;
-      }
-
-      html,
-      body {
-        height: 100%;
-        background: var(--imperial-red);
-        font-family: "Cormorant Garamond", Georgia, serif;
-        color: var(--alabaster);
-      }
-
-      body {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        padding: 48px 24px 64px;
-        min-height: 100vh;
-        background:
-          radial-gradient(
-            ellipse at 20% 10%,
-            rgba(80, 0, 20, 0.7) 0%,
-            transparent 55%
-          ),
-          radial-gradient(
-            ellipse at 80% 90%,
-            rgba(40, 0, 10, 0.9) 0%,
-            transparent 55%
-          ),
-          var(--imperial-red);
-      }
-
-      /* ── Header ── */
-      .header {
-        text-align: center;
-        margin-bottom: 40px;
-      }
-
-      .eyebrow {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 10px;
-        font-weight: 300;
-        letter-spacing: 0.25em;
-        color: var(--gold-solid);
-        text-transform: uppercase;
-        margin-bottom: 10px;
-        opacity: 0.8;
-      }
-
-      .title {
-        font-family: "Cinzel", serif;
-        font-size: 28px;
-        font-weight: 600;
-        background: var(--gold-gradient);
         -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         background-clip: text;
-        color: transparent;
-        letter-spacing: 0.08em;
-        line-height: 1.2;
+        text-align: center;
+        margin-bottom: 4px;
       }
 
       .subtitle {
-        font-family: "Cormorant Garamond", serif;
-        font-size: 14px;
+        text-align: center;
+        font-size: 12px;
+        color: rgba(245, 240, 232, 0.35);
         font-style: italic;
-        color: var(--white-dim);
-        margin-top: 8px;
-      }
-
-      /* ── Card ── */
-      .card {
-        background: var(--metallic-black-surface);
-        border: 1px solid var(--gold-border);
-        border-radius: 4px;
-        width: 100%;
-        max-width: 640px;
-        padding: 32px 36px;
-        position: relative;
-      }
-
-      .card::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: var(--gold-gradient);
-        opacity: 0.6;
-      }
-
-      /* ── Input block ── */
-      .input-block {
-        margin-bottom: 36px;
-      }
-
-      .input-label {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: var(--gold-solid);
-        margin-bottom: 10px;
-        display: block;
-      }
-
-      .input-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .currency-prefix {
-        font-family: "Cinzel", serif;
-        font-size: 22px;
-        color: var(--gold-solid);
-        line-height: 1;
-      }
-
-      input[type="text"] {
-        background: rgba(0, 0, 0, 0.4);
-        border: 1px solid var(--gold-border);
-        border-radius: 3px;
-        color: var(--alabaster);
-        font-family: "JetBrains Mono", monospace;
-        font-size: 26px;
-        font-weight: 300;
-        padding: 10px 16px;
-        width: 100%;
-        outline: none;
         letter-spacing: 0.04em;
-        transition: border-color 0.15s;
-      }
-
-      input[type="text"]:focus {
-        border-color: var(--gold-solid);
-      }
-
-      input[type="text"]::placeholder {
-        color: rgba(245, 240, 232, 0.2);
-      }
-
-      /* ── Divider ── */
-      .divider {
-        height: 1px;
-        background: var(--gold-border);
-        margin-bottom: 28px;
-      }
-
-      /* ── Mode badge ── */
-      .mode-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
         margin-bottom: 24px;
       }
 
-      .mode-badge {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.15em;
+      /* ── INPUT ── */
+      .input-section {
+        margin-bottom: 20px;
+      }
+
+      .input-label {
+        font-family: "Cinzel", serif;
+        font-size: 8.5px;
+        letter-spacing: 0.18em;
         text-transform: uppercase;
-        padding: 4px 10px;
-        border-radius: 2px;
-        border: 1px solid;
+        color: rgba(201, 168, 76, 0.55);
+        margin-bottom: 6px;
+        display: block;
       }
 
-      .mode-self {
-        color: var(--accent-green);
-        border-color: rgba(61, 214, 140, 0.3);
-        background: rgba(61, 214, 140, 0.06);
+      .input-wrap {
+        display: flex;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(201, 168, 76, 0.2);
+        border-radius: 4px;
+        padding: 0 14px;
+        transition: border-color 0.2s;
+      }
+      .input-wrap:focus-within {
+        border-color: rgba(201, 168, 76, 0.55);
       }
 
-      .mode-fe {
-        color: #7eb8f7;
-        border-color: rgba(126, 184, 247, 0.3);
-        background: rgba(126, 184, 247, 0.06);
+      .dollar-sign {
+        font-family: "Cinzel", serif;
+        font-size: 15px;
+        color: rgba(201, 168, 76, 0.5);
+        margin-right: 6px;
+        flex-shrink: 0;
       }
 
-      .mode-label {
-        font-family: "Cormorant Garamond", serif;
-        font-size: 13px;
-        font-style: italic;
-        color: var(--white-dim);
-      }
-
-      /* ── Table ── */
-      .tbl-wrap {
+      input[type="number"] {
+        flex: 1;
+        background: none;
+        border: none;
+        outline: none;
+        color: #f5f0e8;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 22px;
+        padding: 12px 0;
         width: 100%;
       }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
       }
 
-      thead th {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.15em;
+      /* ── MODE TABS ── */
+      .mode-tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 16px;
+        border: 1px solid rgba(201, 168, 76, 0.18);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .mode-tab {
+        flex: 1;
+        padding: 7px 10px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-family: "Cinzel", serif;
+        font-size: 8px;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: var(--gold-solid);
-        padding: 0 0 12px;
+        color: rgba(245, 240, 232, 0.4);
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .mode-tab:not(:last-child) {
+        border-right: 1px solid rgba(201, 168, 76, 0.18);
+      }
+      .mode-tab.active {
+        background: rgba(201, 168, 76, 0.12);
+        color: #c9a84c;
+      }
+
+      .fe-note {
         text-align: right;
-        font-weight: 400;
-        border-bottom: 1px solid var(--gold-border);
+        font-size: 10px;
+        color: rgba(245, 240, 232, 0.3);
+        font-family: "Cinzel", serif;
+        letter-spacing: 0.06em;
+        margin-bottom: 10px;
       }
 
-      thead th:first-child {
-        text-align: left;
+      /* ── TABLE ── */
+      .table-wrap {
+        border: 1px solid rgba(201, 168, 76, 0.12);
+        border-radius: 4px;
+        overflow: hidden;
       }
 
-      tbody tr {
-        border-bottom: 1px solid rgba(201, 168, 76, 0.08);
-        transition: background 0.1s;
+      .tbl-head {
+        display: grid;
+        grid-template-columns: 56px 1fr 72px 1fr;
+        background: rgba(0, 0, 0, 0.3);
+        border-bottom: 1px solid rgba(201, 168, 76, 0.12);
       }
 
-      tbody tr:last-child {
+      .tbl-head-cell {
+        font-family: "Cinzel", serif;
+        font-size: 7px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(201, 168, 76, 0.45);
+        padding: 7px 10px;
+      }
+      .tbl-head-cell:not(:first-child) {
+        border-left: 1px solid rgba(201, 168, 76, 0.07);
+      }
+
+      .tbl-row {
+        display: grid;
+        grid-template-columns: 56px 1fr 72px 1fr;
+        border-bottom: 1px solid rgba(201, 168, 76, 0.06);
+        transition: background 0.12s;
+      }
+      .tbl-row:last-child {
         border-bottom: none;
       }
-      tbody tr:hover {
+      .tbl-row:hover {
         background: rgba(201, 168, 76, 0.04);
       }
 
-      tbody td {
-        padding: 13px 0;
-        text-align: right;
-        vertical-align: middle;
+      /* floor tier rows */
+      .tbl-row.floor-row {
+        opacity: 0.85;
       }
 
-      tbody td:first-child {
-        text-align: left;
+      .tbl-cell {
+        padding: 9px 10px;
         font-family: "JetBrains Mono", monospace;
         font-size: 13px;
-        color: var(--gold-solid);
-        letter-spacing: 0.05em;
+        color: rgba(245, 240, 232, 0.75);
+        display: flex;
+        align-items: center;
+      }
+      .tbl-cell:not(:first-child) {
+        border-left: 1px solid rgba(201, 168, 76, 0.06);
       }
 
-      .net-val {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 14px;
-        font-weight: 400;
-      }
-
-      .gross-val {
-        font-family: "JetBrains Mono", monospace;
+      .tbl-cell.margin-cell {
+        font-family: "Cinzel", serif;
         font-size: 11px;
-        color: var(--white-dim);
-        display: block;
+        letter-spacing: 0.05em;
+        font-weight: 600;
       }
 
-      .fee-val {
+      .tbl-cell.gross-cell {
+        color: rgba(245, 240, 232, 0.55);
+      }
+
+      .tbl-cell.fee-cell {
+        color: rgba(231, 76, 60, 0.6);
+        font-size: 12px;
+      }
+
+      .tbl-cell.net-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+
+      .net-amount {
         font-family: "JetBrains Mono", monospace;
-        font-size: 10px;
-        color: rgba(231, 76, 60, 0.7);
-        display: block;
+        font-size: 13px;
+        font-weight: 600;
       }
 
-      /* Margin color tiers */
-      .m20 {
-        color: #7eb8f7;
-      }
-      .m25 {
-        color: #a0d9a0;
-      }
-      .m30 {
-        color: var(--accent-green);
-      }
-      .m35 {
-        color: #f9f295;
-      }
-      .m40 {
-        color: var(--gold-solid);
-      }
-
-      /* ── Self-funded override ── */
-      .sf .net-val {
-        font-size: 16px;
-      }
-      .sf .gross-val,
-      .sf .fee-val {
-        display: none;
-      }
-
-      /* ── Moonshot tag ── */
-      .moonshot {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 9px;
+      .net-eff {
+        font-family: "Cinzel", serif;
+        font-size: 8px;
         letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--gold-solid);
-        border: 1px solid var(--gold-border);
-        border-radius: 2px;
-        padding: 2px 6px;
-        margin-left: 6px;
-        vertical-align: middle;
-        opacity: 0.8;
+        color: rgba(245, 240, 232, 0.35);
       }
 
-      /* ── Empty state ── */
-      .empty {
-        text-align: center;
-        padding: 32px 0 16px;
-        font-family: "Cormorant Garamond", serif;
-        font-size: 15px;
-        font-style: italic;
-        color: var(--white-dim);
+      .divider-row {
+        height: 1px;
+        background: rgba(201, 168, 76, 0.18);
+        grid-column: span 4;
       }
 
-      /* ── Footer note ── */
+      /* ── FE FOOTNOTE ── */
       .footnote {
-        margin-top: 20px;
+        margin-top: 10px;
+        font-size: 10px;
+        color: rgba(245, 240, 232, 0.28);
         font-family: "JetBrains Mono", monospace;
-        font-size: 9px;
+        letter-spacing: 0.02em;
+        line-height: 1.5;
+        padding: 0 2px;
+      }
+
+      /* ── SELF-FUNDED BADGE ── */
+      .self-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: rgba(61, 214, 140, 0.12);
+        border: 1px solid rgba(61, 214, 140, 0.25);
+        font-family: "Cinzel", serif;
+        font-size: 7px;
         letter-spacing: 0.12em;
+        color: #3dd68c;
         text-transform: uppercase;
-        color: rgba(201, 168, 76, 0.35);
-        text-align: center;
+        vertical-align: middle;
       }
     </style>
   </head>
   <body>
-    <div class="header">
-      <p class="eyebrow">Supply Chain Command</p>
-      <h1 class="title">Margin Calculator</h1>
-      <p class="subtitle">Net take-home at 20 / 25 / 30 / 35 / 40%</p>
-    </div>
-
     <div class="card">
-      <div class="input-block">
-        <label class="input-label" for="amt">Contract Value</label>
-        <div class="input-row">
-          <span class="currency-prefix">$</span>
+      <div class="eyebrow">Supply Chain Command</div>
+      <h1>Margin Calculator</h1>
+      <div class="subtitle" id="subtitle">
+        Net take-home at 8 / 10 / 15 / 20 / 25 / 30 / 35 / 40%
+      </div>
+
+      <div class="input-section">
+        <label class="input-label" for="cv">Contract Value</label>
+        <div class="input-wrap">
+          <span class="dollar-sign">$</span>
           <input
-            type="text"
-            id="amt"
+            type="number"
+            id="cv"
+            min="0"
+            step="100"
             placeholder="0"
-            autocomplete="off"
-            inputmode="numeric"
+            value=""
           />
         </div>
       </div>
 
-      <div class="divider"></div>
-
-      <div class="mode-row">
-        <span id="mode-badge" class="mode-badge mode-self">Self-Funded</span>
-        <span id="mode-label" class="mode-label"
-          >No FE fees &mdash; 20%+ target</span
+      <!-- Mode selector -->
+      <div class="mode-tabs">
+        <button
+          class="mode-tab active"
+          data-mode="fe-30"
+          onclick="setMode('fe-30', this)"
         >
+          FE Day-30
+        </button>
+        <button
+          class="mode-tab"
+          data-mode="fe-60"
+          onclick="setMode('fe-60', this)"
+        >
+          FE Day-60
+        </button>
+        <button
+          class="mode-tab"
+          data-mode="self"
+          onclick="setMode('self', this)"
+        >
+          Self-Funded
+        </button>
       </div>
 
-      <div class="tbl-wrap" id="tbl-wrap">
-        <div class="empty" id="empty-state">Enter a contract value above</div>
-        <table id="results-table" style="display: none">
-          <thead>
-            <tr>
-              <th>Margin</th>
-              <th>Gross</th>
-              <th>FE Fee</th>
-              <th>Net Take-Home</th>
-            </tr>
-          </thead>
-          <tbody id="results-body"></tbody>
-        </table>
+      <div class="fe-note" id="fe-note">
+        FE Day-30 benchmark — 5.00% against contract value
       </div>
 
-      <p class="footnote" id="footnote"></p>
+      <div class="table-wrap">
+        <div class="tbl-head">
+          <div class="tbl-head-cell">Margin</div>
+          <div class="tbl-head-cell">Gross</div>
+          <div class="tbl-head-cell">FE Fee</div>
+          <div class="tbl-head-cell">Net Take-Home</div>
+        </div>
+        <div id="tbl-body"></div>
+      </div>
+
+      <div class="footnote" id="footnote"></div>
     </div>
 
     <script>
-      const FE_THRESHOLD = 10000;
-      const FE_RATE = 0.05;
-      const MARGINS = [0.2, 0.25, 0.3, 0.35, 0.4];
-      const CLASSES = ["m20", "m25", "m30", "m35", "m40"];
+      // ── FE FEE ENGINE ─────────────────────────────────────────────────────
+      // Factoring: 1.67% first 20d, +0.833% per extra 10d
+      // PO Funding: 2.50% flat (applied when using PO funding)
+      function calcFE(invoice, payDay, withPO) {
+        let factorPct = 1.67;
+        if (payDay > 20) {
+          const extra = Math.ceil((payDay - 20) / 10);
+          factorPct += extra * 0.833;
+        }
+        const factorFee = (invoice * factorPct) / 100;
+        const poFee = withPO ? (invoice * 2.5) / 100 : 0;
+        return {
+          totalFee: factorFee + poFee,
+          totalPct: factorPct + (withPO ? 2.5 : 0),
+        };
+      }
 
-      const input = document.getElementById("amt");
-      const badge = document.getElementById("mode-badge");
-      const modeLabel = document.getElementById("mode-label");
-      const empty = document.getElementById("empty-state");
-      const table = document.getElementById("results-table");
-      const tbody = document.getElementById("results-body");
-      const footnote = document.getElementById("footnote");
+      // ── MODES ─────────────────────────────────────────────────────────────
+      const MODES = {
+        "fe-30": {
+          label: "FE Day-30 benchmark — 5.00% against contract value",
+          payDay: 30,
+          withPO: true,
+        },
+        "fe-60": {
+          label: "FE Day-60 worst-case — 7.50% against contract value",
+          payDay: 60,
+          withPO: true,
+        },
+        self: {
+          label: "Self-funded — no FE fees",
+          payDay: 0,
+          withPO: false,
+          selfFunded: true,
+        },
+      };
+
+      const TIERS = [
+        { pct: 0.08, label: "8%", color: "#e74c3c" },
+        { pct: 0.1, label: "10%", color: "#e8874f" },
+        { pct: 0.15, label: "15%", color: "#f0c040" },
+        null, // divider — floor / standard break
+        { pct: 0.2, label: "20%", color: "#7eb8f7" },
+        { pct: 0.25, label: "25%", color: "#9ab8ff" },
+        { pct: 0.3, label: "30%", color: "#C9A84C" },
+        { pct: 0.35, label: "35%", color: "#3dd68c" },
+        { pct: 0.4, label: "40%", color: "#a8e6cf" },
+      ];
+
+      let currentMode = "fe-30";
+
+      function setMode(mode, btn) {
+        currentMode = mode;
+        document
+          .querySelectorAll(".mode-tab")
+          .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        render();
+      }
 
       function fmt(n) {
-        if (n >= 1000000) return "$" + (n / 1000000).toFixed(2) + "M";
-        if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "K";
-        return "$" + Math.round(n).toLocaleString();
+        return (
+          "$" +
+          Math.abs(n).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        );
       }
 
-      function fmtFull(n) {
-        return "$" + Math.round(n).toLocaleString();
-      }
+      function render() {
+        const raw = document.getElementById("cv").value;
+        const cv = parseFloat(raw) || 0;
+        const mode = MODES[currentMode];
 
-      function parseVal(str) {
-        return parseFloat(str.replace(/[^0-9.]/g, "")) || 0;
-      }
+        document.getElementById("fe-note").textContent = mode.label;
 
-      function render(val) {
-        if (!val || val <= 0) {
-          empty.style.display = "block";
-          table.style.display = "none";
-          footnote.textContent = "";
-          badge.className = "mode-badge mode-self";
-          badge.textContent = "Self-Funded";
-          modeLabel.textContent = "No FE fees — 20%+ target";
-          return;
-        }
+        const body = document.getElementById("tbl-body");
+        body.innerHTML = "";
 
-        const fe = val > FE_THRESHOLD;
-        const feeAmt = fe ? val * FE_RATE : 0;
+        TIERS.forEach((tier) => {
+          if (tier === null) {
+            // divider
+            const div = document.createElement("div");
+            div.style.cssText = "height:1px;background:rgba(201,168,76,.18);";
+            body.appendChild(div);
+            return;
+          }
 
-        badge.className = "mode-badge " + (fe ? "mode-fe" : "mode-self");
-        badge.textContent = fe ? "Factoring Express" : "Self-Funded";
-        modeLabel.textContent = fe
-          ? "FE Day-30 benchmark — 5.00% against contract value"
-          : "No FE fees — 20%+ margin target";
+          const gross = cv * tier.pct;
+          let fee = 0;
+          let feeLabel = "—";
+          let netColor = tier.color;
 
-        tbody.innerHTML = "";
+          if (!mode.selfFunded && cv > 0) {
+            const fe = calcFE(cv, mode.payDay, mode.withPO);
+            fee = fe.totalFee;
+            feeLabel = "−" + fmt(fee);
+          }
 
-        MARGINS.forEach((m, i) => {
-          const gross = val * m;
-          const net = gross - feeAmt;
-          const netPct = ((net / val) * 100).toFixed(1);
-          const isMoonshot = val >= 200000 && m >= 0.3;
+          const net = gross - fee;
+          const netPct = cv > 0 ? ((net / cv) * 100).toFixed(1) : "—";
+          const isFloor = tier.pct <= 0.15;
 
-          const tr = document.createElement("tr");
-          if (!fe) tr.className = "sf";
+          const row = document.createElement("div");
+          row.className = "tbl-row" + (isFloor ? " floor-row" : "");
 
-          const moonHtml = isMoonshot
-            ? '<span class="moonshot">Moonshot</span>'
-            : "";
+          const netClass = net >= 0 ? tier.color : "#e74c3c";
 
-          tr.innerHTML = `
-          <td>${Math.round(m * 100)}%${moonHtml}</td>
-          <td><span class="gross-val">${fmtFull(gross)}</span></td>
-          <td><span class="fee-val">- ${fmtFull(feeAmt)}</span></td>
-          <td>
-            <span class="net-val ${CLASSES[i]}">${fmtFull(net)}</span>
-            ${fe ? '<span class="gross-val" style="display:block;">' + netPct + "% effective</span>" : ""}
-          </td>
+          row.innerHTML = `
+          <div class="tbl-cell margin-cell" style="color:${tier.color}">${tier.label}</div>
+          <div class="tbl-cell gross-cell">${cv > 0 ? fmt(gross) : "—"}</div>
+          <div class="tbl-cell fee-cell">${cv > 0 ? feeLabel : "—"}</div>
+          <div class="tbl-cell net-cell">
+            <span class="net-amount" style="color:${cv > 0 ? netClass : "rgba(245,240,232,.3)"}">${cv > 0 ? fmt(net) : "—"}</span>
+            <span class="net-eff">${cv > 0 && !mode.selfFunded ? netPct + "% effective" : cv > 0 ? tier.pct * 100 + ".0% effective" : ""}</span>
+          </div>
         `;
-          tbody.appendChild(tr);
+          body.appendChild(row);
         });
 
-        empty.style.display = "none";
-        table.style.display = "table";
-
-        if (fe) {
-          footnote.textContent =
-            "FE fee: " +
-            fmtFull(feeAmt) +
-            " flat against $" +
-            Math.round(val).toLocaleString() +
-            " · Day-30 · 2.50% factoring + 2.50% PO funding";
+        // Footnote
+        const fn = document.getElementById("footnote");
+        if (cv > 0 && !MODES[currentMode].selfFunded) {
+          const m = MODES[currentMode];
+          const fe = calcFE(cv, m.payDay, m.withPO);
+          fn.textContent =
+            `FE Fee: ${fmt(fe.totalFee)} flat against ${fmt(cv)} — Day-${m.payDay} ${fe.totalPct.toFixed(2)}% factoring` +
+            (m.withPO ? " + 2.50% PO Funding" : "");
         } else {
-          footnote.textContent =
-            "Self-funded · no FE fees applied · 20%+ minimum target";
+          fn.textContent = "";
         }
       }
 
-      input.addEventListener("input", () => {
-        const raw = input.value;
-        const val = parseVal(raw);
-        render(val);
-      });
-
-      input.addEventListener("blur", () => {
-        const val = parseVal(input.value);
-        if (val > 0) {
-          input.value = Math.round(val).toLocaleString();
-        }
-      });
-
-      input.addEventListener("focus", () => {
-        const val = parseVal(input.value);
-        if (val > 0) input.value = Math.round(val);
-      });
+      document.getElementById("cv").addEventListener("input", render);
+      render();
     </script>
   </body>
 </html>

@@ -10,6 +10,9 @@
     "Fast Award": 0.35,
     "Low Hanging Fruit": 0.4,
     "Small Business Set-Aside": 0.3,
+    "Floor 8%": 0.08,
+    "Floor 10%": 0.1,
+    "Floor 15%": 0.15,
   };
 
   const STATUSES = [

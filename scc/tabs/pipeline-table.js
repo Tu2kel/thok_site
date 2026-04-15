@@ -1579,7 +1579,7 @@ Rules:
                   const meetsM = m.gpPct >= tierMargin * 100 - 0.5;
                   const mcls = meetsM
                     ? "var(--green)"
-                    : m.gpPct >= 21
+                    : m.gpPct >= 10
                       ? "var(--amber)"
                       : "var(--red)";
                   const TIER_ABBR = {
@@ -1587,6 +1587,9 @@ Rules:
                     "Fast Award": "FAST",
                     "Low Hanging Fruit": "LHF",
                     "Small Business Set-Aside": "SB",
+                    "Floor 8%": "F8",
+                    "Floor 10%": "F10",
+                    "Floor 15%": "F15",
                   };
                   const abbr = TIER_ABBR[tier] || "STD";
                   const m20 = calcBidMath(costUnit, qty, 0.2, 0, 0, 0);
@@ -1801,6 +1804,30 @@ Rules:
                                 style: { background: "var(--surface-inset)" },
                               },
                               "SB — 30%",
+                            ),
+                            hP(
+                              "option",
+                              {
+                                value: "Floor 8%",
+                                style: { background: "var(--surface-inset)" },
+                              },
+                              "F8 — 8%",
+                            ),
+                            hP(
+                              "option",
+                              {
+                                value: "Floor 10%",
+                                style: { background: "var(--surface-inset)" },
+                              },
+                              "F10 — 10%",
+                            ),
+                            hP(
+                              "option",
+                              {
+                                value: "Floor 15%",
+                                style: { background: "var(--surface-inset)" },
+                              },
+                              "F15 — 15%",
                             ),
                           ),
                           hP(

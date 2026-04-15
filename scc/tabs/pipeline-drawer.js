@@ -290,6 +290,9 @@ Imperio Talent Solutions | CAGE 152U4<br>
               const extPrice = parseFloat(record.unit_price) || 0;
               const rawCost = parseFloat(form.supplier_quote_price) || 0;
               const TIERS = [
+                { label: "8%", pct: 0.08, color: "#e74c3c" },
+                { label: "10%", pct: 0.1, color: "#e8874f" },
+                { label: "15%", pct: 0.15, color: "#f0c040" },
                 { label: "20%", pct: 0.2, color: "#7eb8f7" },
                 { label: "25%", pct: 0.25, color: "#9ab8ff" },
                 { label: "27.5%", pct: 0.275, color: "#C9A84C" },
@@ -343,9 +346,16 @@ Imperio Talent Solutions | CAGE 152U4<br>
                       const bidUnit = +(rawCost / (1 - pct)).toFixed(2);
                       const bidTotal = +(bidUnit * qty).toFixed(2);
                       const gp = bidTotal - rawCost * qty;
-                      const feAmt = bidTotal >= 10000 ? bidTotal * 0.075 : 0;
+                      const selfFunded = bidTotal < 10000;
+                      const feAmt = selfFunded
+                        ? 0
+                        : window.SCC_MATH.calcFEFees(bidTotal, 60, true)
+                            .totalFee;
                       const net = +(gp - feAmt).toFixed(2);
-                      const netPct = ((net / bidTotal) * 100).toFixed(1);
+                      const netPct =
+                        bidTotal > 0
+                          ? ((net / bidTotal) * 100).toFixed(1)
+                          : "0.0";
                       const beatsHist = histUnit > 0 && bidUnit <= histUnit;
 
                       return hP(
@@ -429,7 +439,7 @@ Imperio Talent Solutions | CAGE 152U4<br>
                             " (" +
                             netPct +
                             "%)" +
-                            (bidTotal >= 10000 ? " after FE" : ""),
+                            (!selfFunded ? " after FE" : " self-funded"),
                         ),
                         // vs hist
                         histUnit > 0 &&
