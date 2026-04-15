@@ -129,7 +129,6 @@ async function browserlessFetch(targetUrl, apiKey) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: targetUrl,
-        waitFor: 2000,
       }),
       signal: AbortSignal.timeout(18000),
     },

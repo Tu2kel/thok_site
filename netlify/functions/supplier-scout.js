@@ -136,11 +136,10 @@ async function browserlessSearch(query, apiKey) {
       body: JSON.stringify({
         url: searchUrl,
         elements: [
-          { selector: "h2 a", timeout: 6000 }, // Bing result titles
-          { selector: ".b_caption p", timeout: 6000 }, // Bing snippets
-          { selector: "cite", timeout: 6000 }, // Bing URL citations
+          { selector: "h2 a", timeout: 6000 },
+          { selector: ".b_caption p", timeout: 6000 },
+          { selector: "cite", timeout: 6000 },
         ],
-        waitFor: 4000,
       }),
       signal: AbortSignal.timeout(22000),
     });
