@@ -4,10 +4,9 @@
 // POST body: { manufacturer: "Oakley Inc", pn: "OO9452-0965", nsn: "4240017017266" }
 // Returns: { ok, found, results: [{name, partNo, price, contractor, url}] }
 //
-// Browserless free-tier rules (hard lessons):
-//   - NO proxy/stealth params in query string (400)
-//   - NO waitFor in POST body (400) — timeout goes in QUERY STRING as timeout=
-//   - Endpoint: production-sfo.browserless.io/content
+// Strategy: GSA Advantage has a JSON search API at /advantage/ws/search/advantage_search
+// It returns XML-ish content. We try 3 queries in sequence: pn → nsn → mfr name.
+// First one that returns results wins. No proxy params — those cause 400 on free/basic tier.
 
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +15,7 @@ const HEADERS = {
   "Content-Type": "application/json",
 };
 
+// Clean manufacturer name for search — strip legal suffixes, take first 2 words max
 function cleanMfr(raw) {
   return (raw || "")
     .replace(
@@ -30,81 +30,89 @@ function cleanMfr(raw) {
     .toLowerCase();
 }
 
-function gsaSearchUrl(term, mode) {
-  const prefix = mode === "part" ? "1:8" : "0:8";
-  return `https://www.gsaadvantage.gov/advantage/ws/search/advantage_search?q=${prefix}${encodeURIComponent(term)}&db=0&searchType=0&perPage=10`;
+// Build GSA Advantage search URL — uses the actual search page, not the dead WS endpoint
+function gsaUrl(term, mode = "desc") {
+  // Both desc and part searches use the same endpoint — GSA's keyword search handles both
+  return `https://www.gsaadvantage.gov/advantage/search/search_for_asc.do?q=${encodeURIComponent(term)}&db=0&searchType=0`;
 }
 
+// Parse GSA HTML search results page
 function parseGSA(text) {
   const results = [];
-  if (!text || text.length < 50) return results;
+  if (!text || text.length < 100) return results;
 
-  const contractors = [],
-    names = [],
-    prices = [],
-    parts = [],
-    urls = [];
+  // GSA search results page structure — contractor names appear in links and table cells
+  // Pattern: product names in <a> tags, prices as dollar amounts, contractors in td cells
+
+  // Extract product/contractor names from result links
+  const linkPattern =
+    /<a[^>]+href="[^"]*advantage[^"]*"[^>]*>([^<]{5,120})<\/a>/gi;
+  // Extract any dollar prices
+  const pricePattern = /\$\s*([\d,]+\.?\d{0,2})/g;
+  // Extract company/contractor names — typically all-caps or title case followed by "Inc" etc
+  const companyPattern =
+    /([A-Z][A-Za-z\s&,\.]{4,60}(?:Inc|LLC|Corp|Co|Ltd|Company|Group|Industries|Supply|Systems|Technologies|Solutions)\.?)/g;
+  // Extract part numbers from table cells
+  const partPattern =
+    /(?:Part(?:\s+No\.?|Number)?|P\/N|MFR#|Mfg#)[:\s]+([A-Z0-9][A-Z0-9\-\.]{2,30})/gi;
+
+  const links = [];
+  const prices = [];
+  const companies = [];
+  const parts = [];
+
   let m;
-
-  // XML patterns
-  const pContractor = /<contractor[^>]*>([^<]{3,80})<\/contractor>/gi;
-  const pName = /<name[^>]*>([^<]{3,120})<\/name>/gi;
-  const pPrice = /<(?:unitPrice|price)[^>]*>([\d.]+)<\/(?:unitPrice|price)>/gi;
-  const pPart =
-    /<(?:partNum|mfgPartNum|partNumber)[^>]*>([^<]{2,40})<\/(?:partNum|mfgPartNum|partNumber)>/gi;
-  const pDesc =
-    /<(?:description|longDescription|title)[^>]*>([^<]{5,200})<\/(?:description|longDescription|title)>/gi;
-  const pUrl =
-    /<(?:productUrl|url|link)[^>]*>([^<]{10,300})<\/(?:productUrl|url|link)>/gi;
-
-  while ((m = pContractor.exec(text)) !== null) contractors.push(m[1].trim());
-  while ((m = pName.exec(text)) !== null) names.push(m[1].trim());
-  while ((m = pPrice.exec(text)) !== null) prices.push(parseFloat(m[1]));
-  while ((m = pPart.exec(text)) !== null) parts.push(m[1].trim());
-  while ((m = pUrl.exec(text)) !== null) urls.push(m[1].trim());
-
-  // JSON fallback
-  if (!names.length) {
-    const jName = /"(?:description|title|productName)"\s*:\s*"([^"]{5,200})"/g;
-    const jContractor = /"(?:contractor|company|vendor)"\s*:\s*"([^"]{3,80})"/g;
-    const jPrice = /"(?:unitPrice|price)"\s*:\s*([\d.]+)/g;
-    const jPart = /"(?:partNum|mfgPartNum|partNumber)"\s*:\s*"([^"]{2,40})"/g;
-    while ((m = jName.exec(text)) !== null) names.push(m[1].trim());
-    while ((m = jContractor.exec(text)) !== null) contractors.push(m[1].trim());
-    while ((m = jPrice.exec(text)) !== null) prices.push(parseFloat(m[1]));
-    while ((m = jPart.exec(text)) !== null) parts.push(m[1].trim());
+  while ((m = linkPattern.exec(text)) !== null) {
+    const t = m[1].trim();
+    if (t.length > 4 && !t.toLowerCase().includes("javascript")) links.push(t);
   }
-  if (!names.length) {
-    while ((m = pDesc.exec(text)) !== null) names.push(m[1].trim());
+  while ((m = pricePattern.exec(text)) !== null)
+    prices.push(parseFloat(m[1].replace(/,/g, "")));
+  while ((m = companyPattern.exec(text)) !== null) {
+    const c = m[1].trim();
+    if (c.length > 5) companies.push(c);
   }
+  while ((m = partPattern.exec(text)) !== null) parts.push(m[1].trim());
 
-  const limit = Math.min(
-    Math.max(names.length, contractors.length, prices.length),
-    8,
-  );
+  // Deduplicate companies
+  const uniqueCompanies = [...new Set(companies)].slice(0, 8);
+  const uniqueLinks = [...new Set(links)].slice(0, 8);
+
+  const count = Math.max(uniqueLinks.length, uniqueCompanies.length);
+  const limit = Math.min(count, 8);
+
   for (let i = 0; i < limit; i++) {
-    const name = names[i] || contractors[i] || "GSA Item";
-    if (name.toLowerCase().includes("javascript") || name.length < 3) continue;
+    const name = uniqueLinks[i] || uniqueCompanies[i] || null;
+    if (!name) continue;
     results.push({
       name,
-      contractor: contractors[i] || null,
+      contractor: uniqueCompanies[i] || null,
       partNo: parts[i] || null,
       price: prices[i] || null,
-      url: urls[i] || null,
+      url: null,
+      sources: null,
     });
   }
 
-  // Last resort — page loaded but parser missed structure
-  if (!results.length && text.length > 200) {
-    const hasContent =
-      text.includes("$") || /contract|price|schedule/i.test(text);
-    if (hasContent && !/no results|0 results/i.test(text)) {
+  // Fallback — if page loaded but we couldn't parse structure, at least confirm it returned content
+  if (!results.length) {
+    const hasProducts =
+      text.includes("Add to Cart") ||
+      text.includes("GSA") ||
+      text.includes("contract") ||
+      text.includes("schedule");
+    const noResults =
+      text.includes("No results") ||
+      text.includes("0 results") ||
+      text.includes("no items found");
+    if (hasProducts && !noResults) {
       results.push({
         name: "GSA Schedule Items Found — click Open GSA to view",
         contractor: null,
         partNo: null,
         price: null,
         url: null,
+        sources: null,
       });
     }
   }
@@ -112,41 +120,47 @@ function parseGSA(text) {
   return results;
 }
 
-// Browserless free-tier fetch — timeout in QUERY STRING, nothing extra in POST body
+// Single Browserless fetch — NO proxy params (causes 400 on non-enterprise tier)
 async function browserlessFetch(targetUrl, apiKey) {
   const res = await fetch(
-    `https://production-sfo.browserless.io/content?token=${apiKey}&timeout=15000`,
+    `https://production-sfo.browserless.io/content?token=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: targetUrl }),
+      body: JSON.stringify({
+        url: targetUrl,
+        waitFor: 2000,
+      }),
       signal: AbortSignal.timeout(18000),
     },
   );
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Browserless ${res.status}: ${err.slice(0, 200)}`);
+    const errText = await res.text();
+    throw new Error(`Browserless ${res.status}: ${errText.slice(0, 200)}`);
   }
   return res.text();
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS")
+  if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: HEADERS, body: "" };
-  if (event.httpMethod !== "POST")
+  }
+  if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
       headers: HEADERS,
       body: JSON.stringify({ error: "Method not allowed" }),
     };
+  }
 
   const apiKey = process.env.BROWSERLESS_API_KEY;
-  if (!apiKey)
+  if (!apiKey) {
     return {
       statusCode: 500,
       headers: HEADERS,
       body: JSON.stringify({ error: "BROWSERLESS_API_KEY not configured" }),
     };
+  }
 
   let manufacturer, pn, nsn;
   try {
@@ -167,52 +181,61 @@ exports.handler = async (event) => {
     };
   }
 
-  console.log("gsa-search: mfr=", manufacturer, "pn=", pn, "nsn=", nsn);
+  console.log(
+    "gsa-search: manufacturer=",
+    manufacturer,
+    "pn=",
+    pn,
+    "nsn=",
+    nsn,
+  );
 
-  // Try P/N first (most specific), then NSN, then mfr name
+  // Build query sequence — try P/N first (most specific), then NSN, then mfr name
   const queries = [];
   if (pn) queries.push({ term: pn, mode: "part", label: "part_number" });
   if (nsn)
-    queries.push({
-      term: (nsn || "").replace(/-/g, ""),
-      mode: "part",
-      label: "nsn",
-    });
+    queries.push({ term: nsn.replace(/-/g, ""), mode: "part", label: "nsn" });
   if (manufacturer) {
-    const c = cleanMfr(manufacturer);
-    if (c) queries.push({ term: c, mode: "desc", label: "manufacturer" });
+    const cleaned = cleanMfr(manufacturer);
+    if (cleaned)
+      queries.push({ term: cleaned, mode: "desc", label: "manufacturer" });
   }
 
-  let results = [],
-    usedQuery = null,
-    usedUrl = null,
-    lastError = null;
+  let results = [];
+  let usedQuery = null;
+  let usedUrl = null;
+  let lastError = null;
 
+  // Try each query in sequence — stop at first hit
   for (const q of queries) {
-    const url = gsaSearchUrl(q.term, q.mode);
-    console.log(`gsa-search [${q.label}]:`, url);
+    const url = gsaUrl(q.term, q.mode);
+    console.log(`gsa-search: trying ${q.label} query:`, url);
     try {
       const html = await browserlessFetch(url, apiKey);
-      console.log(`gsa-search [${q.label}]: ${html.length} chars`);
+      console.log(`gsa-search: got ${html.length} chars for ${q.label}`);
       const parsed = parseGSA(html);
       if (parsed.length > 0) {
         results = parsed;
         usedQuery = q;
         usedUrl = url;
-        console.log(`gsa-search: ${parsed.length} results via ${q.label}`);
+        console.log(
+          `gsa-search: found ${parsed.length} results via ${q.label}`,
+        );
         break;
       }
     } catch (err) {
-      console.error(`gsa-search [${q.label}] failed:`, err.message);
+      console.error(`gsa-search: ${q.label} query failed:`, err.message);
       lastError = err.message;
+      // Continue to next query
     }
   }
 
+  // Build open-in-browser URL for UI — use mfr name search as fallback link
   const openUrl =
     usedUrl ||
     (manufacturer
       ? `https://www.gsaadvantage.gov/advantage/ws/search/advantage_search?q=0:8${encodeURIComponent(cleanMfr(manufacturer))}&db=0&searchType=0`
-      : "https://www.gsaadvantage.gov/advantage/main/home.do");
+      : `https://www.gsaadvantage.gov/advantage/main/home.do`);
 
   return {
     statusCode: 200,
