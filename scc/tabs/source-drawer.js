@@ -161,6 +161,9 @@
               color: blocked ? "var(--accent-red-soft)" : "var(--accent-green)",
               marginBottom: "3px",
               fontWeight: "700",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             },
           },
           s.name,
@@ -172,6 +175,9 @@
               fontFamily: "JetBrains Mono,monospace",
               fontSize: "10px",
               color: "var(--body-faint)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             },
           },
           "CAGE " + s.cage + " · " + s.pn,
@@ -1082,8 +1088,9 @@
                       style: {
                         display: "grid",
                         gridTemplateColumns:
-                          "repeat(auto-fill,minmax(200px,1fr))",
+                          "repeat(auto-fill,minmax(180px,1fr))",
                         gap: "8px",
+                        minWidth: 0,
                       },
                     },
                     ...scoutData.claude.map((c, i) =>
@@ -1139,6 +1146,8 @@
                               color: "var(--body-faint)",
                               lineHeight: "1.4",
                               marginTop: "2px",
+                              overflow: "hidden",
+                              wordBreak: "break-word",
                             },
                           },
                           c.reason,
@@ -1608,8 +1617,9 @@
             {
               style: {
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
+                gridTemplateColumns: "repeat(2,1fr)",
                 gap: "8px",
+                minWidth: 0,
               },
             },
             ...allSuppliers.map((s) =>
