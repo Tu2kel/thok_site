@@ -1590,6 +1590,7 @@ Rules:
                     "Floor 8%": "F8",
                     "Floor 10%": "F10",
                     "Floor 15%": "F15",
+                    "Floor 20%": "F20",
                   };
                   const abbr = TIER_ABBR[tier] || "STD";
                   const m20 = calcBidMath(costUnit, qty, 0.2, 0, 0, 0);
@@ -1828,6 +1829,14 @@ Rules:
                                 style: { background: "var(--surface-inset)" },
                               },
                               "F15 — 15%",
+                            ),
+                            hP(
+                              "option",
+                              {
+                                value: "Floor 20%",
+                                style: { background: "var(--surface-inset)" },
+                              },
+                              "F20 — 20%",
                             ),
                           ),
                           hP(

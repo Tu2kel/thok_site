@@ -13,6 +13,7 @@
     "Floor 8%": 0.08,
     "Floor 10%": 0.1,
     "Floor 15%": 0.15,
+    "Floor 20%": 0.2,
   };
 
   const STATUSES = [
