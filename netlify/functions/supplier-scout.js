@@ -123,82 +123,48 @@ Return between 4 and 8 results. If you cannot find enough real companies, return
   }
 }
 
-// ── Browserless — Bing search, NO proxy params ────────────────────────────────
-async function browserlessSearch(query, apiKey) {
-  const searchUrl =
-    "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=8";
-  console.log("Browserless search:", query);
+// ── Bing Web Search API — clean JSON, no scraping ────────────────────────────
+// Free tier: 1000 calls/month. Key goes in Netlify env as BING_SEARCH_API_KEY.
+// Endpoint: api.bing.microsoft.com/v7.0/search
+// Falls back gracefully if key missing — just returns empty array.
+async function bingSearch(query, apiKey) {
+  if (!apiKey) {
+    console.log("bingSearch: no BING_SEARCH_API_KEY — skipping");
+    return [];
+  }
+
+  const url =
+    "https://api.bing.microsoft.com/v7.0/search?q=" +
+    encodeURIComponent(query) +
+    "&count=8&responseFilter=Webpages&mkt=en-US";
+
+  console.log("Bing API search:", query);
 
   try {
-    const res = await fetch(`${BROWSERLESS_SCRAPE}?token=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: searchUrl,
-        elements: [
-          { selector: "h2 a", timeout: 6000 },
-          { selector: ".b_caption p", timeout: 6000 },
-          { selector: "cite", timeout: 6000 },
-        ],
-      }),
-      signal: AbortSignal.timeout(22000),
+    const res = await fetch(url, {
+      headers: { "Ocp-Apim-Subscription-Key": apiKey },
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(
-        `Browserless HTTP ${res.status}: ${errText.slice(0, 200)}`,
-      );
+      throw new Error(`Bing API ${res.status}: ${errText.slice(0, 200)}`);
     }
 
     const data = await res.json();
+    const pages = data?.webPages?.value || [];
 
-    let titles = (data?.data?.[0]?.results || [])
-      .map((r) => r.text || "")
-      .filter(Boolean);
-    let snippets = (data?.data?.[1]?.results || [])
-      .map((r) => r.text || "")
-      .filter(Boolean);
-    let urls = (data?.data?.[2]?.results || [])
-      .map((r) => r.text || "")
-      .filter(Boolean);
+    console.log(`Bing API returned ${pages.length} results for: ${query}`);
 
-    // Fallback: if selectors returned nothing, scrape raw body text
-    if (!titles.length) {
-      console.log("Bing selectors returned nothing — trying body fallback");
-      const allText = (data?.data || [])
-        .flatMap((d) => d.results || [])
-        .map((r) => r.text || r.html || "")
-        .join(" ");
-      // Extract URLs and surrounding text from raw body
-      const bodyUrls = allText.match(/https?:\/\/[^\s"<>]{10,80}/g) || [];
-      return bodyUrls.slice(0, 5).map((u) => ({
-        title: u,
-        snippet: "",
-        url: u,
-        query,
-      }));
-    }
-
-    console.log(`Bing returned ${titles.length} titles for: ${query}`);
-
-    return titles.slice(0, 6).map((title, i) => ({
-      title,
-      snippet: snippets[i] || "",
-      url: urls[i] || "",
+    return pages.map((p) => ({
+      title: p.name || "",
+      snippet: p.snippet || "",
+      url: p.url || "",
       query,
     }));
   } catch (err) {
-    console.error(
-      "Browserless search error for query:",
-      query,
-      "—",
-      err.message,
-    );
-    // Return structured error so front end knows Browserless failed, not zero results
-    return [
-      { title: "__browserless_error__", snippet: err.message, url: "", query },
-    ];
+    console.error("Bing API error for query:", query, "—", err.message);
+    return [];
   }
 }
 
@@ -257,29 +223,24 @@ exports.handler = async (event) => {
   );
 
   // Build 2 targeted Bing search queries
-  // Q1: item name + part number — gives Bing enough context to find relevant distributors
-  // Q2: OEM + authorized dealer — finds who can source from the approved manufacturer
   const itemContext = itemDesc !== "industrial supply item" ? itemDesc : "";
   const searchQ1 = partQuery
     ? `${itemContext} "${partQuery}" distributor supplier government`.trim()
-    : `${itemDesc} distributor government supply Texas`;
+    : `${itemDesc} distributor government supply`;
 
   const mfrClean = mfr.replace(/\b(INC|LLC|CORP|CO|LTD)\b\.?/gi, "").trim();
   const searchQ2 = mfrClean
     ? `"${mfrClean}" authorized dealer reseller government military`
     : `${itemDesc} distributor supplier military government`;
 
-  // Fire Claude always; Browserless only if key present
-  const promises = [claudeScout({ pn, nsn, fsc, item_name, approved_sources })];
-  if (apiKey) {
-    promises.push(browserlessSearch(searchQ1, apiKey));
-    promises.push(browserlessSearch(searchQ2, apiKey));
-  } else {
-    console.log("supplier-scout: No Browserless key — skipping web search");
-  }
+  const bingKey = process.env.BING_SEARCH_API_KEY;
 
-  const [claudeResult, webResult1, webResult2] =
-    await Promise.allSettled(promises);
+  // Fire Claude + Bing API in parallel
+  const [claudeResult, webResult1, webResult2] = await Promise.allSettled([
+    claudeScout({ pn, nsn, fsc, item_name, approved_sources }),
+    bingSearch(searchQ1, bingKey),
+    bingSearch(searchQ2, bingKey),
+  ]);
 
   const claudeSuppliers =
     claudeResult.status === "fulfilled" ? claudeResult.value : [];
@@ -295,7 +256,7 @@ exports.handler = async (event) => {
     ...(webResult2?.status === "fulfilled" ? webResult2.value : []),
   ];
 
-  // Filter web hits — remove nationals, error sentinels, and junk
+  // Filter — remove nationals, encyclopedias, social media, junk
   const EXCLUDE = [
     "grainger",
     "amazon",
@@ -306,21 +267,22 @@ exports.handler = async (event) => {
     "walmart",
     "home depot",
     "fastenal",
-    "__browserless_error__",
+    "wikipedia",
+    "britannica",
+    "investopedia",
+    "libretexts",
+    "chemistrytalk",
+    "youtube",
+    "reddit",
+    "linkedin",
+    "facebook",
+    "twitter",
+    "instagram",
   ];
   const filteredWeb = rawWeb.filter((r) => {
-    if (r.title === "__browserless_error__") return false;
     const combined = (r.title + r.url + r.snippet).toLowerCase();
     return !EXCLUDE.some((e) => combined.includes(e));
   });
-
-  // Surface Browserless errors in logs but don't fail the whole response
-  const browserlessErrors = rawWeb
-    .filter((r) => r.title === "__browserless_error__")
-    .map((r) => r.snippet);
-  if (browserlessErrors.length) {
-    console.error("Browserless errors:", browserlessErrors);
-  }
 
   return {
     statusCode: 200,
@@ -334,9 +296,6 @@ exports.handler = async (event) => {
       queries: [searchQ1, searchQ2],
       claude: claudeSuppliers,
       web: filteredWeb,
-      browserlessErrors: browserlessErrors.length
-        ? browserlessErrors
-        : undefined,
     }),
   };
 };
