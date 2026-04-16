@@ -361,7 +361,7 @@
               if (itemClean) {
                 const gq =
                   itemClean +
-                  ` distributor Texas OR "Central Texas" government OR military -site:sam.gov`;
+                  ' distributor Texas OR "Central Texas" government OR military -site:sam.gov';
                 setTimeout(() => {
                   window.open(
                     "https://www.google.com/search?q=" + encodeURIComponent(gq),
@@ -402,151 +402,135 @@
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  CATALOG CHECK PANEL — inject into DrawerSourcePanel above distributor list
-  //  Fires catalog-search Netlify function against Zoro, Grainger, MSC in parallel
-  //  Surfaces: Primary (best FSC+price fit) · Backup · Benchmark (everybody's first stop)
-  //
-  //  PASTE THIS BLOCK into source-drawer.js immediately after the
-  //  "Quick Search" section (after the SAM.gov button block closes ~line 611)
-  //  and before the distributor IIFE that starts (() => { const allDists = ...
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════
+  //  FSC SOURCING CHECK — replaces broken Zoro/Grainger/MSC catalog check
+  //  Shows your DB distributors matched to current FSC.
+  //  LOCAL SOURCE ACTION — generates targeted search strings from protocol.
+  //  No external API. No AI hallucination. No Browserless.
+  // ═══════════════════════════════════════════════════════════════════════
 
-  // ── CATALOG CHECK COMPONENT ──────────────────────────────────────────────────
-  // Drop this function definition ABOVE the DrawerSourcePanel function definition
-  // (around line 296 in source-drawer.js), after the fetchDistPhone helper.
+  // ── LOCAL SOURCE ACTION search string generator ───────────────────────
+  // Builds targeted Google search strings from item description + FSC
+  // Based on the protocol's LOCAL SOURCING ACTION format
+  function buildLocalSearchStrings(itemName, fsc, approvedSources) {
+    const item = (itemName || "").trim();
+    const fscStr = String(fsc || "");
 
-  /*
-  INJECT POINT A — function definition (before DrawerSourcePanel):
-  ─────────────────────────────────────────────────────────────────
-*/
+    // Clean item to 2-3 usable words
+    const itemWords = item
+      .replace(/\b(MIL-SPEC|MIL|NSN|NOMEN|DRAWING|IAW|PER|PER-)\S*/gi, "")
+      .replace(/[,\.]/g, "")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 3)
+      .join(" ");
 
+    // OEM name for "who distributes X" searches — first approved source
+    const oemName =
+      approvedSources && approvedSources.length
+        ? approvedSources[0]
+            .replace(/\b(INC|LLC|CORP|CO|LTD|MFG|MANUFACTURING)\b\.?/gi, "")
+            .trim()
+        : "";
+
+    const searches = [];
+
+    // 1. Item type + regional distributor (LOCAL SOURCING formula)
+    if (itemWords) {
+      searches.push({
+        label: "Regional Dist — Texas",
+        q: `${itemWords} distributor Texas government OR military`,
+      });
+    }
+
+    // 2. Item type + Austin/Waco/Killeen (closest metro triangle)
+    if (itemWords) {
+      searches.push({
+        label: "Local Dist — Austin/Waco",
+        q: `${itemWords} distributor Austin OR Waco OR Killeen TX`,
+      });
+    }
+
+    // 3. OEM dealer/reseller network if we have an approved source
+    if (oemName) {
+      searches.push({
+        label: `${oemName} Dealer Network`,
+        q: `"${oemName}" authorized dealer OR reseller OR distributor`,
+      });
+    }
+
+    // 4. FSC lane + small business distributor
+    if (fscStr) {
+      searches.push({
+        label: `FSC ${fscStr} — SB Dist`,
+        q: `FSC ${fscStr} distributor "small business" Texas OR government`,
+      });
+    }
+
+    // 5. Item + fleet/industrial (catches the repair shop angle from protocol)
+    if (itemWords) {
+      searches.push({
+        label: "Fleet / Industrial Supplier",
+        q: `${itemWords} supplier fleet industrial Texas`,
+      });
+    }
+
+    return searches;
+  }
+
+  // ── FSC SOURCING CHECK PANEL ──────────────────────────────────────────
   function CatalogCheckPanel({ record, dists }) {
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect } = React;
 
+    const fsc = record.fsc || "";
     const nsn = (record.nsn || "").replace(/-/g, "");
+    const nsnDashed =
+      nsn.length === 13
+        ? nsn.replace(/(\d{4})(\d{2})(\d{3})(\d{4})/, "$1-$2-$3-$4")
+        : nsn;
     const pn = record.ref_part_number || "";
+    const itemName = record.item_name || "";
+    const approvedSources = (record.suppliers || []).map((s) => s.name);
     const unitPrice = parseFloat(record.unit_price) || 0;
 
-    const [status, setStatus] = useState("idle"); // idle | loading | done | error
-    const [results, setResults] = useState([]);
-    const [routing, setRouting] = useState(null);
-    const hasFired = useRef(false);
-    const [gsaStatus, setGsaStatus] = useState("idle"); // idle | loading | done | empty | error
-    const [gsaResults, setGsaResults] = useState([]);
-    const [scoutStatus, setScoutStatus] = useState("idle"); // idle | loading | done | empty | error
-    const [scoutData, setScoutData] = useState(null);
+    // Log what we received for debugging
+    console.log("[FSC Sourcing Check] record:", {
+      sol: record.sol_number,
+      fsc,
+      nsn,
+      pn,
+      item: itemName,
+      dists: dists ? dists.length : 0,
+      unitPrice,
+    });
 
-    // ── Price-tier routing ────────────────────────────────────────────────────
-    // Slot each distributor into Primary / Backup / Benchmark based on min_unit/max_unit
-    // and whether benchmark:true is set. Benchmark always goes to slot 3.
-    function buildRouting(distList, price) {
-      const inRange = distList.filter((d) => {
-        const min = d.min_unit != null ? d.min_unit : 0;
-        const max = d.max_unit != null ? d.max_unit : Infinity;
-        return price >= min && price <= max && !d.benchmark;
-      });
-      const benchmarks = distList.filter((d) => d.benchmark);
-      // Sort in-range by priority (lower = better), then tier
-      inRange.sort(
-        (a, b) =>
-          (a.priority || 9) - (b.priority || 9) ||
-          (a.tier || 9) - (b.tier || 9),
+    const searches = buildLocalSearchStrings(itemName, fsc, approvedSources);
+    const [opened, setOpened] = useState({});
+
+    function fireSearch(idx, q) {
+      console.log(`[Local Source Action] Firing search ${idx + 1}:`, q);
+      window.open(
+        "https://www.google.com/search?q=" + encodeURIComponent(q),
+        "_blank",
       );
-      return {
-        primary: inRange[0] || null,
-        backup: inRange[1] || null,
-        benchmark: benchmarks[0] || null,
-      };
+      setOpened((prev) => ({ ...prev, [idx]: true }));
     }
 
-    // ── Fire catalog search ───────────────────────────────────────────────────
-    async function runSearch() {
-      if (!nsn && !pn) return;
-      setStatus("loading");
-      setGsaStatus("idle");
-      setGsaResults([]);
-      try {
-        const res = await fetch("/.netlify/functions/catalog-search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pn: pn || "", nsn: nsn || "" }),
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "Search failed");
-        setResults(data.results || []);
-        setStatus("done");
-
-        // ── GSA CASCADE — auto-fires when all 3 catalogs return NOT FOUND
-        if (data.allNotFound) {
-          const mfrName =
-            record.suppliers && record.suppliers[0]
-              ? record.suppliers[0].name
-              : record.item_name || "";
-          if (mfrName) {
-            setGsaStatus("loading");
-            try {
-              const gsaRes = await fetch("/.netlify/functions/gsa-search", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ manufacturer: mfrName }),
-              });
-              const gsaData = await gsaRes.json();
-              setGsaResults(gsaData.results || []);
-              setGsaStatus(gsaData.found ? "done" : "empty");
-            } catch {
-              setGsaStatus("error");
-            }
-          }
-
-          // ── SUPPLIER SCOUT — fires in parallel on all-NOT FOUND
-          setScoutStatus("loading");
-          setScoutData(null);
-          try {
-            const scoutRes = await fetch("/.netlify/functions/supplier-scout", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                pn: pn || "",
-                nsn: nsn || "",
-                fsc: record.fsc || "",
-                item_name: record.item_name || "",
-                approved_sources: (record.suppliers || []).map((s) => s.name),
-              }),
-            });
-            const scoutJson = await scoutRes.json();
-            setScoutData(scoutJson);
-            setScoutStatus(
-              (scoutJson.claude && scoutJson.claude.length) ||
-                (scoutJson.web && scoutJson.web.length)
-                ? "done"
-                : "empty",
-            );
-          } catch {
-            setScoutStatus("error");
-          }
-        }
-      } catch (err) {
-        setStatus("error");
-      }
+    function fireAll() {
+      console.log(
+        "[Local Source Action] Firing all",
+        searches.length,
+        "searches",
+      );
+      searches.forEach((s, i) => {
+        setTimeout(() => fireSearch(i, s.q), i * 400);
+      });
     }
 
-    // Auto-fire on mount if NSN or P/N present
-    useEffect(() => {
-      if (!hasFired.current && (nsn || pn)) {
-        hasFired.current = true;
-        runSearch();
-      }
-      // Routing is sync — build from dists whenever they're available
-      if (dists && dists.length && unitPrice >= 0) {
-        setRouting(buildRouting(dists, unitPrice));
-      }
-    }, []);
-
-    // ── Styles ────────────────────────────────────────────────────────────────
+    // ── Style shortcuts ──
     const S = {
       section: {
-        marginBottom: "18px",
+        marginBottom: "16px",
         background: "rgba(0,0,0,.18)",
         border: "1px solid rgba(201,168,76,.12)",
         borderRadius: "4px",
@@ -562,8 +546,8 @@
       },
       headerLabel: {
         fontFamily: "Cinzel,serif",
-        fontSize: "8px",
-        letterSpacing: ".18em",
+        fontSize: "9px",
+        letterSpacing: ".16em",
         textTransform: "uppercase",
         color: "var(--gold-dim)",
       },
@@ -571,113 +555,16 @@
         padding: "10px 12px",
         display: "flex",
         flexDirection: "column",
-        gap: "8px",
-      },
-      slot: (accent) => ({
-        display: "flex",
-        flexDirection: "column",
-        gap: "3px",
-        padding: "8px 10px",
-        borderLeft: "3px solid " + accent,
-        background: "rgba(0,0,0,.12)",
-      }),
-      slotLabel: (accent) => ({
-        fontFamily: "Cinzel,serif",
-        fontSize: "7px",
-        letterSpacing: ".18em",
-        textTransform: "uppercase",
-        color: accent,
-        marginBottom: "1px",
-      }),
-      slotName: {
-        fontFamily: "Cinzel,serif",
-        fontSize: "10px",
-        letterSpacing: ".04em",
-        color: "var(--gold-solid)",
-      },
-      slotMeta: {
-        fontFamily: "JetBrains Mono,monospace",
-        fontSize: "9px",
-        color: "var(--body-faint)",
-      },
-      resultRow: (found) => ({
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        padding: "6px 10px",
-        background: found ? "rgba(61,214,140,.04)" : "rgba(0,0,0,.1)",
-        border:
-          "1px solid " +
-          (found ? "rgba(61,214,140,.15)" : "rgba(255,255,255,.05)"),
-        borderRadius: "3px",
-      }),
-      badge: (found) => ({
-        fontFamily: "JetBrains Mono,monospace",
-        fontSize: "9px",
-        padding: "2px 6px",
-        borderRadius: "2px",
-        background: found ? "rgba(61,214,140,.15)" : "rgba(255,107,122,.1)",
-        color: found ? "#3dd68c" : "#ff6b7a",
-        flexShrink: 0,
-      }),
-      price: {
-        fontFamily: "JetBrains Mono,monospace",
-        fontSize: "11px",
-        color: "var(--gold-solid)",
-        flexShrink: 0,
-      },
-      link: {
-        fontFamily: "Cinzel,serif",
-        fontSize: "8px",
-        letterSpacing: ".06em",
-        color: "var(--gold-dim)",
-        textDecoration: "none",
-        marginLeft: "auto",
-      },
-      supplierName: {
-        fontFamily: "Cinzel,serif",
-        fontSize: "9px",
-        letterSpacing: ".04em",
-        color: "var(--body-muted)",
-        flex: 1,
-      },
-      rerunBtn: {
-        padding: "2px 8px",
-        fontFamily: "Cinzel,serif",
-        fontSize: "7px",
-        letterSpacing: ".1em",
-        background: "transparent",
-        border: "1px solid rgba(201,168,76,.25)",
-        color: "var(--gold-dim)",
-        cursor: "pointer",
-        borderRadius: "2px",
+        gap: "6px",
       },
     };
 
-    // ── Routing slots ─────────────────────────────────────────────────────────
-    const RoutingSlots = () => {
-      if (!routing) return null;
-      const slots = [
-        {
-          key: "primary",
-          label: "Primary",
-          accent: "#3dd68c",
-          dist: routing.primary,
-        },
-        {
-          key: "backup",
-          label: "Backup",
-          accent: "var(--gold-solid)",
-          dist: routing.backup,
-        },
-        {
-          key: "benchmark",
-          label: "Benchmark — Everyone Goes Here",
-          accent: "rgba(160,160,160,.5)",
-          dist: routing.benchmark,
-        },
-      ];
-      return hS(
+    return hS(
+      "div",
+      null,
+
+      // ── SECTION 1: DB Distributor Match ──────────────────────────────
+      hS(
         "div",
         { style: S.section },
         hS(
@@ -686,294 +573,36 @@
           hS(
             "span",
             { style: S.headerLabel },
-            "Sourcing Target — by Price Tier",
+            "FSC " + (fsc || "—") + " — DB Matches",
           ),
-          unitPrice > 0 &&
-            hS(
-              "span",
-              {
-                style: {
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "var(--body-faint)",
-                },
+          hS(
+            "span",
+            {
+              style: {
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "9px",
+                color: "var(--body-faint)",
               },
-              "Hist. $" + unitPrice.toFixed(2),
-            ),
+            },
+            dists && dists.length ? dists.length + " in DB" : "0 in DB",
+          ),
         ),
         hS(
           "div",
           { style: S.body },
-          ...slots.map(({ key, label, accent, dist }) =>
-            hS(
-              "div",
-              { key, style: S.slot(accent) },
-              hS("span", { style: S.slotLabel(accent) }, label),
-              dist
-                ? hS(
-                    React.Fragment,
-                    null,
-                    hS("span", { style: S.slotName }, dist.name),
-                    hS(
-                      "span",
-                      { style: S.slotMeta },
-                      [
-                        dist.min_unit != null && dist.max_unit != null
-                          ? "$" +
-                            dist.min_unit +
-                            "–$" +
-                            dist.max_unit +
-                            " range"
-                          : null,
-                        dist.phone || null,
-                        dist.fsc && dist.fsc.includes(record.fsc)
-                          ? "FSC " + record.fsc + " ✓"
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · "),
-                    ),
-                  )
-                : hS(
-                    "span",
-                    { style: { ...S.slotMeta, fontStyle: "italic" } },
-                    "No distributor matched this price range — add one in Source tab",
-                  ),
-            ),
-          ),
-        ),
-      );
-    };
-
-    // ── Live catalog results ──────────────────────────────────────────────────
-    const CatalogResults = () => {
-      const query = pn || nsn;
-      return hS(
-        "div",
-        { style: S.section },
-        hS(
-          "div",
-          { style: S.header },
-          hS(
-            "span",
-            { style: S.headerLabel },
-            status === "loading"
-              ? "Checking catalogs…"
-              : status === "done"
-                ? "Catalog Check — " + query
-                : status === "error"
-                  ? "Catalog Check — Error"
-                  : "Catalog Check",
-          ),
-          status !== "loading" &&
-            hS(
-              "button",
-              {
-                style: S.rerunBtn,
-                onClick: runSearch,
-              },
-              status === "idle" ? "Run Check" : "Recheck",
-            ),
-        ),
-        status === "loading" &&
-          hS(
-            "div",
-            {
-              style: {
-                padding: "16px 12px",
-                fontFamily: "JetBrains Mono,monospace",
-                fontSize: "9px",
-                color: "var(--gold-dim)",
-                letterSpacing: ".08em",
-              },
-            },
-            "Querying Zoro · Grainger · MSC…",
-          ),
-        status === "done" &&
-          hS(
-            "div",
-            { style: S.body },
-            ...results.map((r) =>
-              hS(
-                "div",
-                { key: r.supplier, style: S.resultRow(r.found) },
-                hS(
-                  "span",
-                  { style: S.badge(r.found) },
-                  r.found ? "FOUND" : "NOT FOUND",
-                ),
-                hS("span", { style: S.supplierName }, r.supplier),
-                r.found && r.price
-                  ? hS("span", { style: S.price }, "$" + r.price.toFixed(2))
-                  : r.found
-                    ? hS(
-                        "span",
-                        { style: { ...S.slotMeta, flexShrink: 0 } },
-                        r.stock || "Check site",
-                      )
-                    : null,
-                r.found && r.url
-                  ? hS(
-                      "a",
-                      { href: r.url, target: "_blank", style: S.link },
-                      "View →",
-                    )
-                  : r.url
-                    ? hS(
-                        "a",
-                        { href: r.url, target: "_blank", style: S.link },
-                        "Search →",
-                      )
-                    : null,
-              ),
-            ),
-          ),
-        status === "error" &&
-          hS(
-            "div",
-            {
-              style: {
-                padding: "12px",
-                fontFamily: "JetBrains Mono,monospace",
-                fontSize: "9px",
-                color: "#ff6b7a",
-              },
-            },
-            "Search failed — check Netlify function logs.",
-          ),
-        status === "idle" &&
-          !nsn &&
-          !pn &&
-          hS(
-            "div",
-            {
-              style: {
-                padding: "12px",
-                fontFamily: "JetBrains Mono,monospace",
-                fontSize: "9px",
-                color: "var(--body-faint)",
-                fontStyle: "italic",
-              },
-            },
-            "No P/N or NSN on this record — nothing to search.",
-          ),
-      );
-    };
-
-    return hS(
-      React.Fragment,
-      null,
-      hS(RoutingSlots, null),
-      hS(CatalogResults, null),
-      // ── GSA CASCADE PANEL — auto-renders on all-NOT FOUND
-      gsaStatus !== "idle" &&
-        hS(
-          "div",
-          {
-            style: {
-              marginBottom: "18px",
-              background: "rgba(0,0,0,.18)",
-              border: "1px solid rgba(100,160,255,.2)",
-              borderRadius: "4px",
-              overflow: "hidden",
-            },
-          },
-          hS(
-            "div",
-            {
-              style: {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "8px 12px",
-                borderBottom: "1px solid rgba(100,160,255,.12)",
-                background: "rgba(100,160,255,.04)",
-              },
-            },
-            hS(
-              "span",
-              {
-                style: {
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "8px",
-                  letterSpacing: ".18em",
-                  textTransform: "uppercase",
-                  color: "rgba(100,160,255,.8)",
-                },
-              },
-              gsaStatus === "loading"
-                ? "GSA Advantage — Searching..."
-                : gsaStatus === "done"
-                  ? "GSA Advantage — Schedule Items Found"
-                  : gsaStatus === "empty"
-                    ? "GSA Advantage — Not On Schedule"
-                    : "GSA Advantage — Error",
-            ),
-            hS(
-              "a",
-              {
-                href:
-                  "https://www.gsaadvantage.gov/advantage/ws/search/advantage_search?q=0:8" +
-                  encodeURIComponent(
-                    (
-                      (record.suppliers && record.suppliers[0]
-                        ? record.suppliers[0].name
-                        : record.item_name) || ""
-                    )
-                      .toLowerCase()
-                      .split(" ")[0],
-                  ) +
-                  "&db=0&searchType=0",
-                target: "_blank",
-                style: {
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "7px",
-                  letterSpacing: ".1em",
-                  color: "rgba(100,160,255,.6)",
-                  textDecoration: "none",
-                },
-              },
-              "Open GSA →",
-            ),
-          ),
-          gsaStatus === "loading" &&
-            hS(
-              "div",
-              {
-                style: {
-                  padding: "16px 12px",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "rgba(100,160,255,.6)",
-                  letterSpacing: ".08em",
-                },
-              },
-              "Querying GSA Schedule...",
-            ),
-          gsaStatus === "done" &&
-            gsaResults.length > 0 &&
-            hS(
-              "div",
-              {
-                style: {
-                  padding: "10px 12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                },
-              },
-              ...gsaResults.map((r, i) =>
+          dists && dists.length > 0
+            ? dists.slice(0, 6).map((d, i) =>
                 hS(
                   "div",
                   {
-                    key: i,
+                    key: d.id || i,
                     style: {
                       display: "flex",
                       flexDirection: "column",
-                      gap: "3px",
-                      padding: "8px 10px",
-                      background: "rgba(100,160,255,.04)",
-                      border: "1px solid rgba(100,160,255,.12)",
+                      gap: "2px",
+                      padding: "7px 10px",
+                      background: "rgba(61,214,140,.04)",
+                      border: "1px solid rgba(61,214,140,.15)",
                       borderRadius: "3px",
                     },
                   },
@@ -981,422 +610,274 @@
                     "div",
                     {
                       style: {
-                        fontFamily: "Cinzel,serif",
-                        fontSize: "9px",
-                        color: "rgba(180,210,255,.9)",
-                        letterSpacing: ".04em",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "8px",
                       },
                     },
-                    r.name,
+                    hS(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cinzel,serif",
+                          fontSize: "10px",
+                          color: "var(--gold-solid)",
+                          fontWeight: 600,
+                        },
+                      },
+                      d.name,
+                    ),
+                    d.tier &&
+                      hS(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "9px",
+                            padding: "1px 5px",
+                            borderRadius: "2px",
+                            background: "rgba(201,168,76,.12)",
+                            color: "var(--gold-dim)",
+                          },
+                        },
+                        "T" + d.tier,
+                      ),
                   ),
                   hS(
                     "div",
                     {
                       style: {
                         display: "flex",
+                        gap: "12px",
                         alignItems: "center",
-                        gap: "10px",
                       },
                     },
-                    r.price &&
-                      hS(
-                        "span",
-                        {
-                          style: {
-                            fontFamily: "JetBrains Mono,monospace",
-                            fontSize: "11px",
-                            color: "var(--gold-solid)",
-                          },
-                        },
-                        "from $" + r.price.toFixed(2),
-                      ),
-                    r.partNo &&
-                      hS(
-                        "span",
-                        {
-                          style: {
-                            fontFamily: "JetBrains Mono,monospace",
-                            fontSize: "9px",
-                            color: "var(--body-faint)",
-                          },
-                        },
-                        r.partNo,
-                      ),
-                    r.sources &&
-                      hS(
-                        "span",
-                        {
-                          style: {
-                            fontFamily: "JetBrains Mono,monospace",
-                            fontSize: "9px",
-                            color: "rgba(100,160,255,.6)",
-                          },
-                        },
-                        r.sources,
-                      ),
-                    r.url &&
+                    d.phone &&
                       hS(
                         "a",
                         {
-                          href: r.url,
+                          href: "tel:" + d.phone.replace(/\D/g, ""),
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "10px",
+                            color: "#3dd68c",
+                            textDecoration: "none",
+                          },
+                        },
+                        "📞 " + d.phone,
+                      ),
+                    d.website &&
+                      hS(
+                        "a",
+                        {
+                          href: d.website.startsWith("http")
+                            ? d.website
+                            : "https://" + d.website,
                           target: "_blank",
                           style: {
-                            fontFamily: "Cinzel,serif",
-                            fontSize: "8px",
-                            letterSpacing: ".06em",
-                            color: "rgba(100,160,255,.7)",
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "9px",
+                            color: "var(--accent-blue)",
                             textDecoration: "none",
-                            marginLeft: "auto",
                           },
                         },
-                        "View →",
+                        d.website.replace(/^https?:\/\//, ""),
                       ),
                   ),
+                  d.fsc &&
+                    hS(
+                      "div",
+                      {
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "9px",
+                          color: "var(--body-faint)",
+                        },
+                      },
+                      "FSC: " +
+                        (Array.isArray(d.fsc) ? d.fsc.join(", ") : d.fsc),
+                    ),
                 ),
+              )
+            : hS(
+                "div",
+                {
+                  style: {
+                    padding: "10px 12px",
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "10px",
+                    color: "var(--body-faint)",
+                    fontStyle: "italic",
+                  },
+                },
+                "No DB distributors for FSC " +
+                  (fsc || "—") +
+                  " — use Local Source Action below or add via Source tab",
               ),
-            ),
-          gsaStatus === "empty" &&
-            hS(
-              "div",
-              {
-                style: {
-                  padding: "12px",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "var(--body-faint)",
-                  fontStyle: "italic",
-                },
-              },
-              "Not on GSA schedule — OEM likely sells direct or unlisted.",
-            ),
-          gsaStatus === "error" &&
-            hS(
-              "div",
-              {
-                style: {
-                  padding: "12px",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "#ff6b7a",
-                },
-              },
-              "GSA search failed — check Netlify logs.",
-            ),
         ),
-      // ── SUPPLIER SCOUT PANEL — named distributor leads + filtered web hits
-      scoutStatus !== "idle" &&
+      ),
+
+      // ── SECTION 2: Local Source Action ───────────────────────────────
+      hS(
+        "div",
+        { style: S.section },
         hS(
           "div",
-          {
-            style: {
-              marginBottom: "18px",
-              background: "rgba(0,0,0,.18)",
-              border: "1px solid rgba(201,168,76,.2)",
-              borderRadius: "4px",
-              overflow: "hidden",
-            },
-          },
+          { style: S.header },
+          hS("span", { style: S.headerLabel }, "Local Source Action"),
           hS(
-            "div",
+            "button",
             {
+              onClick: fireAll,
               style: {
-                display: "flex",
-                alignItems: "center",
-                padding: "8px 12px",
-                borderBottom: "1px solid rgba(201,168,76,.12)",
-                background: "rgba(201,168,76,.04)",
+                padding: "3px 10px",
+                fontFamily: "Cinzel,serif",
+                fontSize: "8px",
+                letterSpacing: ".08em",
+                background: "rgba(201,168,76,.12)",
+                border: "1px solid rgba(201,168,76,.3)",
+                color: "var(--gold-solid)",
+                cursor: "pointer",
+                borderRadius: "2px",
               },
             },
+            "⚡ Fire All",
+          ),
+        ),
+        hS(
+          "div",
+          { style: S.body },
+          searches.map((s, i) =>
             hS(
-              "span",
+              "div",
               {
+                key: i,
                 style: {
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "8px",
-                  letterSpacing: ".18em",
-                  textTransform: "uppercase",
-                  color: "var(--gold-dim)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "6px 10px",
+                  background: opened[i]
+                    ? "rgba(61,214,140,.04)"
+                    : "rgba(0,0,0,.1)",
+                  border:
+                    "1px solid " +
+                    (opened[i]
+                      ? "rgba(61,214,140,.2)"
+                      : "rgba(255,255,255,.06)"),
+                  borderRadius: "3px",
                 },
               },
-              scoutStatus === "loading"
-                ? "Supplier Scout — Searching..."
-                : scoutStatus === "done"
-                  ? "Supplier Scout — " +
-                    ((scoutData &&
-                      scoutData.claude &&
-                      scoutData.claude.length) ||
-                      0) +
-                    " AI leads found"
-                  : scoutStatus === "empty"
-                    ? "Supplier Scout — No leads found"
-                    : "Supplier Scout — Error",
+              hS(
+                "div",
+                { style: { flex: 1, minWidth: 0 } },
+                hS(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "9px",
+                      color: opened[i] ? "#3dd68c" : "var(--gold-dim)",
+                      marginBottom: "2px",
+                    },
+                  },
+                  (opened[i] ? "✓ " : "") + s.label,
+                ),
+                hS(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "9px",
+                      color: "var(--body-faint)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    },
+                  },
+                  s.q,
+                ),
+              ),
+              hS(
+                "button",
+                {
+                  onClick: () => fireSearch(i, s.q),
+                  style: {
+                    padding: "3px 8px",
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "8px",
+                    background: "transparent",
+                    border: "1px solid rgba(201,168,76,.25)",
+                    color: "var(--gold-dim)",
+                    cursor: "pointer",
+                    borderRadius: "2px",
+                    flexShrink: 0,
+                  },
+                },
+                "→",
+              ),
             ),
           ),
-          scoutStatus === "loading" &&
+          // NSN + PartTarget quick lookups
+          (nsn || pn) &&
             hS(
               "div",
               {
                 style: {
-                  padding: "16px 12px",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "var(--gold-dim)",
-                  letterSpacing: ".08em",
-                },
-              },
-              "Scanning distributors + web sources...",
-            ),
-          scoutStatus === "done" &&
-            scoutData &&
-            hS(
-              "div",
-              {
-                style: {
-                  padding: "10px 12px",
+                  marginTop: "4px",
+                  paddingTop: "8px",
+                  borderTop: "1px solid rgba(255,255,255,.06)",
                   display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
+                  gap: "6px",
+                  flexWrap: "wrap",
                 },
               },
-              // ── AI leads
-              scoutData.claude &&
-                scoutData.claude.length > 0 &&
+              nsn &&
                 hS(
-                  "div",
-                  null,
-                  hS(
-                    "div",
-                    {
-                      style: {
-                        fontFamily: "Cinzel,serif",
-                        fontSize: "7px",
-                        letterSpacing: ".18em",
-                        textTransform: "uppercase",
-                        color: "var(--gold-dim)",
-                        marginBottom: "6px",
-                      },
+                  "a",
+                  {
+                    href: `https://www.usaspending.gov/search/?hash=&filters=%7B%22keywords%22%3A%5B%22${encodeURIComponent(nsnDashed)}%22%5D%7D`,
+                    target: "_blank",
+                    style: {
+                      padding: "4px 10px",
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "8px",
+                      letterSpacing: ".08em",
+                      background: "rgba(135,206,235,.08)",
+                      border: "1px solid rgba(135,206,235,.2)",
+                      color: "#87ceeb",
+                      textDecoration: "none",
+                      borderRadius: "2px",
                     },
-                    "AI Sourcing Leads",
-                  ),
-                  hS(
-                    "div",
-                    {
-                      style: {
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill,minmax(180px,1fr))",
-                        gap: "8px",
-                        minWidth: 0,
-                      },
-                    },
-                    ...scoutData.claude.map((c, i) =>
-                      hS(
-                        "div",
-                        {
-                          key: i,
-                          style: {
-                            padding: "8px 10px",
-                            background: "rgba(201,168,76,.04)",
-                            border: "1px solid rgba(201,168,76,.15)",
-                            borderRadius: "3px",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "3px",
-                          },
-                        },
-                        hS(
-                          "div",
-                          {
-                            style: {
-                              fontFamily: "Cinzel,serif",
-                              fontSize: "9px",
-                              color: "var(--gold-solid)",
-                              letterSpacing: ".04em",
-                            },
-                          },
-                          c.name,
-                        ),
-                        c.website &&
-                          hS(
-                            "a",
-                            {
-                              href:
-                                "https://" +
-                                c.website.replace(/^https?:\/\//, ""),
-                              target: "_blank",
-                              style: {
-                                fontFamily: "JetBrains Mono,monospace",
-                                fontSize: "8px",
-                                color: "var(--gold-dim)",
-                                textDecoration: "none",
-                              },
-                            },
-                            c.website,
-                          ),
-                        hS(
-                          "div",
-                          {
-                            style: {
-                              fontFamily: "JetBrains Mono,monospace",
-                              fontSize: "8px",
-                              color: "var(--body-faint)",
-                              lineHeight: "1.4",
-                              marginTop: "2px",
-                              overflow: "hidden",
-                              wordBreak: "break-word",
-                            },
-                          },
-                          c.reason,
-                        ),
-                        hS(
-                          "div",
-                          {
-                            style: {
-                              fontFamily: "Cinzel,serif",
-                              fontSize: "7px",
-                              letterSpacing: ".1em",
-                              color: "rgba(201,168,76,.4)",
-                              marginTop: "2px",
-                            },
-                          },
-                          (c.type || "distributor").toUpperCase(),
-                        ),
-                      ),
-                    ),
-                  ),
+                  },
+                  "USASpending — NSN Winners",
                 ),
-              // ── Web hits
-              scoutData.web &&
-                scoutData.web.length > 0 &&
+              pn &&
                 hS(
-                  "div",
-                  null,
-                  hS(
-                    "div",
-                    {
-                      style: {
-                        fontFamily: "Cinzel,serif",
-                        fontSize: "7px",
-                        letterSpacing: ".18em",
-                        textTransform: "uppercase",
-                        color: "var(--body-faint)",
-                        margin: "8px 0 6px",
-                      },
+                  "a",
+                  {
+                    href: `https://www.parttarget.com/search?q=${encodeURIComponent(pn)}`,
+                    target: "_blank",
+                    style: {
+                      padding: "4px 10px",
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "8px",
+                      letterSpacing: ".08em",
+                      background: "rgba(135,206,235,.08)",
+                      border: "1px solid rgba(135,206,235,.2)",
+                      color: "#87ceeb",
+                      textDecoration: "none",
+                      borderRadius: "2px",
                     },
-                    "Web Hits — Nationals Excluded",
-                  ),
-                  hS(
-                    "div",
-                    {
-                      style: {
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      },
-                    },
-                    ...scoutData.web.slice(0, 6).map((w, i) =>
-                      hS(
-                        "div",
-                        {
-                          key: i,
-                          style: {
-                            padding: "6px 8px",
-                            background: "rgba(0,0,0,.15)",
-                            border: "1px solid rgba(255,255,255,.05)",
-                            borderRadius: "3px",
-                          },
-                        },
-                        hS(
-                          "div",
-                          {
-                            style: {
-                              fontFamily: "JetBrains Mono,monospace",
-                              fontSize: "9px",
-                              color: "var(--body-muted)",
-                              marginBottom: "2px",
-                            },
-                          },
-                          w.title,
-                        ),
-                        w.url &&
-                          hS(
-                            "a",
-                            {
-                              href: w.url.startsWith("http")
-                                ? w.url
-                                : "https://" + w.url,
-                              target: "_blank",
-                              style: {
-                                fontFamily: "JetBrains Mono,monospace",
-                                fontSize: "8px",
-                                color: "var(--gold-dim)",
-                                textDecoration: "none",
-                              },
-                            },
-                            w.url,
-                          ),
-                        w.snippet &&
-                          hS(
-                            "div",
-                            {
-                              style: {
-                                fontFamily: "JetBrains Mono,monospace",
-                                fontSize: "8px",
-                                color: "var(--body-faint)",
-                                marginTop: "2px",
-                                lineHeight: "1.4",
-                              },
-                            },
-                            w.snippet.slice(0, 120) +
-                              (w.snippet.length > 120 ? "..." : ""),
-                          ),
-                      ),
-                    ),
-                  ),
+                  },
+                  "PartTarget — P/N Stocks",
                 ),
-            ),
-          scoutStatus === "empty" &&
-            hS(
-              "div",
-              {
-                style: {
-                  padding: "12px",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "var(--body-faint)",
-                  fontStyle: "italic",
-                },
-              },
-              "No leads found. Try direct manufacturer outreach.",
-            ),
-          scoutStatus === "error" &&
-            hS(
-              "div",
-              {
-                style: {
-                  padding: "12px",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "#ff6b7a",
-                },
-              },
-              "Scout failed — check Netlify logs.",
             ),
         ),
+      ),
     );
   }
-
-  /*
-  INJECT POINT B — usage inside DrawerSourcePanel render return
-  ──────────────────────────────────────────────────────────────
-  After the "Quick Search" block (~line 611) and before the distributor IIFE,
-  add this line inside the return hS(...) chain:
-
-      hS(CatalogCheckPanel, { record, dists }),
-
-  Where `dists` is the already-computed array from:
-      const dists = getDistsByFSC(fsc).slice(0, 20);
-*/
 
   // ── MAIN PANEL ────────────────────────────────────────────────────────
   function DrawerSourcePanel({ record }) {
