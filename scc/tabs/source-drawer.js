@@ -507,24 +507,12 @@
     const searches = buildLocalSearchStrings(itemName, fsc, approvedSources);
     const [opened, setOpened] = useState({});
 
-    function fireSearch(idx, q) {
-      console.log(`[Local Source Action] Firing search ${idx + 1}:`, q);
-      window.open(
-        "https://www.google.com/search?q=" + encodeURIComponent(q),
-        "_blank",
+    function markOpened(idx) {
+      console.log(
+        `[Local Source Action] Opened search ${idx + 1}:`,
+        searches[idx]?.q,
       );
       setOpened((prev) => ({ ...prev, [idx]: true }));
-    }
-
-    function fireAll() {
-      console.log(
-        "[Local Source Action] Firing all",
-        searches.length,
-        "searches",
-      );
-      searches.forEach((s, i) => {
-        setTimeout(() => fireSearch(i, s.q), i * 400);
-      });
     }
 
     // ── Style shortcuts ──
@@ -725,24 +713,24 @@
         hS(
           "div",
           { style: S.header },
-          hS("span", { style: S.headerLabel }, "Local Source Action"),
           hS(
-            "button",
+            "span",
+            { style: S.headerLabel },
+            "Local Source Action — Click Each →",
+          ),
+          hS(
+            "span",
             {
-              onClick: fireAll,
               style: {
-                padding: "3px 10px",
-                fontFamily: "Cinzel,serif",
-                fontSize: "8px",
-                letterSpacing: ".08em",
-                background: "rgba(201,168,76,.12)",
-                border: "1px solid rgba(201,168,76,.3)",
-                color: "var(--gold-solid)",
-                cursor: "pointer",
-                borderRadius: "2px",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "9px",
+                color: "var(--body-faint)",
               },
             },
-            "⚡ Fire All",
+            searches.filter((_, i) => opened[i]).length +
+              "/" +
+              searches.length +
+              " opened",
           ),
         ),
         hS(
@@ -800,9 +788,14 @@
                 ),
               ),
               hS(
-                "button",
+                "a",
                 {
-                  onClick: () => fireSearch(i, s.q),
+                  href:
+                    "https://www.google.com/search?q=" +
+                    encodeURIComponent(s.q),
+                  target: "_blank",
+                  rel: "noopener noreferrer",
+                  onClick: () => markOpened(i),
                   style: {
                     padding: "3px 8px",
                     fontFamily: "Cinzel,serif",
@@ -813,6 +806,7 @@
                     cursor: "pointer",
                     borderRadius: "2px",
                     flexShrink: 0,
+                    textDecoration: "none",
                   },
                 },
                 "→",
@@ -833,11 +827,11 @@
                   flexWrap: "wrap",
                 },
               },
-              nsn &&
+              fsc &&
                 hS(
                   "a",
                   {
-                    href: `https://www.usaspending.gov/search/?hash=&filters=%7B%22keywords%22%3A%5B%22${encodeURIComponent(nsnDashed)}%22%5D%7D`,
+                    href: `https://www.usaspending.gov/search/?hash=&filters=%7B%22psc_codes%22%3A%7B%22require%22%3A%5B%5B%22${encodeURIComponent(fsc)}%22%5D%5D%7D%2C%22agencies%22%3A%5B%7B%22type%22%3A%22awarding%22%2C%22tier%22%3A%22toptier%22%2C%22name%22%3A%22Department+of+Defense%22%7D%5D%7D`,
                     target: "_blank",
                     style: {
                       padding: "4px 10px",
@@ -851,13 +845,15 @@
                       borderRadius: "2px",
                     },
                   },
-                  "USASpending — NSN Winners",
+                  "USASpending — FSC " + fsc + " Winners",
                 ),
-              pn &&
+              (nsn || pn) &&
                 hS(
                   "a",
                   {
-                    href: `https://www.parttarget.com/search?q=${encodeURIComponent(pn)}`,
+                    href: nsn
+                      ? `https://www.parttarget.com/search?searchtext=${encodeURIComponent(nsn)}&searchoption=nsn&originalsearchtext=${encodeURIComponent(nsnDashed)}`
+                      : `https://www.parttarget.com/search?searchtext=${encodeURIComponent(pn)}&searchoption=sku&originalsearchtext=${encodeURIComponent(pn)}`,
                     target: "_blank",
                     style: {
                       padding: "4px 10px",
@@ -871,7 +867,7 @@
                       borderRadius: "2px",
                     },
                   },
-                  "PartTarget — P/N Stocks",
+                  "PartTarget — " + (nsn ? "NSN" : "P/N") + " Lookup",
                 ),
             ),
         ),
