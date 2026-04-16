@@ -1514,7 +1514,7 @@
       {
         onClick,
         style: {
-          padding: "2px 8px",
+          padding: "4px 10px",
           borderRadius: "3px",
           fontSize: "13px",
           fontWeight: 600,
@@ -1604,8 +1604,8 @@
             {
               style: {
                 color: "var(--body-bright)",
-                fontSize: "15px",
-                fontWeight: 500,
+                fontSize: "17px",
+                fontWeight: 600,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -1644,7 +1644,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "14px",
               color: "var(--body-dim)",
               fontFamily: "monospace",
             },
@@ -1656,9 +1656,9 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "14px",
               color: diffColor(s.difficulty),
-              fontWeight: 600,
+              fontWeight: 700,
             },
           },
           s.difficulty,
@@ -1668,7 +1668,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "14px",
               color: contactedVal ? "#3dd68c" : "var(--body-faint)",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -1682,7 +1682,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "14px",
               color: respondedVal ? "#C9A84C" : "var(--body-faint)",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -1696,7 +1696,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "14px",
               color: partnered ? "#3dd68c" : "var(--body-faint)",
               textAlign: "center",
             },
@@ -1708,7 +1708,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "14px",
               color: "var(--body-faint)",
               textAlign: "center",
               transform: expanded ? "rotate(90deg)" : "none",
@@ -1742,9 +1742,9 @@
               "div",
               {
                 style: {
-                  fontSize: "13px",
+                  fontSize: "15px",
                   color: "var(--body-dim)",
-                  marginBottom: "6px",
+                  marginBottom: "8px",
                 },
               },
               s.website &&
@@ -1772,10 +1772,10 @@
               "div",
               {
                 style: {
-                  fontSize: "14px",
+                  fontSize: "16px",
                   color: "var(--body-dim)",
-                  lineHeight: 1.5,
-                  marginBottom: "8px",
+                  lineHeight: 1.6,
+                  marginBottom: "10px",
                 },
               },
               s.notes,
@@ -1784,9 +1784,9 @@
               "div",
               {
                 style: {
-                  fontSize: "13px",
+                  fontSize: "12px",
                   color: "var(--body-faint)",
-                  marginBottom: "3px",
+                  marginBottom: "4px",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
                 },
@@ -1797,9 +1797,9 @@
               "div",
               {
                 style: {
-                  fontSize: "14px",
+                  fontSize: "16px",
                   color: "var(--body-bright)",
-                  marginBottom: "8px",
+                  marginBottom: "10px",
                 },
               },
               s.best_use,
@@ -1813,7 +1813,7 @@
               "div",
               {
                 style: {
-                  fontSize: "13px",
+                  fontSize: "12px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
@@ -1846,11 +1846,11 @@
               "div",
               {
                 style: {
-                  fontSize: "13px",
+                  fontSize: "12px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
-                  marginBottom: "3px",
+                  marginBottom: "4px",
                 },
               },
               "Contacted",
@@ -1868,9 +1868,9 @@
                 background: "rgba(255,255,255,.04)",
                 border: "1px solid rgba(255,255,255,.1)",
                 borderRadius: "3px",
-                padding: "6px 9px",
+                padding: "7px 10px",
                 color: "var(--body-bright)",
-                fontSize: "14px",
+                fontSize: "16px",
                 marginBottom: "6px",
                 boxSizing: "border-box",
               },
@@ -1879,11 +1879,11 @@
               "div",
               {
                 style: {
-                  fontSize: "13px",
+                  fontSize: "12px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
-                  marginBottom: "3px",
+                  marginBottom: "4px",
                 },
               },
               "Responded",
@@ -1901,9 +1901,9 @@
                 background: "rgba(255,255,255,.04)",
                 border: "1px solid rgba(255,255,255,.1)",
                 borderRadius: "3px",
-                padding: "6px 9px",
+                padding: "7px 10px",
                 color: "var(--body-bright)",
-                fontSize: "14px",
+                fontSize: "16px",
                 marginBottom: "6px",
                 boxSizing: "border-box",
               },
@@ -1912,11 +1912,11 @@
               "div",
               {
                 style: {
-                  fontSize: "13px",
+                  fontSize: "12px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
-                  marginBottom: "3px",
+                  marginBottom: "4px",
                 },
               },
               "My Notes",
@@ -1934,9 +1934,9 @@
                 background: "rgba(255,255,255,.04)",
                 border: "1px solid rgba(255,255,255,.1)",
                 borderRadius: "3px",
-                padding: "6px 9px",
+                padding: "7px 10px",
                 color: "var(--body-bright)",
-                fontSize: "14px",
+                fontSize: "16px",
                 boxSizing: "border-box",
               },
             }),
@@ -1994,7 +1994,7 @@
             "span",
             {
               style: {
-                fontSize: "14px",
+                fontSize: "15px",
                 fontWeight: 700,
                 color: "var(--gold-dim)",
                 letterSpacing: ".06em",
@@ -2005,19 +2005,19 @@
           ),
           h(
             "span",
-            { style: { fontSize: "13px", color: "var(--body-faint)" } },
+            { style: { fontSize: "14px", color: "var(--body-faint)" } },
             rows.length + " suppliers",
           ),
           contactCount > 0 &&
             h(
               "span",
-              { style: { fontSize: "13px", color: "#3dd68c" } },
+              { style: { fontSize: "14px", color: "#3dd68c" } },
               contactCount + " contacted",
             ),
           partCount > 0 &&
             h(
               "span",
-              { style: { fontSize: "13px", color: "#C9A84C" } },
+              { style: { fontSize: "14px", color: "#C9A84C" } },
               "✦ " + partCount + " partnered",
             ),
         ),
@@ -2025,7 +2025,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "14px",
               color: "var(--body-faint)",
               transform: collapsed ? "rotate(-90deg)" : "none",
               display: "inline-block",
@@ -2284,7 +2284,7 @@
               display: "flex",
               gap: "14px",
               marginLeft: "auto",
-              fontSize: "14px",
+              fontSize: "15px",
             },
           },
           h(
