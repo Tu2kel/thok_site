@@ -134,27 +134,46 @@ Imperio Talent Solutions | CAGE 152U4<br>
     return hP(
       "div",
       { className: "drawer-inner" },
-      hP("div", {
-        style: {
-          display: "flex", alignItems: "center", gap: "8px",
-          padding: "6px 14px 4px",
-          borderBottom: "1px solid rgba(201,168,76,.15)",
-          background: "rgba(201,168,76,.03)",
-        }
-      },
+      hP(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "6px 14px 4px",
+            borderBottom: "1px solid rgba(201,168,76,.15)",
+            background: "rgba(201,168,76,.03)",
+          },
+        },
         hP("span", {
           style: {
-            width: "7px", height: "7px", borderRadius: "50%",
-            background: "#C9A84C", boxShadow: "0 0 6px #C9A84C88",
-            animation: "pulse 2s infinite", display: "inline-block", flexShrink: 0,
-          }
+            width: "7px",
+            height: "7px",
+            borderRadius: "50%",
+            background: "#C9A84C",
+            boxShadow: "0 0 6px #C9A84C88",
+            animation: "pulse 2s infinite",
+            display: "inline-block",
+            flexShrink: 0,
+          },
         }),
-        hP("span", {
-          style: {
-            fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em",
-            color: "var(--gold-dim)", textTransform: "uppercase",
-          }
-        }, "Working · " + (record.sol_number || "") + " · " + (record.item_name || "")),
+        hP(
+          "span",
+          {
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "9px",
+              letterSpacing: ".1em",
+              color: "var(--gold-dim)",
+              textTransform: "uppercase",
+            },
+          },
+          "Working · " +
+            (record.sol_number || "") +
+            " · " +
+            (record.item_name || ""),
+        ),
       ),
       hP(
         "div",
@@ -822,7 +841,6 @@ Imperio Talent Solutions | CAGE 152U4<br>
               ),
             ),
           ),
-      ),
 
         dtab === "mfg_ref" &&
           hP(
@@ -855,7 +873,7 @@ Imperio Talent Solutions | CAGE 152U4<br>
                   "MFG Ref Table loading...",
                 ),
           ),
-    ),
+      ),
     );
   }
 
