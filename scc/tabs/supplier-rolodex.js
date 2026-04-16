@@ -648,7 +648,7 @@
           "label",
           {
             style: {
-              fontSize: "11px",
+              fontSize: "13px",
               color: "var(--body-faint)",
               textTransform: "uppercase",
               letterSpacing: ".06em",
@@ -670,7 +670,7 @@
                 borderRadius: "3px",
                 padding: "6px 8px",
                 color: "var(--body-bright)",
-                fontSize: "13px",
+                fontSize: "15px",
                 boxSizing: "border-box",
                 resize: "vertical",
               },
@@ -685,7 +685,7 @@
                 borderRadius: "3px",
                 padding: "6px 8px",
                 color: "var(--body-bright)",
-                fontSize: "13px",
+                fontSize: "15px",
                 boxSizing: "border-box",
               },
             }),
@@ -736,7 +736,7 @@
             {
               style: {
                 fontFamily: "Cinzel,serif",
-                fontSize: "14px",
+                fontSize: "16px",
                 color: "var(--gold-solid)",
                 letterSpacing: ".08em",
               },
@@ -751,7 +751,7 @@
                 background: "transparent",
                 border: "none",
                 color: "var(--body-dim)",
-                fontSize: "20px",
+                fontSize: "22px",
                 cursor: "pointer",
               },
             },
@@ -801,7 +801,7 @@
                 color: "var(--body-dim)",
                 borderRadius: "3px",
                 cursor: "pointer",
-                fontSize: "13px",
+                fontSize: "15px",
               },
             },
             "Cancel",
@@ -820,7 +820,7 @@
                 color: "var(--gold-solid)",
                 borderRadius: "3px",
                 cursor: "pointer",
-                fontSize: "13px",
+                fontSize: "15px",
                 fontWeight: 700,
               },
             },
@@ -886,7 +886,7 @@
             {
               style: {
                 fontFamily: "Cinzel,serif",
-                fontSize: "14px",
+                fontSize: "16px",
                 color: "var(--gold-solid)",
                 letterSpacing: ".08em",
               },
@@ -901,7 +901,7 @@
                 background: "transparent",
                 border: "none",
                 color: "var(--body-dim)",
-                fontSize: "20px",
+                fontSize: "22px",
                 cursor: "pointer",
               },
             },
@@ -912,7 +912,7 @@
           "div",
           {
             style: {
-              fontSize: "12px",
+              fontSize: "14px",
               color: "var(--body-faint)",
               marginBottom: "10px",
             },
@@ -931,7 +931,7 @@
             borderRadius: "3px",
             padding: "8px 10px",
             color: "var(--body-bright)",
-            fontSize: "13px",
+            fontSize: "15px",
             boxSizing: "border-box",
             resize: "vertical",
             marginBottom: "10px",
@@ -950,7 +950,7 @@
               color: "var(--gold-solid)",
               borderRadius: "3px",
               cursor: "pointer",
-              fontSize: "13px",
+              fontSize: "15px",
               marginBottom: "16px",
             },
           },
@@ -966,7 +966,7 @@
               {
                 style: {
                   fontFamily: "Cinzel,serif",
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "#3dd68c",
                   letterSpacing: ".08em",
                   marginBottom: "10px",
@@ -1002,7 +1002,7 @@
                     "div",
                     {
                       style: {
-                        fontSize: "10px",
+                        fontSize: "12px",
                         color: "var(--body-faint)",
                         textTransform: "uppercase",
                         letterSpacing: ".06em",
@@ -1022,7 +1022,7 @@
                       borderRadius: "3px",
                       padding: "5px 8px",
                       color: "var(--body-bright)",
-                      fontSize: "13px",
+                      fontSize: "15px",
                       boxSizing: "border-box",
                     },
                   }),
@@ -1036,7 +1036,7 @@
                 "div",
                 {
                   style: {
-                    fontSize: "10px",
+                    fontSize: "12px",
                     color: "var(--body-faint)",
                     textTransform: "uppercase",
                     letterSpacing: ".06em",
@@ -1057,7 +1057,7 @@
                   borderRadius: "3px",
                   padding: "6px 8px",
                   color: "var(--body-bright)",
-                  fontSize: "13px",
+                  fontSize: "15px",
                   boxSizing: "border-box",
                   resize: "vertical",
                 },
@@ -1083,7 +1083,7 @@
                     color: "var(--body-dim)",
                     borderRadius: "3px",
                     cursor: "pointer",
-                    fontSize: "13px",
+                    fontSize: "15px",
                   },
                 },
                 "Cancel",
@@ -1102,7 +1102,7 @@
                     color: "#3dd68c",
                     borderRadius: "3px",
                     cursor: "pointer",
-                    fontSize: "13px",
+                    fontSize: "15px",
                     fontWeight: 700,
                   },
                 },
@@ -1173,7 +1173,7 @@
             {
               style: {
                 color: "var(--body-bright)",
-                fontSize: "14px",
+                fontSize: "16px",
                 fontWeight: 600,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -1186,7 +1186,7 @@
             "span",
             {
               style: {
-                fontSize: "10px",
+                fontSize: "12px",
                 padding: "2px 6px",
                 borderRadius: "2px",
                 flexShrink: 0,
@@ -1209,7 +1209,7 @@
           "span",
           {
             style: {
-              fontSize: "12px",
+              fontSize: "14px",
               color: "var(--body-dim)",
               fontFamily: "monospace",
             },
@@ -1220,7 +1220,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "15px",
               color: diffColor(s.difficulty),
               fontWeight: 600,
             },
@@ -1231,7 +1231,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "15px",
               color: contacted ? "#3dd68c" : "var(--body-faint)",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -1244,7 +1244,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "15px",
               color: responded ? "#C9A84C" : "var(--body-faint)",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -1257,7 +1257,7 @@
           "span",
           {
             style: {
-              fontSize: "13px",
+              fontSize: "15px",
               color: partnered ? "#3dd68c" : "var(--body-faint)",
               textAlign: "center",
             },
@@ -1281,7 +1281,7 @@
               title: "Edit",
               style: {
                 padding: "3px 7px",
-                fontSize: "11px",
+                fontSize: "13px",
                 background: "rgba(201,168,76,.1)",
                 border: "1px solid rgba(201,168,76,.25)",
                 color: "var(--gold-dim)",
@@ -1301,7 +1301,7 @@
               title: "Delete",
               style: {
                 padding: "3px 7px",
-                fontSize: "11px",
+                fontSize: "13px",
                 background: "rgba(231,76,60,.08)",
                 border: "1px solid rgba(231,76,60,.25)",
                 color: "#e74c3c",
@@ -1315,7 +1315,7 @@
             "span",
             {
               style: {
-                fontSize: "11px",
+                fontSize: "13px",
                 color: "var(--body-faint)",
                 transform: expanded ? "rotate(90deg)" : "none",
                 display: "inline-block",
@@ -1349,7 +1349,7 @@
               "div",
               {
                 style: {
-                  fontSize: "13px",
+                  fontSize: "15px",
                   color: "var(--body-dim)",
                   marginBottom: "8px",
                 },
@@ -1363,7 +1363,7 @@
                     style: {
                       color: "var(--accent-blue)",
                       marginRight: "12px",
-                      fontSize: "14px",
+                      fontSize: "16px",
                     },
                   },
                   s.website.replace("https://", ""),
@@ -1371,7 +1371,7 @@
               s.phone &&
                 h(
                   "span",
-                  { style: { marginRight: "12px", fontSize: "14px" } },
+                  { style: { marginRight: "12px", fontSize: "16px" } },
                   s.phone,
                 ),
               s.email &&
@@ -1379,7 +1379,7 @@
                   "a",
                   {
                     href: "mailto:" + s.email,
-                    style: { color: "var(--gold-dim)", fontSize: "13px" },
+                    style: { color: "var(--gold-dim)", fontSize: "15px" },
                   },
                   s.email,
                 ),
@@ -1388,7 +1388,7 @@
               "div",
               {
                 style: {
-                  fontSize: "14px",
+                  fontSize: "16px",
                   color: "var(--body-dim)",
                   lineHeight: 1.6,
                   marginBottom: "10px",
@@ -1400,7 +1400,7 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
@@ -1411,7 +1411,7 @@
             ),
             h(
               "div",
-              { style: { fontSize: "14px", color: "var(--body-bright)" } },
+              { style: { fontSize: "16px", color: "var(--body-bright)" } },
               s.best_use,
             ),
           ),
@@ -1423,7 +1423,7 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
@@ -1442,7 +1442,7 @@
                   style: {
                     padding: "4px 12px",
                     borderRadius: "3px",
-                    fontSize: "12px",
+                    fontSize: "14px",
                     fontWeight: 600,
                     cursor: "pointer",
                     border: "1px solid",
@@ -1462,7 +1462,7 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
@@ -1484,7 +1484,7 @@
                 borderRadius: "3px",
                 padding: "6px 9px",
                 color: "var(--body-bright)",
-                fontSize: "14px",
+                fontSize: "16px",
                 marginBottom: "8px",
                 boxSizing: "border-box",
               },
@@ -1493,7 +1493,7 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
@@ -1515,7 +1515,7 @@
                 borderRadius: "3px",
                 padding: "6px 9px",
                 color: "var(--body-bright)",
-                fontSize: "14px",
+                fontSize: "16px",
                 marginBottom: "8px",
                 boxSizing: "border-box",
               },
@@ -1524,7 +1524,7 @@
               "div",
               {
                 style: {
-                  fontSize: "11px",
+                  fontSize: "13px",
                   color: "var(--body-faint)",
                   textTransform: "uppercase",
                   letterSpacing: ".06em",
@@ -1545,7 +1545,7 @@
                 borderRadius: "3px",
                 padding: "6px 9px",
                 color: "var(--body-bright)",
-                fontSize: "14px",
+                fontSize: "16px",
                 boxSizing: "border-box",
               },
             }),
@@ -1614,7 +1614,7 @@
             "span",
             {
               style: {
-                fontSize: "13px",
+                fontSize: "15px",
                 fontWeight: 700,
                 color: "var(--gold-dim)",
                 letterSpacing: ".06em",
@@ -1625,19 +1625,19 @@
           ),
           h(
             "span",
-            { style: { fontSize: "12px", color: "var(--body-faint)" } },
+            { style: { fontSize: "14px", color: "var(--body-faint)" } },
             rows.length + " suppliers",
           ),
           contactCount > 0 &&
             h(
               "span",
-              { style: { fontSize: "12px", color: "#3dd68c" } },
+              { style: { fontSize: "14px", color: "#3dd68c" } },
               contactCount + " contacted",
             ),
           partCount > 0 &&
             h(
               "span",
-              { style: { fontSize: "12px", color: "#C9A84C" } },
+              { style: { fontSize: "14px", color: "#C9A84C" } },
               "✦ " + partCount + " partnered",
             ),
         ),
@@ -1645,7 +1645,7 @@
           "span",
           {
             style: {
-              fontSize: "11px",
+              fontSize: "13px",
               color: "var(--body-faint)",
               transform: collapsed ? "rotate(-90deg)" : "none",
               display: "inline-block",
@@ -1685,7 +1685,7 @@
                 {
                   key: i,
                   style: {
-                    fontSize: "11px",
+                    fontSize: "13px",
                     color: "var(--body-faint)",
                     textTransform: "uppercase",
                     letterSpacing: ".07em",
@@ -1865,7 +1865,7 @@
                 onClick: () => setSheet(key),
                 style: {
                   padding: "7px 14px",
-                  fontSize: "13px",
+                  fontSize: "15px",
                   fontWeight: 600,
                   cursor: "pointer",
                   background:
@@ -1893,7 +1893,7 @@
                 onClick: () => setFilter(f),
                 style: {
                   padding: "5px 10px",
-                  fontSize: "12px",
+                  fontSize: "14px",
                   fontWeight: 600,
                   cursor: "pointer",
                   borderRadius: "3px",
@@ -1925,7 +1925,7 @@
             borderRadius: "3px",
             padding: "6px 10px",
             color: "var(--body-bright)",
-            fontSize: "13px",
+            fontSize: "15px",
           },
         }),
 
@@ -1939,7 +1939,7 @@
               onClick: () => setShowParser(true),
               style: {
                 padding: "6px 14px",
-                fontSize: "12px",
+                fontSize: "14px",
                 background: "rgba(135,206,235,.1)",
                 border: "1px solid rgba(135,206,235,.3)",
                 color: "#87ceeb",
@@ -1956,7 +1956,7 @@
               onClick: onAddBlank,
               style: {
                 padding: "6px 14px",
-                fontSize: "12px",
+                fontSize: "14px",
                 background: "rgba(61,214,140,.1)",
                 border: "1px solid rgba(61,214,140,.3)",
                 color: "#3dd68c",
@@ -1976,7 +1976,7 @@
             style: {
               display: "flex",
               gap: "12px",
-              fontSize: "13px",
+              fontSize: "15px",
               color: "var(--body-dim)",
             },
           },
