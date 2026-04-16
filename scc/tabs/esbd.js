@@ -466,7 +466,7 @@
     const feFee = useFE ? bidTotal * FE_RATE : 0;
     const netAfterFE = gp - feFee;
     const netPct = bidTotal > 0 ? (netAfterFE / bidTotal) * 100 : 0;
-    const marginOk = useFE ? netPct >= 20 : gpPct >= 20;
+    const marginOk = gpPct >= 10;
 
     return h(
       "div",
@@ -1146,7 +1146,7 @@
                   marginTop: "4px",
                 },
               },
-              "Below 20% margin threshold — review pricing before submitting.",
+              "Below 10% gross margin floor — do not submit.",
             ),
         ),
 

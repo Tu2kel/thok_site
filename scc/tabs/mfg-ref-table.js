@@ -61,7 +61,7 @@
     return {
       gm: gm.toFixed(1),
       net: net.toFixed(1),
-      color: net >= 20 ? "#3dd68c" : net >= 10 ? "#C9A84C" : "#e87474",
+      color: net >= 10 ? "#3dd68c" : net >= 5 ? "#C9A84C" : "#e87474",
     };
   }
 
@@ -481,7 +481,7 @@
             fontFamily: "JetBrains Mono, monospace",
           },
         },
-        "Floor: 20% net after FE  ·  Target: 27.5% gross  ·  Cost ceiling: hist × 72.5%",
+        "Floor: 10% gross (all deals)  ·  Target: 27.5% gross  ·  Cost ceiling: hist × 90%",
       ),
     );
   }
