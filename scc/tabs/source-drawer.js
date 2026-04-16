@@ -314,10 +314,12 @@
               e.stopPropagation();
 
               // ── What we have on this approved source ──
-              const nsn = (record && record.nsn) ? record.nsn.replace(/-/g, "") : "";
-              const nsnDashed = nsn.length === 13
-                ? nsn.replace(/(\d{4})(\d{2})(\d{3})(\d{4})/, "$1-$2-$3-$4")
-                : nsn;
+              const nsn =
+                record && record.nsn ? record.nsn.replace(/-/g, "") : "";
+              const nsnDashed =
+                nsn.length === 13
+                  ? nsn.replace(/(\d{4})(\d{2})(\d{3})(\d{4})/, "$1-$2-$3-$4")
+                  : nsn;
               const pn = s.pn || (record && record.ref_part_number) || "";
               const itemRaw = (record && record.item_name) || "";
               // Strip generic mil suffixes to get searchable item type
@@ -325,7 +327,9 @@
                 .replace(/(MIL-|MS|AN|NOMEN|NSN|DRAWING)\S*/gi, "")
                 .replace(/[,\.]/g, "")
                 .trim()
-                .split(" ").slice(0, 3).join(" ");
+                .split(" ")
+                .slice(0, 3)
+                .join(" ");
               const fsc = (record && record.fsc) || nsn.slice(0, 4) || "";
 
               // ── Search 1: USASpending — who else has won THIS NSN ──
@@ -336,7 +340,7 @@
                     "https://www.usaspending.gov/search/?hash=&filters=%7B%22keywords%22%3A%5B%22" +
                       encodeURIComponent(nsnDashed) +
                       "%22%5D%7D",
-                    "_blank"
+                    "_blank",
                   );
                 }, 0);
               }
@@ -345,8 +349,9 @@
               if (pn) {
                 setTimeout(() => {
                   window.open(
-                    "https://www.parttarget.com/search?q=" + encodeURIComponent(pn),
-                    "_blank"
+                    "https://www.parttarget.com/search?q=" +
+                      encodeURIComponent(pn),
+                    "_blank",
                   );
                 }, 350);
               }
@@ -354,11 +359,13 @@
               // ── Search 3: Google — item type + distributor + Texas ──
               // Use item description, NOT manufacturer name
               if (itemClean) {
-                const gq = itemClean + " distributor Texas OR "Central Texas" government OR military -site:sam.gov";
+                const gq =
+                  itemClean +
+                  ` distributor Texas OR "Central Texas" government OR military -site:sam.gov`;
                 setTimeout(() => {
                   window.open(
                     "https://www.google.com/search?q=" + encodeURIComponent(gq),
-                    "_blank"
+                    "_blank",
                   );
                 }, 700);
               }
@@ -369,19 +376,25 @@
                 window.open(
                   "https://cage.dla.mil/Search/CageSearchResults?searchType=cage&cageCode=" +
                     encodeURIComponent(s.cage),
-                  "_blank"
+                  "_blank",
                 );
               }, 1050);
             },
             style: {
-              display: "block", width: "100%", textAlign: "center",
-              padding: "5px 8px", marginTop: "4px",
+              display: "block",
+              width: "100%",
+              textAlign: "center",
+              padding: "5px 8px",
+              marginTop: "4px",
               background: "rgba(135,206,235,.08)",
               border: "1px solid rgba(135,206,235,.25)",
               borderRadius: "3px",
-              fontFamily: "Cinzel,serif", fontSize: "8px",
-              letterSpacing: ".12em", textTransform: "uppercase",
-              color: "#87ceeb", cursor: "pointer",
+              fontFamily: "Cinzel,serif",
+              fontSize: "8px",
+              letterSpacing: ".12em",
+              textTransform: "uppercase",
+              color: "#87ceeb",
+              cursor: "pointer",
             },
           },
           "🔍 Find Distributors",
