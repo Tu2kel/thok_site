@@ -441,14 +441,20 @@
       LHFCheckTab,
     } = window.SCC_TABS;
 
-    const [tab, setTab] = useState("dashboard");
+    const [tab, setTab] = useState(
+      () => localStorage.getItem("scc-active-tab") || "dashboard"
+    );
     const [boxA, setBoxA] = useState("");
     const [boxB, setBoxB] = useState("");
     const [parsed, setParsed] = useState(null);
     const [rows, setRows] = useState([]);
-    const [filter, setFilter] = useState("All");
+    const [filter, setFilter] = useState(
+      () => localStorage.getItem("scc-pipeline-filter") || "All"
+    );
     const [toast, setToast] = useState(null);
-    const [openDrawer, setOpenDrawer] = useState(null);
+    const [openDrawer, setOpenDrawer] = useState(
+      () => localStorage.getItem("scc-open-drawer") || null
+    );
     const [oopSet, setOopSet] = useState(new Set());
     const [sourcePreload, setSourcePreload] = useState(null);
     const [awardPrefill, setAwardPrefill] = useState(null);
@@ -469,6 +475,13 @@
       document.documentElement.setAttribute("data-theme", theme);
       localStorage.setItem("scc-theme", theme);
     }, [theme]);
+
+    useEffect(() => { localStorage.setItem("scc-active-tab", tab); }, [tab]);
+    useEffect(() => { localStorage.setItem("scc-pipeline-filter", filter); }, [filter]);
+    useEffect(() => {
+      if (openDrawer) localStorage.setItem("scc-open-drawer", openDrawer);
+      else localStorage.removeItem("scc-open-drawer");
+    }, [openDrawer]);
 
     // 3-way cycle: dark (Imperial Red) → metallic → light (Ivory)
     const toggleTheme = () =>
@@ -941,6 +954,28 @@
         ),
       ),
 
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "rolodex" ? " active" : ""),
+              onClick: () => setTab("rolodex"),
+              style: {
+                borderColor:
+                  tab === "rolodex"
+                    ? "rgba(201,168,76,.6)"
+                    : "rgba(201,168,76,.2)",
+                color:
+                  tab === "rolodex"
+                    ? "var(--gold-solid)"
+                    : "rgba(201,168,76,.4)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "☎ Rolodex",
+          ),
+        ),
+      ),
+
       // ── DIVIDER ──
       hA(
         "div",
@@ -1018,6 +1053,11 @@
         tab === "lhf" && hA(LHFCheckTab, { onSendToIntake: null }),
 
         tab === "esbd" && hA(EsbdTab, { goAward: goEsbdAward }),
+
+        tab === "rolodex" &&
+          (window.SCC_TABS && window.SCC_TABS.SupplierRolodexTab
+            ? hA(window.SCC_TABS.SupplierRolodexTab, null)
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Rolodex loading...")),
 
         tab === "fu" &&
           hA(FUTab, {

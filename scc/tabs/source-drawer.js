@@ -303,6 +303,49 @@
           },
           "📄 Open RFQ",
         ),
+
+      // ── Find Distributors button ──
+      !blocked &&
+        hS(
+          "button",
+          {
+            onClick: (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const mfrClean = s.name
+                .replace(/\b(INC|LLC|CORP|CO|LTD|MANUFACTURING|MFG|COMPANY)\b\.?/gi, "")
+                .trim();
+              const queries = [
+                '"' + mfrClean + '" authorized distributor government OR DLA OR military',
+                mfrClean + " distributor Texas government OR military",
+              ];
+              queries.forEach((q, i) => {
+                setTimeout(
+                  () => window.open("https://www.google.com/search?q=" + encodeURIComponent(q), "_blank"),
+                  i * 300,
+                );
+              });
+              setTimeout(() => {
+                window.open(
+                  "https://sam.gov/search/?index=ed&page=1&pageSize=25&sfm%5BsimpleSearch%5D%5BkeywordTerm%5D=" +
+                    encodeURIComponent(s.cage),
+                  "_blank",
+                );
+              }, 650);
+            },
+            style: {
+              display: "block", width: "100%", textAlign: "center",
+              padding: "5px 8px", marginTop: "4px",
+              background: "rgba(135,206,235,.08)",
+              border: "1px solid rgba(135,206,235,.25)",
+              borderRadius: "3px",
+              fontFamily: "Cinzel,serif", fontSize: "8px",
+              letterSpacing: ".12em", textTransform: "uppercase",
+              color: "#87ceeb", cursor: "pointer",
+            },
+          },
+          "🔍 Find Distributors",
+        ),
     );
   }
 
