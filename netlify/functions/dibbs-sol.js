@@ -75,6 +75,31 @@ function parseSolPage(html, solNumber) {
     .replace(/<style[\s\S]*?<\/style>/gi, "");
   const text = stripped.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
+  // Debug: log a slice of the raw text so we can see page structure
+  console.log("[DIBBS Parser] HTML length:", html.length);
+  console.log(
+    "[DIBBS Parser] First 500 chars of stripped text:",
+    text.slice(0, 500),
+  );
+  // Find where supplier section might be
+  const lowerText = text.toLowerCase();
+  const markers = [
+    "approved source",
+    "supplier list",
+    "manufacturer",
+    "cage",
+    "solicitation",
+    "rfq",
+  ];
+  markers.forEach((m) => {
+    const idx = lowerText.indexOf(m);
+    if (idx > 0)
+      console.log(
+        `[DIBBS Parser] Found "${m}" at index ${idx}:`,
+        text.slice(Math.max(0, idx - 20), idx + 80),
+      );
+  });
+
   const sol = {
     contract_number: solNumber,
     contract_type: "",
@@ -251,6 +276,15 @@ exports.handler = async (event) => {
   }
 
   const sol = parseSolPage(html, sol_number);
+
+  console.log("[DIBBS Parser] Final result:", {
+    item: sol.item_description,
+    nsn: sol.nsn,
+    suppliersFound: sol.suppliers.length,
+    suppliers: sol.suppliers,
+    fob: sol.fob,
+    award: sol.anticipated_award,
+  });
 
   return {
     statusCode: 200,

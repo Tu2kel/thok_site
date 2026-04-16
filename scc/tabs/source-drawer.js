@@ -506,6 +506,7 @@
 
     const searches = buildLocalSearchStrings(itemName, fsc, approvedSources);
     const [opened, setOpened] = useState({});
+    const linkRefs = React.useRef([]);
 
     function markOpened(idx) {
       console.log(
@@ -513,6 +514,23 @@
         searches[idx]?.q,
       );
       setOpened((prev) => ({ ...prev, [idx]: true }));
+    }
+
+    function fireAll() {
+      console.log(
+        "[Local Source Action] Firing all",
+        searches.length,
+        "searches with stagger",
+      );
+      searches.forEach((s, i) => {
+        setTimeout(() => {
+          const el = linkRefs.current[i];
+          if (el) {
+            el.click();
+            markOpened(i);
+          }
+        }, i * 600);
+      });
     }
 
     // ── Style shortcuts ──
@@ -713,24 +731,42 @@
         hS(
           "div",
           { style: S.header },
+          hS("span", { style: S.headerLabel }, "Local Source Action"),
           hS(
-            "span",
-            { style: S.headerLabel },
-            "Local Source Action — Click Each →",
-          ),
-          hS(
-            "span",
-            {
-              style: {
-                fontFamily: "JetBrains Mono,monospace",
-                fontSize: "9px",
-                color: "var(--body-faint)",
+            "div",
+            { style: { display: "flex", gap: "8px", alignItems: "center" } },
+            hS(
+              "span",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                },
               },
-            },
-            searches.filter((_, i) => opened[i]).length +
-              "/" +
-              searches.length +
-              " opened",
+              searches.filter((_, i) => opened[i]).length +
+                "/" +
+                searches.length +
+                " opened",
+            ),
+            hS(
+              "button",
+              {
+                onClick: fireAll,
+                style: {
+                  padding: "3px 10px",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".08em",
+                  background: "rgba(201,168,76,.12)",
+                  border: "1px solid rgba(201,168,76,.3)",
+                  color: "var(--gold-solid)",
+                  cursor: "pointer",
+                  borderRadius: "2px",
+                },
+              },
+              "⚡ Fire All",
+            ),
           ),
         ),
         hS(
@@ -795,6 +831,9 @@
                     encodeURIComponent(s.q),
                   target: "_blank",
                   rel: "noopener noreferrer",
+                  ref: (el) => {
+                    linkRefs.current[i] = el;
+                  },
                   onClick: () => markOpened(i),
                   style: {
                     padding: "3px 8px",
@@ -831,7 +870,21 @@
                 hS(
                   "a",
                   {
-                    href: `https://www.usaspending.gov/search/?hash=&filters=%7B%22psc_codes%22%3A%7B%22require%22%3A%5B%5B%22${encodeURIComponent(fsc)}%22%5D%5D%7D%2C%22agencies%22%3A%5B%7B%22type%22%3A%22awarding%22%2C%22tier%22%3A%22toptier%22%2C%22name%22%3A%22Department+of+Defense%22%7D%5D%7D`,
+                    href:
+                      "https://www.usaspending.gov/search/?hash=&filters=" +
+                      encodeURIComponent(
+                        JSON.stringify({
+                          psc_codes: { require: [[fsc]] },
+                          agencies: [
+                            {
+                              type: "awarding",
+                              tier: "toptier",
+                              name: "Department of Defense",
+                            },
+                          ],
+                          award_type_codes: ["A", "B", "C", "D"],
+                        }),
+                      ),
                     target: "_blank",
                     style: {
                       padding: "4px 10px",
@@ -847,13 +900,13 @@
                   },
                   "USASpending — FSC " + fsc + " Winners",
                 ),
-              (nsn || pn) &&
+              (nsnDashed || pn) &&
                 hS(
                   "a",
                   {
-                    href: nsn
-                      ? `https://www.parttarget.com/search?searchtext=${encodeURIComponent(nsn)}&searchoption=nsn&originalsearchtext=${encodeURIComponent(nsnDashed)}`
-                      : `https://www.parttarget.com/search?searchtext=${encodeURIComponent(pn)}&searchoption=sku&originalsearchtext=${encodeURIComponent(pn)}`,
+                    href: nsnDashed
+                      ? `https://www.parttarget.com/search?searchtext=${encodeURIComponent(nsnDashed)}&searchoption=nsn`
+                      : `https://www.parttarget.com/search?searchtext=${encodeURIComponent(pn)}&searchoption=sku`,
                     target: "_blank",
                     style: {
                       padding: "4px 10px",
