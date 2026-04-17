@@ -39,7 +39,7 @@ function checkIsBlocked(html, solNumber) {
   if (!html || html.length < 500) return true;
   const lc = html.toLowerCase();
   const solLc = solNumber.toLowerCase();
-  
+
   return (
     lc.includes("access denied") ||
     lc.includes("login required") ||
@@ -55,8 +55,12 @@ function parseSuppliers(html) {
   const suppliers = [];
   const lc = html.toLowerCase();
   const markers = [
-    "approved source", "sources of supply", "supplier list", 
-    "manufacturer required", "source list", "approved manufacturer"
+    "approved source",
+    "sources of supply",
+    "supplier list",
+    "manufacturer required",
+    "source list",
+    "approved manufacturer",
   ];
 
   let sectionStart = -1;
@@ -78,7 +82,12 @@ function parseSuppliers(html) {
     const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
     let cellMatch;
     while ((cellMatch = cellRe.exec(rowHtml)) !== null) {
-      const t = clean(cellMatch[1].replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&nbsp;/g, " "));
+      const t = clean(
+        cellMatch[1]
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&nbsp;/g, " "),
+      );
       if (t) cells.push(t);
     }
 
@@ -90,7 +99,8 @@ function parseSuppliers(html) {
     const name = cells.slice(0, cageIdx).join(" ").trim();
     const pn = clean(cells[cageIdx + 1] || "");
 
-    if (!name || /^(cage|name|part|supplier|mfr|mfg|source)$/i.test(name)) continue;
+    if (!name || /^(cage|name|part|supplier|mfr|mfg|source)$/i.test(name))
+      continue;
 
     if (!suppliers.find((s) => s.cage === cage)) {
       suppliers.push({ name: clean(name), cage, pn });
@@ -101,13 +111,18 @@ function parseSuppliers(html) {
   // Strategy 2: Regex Scan Fallback
   if (suppliers.length === 0) {
     const stripped = relevantHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    const inlineRe = /([A-Z][A-Z0-9 &,.-]{2,50})\s+([A-Z0-9]{5})\s+([A-Z0-9][A-Z0-9\-\/_.]{0,40})?/g;
+    const inlineRe =
+      /([A-Z][A-Z0-9 &,.-]{2,50})\s+([A-Z0-9]{5})\s+([A-Z0-9][A-Z0-9\-\/_.]{0,40})?/g;
     let m;
     while ((m = inlineRe.exec(stripped)) !== null) {
       const name = clean(m[1]);
       const cage = m[2];
       const pn = clean(m[3] || "");
-      if (!name || /^(cage|part|source|supplier|approved|manufacturer)/i.test(name)) continue;
+      if (
+        !name ||
+        /^(cage|part|source|supplier|approved|manufacturer)/i.test(name)
+      )
+        continue;
       if (!suppliers.find((s) => s.cage === cage)) {
         suppliers.push({ name, cage, pn });
       }
@@ -123,7 +138,7 @@ function parseSolPage(html, solNumber) {
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(//g, "");
+    .replace(/<[^>]+>/g, ""); // FIXED: Now properly strips HTML comments
 
   const text = stripped.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
@@ -138,7 +153,11 @@ function parseSolPage(html, solNumber) {
     item_description: extractField(text, "Nomenclature", "Item Description"),
     drawing_info: extractField(text, "Drawing Number", "Dwg"),
     fob: extractField(text, "F.O.B. Point", "FOB"),
-    anticipated_award: extractField(text, "Anticipated Award", "Estimated Value"),
+    anticipated_award: extractField(
+      text,
+      "Anticipated Award",
+      "Estimated Value",
+    ),
     packaging: extractField(text, "Preservation", "Packaging"),
     set_aside: extractField(text, "Set Aside", "Socioeconomic"),
     qty: extractField(text, "Quantity", "Qty"),
@@ -154,7 +173,12 @@ function parseSolPage(html, solNumber) {
   if (nsnMatch) sol.nsn = nsnMatch[1].replace(/[- ]/g, "");
 
   const pnField = extractField(text, "Part Number", "Ref Part Number", "P/N");
-  if (pnField) sol.part_numbers = pnField.split(/[,;\/]/).map(clean).filter(Boolean).slice(0, 10);
+  if (pnField)
+    sol.part_numbers = pnField
+      .split(/[,;\/]/)
+      .map(clean)
+      .filter(Boolean)
+      .slice(0, 10);
 
   return sol;
 }
@@ -163,7 +187,10 @@ function parseSolPage(html, solNumber) {
 async function fetchDirect(url) {
   const res = await fetch(url, {
     method: "GET",
-    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36" },
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36",
+    },
     signal: AbortSignal.timeout(12000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -171,33 +198,46 @@ async function fetchDirect(url) {
 }
 
 async function fetchBrowserless(url, apiKey) {
-  const res = await fetch(`${BROWSERLESS_CONTENT}?token=${apiKey}&stealth=true`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      url,
-      waitFor: 3000,
-      gotoOptions: { waitUntil: "networkidle2", timeout: 20000 },
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
+  const res = await fetch(
+    `${BROWSERLESS_CONTENT}?token=${apiKey}&stealth=true`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        waitFor: 3000,
+        gotoOptions: { waitUntil: "networkidle2", timeout: 20000 },
+      }),
+      signal: AbortSignal.timeout(30000),
+    },
+  );
   if (!res.ok) throw new Error(`Browserless Error: ${res.status}`);
   return await res.text();
 }
 
 // ── HANDLER (The Full Loop) ──────────────────────────────────────────────────
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: HEADERS, body: "" };
-  
+  if (event.httpMethod === "OPTIONS")
+    return { statusCode: 204, headers: HEADERS, body: "" };
+
   let sol_number;
   try {
     ({ sol_number } = JSON.parse(event.body || "{}"));
   } catch {
-    return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: "Invalid JSON" }) };
+    return {
+      statusCode: 400,
+      headers: HEADERS,
+      body: JSON.stringify({ error: "Invalid JSON" }),
+    };
   }
 
   const solClean = sol_number?.trim().toUpperCase();
-  if (!solClean) return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: "sol_number required" }) };
+  if (!solClean)
+    return {
+      statusCode: 400,
+      headers: HEADERS,
+      body: JSON.stringify({ error: "sol_number required" }),
+    };
 
   const rfqUrl = `https://www.dibbs.bsm.dla.mil/rfq/rqdetail.aspx?rfqno=${encodeURIComponent(solClean)}`;
   const apiKey = process.env.BROWSERLESS_API_KEY;
@@ -216,14 +256,25 @@ exports.handler = async (event) => {
       return {
         statusCode: 200,
         headers: HEADERS,
-        body: JSON.stringify({ ok: false, error: "DIBBS Blocked. Need BROWSERLESS_API_KEY.", method: "direct-blocked" })
+        body: JSON.stringify({
+          ok: false,
+          error: "DIBBS Blocked. Need BROWSERLESS_API_KEY.",
+          method: "direct-blocked",
+        }),
       };
     }
     try {
       html = await fetchBrowserless(rfqUrl, apiKey);
       method = "browserless";
     } catch (err) {
-      return { statusCode: 502, headers: HEADERS, body: JSON.stringify({ ok: false, error: "Browserless failed: " + err.message }) };
+      return {
+        statusCode: 502,
+        headers: HEADERS,
+        body: JSON.stringify({
+          ok: false,
+          error: "Browserless failed: " + err.message,
+        }),
+      };
     }
   }
 
@@ -231,7 +282,11 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: HEADERS,
-      body: JSON.stringify({ ok: false, error: "Security Block persistent. Try again later.", method })
+      body: JSON.stringify({
+        ok: false,
+        error: "Security Block persistent. Try again later.",
+        method,
+      }),
     };
   }
 
