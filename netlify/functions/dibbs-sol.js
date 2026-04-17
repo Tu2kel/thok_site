@@ -135,12 +135,15 @@ function parseSuppliers(html) {
 
 // ── MAIN PAGE PARSER ──────────────────────────────────────────────────────────
 function parseSolPage(html, solNumber) {
-  const stripped = html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, ""); // FIXED: Now properly strips HTML comments
+  // We avoid using / / regex literals to prevent the editor from seeing comments
+  const scriptRegex = new RegExp(`<script[\\s\\S]*?<\/script>`, `gi`);
+  const styleRegex = new RegExp(`<style[\\s\\S]*?<\/style>`, `gi`);
+  const tagRegex = new RegExp(`<[^>]+>`, `g`);
+  const spaceRegex = new RegExp(`\\s+`, `g`);
 
-  const text = stripped.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  const stripped = html.replace(scriptRegex, "").replace(styleRegex, "");
+
+  const text = stripped.replace(tagRegex, " ").replace(spaceRegex, " ");
 
   const sol = {
     contract_number: solNumber,
@@ -169,8 +172,11 @@ function parseSolPage(html, solNumber) {
     source: "dibbs-hybrid",
   };
 
-  const nsnMatch = text.match(/\b(\d{4}[- ]\d{2}[- ]\d{3}[- ]\d{4}|\d{13})\b/);
-  if (nsnMatch) sol.nsn = nsnMatch[1].replace(/[- ]/g, "");
+  const nsnRegex = new RegExp(
+    `\\b(\\d{4}[- ]\\d{2}[- ]\\d{3}[- ]\\d{4}|\\d{13})\\b`,
+  );
+  const nsnMatch = text.match(nsnRegex);
+  if (nsnMatch) sol.nsn = nsnMatch[1].replace(new RegExp(`[- ]`, `g`), "");
 
   const pnField = extractField(text, "Part Number", "Ref Part Number", "P/N");
   if (pnField)
