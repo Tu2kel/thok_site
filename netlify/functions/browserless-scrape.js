@@ -28,11 +28,10 @@ exports.handler = async (event) => {
     };
   }
 
-  let url, timeout;
+  let url;
   try {
     const body = JSON.parse(event.body || "{}");
     url = body.url;
-    timeout = body.timeout || 5000; // Increased default timeout for residential proxy
   } catch (err) {
     return {
       statusCode: 400,
@@ -59,7 +58,6 @@ exports.handler = async (event) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: url,
-          waitFor: timeout,
           gotoOptions: {
             waitUntil: "networkidle2", // Wait for DIBBS background JS to finish
             timeout: 20000,
