@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Imperio SCC backend functions",
   "dependencies": {
-    "mongodb": "^6.3.0"
+    "mongodb": "^6.3.0",
+    "pdf-lib": "^1.17.1"
   }
 }

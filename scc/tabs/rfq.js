@@ -1362,6 +1362,11 @@
     const [sentSet, setSentSet] = useState(new Set());
     const [parsed, setParsed] = useState(false);
     const [manualRFQEmail, setManualRFQEmail] = useState("");
+    const [sellerName, setSellerName] = useState("");
+    const [sellerStreet, setSellerStreet] = useState("");
+    const [sellerCity, setSellerCity] = useState("");
+    const [rfqSending, setRfqSending] = useState(false);
+    const [rfqSendStatus, setRfqSendStatus] = useState(null); // null | 'ok' | 'err'alRFQEmail, setManualRFQEmail] = useState("");
 
     const sentCount = sentSet.size;
     const totalCount = entries.length;
@@ -1789,75 +1794,178 @@
                 paddingTop: "16px",
                 borderTop: "1px solid rgba(201,168,76,.12)",
                 display: "flex",
+                flexDirection: "column",
                 gap: "10px",
-                alignItems: "flex-end",
-                flexWrap: "wrap",
               },
             },
+
+            // Row 1: email + seller name
             h(
               "div",
-              { style: { flex: "1", minWidth: "220px" } },
-              h("label", { style: sLabel }, "Send to Specific Email"),
-              h("input", {
-                type: "email",
-                value: manualRFQEmail,
-                onChange: (e) => setManualRFQEmail(e.target.value),
-                placeholder: "quotes@supplier.com",
-                style: sInput,
-              }),
+              { style: { display: "flex", gap: "10px", flexWrap: "wrap" } },
+              h(
+                "div",
+                { style: { flex: "1", minWidth: "200px" } },
+                h("label", { style: sLabel }, "Recipient Email"),
+                h("input", {
+                  type: "email",
+                  value: manualRFQEmail,
+                  onChange: (e) => setManualRFQEmail(e.target.value),
+                  placeholder: "quotes@supplier.com",
+                  style: sInput,
+                }),
+              ),
+              h(
+                "div",
+                { style: { flex: "1", minWidth: "200px" } },
+                h("label", { style: sLabel }, "Seller Name (Resale Cert)"),
+                h("input", {
+                  type: "text",
+                  value: sellerName,
+                  onChange: (e) => setSellerName(e.target.value),
+                  placeholder: "Acme Supply Co.",
+                  style: sInput,
+                }),
+              ),
             ),
+
+            // Row 2: street + city/state/zip
             h(
-              "button",
+              "div",
+              { style: { display: "flex", gap: "10px", flexWrap: "wrap" } },
+              h(
+                "div",
+                { style: { flex: "1", minWidth: "200px" } },
+                h("label", { style: sLabel }, "Seller Street Address"),
+                h("input", {
+                  type: "text",
+                  value: sellerStreet,
+                  onChange: (e) => setSellerStreet(e.target.value),
+                  placeholder: "123 Industrial Blvd",
+                  style: sInput,
+                }),
+              ),
+              h(
+                "div",
+                { style: { flex: "1", minWidth: "200px" } },
+                h("label", { style: sLabel }, "Seller City, State, ZIP"),
+                h("input", {
+                  type: "text",
+                  value: sellerCity,
+                  onChange: (e) => setSellerCity(e.target.value),
+                  placeholder: "Houston, TX 77001",
+                  style: sInput,
+                }),
+              ),
+            ),
+
+            // Row 3: send button + status
+            h(
+              "div",
               {
-                onClick: () => {
-                  const email = manualRFQEmail.trim();
-                  if (!email || !email.includes("@")) {
-                    alert("Enter a valid email address first.");
-                    return;
-                  }
-                  const subject = "RFQ – Government Solicitation – CAGE 152U4";
-                  const body =
-                    "To the Quotes / Government Sales Team,\n\nMy name is Anthony Kelley Sr., and I represent The House of Kel LLC (DBA Imperio Talent Solutions) — a Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE 152U4, based in Killeen, Texas.\n\nI am requesting pricing and availability on a DLA solicitation requirement" +
-                    (solNum ? " — Solicitation " + solNum : "") +
-                    ".\n\nPlease reply with your best government pricing, unit of issue confirmation, and lead time.\n\nPoint of Contact:\nAnthony Kelley Sr.\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified\n\nVery respectfully,\nAnthony Kelley Sr.\nImperio Talent Solutions";
-                  const encS = encodeURIComponent(subject);
-                  const encB = body
-                    .split("\n")
-                    .map(encodeURIComponent)
-                    .join("%0D%0A");
-                  window.open(
-                    "mailto:" +
-                      encodeURIComponent(email) +
-                      "?subject=" +
-                      encS +
-                      "&body=" +
-                      encB,
-                    "_blank",
-                  );
-                },
                 style: {
-                  background: "transparent",
-                  border: "1px solid rgba(201,168,76,.4)",
-                  color: "var(--gold-solid)",
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "9px",
-                  letterSpacing: ".18em",
-                  textTransform: "uppercase",
-                  padding: "10px 20px",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all .2s",
-                },
-                onMouseEnter: (e) => {
-                  e.currentTarget.style.background = "rgba(201,168,76,.1)";
-                  e.currentTarget.style.borderColor = "rgba(201,168,76,.7)";
-                },
-                onMouseLeave: (e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.borderColor = "rgba(201,168,76,.4)";
+                  display: "flex",
+                  gap: "10px",
+                  alignItems: "center",
+                  flexWrap: "wrap",
                 },
               },
-              "✉ Send to This Email",
+              h(
+                "button",
+                {
+                  disabled: rfqSending,
+                  onClick: async () => {
+                    const email = manualRFQEmail.trim();
+                    if (!email || !email.includes("@")) {
+                      alert("Enter a valid email address first.");
+                      return;
+                    }
+                    const subject =
+                      "RFQ \u2013 Government Solicitation \u2013 CAGE 152U4";
+                    const emailBody =
+                      "To the Quotes / Government Sales Team,\n\nMy name is Anthony Kelley Sr., and I represent The House of Kel LLC (DBA Imperio Talent Solutions) \u2014 a Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE 152U4, based in Killeen, Texas.\n\nI am requesting pricing and availability on a DLA solicitation requirement" +
+                      (solNum ? " \u2014 Solicitation " + solNum : "") +
+                      ".\n\nPlease reply with your best government pricing, unit of issue confirmation, and lead time.\n\nPoint of Contact:\nAnthony Kelley Sr.\nThe House of Kel LLC \u00b7 Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified\n\nVery respectfully,\nAnthony Kelley Sr.\nImperio Talent Solutions";
+
+                    setRfqSending(true);
+                    setRfqSendStatus(null);
+                    try {
+                      const res = await fetch("/.netlify/functions/send-rfq", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          to: email,
+                          subject,
+                          emailBody,
+                          attachCert: true,
+                          sellerName: sellerName.trim(),
+                          sellerStreet: sellerStreet.trim(),
+                          sellerCity: sellerCity.trim(),
+                        }),
+                      });
+                      const data = await res.json();
+                      setRfqSendStatus(data.ok ? "ok" : "err");
+                    } catch {
+                      setRfqSendStatus("err");
+                    } finally {
+                      setRfqSending(false);
+                    }
+                  },
+                  style: {
+                    background: rfqSending
+                      ? "rgba(201,168,76,.1)"
+                      : "transparent",
+                    border: "1px solid rgba(201,168,76,.4)",
+                    color: "var(--gold-solid)",
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".18em",
+                    textTransform: "uppercase",
+                    padding: "10px 20px",
+                    cursor: rfqSending ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all .2s",
+                    opacity: rfqSending ? 0.6 : 1,
+                  },
+                  onMouseEnter: (e) => {
+                    if (!rfqSending) {
+                      e.currentTarget.style.background = "rgba(201,168,76,.1)";
+                      e.currentTarget.style.borderColor = "rgba(201,168,76,.7)";
+                    }
+                  },
+                  onMouseLeave: (e) => {
+                    if (!rfqSending) {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.borderColor = "rgba(201,168,76,.4)";
+                    }
+                  },
+                },
+                rfqSending ? "Sending..." : "\u2709 Send + Attach Cert",
+              ),
+              rfqSendStatus === "ok" &&
+                h(
+                  "span",
+                  {
+                    style: {
+                      color: "#2ecc71",
+                      fontSize: "11px",
+                      fontFamily: "Cinzel,serif",
+                    },
+                  },
+                  "\u2713 Sent with resale cert attached",
+                ),
+              rfqSendStatus === "err" &&
+                h(
+                  "span",
+                  {
+                    style: {
+                      color: "#e74c3c",
+                      fontSize: "11px",
+                      fontFamily: "Cinzel,serif",
+                    },
+                  },
+                  "\u26a0 Send failed \u2014 check console",
+                ),
             ),
           ),
         ),
