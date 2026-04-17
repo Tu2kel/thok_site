@@ -1,8 +1,10 @@
 // netlify/functions/dibbs-sol.js
-// Imperio SCC — DIBBS Solicitation Scraper v2.2
-// Strategy cascade:
-//   1. Direct fetch (fast)
-//   2. Browserless escalation (headless bypass for F5 ASM)
+// Imperio SCC — DIBBS Solicitation Scraper
+// Hits DIBBS RFQ page directly via Node fetch — no Browserless needed.
+// POST body: { sol_number: "SPE4A7-25-T-795A" }
+// Returns: { ok, sol: { contract_number, nsn, part_numbers[], due_date,
+//   item_description, fob, anticipated_award, qty, unit_issue,
+//   delivery_days, hist_unit_price, suppliers: [{name, cage, pn}] } }
 
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -11,9 +13,6 @@ const HEADERS = {
   "Content-Type": "application/json",
 };
 
-const BROWSERLESS_CONTENT = "https://production-sfo.browserless.io/content";
-
-// ── UTILITIES ─────────────────────────────────────────────────────────────────
 function clean(s) {
   return (s || "").replace(/\s+/g, " ").trim();
 }
@@ -21,38 +20,28 @@ function clean(s) {
 function extractField(text, ...labels) {
   for (const label of labels) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(escaped + "[:\\s]+([^\\n<]{1,300})", "i");
+    const re = new RegExp(escaped + "[:\\s]*([^\\n]{1,200})", "i");
     const m = text.match(re);
     if (m) {
       const val = clean(m[1]);
-      if (val && val.length > 0 && val.length < 280) return val;
+      if (val) return val;
     }
   }
   return "";
 }
 
-// ── BLOCK DETECTION ──────────────────────────────────────────────────────────
-function checkIsBlocked(html, solNumber) {
-  if (!html || html.length < 500) return true;
-  const lc = html.toLowerCase();
-  const solLc = solNumber.toLowerCase();
-
-  return (
-    lc.includes("access denied") ||
-    lc.includes("login required") ||
-    lc.includes("cac required") ||
-    lc.includes("support id") ||
-    lc.includes("the requested url was rejected") ||
-    (lc.includes("<title") && !lc.includes(solLc.slice(0, 6)))
-  );
-}
-
-// ── SUPPLIER PARSER ───────────────────────────────────────────────────────────
 function parseSuppliers(html) {
   const suppliers = [];
+  const supplierIdx = Math.max(
+    html.toLowerCase().indexOf("approved source"),
+    html.toLowerCase().indexOf("supplier list"),
+    html.toLowerCase().indexOf("manufacturer required"),
+  );
+  const relevantHtml = supplierIdx > 0 ? html.slice(supplierIdx) : html;
+
   const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
-  while ((rowMatch = rowRe.exec(html)) !== null) {
+  while ((rowMatch = rowRe.exec(relevantHtml)) !== null) {
     const cells = [];
     const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
     let cellMatch;
@@ -60,88 +49,148 @@ function parseSuppliers(html) {
       const t = clean(cellMatch[1].replace(/<[^>]+>/g, " "));
       if (t) cells.push(t);
     }
-    const cageIdx = cells.findIndex((c) => /^[A-Z0-9]{5}$/.test(c.trim()));
-    if (cageIdx >= 0) {
-      const cage = cells[cageIdx].trim();
-      if (!suppliers.find((s) => s.cage === cage)) {
-        suppliers.push({
-          name: cells.slice(0, cageIdx).join(" "),
-          cage,
-          pn: clean(cells[cageIdx + 1] || ""),
-        });
+    if (cells.length >= 2) {
+      const cageIdx = cells.findIndex((c) => /^[A-Z0-9]{5}$/.test(c.trim()));
+      if (cageIdx > 0) {
+        const name = cells.slice(0, cageIdx).join(" ");
+        const cage = cells[cageIdx].trim();
+        const pn = cells[cageIdx + 1] || "";
+        if (
+          name &&
+          cage &&
+          !/^(cage|name|part|supplier|manufacturer|source)$/i.test(name.trim())
+        ) {
+          suppliers.push({ name: clean(name), cage, pn: clean(pn) });
+        }
       }
     }
+    if (suppliers.length >= 20) break;
   }
   return suppliers;
 }
 
-// ── MAIN PAGE PARSER ──────────────────────────────────────────────────────────
 function parseSolPage(html, solNumber) {
-  const scriptRe = new RegExp(`<script[\\s\\S]*?<\/script>`, `gi`);
-  const styleRe = new RegExp(`<style[\\s\\S]*?<\/style>`, `gi`);
-  const text = html
-    .replace(scriptRe, "")
-    .replace(styleRe, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ");
+  const stripped = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "");
+  const text = stripped.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
-  return {
-    contract_number: solNumber,
-    nsn: (text.match(/\b(\d{13})\b/) || ["", ""])[1],
-    due_date: extractField(text, "Quote Due", "Due Date"),
-    item_description: extractField(text, "Nomenclature", "Item Description"),
-    fob: extractField(text, "F.O.B. Point", "FOB"),
-    hist_unit_price: extractField(text, "Historical Unit Price", "Hist Price"),
-    suppliers: parseSuppliers(html),
-    source: "dibbs-hybrid",
-  };
-}
-
-// ── FETCHERS ──────────────────────────────────────────────────────────────────
-async function fetchDirect(url) {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0",
-    },
-    signal: AbortSignal.timeout(10000),
-  });
-  return await res.text();
-}
-
-// Change this in dibbs-sol.js
-async function fetchBrowserless(url) {
-  // We call our OWN netlify function utility now
-  const res = await fetch(
-    "https://thehouseofkel.com/.netlify/functions/browserless-scrape",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: url,
-        timeout: 5000,
-        selectors: [{ selector: "html" }], // Get the whole page
-      }),
-    },
+  // Debug: log a slice of the raw text so we can see page structure
+  console.log("[DIBBS Parser] HTML length:", html.length);
+  console.log(
+    "[DIBBS Parser] First 500 chars of stripped text:",
+    text.slice(0, 500),
   );
+  // Find where supplier section might be
+  const lowerText = text.toLowerCase();
+  const markers = [
+    "approved source",
+    "supplier list",
+    "manufacturer",
+    "cage",
+    "solicitation",
+    "rfq",
+  ];
+  markers.forEach((m) => {
+    const idx = lowerText.indexOf(m);
+    if (idx > 0)
+      console.log(
+        `[DIBBS Parser] Found "${m}" at index ${idx}:`,
+        text.slice(Math.max(0, idx - 20), idx + 80),
+      );
+  });
 
-  if (!res.ok) throw new Error(`Scrape Utility Error: ${res.status}`);
-  const data = await res.json();
+  const sol = {
+    contract_number: solNumber,
+    contract_type: "",
+    pr_number: "",
+    date_issued: "",
+    nsn: "",
+    part_numbers: [],
+    due_date: "",
+    item_description: "",
+    drawing_info: "",
+    fob: "",
+    anticipated_award: "",
+    packaging: "",
+    set_aside: "",
+    qty: "",
+    unit_issue: "",
+    delivery_days: "",
+    hist_unit_price: "",
+    unit_price: "",
+    suppliers: [],
+    source: "dibbs-direct",
+  };
 
-  // Return the html content from the first result
-  return data.results[0]?.html || "";
+  sol.contract_type = extractField(text, "Contract Type", "Set Aside");
+  sol.pr_number = extractField(text, "PR Number", "Purchase Request");
+  sol.date_issued = extractField(
+    text,
+    "Date Issued",
+    "Issue Date",
+    "Posted Date",
+  );
+  sol.due_date = extractField(text, "Due Date", "Quote Due", "Closing Date");
+  sol.item_description = extractField(
+    text,
+    "Item Description",
+    "Nomenclature",
+    "Description",
+  );
+  sol.drawing_info = extractField(
+    text,
+    "Drawing Information",
+    "Drawing Number",
+  );
+  sol.fob = extractField(text, "FOB Point", "FOB");
+  sol.anticipated_award = extractField(
+    text,
+    "Anticipated Award Amount",
+    "Award Amount",
+    "Estimated Value",
+  );
+  sol.packaging = extractField(text, "Packaging", "Pack");
+  sol.set_aside = extractField(text, "Set Aside", "Set-Aside");
+  sol.qty = extractField(text, "Quantity", "Qty");
+  sol.unit_issue = extractField(text, "Unit of Issue", "Unit Issue", "UOI");
+  sol.delivery_days = extractField(text, "Delivery Days", "Delivery", "ARO");
+  sol.hist_unit_price = extractField(
+    text,
+    "Historical Unit Price",
+    "Hist Unit Price",
+    "Historical Price",
+  );
+  sol.unit_price = extractField(text, "Unit Price");
+
+  const nsnMatch = text.match(/\b(\d{4}-\d{2}-\d{3}-\d{4}|\d{13})\b/);
+  if (nsnMatch) sol.nsn = nsnMatch[1].replace(/-/g, "");
+
+  const pnSection = extractField(text, "Part Number", "P/N");
+  if (pnSection) {
+    sol.part_numbers = pnSection.split(/[,;]/).map(clean).filter(Boolean);
+  }
+
+  sol.suppliers = parseSuppliers(html);
+  return sol;
 }
 
-// ── HANDLER (The Full Loop) ──────────────────────────────────────────────────
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS")
+  if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: HEADERS, body: "" };
+  }
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers: HEADERS,
+      body: JSON.stringify({ error: "Method not allowed" }),
+    };
+  }
 
   let sol_number;
   try {
     ({ sol_number } = JSON.parse(event.body || "{}"));
-  } catch (e) {
+  } catch {
     return {
       statusCode: 400,
       headers: HEADERS,
@@ -149,64 +198,87 @@ exports.handler = async (event) => {
     };
   }
 
-  const solClean = sol_number?.trim().toUpperCase();
-  const rfqUrl = `https://www.dibbs.bsm.dla.mil/rfq/rqdetail.aspx?rfqno=${encodeURIComponent(solClean)}`;
-  const apiKey = process.env.BROWSERLESS_API_KEY;
-
-  let html = "";
-  let method = "direct";
-
-  try {
-    html = await fetchDirect(rfqUrl);
-  } catch (err) {
-    console.warn("Direct fail:", err.message);
+  if (!sol_number) {
+    return {
+      statusCode: 400,
+      headers: HEADERS,
+      body: JSON.stringify({ error: "sol_number required" }),
+    };
   }
 
-  if (checkIsBlocked(html, solClean)) {
-    if (!apiKey) {
-      return {
-        statusCode: 200,
-        headers: HEADERS,
-        body: JSON.stringify({
-          ok: false,
-          error: "DIBBS Blocked. API Key missing.",
-          method: "direct-blocked",
-        }),
-      };
-    }
-    try {
-      html = await fetchBrowserless(rfqUrl, apiKey);
-      method = "browserless";
-    } catch (err) {
+  // ── Route through browserless-scrape to bypass DIBBS IP blocking ──
+  const rfqUrl = `https://www.dibbs.bsm.dla.mil/rfq/rqdetail.aspx?rfqno=${encodeURIComponent(sol_number.trim())}`;
+  const scrapeUrl = `${process.env.URL || "https://thehouseofkel.com"}/.netlify/functions/browserless-scrape`;
+
+  let html = "";
+  const usedUrl = rfqUrl;
+
+  try {
+    console.log("[DIBBS Sol] Fetching via browserless-scrape:", rfqUrl);
+    const scrapeRes = await fetch(scrapeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: rfqUrl }),
+      signal: AbortSignal.timeout(35000),
+    });
+
+    const scrapeData = await scrapeRes.json();
+
+    if (!scrapeData.ok || !scrapeData.results?.[0]?.html) {
       return {
         statusCode: 502,
         headers: HEADERS,
         body: JSON.stringify({
           ok: false,
-          error: "Browserless failed: " + err.message,
-          method: "browserless-fail",
+          error:
+            "Browserless failed: " + (scrapeData.error || "no HTML returned"),
+          url: rfqUrl,
+          method: "browserless",
         }),
       };
     }
+
+    html = scrapeData.results[0].html;
+    console.log("[DIBBS Sol] Got HTML via browserless, length:", html.length);
+  } catch (err) {
+    return {
+      statusCode: 502,
+      headers: HEADERS,
+      body: JSON.stringify({
+        ok: false,
+        error: "Browserless scrape error: " + err.message,
+        url: rfqUrl,
+        method: "browserless",
+      }),
+    };
   }
 
-  // Final check
-  if (checkIsBlocked(html, solClean)) {
+  if (!html || html.length < 200) {
     return {
       statusCode: 200,
       headers: HEADERS,
       body: JSON.stringify({
         ok: false,
-        error: "DIBBS Security still persistent.",
-        method,
+        error: "Empty page — sol may be closed or not found",
+        url: usedUrl,
       }),
     };
   }
 
-  const sol = parseSolPage(html, solClean);
+  const sol = parseSolPage(html, sol_number);
+
+  console.log("[DIBBS Parser] Final result:", {
+    item: sol.item_description,
+    nsn: sol.nsn,
+    suppliersFound: sol.suppliers.length,
+    suppliers: sol.suppliers,
+    fob: sol.fob,
+    award: sol.anticipated_award,
+  });
+
   return {
     statusCode: 200,
     headers: HEADERS,
-    body: JSON.stringify({ ok: true, sol, url: rfqUrl, method }),
+    body: JSON.stringify({ ok: true, sol, url: usedUrl }),
   };
 };
