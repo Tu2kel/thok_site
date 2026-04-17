@@ -110,21 +110,27 @@ async function fetchDirect(url) {
   return await res.text();
 }
 
-async function fetchBrowserless(url, apiKey) {
+// Change this in dibbs-sol.js
+async function fetchBrowserless(url) {
+  // We call our OWN netlify function utility now
   const res = await fetch(
-    `${BROWSERLESS_CONTENT}?token=${apiKey}&stealth=true`,
+    "https://thehouseofkel.com/.netlify/functions/browserless-scrape",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: url,
-        waitFor: 3000,
-        gotoOptions: { waitUntil: "networkidle2", timeout: 20000 },
+        timeout: 5000,
+        selectors: [{ selector: "html" }], // Get the whole page
       }),
     },
   );
-  if (!res.ok) throw new Error(`Browserless Error: ${res.status}`);
-  return await res.text();
+
+  if (!res.ok) throw new Error(`Scrape Utility Error: ${res.status}`);
+  const data = await res.json();
+
+  // Return the html content from the first result
+  return data.results[0]?.html || "";
 }
 
 // ── HANDLER (The Full Loop) ──────────────────────────────────────────────────
