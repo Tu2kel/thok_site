@@ -922,6 +922,26 @@
             hA("span", { className: "glint" }),
             "☎ Rolodex",
           ),
+          // Lane Lookup tab
+          hA(
+            "button",
+            {
+              className: "tab" + (tab === "lanelookup" ? " active" : ""),
+              onClick: () => setTab("lanelookup"),
+              style: {
+                borderColor:
+                  tab === "lanelookup"
+                    ? "rgba(201,168,76,.6)"
+                    : "rgba(201,168,76,.2)",
+                color:
+                  tab === "lanelookup"
+                    ? "var(--gold-solid)"
+                    : "rgba(201,168,76,.4)",
+              },
+            },
+            hA("span", { className: "glint" }),
+            "⊞ Lane Lookup",
+          ),
           // Backup
           hA(
             "button",
@@ -1063,6 +1083,15 @@
                 "div",
                 { style: { padding: "20px", color: "var(--body-dim)" } },
                 "Rolodex loading...",
+              )),
+
+        tab === "lanelookup" &&
+          (window.SCC_TABS && window.SCC_TABS.LaneLookupTab
+            ? hA(window.SCC_TABS.LaneLookupTab, null)
+            : hA(
+                "div",
+                { style: { padding: "20px", color: "var(--body-dim)" } },
+                "Lane Lookup loading...",
               )),
 
         tab === "fu" &&
