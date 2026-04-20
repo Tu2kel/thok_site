@@ -95,8 +95,6 @@ function parseSuppliers(html) {
   });
 }
 
-console.log("[DIBBS Raw HTML sample]", html.slice(0, 2000));
-
 function parseSolPage(html, solNumber) {
   const sol = {
     contract_number: solNumber,
@@ -326,7 +324,7 @@ exports.handler = async (event) => {
       }),
     };
   }
-
+  console.log("[DIBBS Raw HTML sample]", html.slice(0, 2000));
   const sol = parseSolPage(html, solClean);
 
   return {
