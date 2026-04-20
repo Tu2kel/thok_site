@@ -1,10 +1,9 @@
 // netlify/functions/dibbs-sol.js
-// Imperio SCC — DIBBS Solicitation Parser (browser-fetch architecture)
+// Imperio SCC — DIBBS Solicitation Fetcher + Parser
+// Routes through ScraperAPI to bypass DIBBS cloud-IP block.
+// Netlify env var required: SCRAPER_API_KEY
 //
-// Browser fetches the DIBBS page directly (avoids server-side IP block),
-// sends raw HTML here for parsing.
-//
-// POST body: { html: "<full page html>", sol_number: "SPE7L226T0368" }
+// POST body: { sol_number: "SPE7L226T0368" }
 // Returns:   { ok, sol: { contract_number, nsn, due_date, issue_date,
 //              item_description, qty, unit_issue, delivery_days,
 //              unit_price, hist_unit_price, fob, set_aside, packaging,
@@ -124,7 +123,7 @@ function parseSolPage(html, solNumber) {
   const rows = extractRows(cleaned);
   const fullText = cleaned.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
-  // ── Dates from sol header row (MM-DD-YYYY confirmed) ──
+  // ── Dates from sol header row (MM-DD-YYYY confirmed from live page) ──
   for (const row of rows) {
     if (/SPE[A-Z0-9\-]{6,}/i.test(row)) {
       const dates = [...row.matchAll(/(\d{2}-\d{2}-\d{4})/g)].map((m) => m[1]);
@@ -139,7 +138,8 @@ function parseSolPage(html, solNumber) {
     }
   }
 
-  // ── NSN + Item + Qty from line item row ──
+  // ── NSN + Item + Qty ──
+  // Confirmed row: "1  5310-01-721-2111  NUT, PLAIN, EXTENDED  None  7016287028  Qty: 7143"
   for (const row of rows) {
     const nsnMatch = row.match(/\b(\d{4}-\d{2}-\d{3}-\d{4})\b/);
     if (nsnMatch) {
@@ -229,25 +229,14 @@ exports.handler = async (event) => {
     };
   }
 
-  let html, sol_number;
+  let sol_number;
   try {
-    ({ html, sol_number } = JSON.parse(event.body || "{}"));
+    ({ sol_number } = JSON.parse(event.body || "{}"));
   } catch {
     return {
       statusCode: 400,
       headers: HEADERS,
       body: JSON.stringify({ error: "Invalid JSON" }),
-    };
-  }
-
-  if (!html || html.length < 500) {
-    return {
-      statusCode: 400,
-      headers: HEADERS,
-      body: JSON.stringify({
-        ok: false,
-        error: "No HTML provided — browser fetch may have failed",
-      }),
     };
   }
 
@@ -259,11 +248,88 @@ exports.handler = async (event) => {
     };
   }
 
-  const sol = parseSolPage(html, sol_number.trim().toUpperCase());
+  const apiKey = process.env.SCRAPER_API_KEY;
+  if (!apiKey) {
+    return {
+      statusCode: 500,
+      headers: HEADERS,
+      body: JSON.stringify({
+        ok: false,
+        error: "SCRAPER_API_KEY env var not set",
+      }),
+    };
+  }
+
+  const solClean = sol_number.trim().toUpperCase();
+  const targetUrl = `https://www.dibbs.bsm.dla.mil/RFQ/RFQRec.aspx?sn=${encodeURIComponent(solClean)}`;
+
+  // ScraperAPI routes through residential IPs — bypasses DIBBS cloud block
+  const scraperUrl = `https://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=false`;
+
+  let html = "";
+  try {
+    const res = await fetch(scraperUrl, {
+      method: "GET",
+      signal: AbortSignal.timeout(30000), // ScraperAPI can take up to 20s
+    });
+    if (!res.ok) {
+      return {
+        statusCode: 502,
+        headers: HEADERS,
+        body: JSON.stringify({
+          ok: false,
+          error: `ScraperAPI returned HTTP ${res.status}`,
+          url: targetUrl,
+        }),
+      };
+    }
+    html = await res.text();
+  } catch (err) {
+    return {
+      statusCode: 502,
+      headers: HEADERS,
+      body: JSON.stringify({
+        ok: false,
+        error: "ScraperAPI fetch failed: " + err.message,
+        url: targetUrl,
+      }),
+    };
+  }
+
+  if (!html || html.length < 500) {
+    return {
+      statusCode: 200,
+      headers: HEADERS,
+      body: JSON.stringify({
+        ok: false,
+        error:
+          "Empty page returned — sol may be closed, removed, or ScraperAPI blocked",
+        url: targetUrl,
+      }),
+    };
+  }
+
+  if (
+    /no solicitation found|rfq not found|invalid solicitation|does not exist/i.test(
+      html,
+    )
+  ) {
+    return {
+      statusCode: 200,
+      headers: HEADERS,
+      body: JSON.stringify({
+        ok: false,
+        error: "Solicitation not found on DIBBS — may be removed or awarded",
+        url: targetUrl,
+      }),
+    };
+  }
+
+  const sol = parseSolPage(html, solClean);
 
   return {
     statusCode: 200,
     headers: HEADERS,
-    body: JSON.stringify({ ok: true, sol }),
+    body: JSON.stringify({ ok: true, sol, url: targetUrl }),
   };
 };
