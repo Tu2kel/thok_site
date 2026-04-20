@@ -173,7 +173,7 @@
         "div",
         {
           style: {
-            fontSize: "8px",
+            fontSize: "11px",
             letterSpacing: ".2em",
             color: "rgba(201,168,76,0.35)",
             marginBottom: "3px",
@@ -189,7 +189,7 @@
               target: "_blank",
               rel: "noopener noreferrer",
               style: {
-                fontSize: "11px",
+                fontSize: "14px",
                 color: "var(--gold-solid,#c9a84c)",
                 textDecoration: "none",
                 borderBottom: "1px solid rgba(201,168,76,0.25)",
@@ -201,7 +201,7 @@
             "div",
             {
               style: {
-                fontSize: "11px",
+                fontSize: "14px",
                 color: "rgba(201,168,76,0.8)",
                 lineHeight: "1.4",
               },
@@ -262,7 +262,7 @@
             "div",
             {
               style: {
-                fontSize: "13px",
+                fontSize: "16px",
                 fontWeight: "bold",
                 letterSpacing: ".04em",
               },
@@ -273,7 +273,7 @@
             "div",
             {
               style: {
-                fontSize: "9px",
+                fontSize: "12px",
                 color: "rgba(201,168,76,0.45)",
                 letterSpacing: ".1em",
                 marginTop: "2px",
@@ -287,7 +287,7 @@
             "div",
             {
               style: {
-                fontSize: "8px",
+                fontSize: "11px",
                 color: frictionColor(d.friction),
                 letterSpacing: ".12em",
                 marginRight: "6px",
@@ -299,7 +299,7 @@
           "div",
           {
             style: {
-              fontSize: "8px",
+              fontSize: "11px",
               letterSpacing: ".12em",
               color,
               padding: "3px 8px",
@@ -315,7 +315,7 @@
           {
             style: {
               color: "rgba(201,168,76,0.3)",
-              fontSize: "11px",
+              fontSize: "14px",
               marginLeft: "6px",
             },
           },
@@ -411,7 +411,7 @@
                 ? "var(--gold-solid,#c9a84c)"
                 : "rgba(201,168,76,0.55)",
               fontFamily: "var(--font-mono,'Courier New',monospace)",
-              fontSize: "10px",
+              fontSize: "13px",
               cursor: "pointer",
               borderRadius: "3px",
               transition: "all .1s",
@@ -426,7 +426,9 @@
           ),
           h(
             "span",
-            { style: { color: "#4ade80", fontSize: "9px", marginLeft: "6px" } },
+            {
+              style: { color: "#4ade80", fontSize: "12px", marginLeft: "6px" },
+            },
             count,
           ),
         );
@@ -513,7 +515,7 @@
                     ? "var(--gold-solid,#c9a84c)"
                     : "rgba(201,168,76,0.4)",
                 fontFamily: "var(--font-mono,'Courier New',monospace)",
-                fontSize: "11px",
+                fontSize: "14px",
                 letterSpacing: ".15em",
                 cursor: "pointer",
                 borderRadius: "3px",
@@ -542,7 +544,7 @@
             border: "1px solid rgba(201,168,76,0.25)",
             color: "var(--gold-solid,#c9a84c)",
             fontFamily: "var(--font-mono,'Courier New',monospace)",
-            fontSize: "14px",
+            fontSize: "17px",
             padding: "10px 14px",
             borderRadius: "3px",
             outline: "none",
@@ -558,7 +560,7 @@
               border: "1px solid rgba(201,168,76,0.4)",
               color: "var(--gold-solid,#c9a84c)",
               fontFamily: "var(--font-mono,'Courier New',monospace)",
-              fontSize: "11px",
+              fontSize: "14px",
               letterSpacing: ".15em",
               cursor: "pointer",
               borderRadius: "3px",
@@ -575,7 +577,7 @@
           {
             style: {
               color: "rgba(201,168,76,0.4)",
-              fontSize: "11px",
+              fontSize: "14px",
               letterSpacing: ".1em",
               marginBottom: "16px",
             },
@@ -594,7 +596,7 @@
               border: "1px solid rgba(201,168,76,0.1)",
               borderRadius: "4px",
               color: "rgba(201,168,76,0.4)",
-              fontSize: "11px",
+              fontSize: "14px",
               letterSpacing: ".1em",
               marginBottom: "16px",
             },
@@ -612,7 +614,7 @@
             "div",
             {
               style: {
-                fontSize: "9px",
+                fontSize: "12px",
                 letterSpacing: ".2em",
                 color: "rgba(201,168,76,0.35)",
                 marginBottom: "10px",
@@ -632,7 +634,7 @@
             "div",
             {
               style: {
-                fontSize: "9px",
+                fontSize: "12px",
                 letterSpacing: ".2em",
                 color: "rgba(201,168,76,0.4)",
                 borderTop: "1px solid rgba(201,168,76,0.1)",
@@ -671,7 +673,7 @@
                     border: "1px solid rgba(201,168,76,0.1)",
                     borderRadius: "4px",
                     color: "rgba(201,168,76,0.3)",
-                    fontSize: "12px",
+                    fontSize: "15px",
                     letterSpacing: ".1em",
                   },
                 },
@@ -718,7 +720,7 @@
               "span",
               {
                 style: {
-                  fontSize: "9px",
+                  fontSize: "12px",
                   letterSpacing: ".12em",
                   color: "rgba(201,168,76,0.35)",
                 },
