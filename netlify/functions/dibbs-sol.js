@@ -270,7 +270,7 @@ exports.handler = async (event) => {
   try {
     const res = await fetch(scraperUrl, {
       method: "GET",
-      signal: AbortSignal.timeout(9000), // ScraperAPI can take up to 20s
+      signal: AbortSignal.timeout(30000), // ScraperAPI can take up to 20s
     });
     if (!res.ok) {
       return {
