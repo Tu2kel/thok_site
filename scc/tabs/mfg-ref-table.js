@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════
 //  IMPERIO SCC — MFG REFERENCE TABLE
 //  Per-sol quote tracking + DIBBS pull button
+//  Architecture: browser fetches DIBBS directly (avoids server IP block),
+//  sends raw HTML to /.netlify/functions/dibbs-sol for parsing.
 //  Storage: localStorage keyed by sol_number
 //  Exports: window.SCC_TABS.MFGRefTable
 //  Load order: before pipeline-drawer.js
@@ -10,6 +12,7 @@
   const { createElement: hM, useState, useEffect } = React;
 
   const LS_KEY = "scc-mfg-quotes-v1";
+  const DIBBS_RFQ_URL = "https://www.dibbs.bsm.dla.mil/RFQ/RFQRec.aspx?sn=";
 
   function loadQuotes(sol) {
     try {
@@ -40,15 +43,46 @@
     };
   }
 
+  // Step 1: browser fetches DIBBS page directly (uses your IP + session)
+  // Step 2: sends raw HTML to Netlify function for parsing
   async function pullDIBBS(solNumber) {
-    const res = await fetch("/.netlify/functions/dibbs-sol", {
+    console.log("[MFG Pull] Browser fetching DIBBS for:", solNumber);
+
+    // Browser fetch — works because it uses your real IP and cookies
+    const dibbsRes = await fetch(
+      DIBBS_RFQ_URL + encodeURIComponent(solNumber),
+      {
+        credentials: "include",
+      },
+    );
+
+    if (!dibbsRes.ok) {
+      throw new Error("DIBBS returned " + dibbsRes.status);
+    }
+
+    const html = await dibbsRes.text();
+    console.log("[MFG Pull] DIBBS HTML received, length:", html.length);
+
+    if (html.length < 500) {
+      throw new Error(
+        "DIBBS returned empty page — sol may be closed or removed",
+      );
+    }
+
+    // Send HTML to Netlify function for parsing
+    const parseRes = await fetch("/.netlify/functions/dibbs-sol", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sol_number: solNumber }),
+      body: JSON.stringify({ html, sol_number: solNumber }),
     });
-    return await res.json();
+
+    return await parseRes.json();
   }
 
+  // Margin calc: shows GM% and net after FE fees
+  // FE fee tiers per protocol: Day 20 = 1.67%, Day 30 = 2.50%, Day 60 = 5.00%
+  // With PO funding Day 30 = 5.00%, Day 45 = 5.833%, Day 60 = 7.50%
+  // Default display: FE Day-30 factoring only (2.5%) for deals >= $10K
   function calcMargin(price, histUnit, qty) {
     const cost = parseFloat(price);
     const hist = parseFloat(histUnit);
@@ -56,11 +90,13 @@
     if (!cost || !hist) return null;
     const gm = ((hist - cost) / hist) * 100;
     const total = hist * q;
-    const feeFactor = total >= 10000 ? 7.5 : 0;
+    // Self-funded under $10K, FE Day-30 factoring only above
+    const feeFactor = total >= 10000 ? 2.5 : 0;
     const net = gm - feeFactor;
     return {
       gm: gm.toFixed(1),
       net: net.toFixed(1),
+      isFE: total >= 10000,
       color: net >= 10 ? "#3dd68c" : net >= 5 ? "#C9A84C" : "#e87474",
     };
   }
@@ -96,29 +132,15 @@
     async function handlePull() {
       if (!sol) return;
       setPullStatus("loading");
-      console.log("[MFG Pull] Firing dibbs-sol for:", sol);
       try {
         const data = await pullDIBBS(sol);
-        console.log("[MFG Pull] Response:", {
-          ok: data.ok,
-          url: data.url,
-          method: data.method,
-          error: data.error,
-          suppliersFound: data.sol?.suppliers?.length || 0,
-          suppliers: data.sol?.suppliers || [],
-          item: data.sol?.item_description,
-          award: data.sol?.anticipated_award,
-          fob: data.sol?.fob,
-        });
+        console.log("[MFG Pull] Parse result:", data);
+
         if (data.ok && data.sol) {
           setPullData(data.sol);
           setPullStatus("done");
+
           if (data.sol.suppliers && data.sol.suppliers.length) {
-            console.log(
-              "[MFG Pull] Loading",
-              data.sol.suppliers.length,
-              "approved sources into table",
-            );
             const newRows = data.sol.suppliers.map((s) => ({
               ...emptyRow(),
               mfg: s.name || "",
@@ -142,29 +164,19 @@
                   " approved sources loaded",
               );
           } else {
-            console.warn(
-              "[MFG Pull] No suppliers found in parsed response. Full sol:",
-              data.sol,
-            );
             if (showToast)
               showToast(
-                "DIBBS pulled — no approved sources parsed. Check console.",
+                "DIBBS pulled — no approved sources found on this sol.",
                 true,
               );
           }
         } else {
-          console.error(
-            "[MFG Pull] Pull failed:",
-            data.error,
-            "url:",
-            data.url,
-          );
           setPullStatus("error");
           if (showToast)
             showToast("DIBBS pull failed: " + (data.error || "unknown"), true);
         }
       } catch (err) {
-        console.error("[MFG Pull] Exception:", err.message);
+        console.error("[MFG Pull] Error:", err.message);
         setPullStatus("error");
         if (showToast) showToast("DIBBS pull error: " + err.message, true);
       }
@@ -206,11 +218,40 @@
 
     const GRID = "2fr 1.5fr 55px 85px 70px 1.5fr 22px";
 
+    const pullBtnStyle = {
+      padding: "5px 12px",
+      fontSize: "10px",
+      fontWeight: 700,
+      fontFamily: "Cinzel,serif",
+      letterSpacing: ".06em",
+      borderRadius: "3px",
+      cursor: pullStatus === "loading" ? "wait" : "pointer",
+      background:
+        pullStatus === "done"
+          ? "rgba(61,214,140,.12)"
+          : pullStatus === "error"
+            ? "rgba(231,76,60,.1)"
+            : "rgba(201,168,76,.1)",
+      border:
+        "1px solid " +
+        (pullStatus === "done"
+          ? "rgba(61,214,140,.4)"
+          : pullStatus === "error"
+            ? "rgba(231,76,60,.4)"
+            : "rgba(201,168,76,.3)"),
+      color:
+        pullStatus === "done"
+          ? "#3dd68c"
+          : pullStatus === "error"
+            ? "#e87474"
+            : "var(--gold-solid)",
+    };
+
     return hM(
       "div",
       null,
 
-      // Header
+      // ── Header ──
       hM(
         "div",
         {
@@ -242,34 +283,7 @@
             {
               onClick: handlePull,
               disabled: pullStatus === "loading",
-              style: {
-                padding: "5px 12px",
-                fontSize: "10px",
-                fontWeight: 700,
-                background:
-                  pullStatus === "done"
-                    ? "rgba(61,214,140,.12)"
-                    : pullStatus === "error"
-                      ? "rgba(231,76,60,.1)"
-                      : "rgba(201,168,76,.1)",
-                border:
-                  "1px solid " +
-                  (pullStatus === "done"
-                    ? "rgba(61,214,140,.4)"
-                    : pullStatus === "error"
-                      ? "rgba(231,76,60,.4)"
-                      : "rgba(201,168,76,.3)"),
-                color:
-                  pullStatus === "done"
-                    ? "#3dd68c"
-                    : pullStatus === "error"
-                      ? "#e87474"
-                      : "var(--gold-solid)",
-                borderRadius: "3px",
-                cursor: pullStatus === "loading" ? "wait" : "pointer",
-                letterSpacing: ".06em",
-                fontFamily: "Cinzel,serif",
-              },
+              style: pullBtnStyle,
             },
             pullStatus === "loading"
               ? "⟳ Pulling..."
@@ -299,7 +313,7 @@
         ),
       ),
 
-      // DIBBS pull banner
+      // ── DIBBS pull banner ──
       pullData &&
         hM(
           "div",
@@ -348,19 +362,22 @@
               },
             },
             [
-              pullData.anticipated_award &&
-                "Award: " + pullData.anticipated_award,
+              pullData.nsn && "NSN: " + pullData.nsn,
+              pullData.qty &&
+                "Qty: " +
+                  pullData.qty +
+                  (pullData.unit_issue ? " " + pullData.unit_issue : ""),
               pullData.due_date && "Due: " + pullData.due_date,
               pullData.fob && "FOB: " + pullData.fob,
-              pullData.packaging && "Pack: " + pullData.packaging,
               pullData.set_aside && "Set-Aside: " + pullData.set_aside,
+              pullData.delivery_days && "Del: " + pullData.delivery_days + "d",
             ]
               .filter(Boolean)
               .join("  ·  "),
           ),
         ),
 
-      // Column headers
+      // ── Column headers ──
       hM(
         "div",
         {
@@ -383,7 +400,7 @@
         hM("span", null),
       ),
 
-      // Rows
+      // ── Rows ──
       hM(
         "div",
         {
@@ -396,8 +413,6 @@
         },
         rows.map((row) => {
           const margin = calcMargin(row.price, histUnit, row.qty || qty);
-          const isFE =
-            parseFloat(histUnit) * parseFloat(row.qty || qty) >= 10000;
           return hM(
             "div",
             { key: row.id },
@@ -462,13 +477,13 @@
                       "% vs hist $" +
                       parseFloat(histUnit).toFixed(2)
                     : "") +
-                  (isFE ? "  (FE 7.5% baked in)" : "  (self-funded)"),
+                  (margin.isFE ? "  (FE Day-30 baked in)" : "  (self-funded)"),
               ),
           );
         }),
       ),
 
-      // Floor reminder
+      // ── Floor reminder ──
       hM(
         "div",
         {
