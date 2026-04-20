@@ -264,7 +264,7 @@ exports.handler = async (event) => {
   const targetUrl = `https://www.dibbs.bsm.dla.mil/RFQ/RFQRec.aspx?sn=${encodeURIComponent(solClean)}`;
 
   // ScraperAPI routes through residential IPs — bypasses DIBBS cloud block
-  const scraperUrl = `https://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=false`;
+  const scraperUrl = `https://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=false&country_code=us`;
 
   let html = "";
   try {
