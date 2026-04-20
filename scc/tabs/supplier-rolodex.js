@@ -1797,6 +1797,87 @@
       onAdd(blank);
     }
 
+    function exportRolodex() {
+      const allRows = [...suppliers.hd, ...suppliers.ft, ...suppliers.ml].map(
+        (s) => {
+          const st = rowState[s.id] || {};
+          return {
+            company: s.company || "",
+            type: s.type || "",
+            block: s.block || "",
+            fscs: s.fscs || "",
+            phone: s.phone || "",
+            email: s.email || "",
+            website: s.website || "",
+            difficulty: s.difficulty || "",
+            best_use: s.best_use || "",
+            notes: s.notes || "",
+            my_notes: st.my_notes ?? s.my_notes ?? "",
+            contacted: st.contacted ?? s.contacted ?? "",
+            responded: st.responded ?? s.responded ?? "",
+            partnered: (st.partnered ?? s.partnered ?? false) ? "YES" : "",
+          };
+        },
+      );
+
+      const headers = [
+        "Company",
+        "Type",
+        "Block",
+        "FSCs",
+        "Phone",
+        "Email",
+        "Website",
+        "Difficulty",
+        "Best Use",
+        "Notes",
+        "My Notes",
+        "Contacted",
+        "Responded",
+        "Partnered",
+      ];
+
+      const escape = (v) => {
+        const s = String(v ?? "");
+        return s.includes(",") || s.includes('"') || s.includes("\n")
+          ? '"' + s.replace(/"/g, '""') + '"'
+          : s;
+      };
+
+      const csv = [
+        headers.join(","),
+        ...allRows.map((r) =>
+          [
+            r.company,
+            r.type,
+            r.block,
+            r.fscs,
+            r.phone,
+            r.email,
+            r.website,
+            r.difficulty,
+            r.best_use,
+            r.notes,
+            r.my_notes,
+            r.contacted,
+            r.responded,
+            r.partnered,
+          ]
+            .map(escape)
+            .join(","),
+        ),
+      ].join("\r\n");
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        "rolodex-export-" + new Date().toISOString().slice(0, 10) + ".csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     // Grouped
     const blocks = [...new Set(data.map((s) => s.block))];
     function filterData(rows) {
@@ -1966,6 +2047,24 @@
               },
             },
             "+ Add Supplier",
+          ),
+          h(
+            "button",
+            {
+              onClick: exportRolodex,
+              title: "Export all rolodex entries to CSV",
+              style: {
+                padding: "6px 14px",
+                fontSize: "14px",
+                background: "rgba(201,168,76,.1)",
+                border: "1px solid rgba(201,168,76,.3)",
+                color: "var(--gold-solid)",
+                borderRadius: "3px",
+                cursor: "pointer",
+                fontWeight: 600,
+              },
+            },
+            "↓ Export CSV",
           ),
         ),
 
