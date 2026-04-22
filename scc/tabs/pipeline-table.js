@@ -13,6 +13,202 @@
     Fragment: PFrag,
   } = React;
 
+  // ── BAA COO QUICK REFERENCE ──────────────────────────────────────────
+  const _BAA_NQ = [
+    "China",
+    "Taiwan",
+    "India",
+    "Vietnam",
+    "South Korea",
+    "Mexico",
+    "Bangladesh",
+    "Indonesia",
+    "Thailand",
+    "Malaysia",
+  ];
+  const _BAA_Q = [
+    "United States",
+    "Australia",
+    "Austria",
+    "Belgium",
+    "Canada",
+    "Czech Republic",
+    "Denmark",
+    "Egypt",
+    "Estonia",
+    "Finland",
+    "France",
+    "Germany",
+    "Greece",
+    "Israel",
+    "Italy",
+    "Japan",
+    "Latvia",
+    "Lithuania",
+    "Luxembourg",
+    "Netherlands",
+    "Norway",
+    "Poland",
+    "Portugal",
+    "Slovenia",
+    "Spain",
+    "Sweden",
+    "Switzerland",
+    "Turkey",
+    "United Kingdom",
+  ];
+
+  function BAARef() {
+    const [pinned, setPinned] = usePState(false);
+    const [hovered, setHovered] = usePState(false);
+    const show = pinned || hovered;
+    const pill = (name, isOut) =>
+      hP(
+        "span",
+        {
+          key: name,
+          style: {
+            padding: "2px 8px",
+            fontSize: "10px",
+            fontFamily: "JetBrains Mono,monospace",
+            borderRadius: "2px",
+            border: isOut
+              ? "1px solid rgba(231,76,60,.3)"
+              : "1px solid rgba(201,168,76,.15)",
+            color: isOut ? "#ff6b7a" : "var(--alabaster)",
+            background: isOut ? "rgba(231,76,60,.08)" : "rgba(201,168,76,.04)",
+          },
+        },
+        name,
+      );
+    const secHdr = (txt, color) =>
+      hP(
+        "div",
+        {
+          style: {
+            padding: "4px 12px",
+            fontFamily: "Cinzel,serif",
+            fontSize: "7px",
+            letterSpacing: ".14em",
+            textTransform: "uppercase",
+            color,
+            background: "rgba(0,0,0,.35)",
+            borderBottom: "1px solid rgba(201,168,76,.08)",
+          },
+        },
+        txt,
+      );
+    return hP(
+      "div",
+      { style: { position: "relative", display: "inline-block" } },
+      hP(
+        "button",
+        {
+          style: {
+            padding: "5px 10px",
+            fontFamily: "Cinzel,serif",
+            fontSize: "8px",
+            letterSpacing: ".12em",
+            background: pinned ? "rgba(201,168,76,.15)" : "transparent",
+            border: pinned
+              ? "1px solid rgba(201,168,76,.5)"
+              : "1px solid rgba(201,168,76,.25)",
+            color: pinned ? "var(--gold-solid)" : "var(--gold-dim)",
+            borderRadius: "3px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            transition: "all .15s",
+            whiteSpace: "nowrap",
+          },
+          onMouseEnter: () => setHovered(true),
+          onMouseLeave: () => setHovered(false),
+          onClick: () => setPinned((p) => !p),
+        },
+        hP(
+          "span",
+          {
+            style: {
+              border: "1px solid rgba(201,168,76,.4)",
+              borderRadius: "50%",
+              width: "12px",
+              height: "12px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "8px",
+              color: "var(--gold-solid)",
+            },
+          },
+          "?",
+        ),
+        "BAA COO",
+      ),
+      show &&
+        hP(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              left: 0,
+              background: "#1a181b",
+              border: "1px solid rgba(201,168,76,.25)",
+              borderRadius: "6px",
+              width: "420px",
+              zIndex: 999,
+              boxShadow: "0 6px 32px rgba(0,0,0,.7)",
+              overflow: "hidden",
+            },
+            onMouseEnter: () => setHovered(true),
+            onMouseLeave: () => setHovered(false),
+          },
+          secHdr("Non-Qualifying — Cannot Source From", "#ff6b7a"),
+          hP(
+            "div",
+            {
+              style: {
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "5px",
+                padding: "8px 12px",
+                borderBottom: "1px solid rgba(201,168,76,.08)",
+              },
+            },
+            ..._BAA_NQ.map((c) => pill(c, true)),
+          ),
+          secHdr("Qualifying — Clear to Source", "var(--gold-solid)"),
+          hP(
+            "div",
+            {
+              style: {
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "5px",
+                padding: "8px 12px",
+              },
+            },
+            ..._BAA_Q.map((c) => pill(c, false)),
+          ),
+          hP(
+            "div",
+            {
+              style: {
+                padding: "6px 12px",
+                borderTop: "1px solid rgba(201,168,76,.08)",
+                fontFamily: "Cormorant Garamond,serif",
+                fontStyle: "italic",
+                fontSize: "11px",
+                color: "rgba(201,168,76,.45)",
+              },
+            },
+            '"Country of origin?" — domestic or named qualifying country closes the gate.',
+          ),
+        ),
+    );
+  }
+
   // ── PIPELINE TAB ─────────────────────────────────────────────────────
   const BID_BANDS = {
     All: [0, Infinity],
@@ -1266,22 +1462,27 @@ Rules:
               "◆ Ingest Quote",
             ),
           ),
-          hP("input", {
-            value: search,
-            onChange: (e) => setSearch(e.target.value),
-            placeholder: "Search NSN, sol #, item, FSC, part #…",
-            style: {
-              padding: "7px 14px",
-              background: "var(--inset-bg)",
-              border: "1px solid rgba(201,168,76,.2)",
-              color: "var(--alabaster)",
-              fontFamily: "JetBrains Mono,monospace",
-              fontSize: "12px",
-              outline: "none",
-              width: "300px",
-              letterSpacing: ".04em",
-            },
-          }),
+          hP(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "8px" } },
+            hP("input", {
+              value: search,
+              onChange: (e) => setSearch(e.target.value),
+              placeholder: "Search NSN, sol #, item, FSC, part #…",
+              style: {
+                padding: "7px 14px",
+                background: "var(--inset-bg)",
+                border: "1px solid rgba(201,168,76,.2)",
+                color: "var(--alabaster)",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "12px",
+                outline: "none",
+                width: "300px",
+                letterSpacing: ".04em",
+              },
+            }),
+            hP(BAARef, null),
+          ),
         ),
         hP(
           "div",
