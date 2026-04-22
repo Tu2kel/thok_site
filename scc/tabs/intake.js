@@ -6,6 +6,263 @@
 
   const { createElement: h, useState: useIntakeState, Fragment } = React;
 
+  // ── BAA COO REFERENCE MODAL ──────────────────────────────────────────
+  const BAA_NON_QUAL = [
+    "China",
+    "Taiwan",
+    "India",
+    "Vietnam",
+    "South Korea",
+    "Mexico",
+    "Bangladesh",
+    "Indonesia",
+    "Thailand",
+    "Malaysia",
+  ];
+  const BAA_QUAL = [
+    "United States",
+    "Australia",
+    "Austria",
+    "Belgium",
+    "Canada",
+    "Czech Republic",
+    "Denmark",
+    "Egypt",
+    "Estonia",
+    "Finland",
+    "France",
+    "Germany",
+    "Greece",
+    "Israel",
+    "Italy",
+    "Japan",
+    "Latvia",
+    "Lithuania",
+    "Luxembourg",
+    "Netherlands",
+    "Norway",
+    "Poland",
+    "Portugal",
+    "Slovenia",
+    "Spain",
+    "Sweden",
+    "Switzerland",
+    "Turkey",
+    "United Kingdom",
+  ];
+
+  function BAAModal() {
+    const [open, setOpen] = useIntakeState(false);
+    const btn = {
+      padding: "6px 14px",
+      fontFamily: "Cinzel,serif",
+      fontSize: "9px",
+      letterSpacing: ".1em",
+      background: "transparent",
+      border: "1px solid rgba(201,168,76,.25)",
+      color: "rgba(201,168,76,.7)",
+      borderRadius: "4px",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      transition: "all .15s",
+    };
+    const overlay = {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,.75)",
+      zIndex: 9999,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    };
+    const modal = {
+      background: "#1a181b",
+      border: "1px solid rgba(201,168,76,.25)",
+      borderRadius: "8px",
+      width: "520px",
+      maxHeight: "80vh",
+      overflowY: "auto",
+      boxShadow: "0 8px 40px rgba(0,0,0,.6)",
+    };
+    const sectionHdr = (txt, color) =>
+      h(
+        "div",
+        {
+          style: {
+            padding: "6px 16px",
+            fontFamily: "Cinzel,serif",
+            fontSize: "9px",
+            letterSpacing: ".12em",
+            textTransform: "uppercase",
+            color,
+            borderBottom: "1px solid rgba(201,168,76,.1)",
+            background: "rgba(0,0,0,.3)",
+          },
+        },
+        txt,
+      );
+    const pill = (name, isOut) =>
+      h(
+        "div",
+        {
+          key: name,
+          style: {
+            padding: "4px 10px",
+            fontSize: "12px",
+            fontFamily: "JetBrains Mono,monospace",
+            borderRadius: "3px",
+            border: isOut
+              ? "1px solid rgba(231,76,60,.3)"
+              : "1px solid rgba(201,168,76,.15)",
+            color: isOut ? "#ff6b7a" : "var(--alabaster)",
+            background: isOut ? "rgba(231,76,60,.08)" : "rgba(201,168,76,.04)",
+          },
+        },
+        name,
+      );
+
+    return h(
+      Fragment,
+      null,
+      h(
+        "button",
+        { style: btn, onClick: () => setOpen(true) },
+        h(
+          "span",
+          {
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "10px",
+              fontWeight: "700",
+              border: "1px solid rgba(201,168,76,.4)",
+              borderRadius: "50%",
+              width: "16px",
+              height: "16px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--gold-solid)",
+            },
+          },
+          "?",
+        ),
+        "BAA COO REF",
+      ),
+      open &&
+        h(
+          "div",
+          { style: overlay, onClick: () => setOpen(false) },
+          h(
+            "div",
+            { style: modal, onClick: (e) => e.stopPropagation() },
+            h(
+              "div",
+              {
+                style: {
+                  padding: "14px 16px",
+                  borderBottom: "1px solid rgba(201,168,76,.15)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                },
+              },
+              h(
+                "div",
+                null,
+                h(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "11px",
+                      letterSpacing: ".12em",
+                      color: "var(--gold-solid)",
+                      textTransform: "uppercase",
+                    },
+                  },
+                  "DFARS 252.225-7001",
+                ),
+                h(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "Cormorant Garamond,serif",
+                      fontSize: "13px",
+                      fontStyle: "italic",
+                      color: "rgba(201,168,76,.6)",
+                      marginTop: "2px",
+                    },
+                  },
+                  "Buy American & Balance of Payments — applies all quotes above $10K",
+                ),
+              ),
+              h(
+                "button",
+                {
+                  onClick: () => setOpen(false),
+                  style: {
+                    background: "none",
+                    border: "none",
+                    color: "rgba(201,168,76,.5)",
+                    fontSize: "18px",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  },
+                },
+                "×",
+              ),
+            ),
+            sectionHdr("Non-Qualifying — Cannot Source From", "#ff6b7a"),
+            h(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  padding: "12px 16px",
+                  borderBottom: "1px solid rgba(201,168,76,.1)",
+                },
+              },
+              ...BAA_NON_QUAL.map((c) => pill(c, true)),
+            ),
+            sectionHdr("Qualifying — Clear to Source", "var(--gold-solid)"),
+            h(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  padding: "12px 16px",
+                },
+              },
+              ...BAA_QUAL.map((c) => pill(c, false)),
+            ),
+            h(
+              "div",
+              {
+                style: {
+                  padding: "10px 16px",
+                  borderTop: "1px solid rgba(201,168,76,.1)",
+                  fontFamily: "Cormorant Garamond,serif",
+                  fontStyle: "italic",
+                  fontSize: "13px",
+                  color: "rgba(201,168,76,.5)",
+                },
+              },
+              'Supplier gate question: "Country of origin?" — domestic or named qualifying country closes it. Vague = dig or pass.',
+            ),
+          ),
+        ),
+    );
+  }
+
   // ── PRICING PANEL ────────────────────────────────────────────────────
   function PricingPanel({ parsed, onTierChange }) {
     const { fmt, TIER_MARGINS, calcBidMath } = window.SCC_MATH;
@@ -462,6 +719,7 @@
           h("span", { className: "glint" }),
           "Clear",
         ),
+        h(BAAModal, null),
       ),
 
       parsed &&

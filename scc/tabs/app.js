@@ -444,6 +444,7 @@
     const [tab, setTab] = useState(
       () => localStorage.getItem("scc-active-tab") || "dashboard",
     );
+    const [openGroup, setOpenGroup] = useState("workflow");
     const [boxA, setBoxA] = useState("");
     const [boxB, setBoxB] = useState("");
     const [parsed, setParsed] = useState(null);
@@ -732,269 +733,255 @@
 
         hA(
           "div",
-          { className: "tabs" },
-          ["dashboard", "intake", "pipeline"].map((t) =>
-            hA(
-              "button",
+          {
+            className: "tabs",
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "1px",
+              flexWrap: "nowrap",
+              overflow: "visible",
+            },
+          },
+
+          // ── TAB GROUPS DATA ──
+          ...(() => {
+            const GROUPS = [
               {
-                key: t,
-                className: "tab" + (tab === t ? " active" : ""),
-                onClick: () => setTab(t),
+                id: "workflow",
+                label: "Workflow",
+                tabs: [
+                  { id: "dashboard", label: "Dashboard", icon: "" },
+                  { id: "intake", label: "Intake", icon: "" },
+                  { id: "pipeline", label: "Pipeline", icon: "" },
+                  { id: "source", label: "Source", icon: "◆ " },
+                  { id: "rfq", label: "RFQ", icon: "⚡ " },
+                  { id: "fu", label: "Follow-Up", icon: "✉ " },
+                  { id: "esbd", label: "State/Fed", icon: "🏛 " },
+                ],
               },
-              hA("span", { className: "glint" }),
-              t.charAt(0).toUpperCase() + t.slice(1),
-            ),
-          ),
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "source" ? " active" : ""),
-              onClick: () => setTab("source"),
-              style: {
-                borderColor: "rgba(201,168,76,.35)",
-                color:
-                  tab === "source"
-                    ? "var(--gold-solid)"
-                    : "rgba(201,168,76,.5)",
+              {
+                id: "intel",
+                label: "Intel",
+                tabs: [
+                  { id: "awards", label: "Awards", icon: "🏆 " },
+                  { id: "lhf", label: "LHF Check", icon: "◈ " },
+                  { id: "lanelookup", label: "Lane Lookup", icon: "⬡ " },
+                ],
               },
-            },
-            hA("span", { className: "glint" }),
-            "◆ Source",
-          ),
-          // RFQ Blaster tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "rfq" ? " active" : ""),
-              onClick: () => setTab("rfq"),
-              style: {
-                borderColor:
-                  tab === "rfq"
-                    ? "rgba(232,116,116,.6)"
-                    : "rgba(232,116,116,.25)",
-                color: tab === "rfq" ? "#e87474" : "rgba(232,116,116,.5)",
+              {
+                id: "admin",
+                label: "Admin",
+                tabs: [
+                  { id: "rolodex", label: "Rolodex", icon: "☎ " },
+                  { id: "memo", label: "Memo", icon: "📄 " },
+                  { id: "archive", label: "Archive", icon: "⬇ " },
+                  { id: "backup", label: "Backup", icon: "↓ " },
+                ],
               },
-            },
-            hA("span", { className: "glint" }),
-            "⚡ RFQ Blaster",
-          ),
-          // Archive tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "archive" ? " active" : ""),
-              onClick: () => setTab("archive"),
-              style: {
-                borderColor:
-                  tab === "archive"
-                    ? "rgba(232,143,203,.5)"
-                    : "rgba(232,143,203,.2)",
-                color: tab === "archive" ? "#e88fcb" : "rgba(232,143,203,.45)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "⬇ Archive",
-          ),
-          // Awards tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "awards" ? " active" : ""),
-              onClick: () => setTab("awards"),
-              style: {
-                borderColor:
-                  tab === "awards"
-                    ? "rgba(61,214,140,.6)"
-                    : "rgba(61,214,140,.2)",
-                color:
-                  tab === "awards"
-                    ? "var(--accent-green)"
-                    : "rgba(61,214,140,.4)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "★ Awards",
-          ),
-          // Memo Generator tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "memo" ? " active" : ""),
-              onClick: () => setTab("memo"),
-              style: {
-                borderColor:
-                  tab === "memo"
-                    ? "rgba(184,134,11,.7)"
-                    : "rgba(184,134,11,.25)",
-                color: tab === "memo" ? "#b8860b" : "rgba(184,134,11,.5)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "📄 Memo",
-          ),
-          // FU Engine tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "fu" ? " active" : ""),
-              onClick: () => setTab("fu"),
-              style: {
-                borderColor:
-                  tab === "fu"
-                    ? "rgba(135,206,235,.6)"
-                    : "rgba(135,206,235,.25)",
-                color: tab === "fu" ? "#87ceeb" : "rgba(135,206,235,.5)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "✉ FU Engine",
-          ),
-          // Deal Checker tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "dealcheck" ? " active" : ""),
-              onClick: () => setTab("dealcheck"),
-              style: {
-                borderColor:
-                  tab === "dealcheck"
-                    ? "rgba(61,214,140,.6)"
-                    : "rgba(61,214,140,.2)",
-                color: tab === "dealcheck" ? "#3dd68c" : "rgba(61,214,140,.4)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "◈ Deal Check",
-          ),
-          // LHF Quote Checker tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "lhf" ? " active" : ""),
-              onClick: () => setTab("lhf"),
-              style: {
-                borderColor:
-                  tab === "lhf" ? "rgba(201,168,76,.6)" : "rgba(201,168,76,.2)",
-                color:
-                  tab === "lhf" ? "var(--gold-solid)" : "rgba(201,168,76,.4)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "◈ LHF Check",
-          ),
-          // State & Federal tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "esbd" ? " active" : ""),
-              onClick: () => setTab("esbd"),
-              style: {
-                borderColor:
-                  tab === "esbd"
-                    ? "rgba(135,206,235,.6)"
-                    : "rgba(135,206,235,.2)",
-                color:
-                  tab === "esbd"
-                    ? "rgba(135,206,235,1)"
-                    : "rgba(135,206,235,.45)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "★ State/Fed",
-          ),
-          // Rolodex tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "rolodex" ? " active" : ""),
-              onClick: () => setTab("rolodex"),
-              style: {
-                borderColor:
-                  tab === "rolodex"
-                    ? "rgba(201,168,76,.6)"
-                    : "rgba(201,168,76,.2)",
-                color:
-                  tab === "rolodex"
-                    ? "var(--gold-solid)"
-                    : "rgba(201,168,76,.4)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "☎ Rolodex",
-          ),
-          // Lane Lookup tab
-          hA(
-            "button",
-            {
-              className: "tab" + (tab === "lanelookup" ? " active" : ""),
-              onClick: () => setTab("lanelookup"),
-              style: {
-                borderColor:
-                  tab === "lanelookup"
-                    ? "rgba(201,168,76,.6)"
-                    : "rgba(201,168,76,.2)",
-                color:
-                  tab === "lanelookup"
-                    ? "var(--gold-solid)"
-                    : "rgba(201,168,76,.4)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "⊞ Lane Lookup",
-          ),
-          // Backup
-          hA(
-            "button",
-            {
-              className: "tab",
-              onClick: exportAllData,
-              title:
-                "Export full backup — solicitations + vendor intel + archive",
-              style: {
-                borderColor: "rgba(61,214,140,.25)",
-                color: "var(--accent-green)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "↓ Backup",
-          ),
-          // Restore
-          hA(
-            "label",
-            {
-              className: "tab",
-              style: {
-                cursor: "pointer",
-                borderColor: "rgba(126,184,247,.25)",
-                color: "var(--accent-blue)",
-              },
-            },
-            hA("span", { className: "glint" }),
-            "↑ Restore",
-            hA("input", {
-              type: "file",
-              accept: ".json",
-              style: { display: "none" },
-              onChange: (e) => {
-                const f = e.target.files[0];
-                if (!f) return;
-                const r = new FileReader();
-                r.onload = (ev) =>
-                  importAllData(ev.target.result, (s, v) => {
-                    showToast(
-                      "Restored " +
-                        s +
-                        " solicitations + " +
-                        v +
-                        " vendor intel records",
-                    );
-                    loadPipeline();
-                  });
-                r.readAsText(f);
-                e.target.value = "";
-              },
-            }),
-          ),
+            ];
+
+            const chevronBase = {
+              display: "flex",
+              alignItems: "center",
+              height: "32px",
+              border: "none",
+              outline: "none",
+              cursor: "pointer",
+              fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
+              fontSize: "10px",
+              letterSpacing: "0.05em",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            };
+
+            const redBase =
+              "linear-gradient(180deg,#5a0010 0%,#3a0008 50%,#4a000e 100%)";
+            const redActive = "linear-gradient(180deg,#3a0008 0%,#1e0004 100%)";
+            const redHover =
+              "linear-gradient(180deg,#6e0015 0%,#4a000c 50%,#5c0012 100%)";
+
+            const nodes = [];
+
+            GROUPS.forEach((group, gi) => {
+              const isOpen = openGroup === group.id;
+
+              // ── GROUP HEADER ──
+              nodes.push(
+                hA(
+                  "button",
+                  {
+                    key: "grp-" + group.id,
+                    onClick: () => setOpenGroup(isOpen ? null : group.id),
+                    style: {
+                      ...chevronBase,
+                      padding: "0 18px 0 14px",
+                      clipPath:
+                        "polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%)",
+                      background: isOpen ? redActive : redBase,
+                      color: isOpen
+                        ? "var(--gold-solid)"
+                        : "rgba(245,240,232,0.5)",
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "9px",
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      fontWeight: isOpen ? "700" : "400",
+                      marginRight: "1px",
+                      gap: "6px",
+                      transition: "background 0.12s,color 0.12s",
+                    },
+                    onMouseEnter: (e) => {
+                      if (!isOpen) e.currentTarget.style.background = redHover;
+                    },
+                    onMouseLeave: (e) => {
+                      if (!isOpen) e.currentTarget.style.background = redBase;
+                    },
+                  },
+                  group.label,
+                  hA(
+                    "span",
+                    {
+                      style: {
+                        fontSize: "8px",
+                        opacity: 0.7,
+                        display: "inline-block",
+                        transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+                        transition: "transform 0.15s",
+                      },
+                    },
+                    "▶",
+                  ),
+                ),
+              );
+
+              // ── CHILD TABS (only when open) ──
+              if (isOpen) {
+                group.tabs.forEach((t, i, arr) => {
+                  const isActive = tab === t.id;
+                  const isFirst = i === 0;
+                  const isLast = i === arr.length - 1;
+                  const activeColor =
+                    group.id === "workflow" ? "var(--gold-solid)" : "#F5F0E8";
+                  const isBackup = t.id === "backup";
+
+                  nodes.push(
+                    hA(
+                      "button",
+                      {
+                        key: t.id,
+                        onClick: isBackup
+                          ? exportAllData
+                          : () => {
+                              setTab(t.id);
+                            },
+                        title: isBackup ? "Export full backup" : undefined,
+                        style: {
+                          ...chevronBase,
+                          padding: isFirst ? "0 16px 0 14px" : "0 16px 0 22px",
+                          clipPath: isFirst
+                            ? "polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%)"
+                            : isLast
+                              ? "polygon(0 0,100% 0,100% 100%,0 100%,9px 50%)"
+                              : "polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%,9px 50%)",
+                          background: isActive ? redActive : redBase,
+                          color: isActive
+                            ? activeColor
+                            : "rgba(245,240,232,0.45)",
+                          fontWeight: isActive ? "700" : "400",
+                          marginRight: isLast ? "0" : "1px",
+                          transition: "background 0.12s,color 0.12s",
+                        },
+                        onMouseEnter: (e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.background = redHover;
+                            e.currentTarget.style.color =
+                              "rgba(245,240,232,0.8)";
+                          }
+                        },
+                        onMouseLeave: (e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.background = redBase;
+                            e.currentTarget.style.color =
+                              "rgba(245,240,232,0.45)";
+                          }
+                        },
+                      },
+                      t.icon + t.label,
+                    ),
+                  );
+                });
+              }
+
+              // ── DIVIDER between groups ──
+              if (gi < GROUPS.length - 1) {
+                nodes.push(
+                  hA("div", {
+                    key: "div-" + gi,
+                    style: {
+                      width: "1px",
+                      height: "32px",
+                      background: "rgba(201,168,76,0.2)",
+                      flexShrink: 0,
+                      margin: "0 6px",
+                    },
+                  }),
+                );
+              }
+            });
+
+            // ── RESTORE (always visible) ──
+            nodes.push(
+              hA(
+                "label",
+                {
+                  key: "restore",
+                  style: {
+                    ...chevronBase,
+                    padding: "0 14px",
+                    marginLeft: "6px",
+                    background: redBase,
+                    color: "var(--accent-blue)",
+                    clipPath: "none",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                  },
+                  onMouseEnter: (e) => {
+                    e.currentTarget.style.background = redHover;
+                  },
+                  onMouseLeave: (e) => {
+                    e.currentTarget.style.background = redBase;
+                  },
+                },
+                "↑ Restore",
+                hA("input", {
+                  type: "file",
+                  accept: ".json",
+                  style: { display: "none" },
+                  onChange: (e) => {
+                    const f = e.target.files[0];
+                    if (!f) return;
+                    const r = new FileReader();
+                    r.onload = (ev) =>
+                      importAllData(ev.target.result, (s, v) => {
+                        showToast(
+                          "Restored " +
+                            s +
+                            " solicitations + " +
+                            v +
+                            " vendor intel records",
+                        );
+                        loadPipeline();
+                      });
+                    r.readAsText(f);
+                    e.target.value = "";
+                  },
+                }),
+              ),
+            );
+
+            return nodes;
+          })(),
         ),
       ),
 
@@ -1069,8 +1056,6 @@
           }),
 
         tab === "memo" && hA(MemoTab, null),
-
-        tab === "dealcheck" && hA(window.SCC_TABS.DealCheckTab, null),
 
         tab === "lhf" && hA(LHFCheckTab, { onSendToIntake: null }),
 
