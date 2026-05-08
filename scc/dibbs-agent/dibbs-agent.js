@@ -1,0 +1,465 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  IMPERIO SCC — DIBBS LOCAL AGENT  v1.0
+//  Runs on your Windows machine. Listens on http://localhost:3100
+//  Handles: DoD banner POST → cookie jar → sol page → NSN page → PDF
+//  SCC calls this via the Netlify relay function (dibbs-local-relay.js)
+//
+//  START: double-click start-agent.bat
+//  STOP:  close the terminal window
+// ═══════════════════════════════════════════════════════════════════════
+
+const http  = require("http");
+const https = require("https");
+const url   = require("url");
+const fs    = require("fs");
+const path  = require("path");
+
+const PORT        = 3100;
+const DIBBS_HOST  = "www.dibbs.bsm.dla.mil";
+const COOKIE_FILE = path.join(__dirname, "dibbs-cookies.json");
+
+// ── Cookie jar — persists to disk so you don't re-banner every restart ──
+let cookieJar = {};
+
+function loadCookies() {
+  try {
+    if (fs.existsSync(COOKIE_FILE)) {
+      cookieJar = JSON.parse(fs.readFileSync(COOKIE_FILE, "utf8"));
+      console.log("[agent] Loaded", Object.keys(cookieJar).length, "saved cookies");
+    }
+  } catch { cookieJar = {}; }
+}
+
+function saveCookies() {
+  try { fs.writeFileSync(COOKIE_FILE, JSON.stringify(cookieJar, null, 2)); }
+  catch (e) { console.warn("[agent] Cookie save failed:", e.message); }
+}
+
+function parseCookieHeader(setCookieArr) {
+  for (const raw of (setCookieArr || [])) {
+    const parts = raw.split(";");
+    const kv = parts[0].trim();
+    const eq = kv.indexOf("=");
+    if (eq < 0) continue;
+    const name  = kv.slice(0, eq).trim();
+    const value = kv.slice(eq + 1).trim();
+    if (name) cookieJar[name] = value;
+  }
+}
+
+function buildCookieHeader() {
+  return Object.entries(cookieJar)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("; ");
+}
+
+// ── Generic HTTPS fetch with cookie jar ──────────────────────────────────
+function dibbsFetch(reqPath, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: DIBBS_HOST,
+      port: 443,
+      path: reqPath,
+      method: opts.method || "GET",
+      headers: {
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+        "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "identity",
+        "Connection":      "keep-alive",
+        "Cookie":          buildCookieHeader(),
+        ...(opts.headers || {}),
+      },
+    };
+
+    if (opts.body) {
+      options.headers["Content-Type"]   = "application/x-www-form-urlencoded";
+      options.headers["Content-Length"] = Buffer.byteLength(opts.body);
+    }
+
+    const req = https.request(options, (res) => {
+      // Absorb cookies
+      const setCookies = res.headers["set-cookie"];
+      if (setCookies) {
+        parseCookieHeader(Array.isArray(setCookies) ? setCookies : [setCookies]);
+        saveCookies();
+      }
+
+      // Follow single redirect
+      if ((res.statusCode === 302 || res.statusCode === 301) && res.headers.location) {
+        const loc = res.headers.location;
+        const nextPath = loc.startsWith("http") ? new url.URL(loc).pathname + (new url.URL(loc).search || "") : loc;
+        console.log("[agent] Redirect →", nextPath);
+        res.resume();
+        return dibbsFetch(nextPath, { method: "GET" }).then(resolve).catch(reject);
+      }
+
+      const chunks = [];
+      res.on("data", c => chunks.push(c));
+      res.on("end", () => resolve({
+        status:  res.statusCode,
+        headers: res.headers,
+        body:    Buffer.concat(chunks),
+      }));
+    });
+
+    req.on("error", reject);
+    req.setTimeout(25000, () => { req.destroy(new Error("timeout")); });
+
+    if (opts.body) req.write(opts.body);
+    req.end();
+  });
+}
+
+// ── Step 1: Handle DoD consent banner ───────────────────────────────────
+// DIBBS uses ASP.NET. Banner page has hidden __VIEWSTATE fields.
+// We must: GET banner → extract hidden fields → POST OK → get session cookie.
+async function dismissBanner(solNumber) {
+  const gotoPath = `/rfq/rfqrec.aspx?sn=${encodeURIComponent(solNumber)}`;
+  const bannerPath = `/dodwarning.aspx?goto=${encodeURIComponent(gotoPath)}`;
+
+  console.log("[agent] Fetching banner page...");
+  const bannerRes = await dibbsFetch(bannerPath);
+  const bannerHtml = bannerRes.body.toString("utf8");
+
+  // Check if we already have a valid session (banner not shown)
+  if (!bannerHtml.includes("dodwarning") && !bannerHtml.includes("btnOK")) {
+    console.log("[agent] Banner already dismissed (session active)");
+    return true;
+  }
+
+  // Extract ASP.NET hidden fields
+  const vsMatch  = bannerHtml.match(/id="__VIEWSTATE"\s+value="([^"]+)"/);
+  const vsgMatch = bannerHtml.match(/id="__VIEWSTATEGENERATOR"\s+value="([^"]+)"/);
+  const evMatch  = bannerHtml.match(/id="__EVENTVALIDATION"\s+value="([^"]+)"/);
+
+  const viewstate  = vsMatch  ? vsMatch[1]  : "";
+  const vsgenerator = vsgMatch ? vsgMatch[1] : "";
+  const validation = evMatch  ? evMatch[1]  : "";
+
+  const body = new URLSearchParams({
+    "__VIEWSTATE":          viewstate,
+    "__VIEWSTATEGENERATOR": vsgenerator,
+    "__EVENTVALIDATION":    validation,
+    "__EVENTTARGET":        "",
+    "__EVENTARGUMENT":      "",
+    "btnOK":                "OK",
+  }).toString();
+
+  console.log("[agent] POSTing OK to banner...");
+  const postRes = await dibbsFetch(bannerPath, { method: "POST", body });
+
+  const postHtml = postRes.body.toString("utf8");
+  const success  = !postHtml.includes("btnOK") || postRes.status === 302;
+  console.log("[agent] Banner dismissed:", success, "| Status:", postRes.status);
+  return success;
+}
+
+// ── Step 2: Fetch sol page ───────────────────────────────────────────────
+async function fetchSolPage(solNumber) {
+  await dismissBanner(solNumber);
+  const solPath = `/rfq/rfqrec.aspx?sn=${encodeURIComponent(solNumber)}`;
+  console.log("[agent] Fetching sol page:", solPath);
+  const res = await dibbsFetch(solPath);
+  return res.body.toString("utf8");
+}
+
+// ── Step 3: Fetch NSN detail page ────────────────────────────────────────
+async function fetchNsnPage(nsn) {
+  if (!nsn) return "";
+  // DIBBS NSN page: /RFQ/RFQNsn.aspx?value=XXXXXXXXXXXXXXXXX&category=&Scope=
+  const nsnPath = `/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=&Scope=`;
+  console.log("[agent] Fetching NSN page:", nsnPath);
+  const res = await dibbsFetch(nsnPath);
+  return res.body.toString("utf8");
+}
+
+// ── Step 4: Fetch PDF and extract text ──────────────────────────────────
+async function fetchPdf(pdfPath) {
+  if (!pdfPath) return null;
+  const cleanPath = pdfPath.startsWith("/") ? pdfPath : "/" + pdfPath;
+  console.log("[agent] Fetching PDF:", cleanPath);
+  try {
+    const res = await dibbsFetch(cleanPath);
+    if (res.status !== 200) return null;
+    // Return raw PDF bytes as base64 — SCC will display/process
+    return res.body.toString("base64");
+  } catch (e) {
+    console.warn("[agent] PDF fetch failed:", e.message);
+    return null;
+  }
+}
+
+// ── HTML Parsers (ported from dibbs-sol.js) ─────────────────────────────
+function clean(s) { return (s || "").replace(/\s+/g, " ").trim(); }
+function stripTags(html) { return clean(html.replace(/<[^>]+>/g, " ")); }
+
+function extractRows(html) {
+  const rows = [];
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let m;
+  while ((m = rowRe.exec(html)) !== null) {
+    const t = stripTags(m[1]);
+    if (t.length > 2) rows.push(t);
+  }
+  return rows;
+}
+
+function parseSuppliers(html) {
+  const suppliers = [];
+  const lower = html.toLowerCase();
+  const markers = ["approved source", "mfr cage", "cage code", "supplier"];
+  let sectionStart = -1;
+  for (const marker of markers) {
+    const idx = lower.indexOf(marker);
+    if (idx > 0 && (sectionStart < 0 || idx < sectionStart)) sectionStart = idx;
+  }
+  const relevantHtml = sectionStart > 0 ? html.slice(sectionStart) : html;
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch;
+  while ((rowMatch = rowRe.exec(relevantHtml)) !== null) {
+    const cells = [];
+    const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let cellMatch;
+    while ((cellMatch = cellRe.exec(rowMatch[1])) !== null) {
+      const t = stripTags(cellMatch[1]);
+      if (t) cells.push(t);
+    }
+    if (cells.length < 2) continue;
+    if (cells.every(c => /^(cage|name|part number|company|manufacturer|source|#)$/i.test(c))) continue;
+    const cageIdx = cells.findIndex(c => /^[A-Z0-9]{5}$/.test(c.trim()));
+    if (cageIdx === -1) continue;
+    let name, cage, pn;
+    if (cageIdx === 0) {
+      cage = cells[0].trim(); name = cells[1] ? cells[1].trim() : ""; pn = cells[2] ? cells[2].trim() : "";
+    } else {
+      name = cells.slice(0, cageIdx).join(" ").trim();
+      cage = cells[cageIdx].trim();
+      pn   = cells.slice(cageIdx + 1).join(" ").trim();
+    }
+    if (!name || name.length < 2) continue;
+    if (/^(cage|name|part|supplier|manufacturer|approved)$/i.test(name)) continue;
+    suppliers.push({ name: clean(name), cage, pn: clean(pn) });
+    if (suppliers.length >= 30) break;
+  }
+  const seen = new Set();
+  return suppliers.filter(s => { if (seen.has(s.cage)) return false; seen.add(s.cage); return true; });
+}
+
+function parseSolPage(html, solNumber) {
+  const sol = {
+    contract_number: solNumber,
+    nsn: "", part_numbers: [], due_date: "", issue_date: "",
+    item_description: "", fob: "", anticipated_award: "",
+    qty: "", unit_issue: "", delivery_days: "",
+    hist_unit_price: "", unit_price: "", set_aside: "",
+    packaging: "", suppliers: [], amsc: "", pdf_path: "",
+    source: "local-agent",
+  };
+
+  const cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "");
+  const rows    = extractRows(cleaned);
+  const fullText = cleaned.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+  // Dates
+  for (const row of rows) {
+    if (/SPE[A-Z0-9\-]{6,}/i.test(row)) {
+      const dates = [...row.matchAll(/(\d{2}-\d{2}-\d{4})/g)].map(m => m[1]);
+      if (dates[0]) sol.issue_date = dates[0];
+      if (dates[1]) sol.due_date   = dates[1];
+      sol.status = /\bopen\b/i.test(row) ? "Open" : /\bclosed\b/i.test(row) ? "Closed" : "";
+      break;
+    }
+  }
+
+  // NSN + Item + Qty
+  for (const row of rows) {
+    const nsnMatch = row.match(/\b(\d{4}-\d{2}-\d{3}-\d{4})\b/);
+    if (nsnMatch) {
+      sol.nsn = nsnMatch[1].replace(/-/g, "");
+      const afterNsn = row.slice(row.indexOf(nsnMatch[1]) + nsnMatch[1].length).trim();
+      const itemMatch = afterNsn.match(/^([A-Z][A-Z,\.\-\s]+?)(?:\s+None\b|\s+Technical|\s+\d{7,}|\s*$)/i);
+      if (itemMatch) sol.item_description = clean(itemMatch[1]);
+      const qtyMatch = row.match(/Qty:\s*([\d,]+)\s*([A-Z]{2})?/i) ||
+        row.match(/\b([\d,]+)\s+(EA|LT|BX|DZ|PR|FT|GL|LB|PK|RL|SE|ST|SH|VI|CY|GR|TH|YD)\b/i);
+      if (qtyMatch) { sol.qty = qtyMatch[1].replace(/,/g, ""); if (qtyMatch[2]) sol.unit_issue = qtyMatch[2].toUpperCase(); }
+      break;
+    }
+    const nsnRaw = row.match(/\b(\d{13})\b/);
+    if (nsnRaw && !sol.nsn) sol.nsn = nsnRaw[1];
+  }
+
+  // Prices
+  const unitPriceMatch = fullText.match(/[Uu]nit\s+[Pp]rice[^$\d]{0,20}\$?([\d,]+\.\d{2,4})/);
+  if (unitPriceMatch) sol.unit_price = unitPriceMatch[1].replace(/,/g, "");
+  const histPriceMatch = fullText.match(/[Hh]ist(?:orical)?\s+(?:[Uu]nit\s+)?[Pp]rice[^$\d]{0,20}\$?([\d,]+\.\d{2,4})/);
+  if (histPriceMatch) sol.hist_unit_price = histPriceMatch[1].replace(/,/g, "");
+
+  // Delivery / FOB / Set-aside
+  const delMatch = fullText.match(/[Dd]elivery\s+[Dd]ays?[^0-9]{0,10}(\d{1,3})\b/) ||
+    fullText.match(/(\d{1,3})\s+[Dd]ays?\s+ARO/i);
+  if (delMatch) sol.delivery_days = delMatch[1];
+  if (/FOB[:\s]+Dest/i.test(fullText))   sol.fob = "Dest.";
+  else if (/FOB[:\s]+Orig/i.test(fullText)) sol.fob = "Orig.";
+  const saMatch = fullText.match(/[Ss]et[\s\-][Aa]side[:\s]+([A-Za-z][A-Za-z\s]{1,40})(?:\s{2}|<)/);
+  if (saMatch) sol.set_aside = clean(saMatch[1]).slice(0, 40);
+
+  // PDF path — look for .pdf link in the HTML
+  const pdfMatch = html.match(/href="([^"]*\.pdf)"/i);
+  if (pdfMatch) sol.pdf_path = pdfMatch[1];
+
+  // Suppliers
+  sol.suppliers = parseSuppliers(cleaned);
+
+  return sol;
+}
+
+function parseNsnPage(html) {
+  const result = { amsc: "", approved_sources: [] };
+  const cleaned = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "");
+  const fullText = cleaned.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+  // AMSC
+  const amscMatch = fullText.match(/AMSC[:\s]+([A-Z])\b/);
+  if (amscMatch) result.amsc = amscMatch[1];
+
+  // Approved Sources from NSN page (more complete than sol page)
+  result.approved_sources = parseSuppliers(cleaned);
+
+  return result;
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────
+async function handleRequest(body) {
+  const { sol_number } = body;
+  if (!sol_number) return { ok: false, error: "sol_number required" };
+
+  const solClean = sol_number.trim().toUpperCase();
+  console.log("\n[agent] ── Processing:", solClean);
+
+  try {
+    // 1. Fetch sol page (handles banner automatically)
+    const solHtml = await fetchSolPage(solClean);
+
+    if (!solHtml || solHtml.length < 500) {
+      return { ok: false, error: "Empty sol page — may be closed or removed", sol_number: solClean };
+    }
+    if (/no solicitation found|rfq not found|does not exist/i.test(solHtml)) {
+      return { ok: false, error: "Sol not found on DIBBS", sol_number: solClean };
+    }
+
+    // 2. Parse sol page
+    const sol = parseSolPage(solHtml, solClean);
+    console.log("[agent] Parsed:", { nsn: sol.nsn, item: sol.item_description, qty: sol.qty, due: sol.due_date });
+
+    // 3. Fetch NSN page for AMSC + fuller approved source list
+    if (sol.nsn) {
+      try {
+        const nsnHtml = await fetchNsnPage(sol.nsn);
+        const nsnData = parseNsnPage(nsnHtml);
+        if (nsnData.amsc) sol.amsc = nsnData.amsc;
+        // Merge NSN-page suppliers (they often have more)
+        if (nsnData.approved_sources.length > sol.suppliers.length) {
+          sol.suppliers = nsnData.approved_sources;
+        }
+        console.log("[agent] NSN AMSC:", sol.amsc, "| Sources:", sol.suppliers.length);
+      } catch (e) {
+        console.warn("[agent] NSN fetch failed (non-fatal):", e.message);
+      }
+    }
+
+    // 4. Fetch PDF (non-fatal if missing)
+    let pdf_base64 = null;
+    if (sol.pdf_path) {
+      try {
+        pdf_base64 = await fetchPdf(sol.pdf_path);
+        console.log("[agent] PDF fetched:", pdf_base64 ? "yes" : "no");
+      } catch (e) {
+        console.warn("[agent] PDF fetch failed (non-fatal):", e.message);
+      }
+    }
+
+    return { ok: true, sol, pdf_base64 };
+
+  } catch (err) {
+    console.error("[agent] Error:", err.message);
+    return { ok: false, error: err.message, sol_number: solClean };
+  }
+}
+
+// ── HTTP Server ──────────────────────────────────────────────────────────
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Content-Type": "application/json",
+};
+
+loadCookies();
+
+const server = http.createServer((req, res) => {
+  // CORS preflight
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, CORS);
+    res.end();
+    return;
+  }
+
+  // Health check
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200, CORS);
+    res.end(JSON.stringify({ ok: true, status: "DIBBS Local Agent running", port: PORT, cookies: Object.keys(cookieJar).length }));
+    return;
+  }
+
+  // Clear cookies (force re-banner)
+  if (req.method === "POST" && req.url === "/clear-cookies") {
+    cookieJar = {};
+    saveCookies();
+    res.writeHead(200, CORS);
+    res.end(JSON.stringify({ ok: true, message: "Cookies cleared" }));
+    return;
+  }
+
+  // Main sol fetch endpoint
+  if (req.method === "POST" && req.url === "/fetch-sol") {
+    let rawBody = "";
+    req.on("data", c => rawBody += c);
+    req.on("end", async () => {
+      let body;
+      try { body = JSON.parse(rawBody); }
+      catch { res.writeHead(400, CORS); res.end(JSON.stringify({ ok: false, error: "Invalid JSON" })); return; }
+
+      const result = await handleRequest(body);
+      res.writeHead(result.ok ? 200 : 502, CORS);
+      res.end(JSON.stringify(result));
+    });
+    return;
+  }
+
+  res.writeHead(404, CORS);
+  res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
+});
+
+server.listen(PORT, "127.0.0.1", () => {
+  console.log("╔══════════════════════════════════════════════════╗");
+  console.log("║   IMPERIO — DIBBS LOCAL AGENT  v1.0             ║");
+  console.log("║   Listening on http://localhost:" + PORT + "            ║");
+  console.log("║   Health: http://localhost:" + PORT + "/health          ║");
+  console.log("║   Stop: Ctrl+C or close this window             ║");
+  console.log("╚══════════════════════════════════════════════════╝");
+  console.log("");
+  console.log("[agent] Cookie jar:", Object.keys(cookieJar).length, "stored cookies");
+  console.log("[agent] Ready.\n");
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error("[agent] ERROR: Port 3100 already in use. Close the other instance first.");
+  } else {
+    console.error("[agent] Server error:", err.message);
+  }
+  process.exit(1);
+});

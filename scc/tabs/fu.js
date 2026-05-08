@@ -31,7 +31,7 @@ Respectfully,
 Anthony Kelley Sr.
 Founder & CEO | Imperio Talent Solutions
 (254) 265-9335
-anthony@imperiovita.co`,
+anthony@ifedlog.com`,
     },
     intro: {
       subject:

@@ -753,6 +753,7 @@
                 tabs: [
                   { id: "dashboard", label: "Dashboard", icon: "" },
                   { id: "intake", label: "Intake", icon: "" },
+                  { id: "ingest", label: "Email Ingest", icon: "📧 " },
                   { id: "pipeline", label: "Pipeline", icon: "" },
                   { id: "source", label: "Source", icon: "◆ " },
                   { id: "rfq", label: "RFQ", icon: "⚡ " },
@@ -1011,6 +1012,15 @@
             onClear: handleClear,
             onSave: handleSave,
           }),
+
+        tab === "ingest" &&
+          (window.SCC_TABS && window.SCC_TABS.DibbsIngestTab
+            ? hA(window.SCC_TABS.DibbsIngestTab, null)
+            : hA(
+                "div",
+                { style: { padding: "20px", color: "var(--body-dim)" } },
+                "Email Ingest loading...",
+              )),
 
         tab === "pipeline" &&
           hA(PipelineTab, {

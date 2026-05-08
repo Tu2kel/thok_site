@@ -437,6 +437,204 @@
         partnered: false,
         my_notes: "",
       },
+      {
+        id: "southwest-seal-supply",
+        block: "HOSE / FITTINGS / SEALS BLOCK",
+        fscs: "4720, 4730, 5330",
+        company: "Southwest Seal & Supply",
+        type: "Distributor",
+        best_use: "Sourcing",
+        difficulty: "Low",
+        website: "https://www.swseal.com",
+        phone: "(915) 772-1775",
+        email: "",
+        notes:
+          "El Paso TX / Albuquerque NM. Parker Hannifin authorized. Parker seals, o-rings, gaskets, hose fittings, hydraulic hose, couplings, adapters. Use for seals/hose/fittings/gaskets FSC.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "dk-lok-usa",
+        block: "HOSE / FITTINGS / SEALS BLOCK",
+        fscs: "4720, 4730, 5330, 4820",
+        company: "DK-LOK USA",
+        type: "Manufacturer",
+        best_use: "High-Margin, SB",
+        difficulty: "Low",
+        website: "https://dklokusa.com",
+        phone: "(800) 328-5803",
+        email: "info@dklokusa.com",
+        notes:
+          "REAL MANUFACTURER. USA / Houston support. Tube fittings, pipe fittings, weld fittings, instrumentation valves, manifolds, metallic flexible hoses. Use for instrumentation fittings/valves — not generic plumbing.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "aiv-inc",
+        block: "HOSE / FITTINGS / SEALS BLOCK",
+        fscs: "4730, 4820",
+        company: "AIV Inc.",
+        type: "Distributor",
+        best_use: "Sourcing",
+        difficulty: "Medium",
+        website: "https://www.aivinc.com",
+        phone: "(713) 462-4181",
+        email: "valves@aivinc.com",
+        notes:
+          "Houston TX. Master distributor with manufacturer authorization. Industrial valves, actuators, exotic alloy valves, hard-to-find valves. Use when valve NSN has OEM traceability requirement.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "texas-mci",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "Texas MCI",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://texasmci.com",
+        phone: "",
+        email: "",
+        notes:
+          "REAL MANUFACTURER. Texas. Precision small-to-mid machined components, assemblies, customer furnished blanks. Aerospace/defense/medical/commercial. Good for JCP prints needing CNC quote.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "american-valmark",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "American Valmark",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://texascncmachining.com",
+        phone: "(512) 264-0686",
+        email: "",
+        notes:
+          "REAL MANUFACTURER. Spicewood TX. CNC machining, laser cutting, waterjet, metal finishing, prototype-to-production. ITAR lane. Good for Central Texas machining.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "centerline-manufacturing",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "Centerline Manufacturing LTD",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://centerlinemanufacturingltd.com",
+        phone: "(713) 329-9070",
+        email: "quotes@centerlinemanufacturingltd.com",
+        notes:
+          "REAL MANUFACTURER. Houston TX. AS9100/ISO certified CNC machining. ITAR. Contract manufacturing, close-tolerance parts. Strong for aerospace/defense JCP prints.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "specialty-machine-lp",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "Specialty Machine LP",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://www.specialtymachinelp.com",
+        phone: "(512) 267-4944",
+        email: "info@specialtymachinelp.com",
+        notes:
+          "REAL MANUFACTURER. Lago Vista TX / Marble Falls TX. CNC machining, welding, sheet metal, assembly, testing. Defense industrial base components. Central Texas; good for drawings, sheet metal, welded parts.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "precision-machining-co",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "Precision Machining Company LLC",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://www.precisionmachiningtexas.com",
+        phone: "(682) 373-4775",
+        email: "admin@precisionmachiningtexas.com",
+        notes:
+          "REAL SMALL SHOP. Fort Worth TX. CNC turning, CNC milling, Swiss machining. Good fit for SDVOSB outreach and drawing RFQs.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "dallas-precision-machining",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "Dallas Precision Machining",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://dallasprecisionmachining.com",
+        phone: "(469) 588-3788",
+        email: "info@dallasprecisionmachining.com",
+        notes:
+          "REAL MANUFACTURER. Dallas TX. 5-axis milling, mill-turn, 4th-axis, prototypes, production runs, sheet metal, laser/waterjet. Good for quote-speed and DFW machine work.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "rigid-concepts",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "Rigid Concepts LLC",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://www.rigidconcepts.com",
+        phone: "(214) 504-1967",
+        email: "catherine@rigidconcepts.com",
+        notes:
+          "REAL SMALL SHOP. Van Alstyne TX. 5-axis CNC, precision manufacturing, prototype-to-production. Good North Texas candidate for JCP drawings.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "caliber-sales-engineering",
+        block: "JCP MACHINING BLOCK",
+        fscs: "5340, 5365, 9510, 9520, 9535",
+        company: "Caliber Sales Engineering",
+        type: "Manufacturer",
+        best_use: "Selective",
+        difficulty: "Medium",
+        website: "https://calibersales.com",
+        phone: "",
+        email: "",
+        notes:
+          "Pembroke Pines FL. Not Texas but small-business defense lane. Low-to-mid volume defense electronics, electromechanical components, reverse engineering, obsolete assemblies. Use for electromechanical only — not commodity hardware.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
     ];
   }
 
@@ -596,6 +794,114 @@
         phone: "(800) 323-4340",
         email: "sales@coleparmer.com",
         notes: "Strong niche for lab/scientific items buyers ignore.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "tsp-manufacturing",
+        block: "FASTENER SPECIALISTS",
+        fscs: "5305, 5306, 5307, 5310, 5315, 5320, 5340",
+        company: "TSP Manufacturing",
+        type: "Manufacturer",
+        best_use: "High-Margin, SB",
+        difficulty: "Low",
+        website: "https://www.tsp-mfg.com",
+        phone: "(713) 230-2500",
+        email: "info@tsp-mfg.com",
+        notes:
+          "REAL MANUFACTURER. Houston TX. Engineered/custom fasteners, screws, bolts, studs, machined components, shear screws, valve stems. Also operates as WN Global / U.S. Bolt.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "shamrock-precision",
+        block: "FASTENER SPECIALISTS",
+        fscs: "5305, 5310, 5315, 5320, 5340",
+        company: "Shamrock Precision",
+        type: "Manufacturer",
+        best_use: "High-Margin, JCP",
+        difficulty: "Low",
+        website: "https://shamrockprecision.com",
+        phone: "(972) 241-4226",
+        email: "sales@shamrockprecision.com",
+        notes:
+          "REAL MANUFACTURER. Farmers Branch TX. Special fasteners, shear screws, shear pins, CNC precision parts, Swiss machining. Strong for JCP drawings.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "bayou-city-bolt",
+        block: "FASTENER SPECIALISTS",
+        fscs: "5305, 5310, 5315, 5320, 5340",
+        company: "Bayou City Bolt & Supply",
+        type: "Distributor",
+        best_use: "LHF, Hard-to-Find",
+        difficulty: "Low",
+        website: "https://www.bayoucitybolt.com",
+        phone: "(713) 747-9944",
+        email: "",
+        notes:
+          "Houston TX. Not manufacturer-first. Useful for hard-to-find commodity fasteners and quick buys. Small/medium shop.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "m-squared-innovations",
+        block: "CLEANING / CONSUMABLES",
+        fscs: "7920, 7930, 6850",
+        company: "M-Squared Innovations",
+        type: "Manufacturer",
+        best_use: "High-Margin, SB",
+        difficulty: "Low",
+        website: "https://www.msqrinnovations.com",
+        phone: "(855) 501-2049",
+        email: "support@msqrinnovations.com",
+        notes:
+          "REAL MANUFACTURER. FSC 7920/7930 confirmed. Aerospace cleaning cloths, surface prep consumables, wipes, industrial cleaning. Contact: Marc Schmidt. COO: Mary Mallory. NOT fastener lane.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "allied-wire-cable",
+        block: "ELECTRICAL / WIRE",
+        fscs: "5970, 5975, 5995, 6145, 6150",
+        company: "Allied Wire & Cable",
+        type: "Manufacturer",
+        best_use: "High-Margin, SB",
+        difficulty: "Low",
+        website: "https://www.awcwire.com",
+        phone: "(800) 472-4655",
+        email: "",
+        notes:
+          "Mil-spec wire, cable, tubing, custom cable, wire harness, cable assembly materials. Specialty manufacturer/distributor. GCG CPS affiliate.",
+        contacted: "",
+        responded: "",
+        partnered: false,
+        my_notes: "",
+      },
+      {
+        id: "texcan",
+        block: "ELECTRICAL / WIRE",
+        fscs: "5970, 5975, 6145, 6150",
+        company: "Texcan",
+        type: "Distributor",
+        best_use: "Sourcing, LHF",
+        difficulty: "Low",
+        website: "https://www.texcan.com",
+        phone: "(800) 665-1025",
+        email: "",
+        notes:
+          "Canada/US. Wire, cable, custom cut lengths. Carries Southwire, Belden, Prysmian, Nexans, Northern Cables. Secondary — use for cable/wire only, not complex assemblies.",
         contacted: "",
         responded: "",
         partnered: false,
@@ -1797,87 +2103,6 @@
       onAdd(blank);
     }
 
-    function exportRolodex() {
-      const allRows = [...suppliers.hd, ...suppliers.ft, ...suppliers.ml].map(
-        (s) => {
-          const st = rowState[s.id] || {};
-          return {
-            company: s.company || "",
-            type: s.type || "",
-            block: s.block || "",
-            fscs: s.fscs || "",
-            phone: s.phone || "",
-            email: s.email || "",
-            website: s.website || "",
-            difficulty: s.difficulty || "",
-            best_use: s.best_use || "",
-            notes: s.notes || "",
-            my_notes: st.my_notes ?? s.my_notes ?? "",
-            contacted: st.contacted ?? s.contacted ?? "",
-            responded: st.responded ?? s.responded ?? "",
-            partnered: (st.partnered ?? s.partnered ?? false) ? "YES" : "",
-          };
-        },
-      );
-
-      const headers = [
-        "Company",
-        "Type",
-        "Block",
-        "FSCs",
-        "Phone",
-        "Email",
-        "Website",
-        "Difficulty",
-        "Best Use",
-        "Notes",
-        "My Notes",
-        "Contacted",
-        "Responded",
-        "Partnered",
-      ];
-
-      const escape = (v) => {
-        const s = String(v ?? "");
-        return s.includes(",") || s.includes('"') || s.includes("\n")
-          ? '"' + s.replace(/"/g, '""') + '"'
-          : s;
-      };
-
-      const csv = [
-        headers.join(","),
-        ...allRows.map((r) =>
-          [
-            r.company,
-            r.type,
-            r.block,
-            r.fscs,
-            r.phone,
-            r.email,
-            r.website,
-            r.difficulty,
-            r.best_use,
-            r.notes,
-            r.my_notes,
-            r.contacted,
-            r.responded,
-            r.partnered,
-          ]
-            .map(escape)
-            .join(","),
-        ),
-      ].join("\r\n");
-
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download =
-        "rolodex-export-" + new Date().toISOString().slice(0, 10) + ".csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
     // Grouped
     const blocks = [...new Set(data.map((s) => s.block))];
     function filterData(rows) {
@@ -2047,24 +2272,6 @@
               },
             },
             "+ Add Supplier",
-          ),
-          h(
-            "button",
-            {
-              onClick: exportRolodex,
-              title: "Export all rolodex entries to CSV",
-              style: {
-                padding: "6px 14px",
-                fontSize: "14px",
-                background: "rgba(201,168,76,.1)",
-                border: "1px solid rgba(201,168,76,.3)",
-                color: "var(--gold-solid)",
-                borderRadius: "3px",
-                cursor: "pointer",
-                fontWeight: 600,
-              },
-            },
-            "↓ Export CSV",
           ),
         ),
 
