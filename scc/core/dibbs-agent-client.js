@@ -10,7 +10,7 @@
 
 (function () {
   const AGENT_URL_KEY = "scc_agent_url";
-  const DEFAULT_URL   = "http://localhost:3100";
+  const DEFAULT_URL = "http://localhost:3100";
 
   function getAgentUrl() {
     return localStorage.getItem(AGENT_URL_KEY) || DEFAULT_URL;
@@ -57,6 +57,23 @@
     return res.json();
   }
 
-  window.SCC_AGENT = { healthCheck, fetchSol, clearCookies, getAgentUrl, setAgentUrl };
+  async function setBrowserCookies(cookieString) {
+    const res = await fetch(getAgentUrl() + "/set-cookies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cookies: cookieString }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.json();
+  }
+
+  window.SCC_AGENT = {
+    healthCheck,
+    fetchSol,
+    clearCookies,
+    setBrowserCookies,
+    getAgentUrl,
+    setAgentUrl,
+  };
   console.log("[SCC_AGENT] Loaded. Agent URL:", getAgentUrl());
 })();

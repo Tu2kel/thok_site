@@ -1291,7 +1291,6 @@
             },
             "✏",
           ),
-          h(SaveToDBBtn, { supplier: s, rowState: rowState[s.id] || {} }),
           h(
             "button",
             {
@@ -1555,99 +1554,6 @@
     );
   }
 
-  // ── SAVE TO DB BUTTON ───────────────────────────────────────────────────
-  function SaveToDBBtn({ supplier, rowState }) {
-    const [status, setStatus] = useState("idle"); // idle | saving | saved | err
-
-    async function handleSave(e) {
-      e.stopPropagation();
-      if (status === "saving") return;
-      setStatus("saving");
-      try {
-        const payload = {
-          ...supplier,
-          contacted: rowState.contacted || supplier.contacted || "",
-          responded: rowState.responded || supplier.responded || "",
-          partnered: rowState.partnered ?? supplier.partnered ?? false,
-          my_notes: rowState.my_notes || supplier.my_notes || "",
-          saved_at: new Date().toISOString(),
-          source: "rolodex",
-        };
-        const res = await fetch("/.netlify/functions/scc-db", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "saveSupplier", supplier: payload }),
-          signal: AbortSignal.timeout(12000),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || "DB error");
-        setStatus("saved");
-        setTimeout(() => setStatus("idle"), 3000);
-      } catch (err) {
-        console.error("[Rolodex] Save to DB failed:", err.message);
-        setStatus("err");
-        setTimeout(() => setStatus("idle"), 4000);
-      }
-    }
-
-    const label =
-      status === "saving"
-        ? "…"
-        : status === "saved"
-          ? "✓"
-          : status === "err"
-            ? "!"
-            : "↑";
-    const title =
-      status === "saving"
-        ? "Saving…"
-        : status === "saved"
-          ? "Saved to MongoDB"
-          : status === "err"
-            ? "Save failed — check console"
-            : "Save to MongoDB";
-    const border =
-      status === "saved"
-        ? "rgba(46,204,113,.35)"
-        : status === "err"
-          ? "rgba(231,76,60,.35)"
-          : "rgba(201,168,76,.2)";
-    const bg =
-      status === "saved"
-        ? "rgba(46,204,113,.1)"
-        : status === "err"
-          ? "rgba(231,76,60,.1)"
-          : "rgba(201,168,76,.06)";
-    const color =
-      status === "saved"
-        ? "#2ecc71"
-        : status === "err"
-          ? "#e74c3c"
-          : "var(--gold-dim)";
-
-    return h(
-      "button",
-      {
-        onClick: handleSave,
-        title,
-        style: {
-          padding: "3px 7px",
-          fontSize: "13px",
-          background: bg,
-          border: "1px solid " + border,
-          color,
-          borderRadius: "2px",
-          cursor: status === "saving" ? "default" : "pointer",
-          fontWeight: "700",
-          minWidth: "22px",
-          textAlign: "center",
-          transition: "all .2s",
-        },
-      },
-      label,
-    );
-  }
-
   // ── BLOCK GROUP ─────────────────────────────────────────────────────────
   function BlockGroup({
     block,
@@ -1891,6 +1797,87 @@
       onAdd(blank);
     }
 
+    function exportRolodex() {
+      const allRows = [...suppliers.hd, ...suppliers.ft, ...suppliers.ml].map(
+        (s) => {
+          const st = rowState[s.id] || {};
+          return {
+            company: s.company || "",
+            type: s.type || "",
+            block: s.block || "",
+            fscs: s.fscs || "",
+            phone: s.phone || "",
+            email: s.email || "",
+            website: s.website || "",
+            difficulty: s.difficulty || "",
+            best_use: s.best_use || "",
+            notes: s.notes || "",
+            my_notes: st.my_notes ?? s.my_notes ?? "",
+            contacted: st.contacted ?? s.contacted ?? "",
+            responded: st.responded ?? s.responded ?? "",
+            partnered: (st.partnered ?? s.partnered ?? false) ? "YES" : "",
+          };
+        },
+      );
+
+      const headers = [
+        "Company",
+        "Type",
+        "Block",
+        "FSCs",
+        "Phone",
+        "Email",
+        "Website",
+        "Difficulty",
+        "Best Use",
+        "Notes",
+        "My Notes",
+        "Contacted",
+        "Responded",
+        "Partnered",
+      ];
+
+      const escape = (v) => {
+        const s = String(v ?? "");
+        return s.includes(",") || s.includes('"') || s.includes("\n")
+          ? '"' + s.replace(/"/g, '""') + '"'
+          : s;
+      };
+
+      const csv = [
+        headers.join(","),
+        ...allRows.map((r) =>
+          [
+            r.company,
+            r.type,
+            r.block,
+            r.fscs,
+            r.phone,
+            r.email,
+            r.website,
+            r.difficulty,
+            r.best_use,
+            r.notes,
+            r.my_notes,
+            r.contacted,
+            r.responded,
+            r.partnered,
+          ]
+            .map(escape)
+            .join(","),
+        ),
+      ].join("\r\n");
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        "rolodex-export-" + new Date().toISOString().slice(0, 10) + ".csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     // Grouped
     const blocks = [...new Set(data.map((s) => s.block))];
     function filterData(rows) {
@@ -2060,6 +2047,24 @@
               },
             },
             "+ Add Supplier",
+          ),
+          h(
+            "button",
+            {
+              onClick: exportRolodex,
+              title: "Export all rolodex entries to CSV",
+              style: {
+                padding: "6px 14px",
+                fontSize: "14px",
+                background: "rgba(201,168,76,.1)",
+                border: "1px solid rgba(201,168,76,.3)",
+                color: "var(--gold-solid)",
+                borderRadius: "3px",
+                cursor: "pointer",
+                fontWeight: 600,
+              },
+            },
+            "↓ Export CSV",
           ),
         ),
 

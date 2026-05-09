@@ -98,7 +98,7 @@ function dibbsFetch(reqPath, opts = {}) {
         saveCookies();
       }
 
-      // Follow single redirect
+      // Follow redirects — but never chase back to the banner (infinite loop)
       if (
         (res.statusCode === 302 || res.statusCode === 301) &&
         res.headers.location
@@ -109,6 +109,18 @@ function dibbsFetch(reqPath, opts = {}) {
           : loc;
         console.log("[agent] Redirect →", nextPath);
         res.resume();
+        // If redirecting back to banner, stop — return empty so caller can handle
+        if (nextPath.includes("dodwarning") || nextPath.includes("ErrorPg")) {
+          console.log(
+            "[agent] Banner redirect detected — stopping redirect chain",
+          );
+          return resolve({
+            status: 302,
+            headers: res.headers,
+            body: Buffer.from(""),
+            bannered: true,
+          });
+        }
         return dibbsFetch(nextPath, { method: "GET" })
           .then(resolve)
           .catch(reject);
@@ -236,11 +248,47 @@ async function dismissBanner(solNumber) {
 
 // ── Step 2: Fetch sol page ───────────────────────────────────────────────
 async function fetchSolPage(solNumber) {
-  await dismissBanner(solNumber);
   const solPath = `/rfq/rfqrec.aspx?sn=${encodeURIComponent(solNumber)}`;
-  console.log("[agent] Fetching sol page:", solPath);
-  const res = await dibbsFetch(solPath);
-  return res.body.toString("utf8");
+
+  // Try up to 3 times — each attempt re-dismisses banner
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await dismissBanner(solNumber);
+    console.log(
+      "[agent] Fetching sol page (attempt " + attempt + "):",
+      solPath,
+    );
+    const res = await dibbsFetch(solPath);
+
+    // If we got bannered (empty body from redirect chain)
+    if (res.bannered || res.body.length < 200) {
+      console.log(
+        "[agent] Got bannered on sol fetch — clearing cookies and retrying...",
+      );
+      // Clear consent cookies to force re-dismissal
+      delete cookieJar["DodWarningAccepted"];
+      delete cookieJar["dodwarningaccepted"];
+      saveCookies();
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
+    }
+
+    const html = res.body.toString("utf8");
+
+    // Check if we got the banner page instead of the sol
+    if (html.includes("btnOK") || html.includes("dodwarning.aspx")) {
+      console.log("[agent] Received banner HTML on sol fetch — retrying...");
+      delete cookieJar["DodWarningAccepted"];
+      delete cookieJar["dodwarningaccepted"];
+      saveCookies();
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
+    }
+
+    console.log("[agent] Sol page received, length:", html.length);
+    return html;
+  }
+
+  throw new Error("Could not get past DIBBS banner after 3 attempts");
 }
 
 // ── Step 3: Fetch NSN detail page ────────────────────────────────────────
@@ -493,7 +541,6 @@ async function handleRequest(body) {
 
     // 2. Parse sol page
     const sol = parseSolPage(solHtml, solClean);
-    console.log("[agent] HTML sample:", solHtml.slice(0, 500));
     console.log("[agent] Parsed:", {
       nsn: sol.nsn,
       item: sol.item_description,
@@ -578,6 +625,52 @@ const server = http.createServer((req, res) => {
     saveCookies();
     res.writeHead(200, CORS);
     res.end(JSON.stringify({ ok: true, message: "Cookies cleared" }));
+    return;
+  }
+
+  // Set cookies manually from browser session
+  // POST body: { cookies: "ASP.NET_SessionId=xxx; othercookie=yyy" }
+  if (req.method === "POST" && req.url === "/set-cookies") {
+    let rawBody = "";
+    req.on("data", (c) => (rawBody += c));
+    req.on("end", () => {
+      try {
+        const { cookies } = JSON.parse(rawBody);
+        if (!cookies) {
+          res.writeHead(400, CORS);
+          res.end(
+            JSON.stringify({ ok: false, error: "cookies field required" }),
+          );
+          return;
+        }
+        // Parse and merge into jar
+        const pairs = cookies.split(";");
+        for (const pair of pairs) {
+          const eq = pair.indexOf("=");
+          if (eq < 0) continue;
+          const k = pair.slice(0, eq).trim();
+          const v = pair.slice(eq + 1).trim();
+          if (k) cookieJar[k] = v;
+        }
+        saveCookies();
+        console.log(
+          "[agent] Browser cookies injected. Jar size:",
+          Object.keys(cookieJar).length,
+          Object.keys(cookieJar),
+        );
+        res.writeHead(200, CORS);
+        res.end(
+          JSON.stringify({
+            ok: true,
+            count: Object.keys(cookieJar).length,
+            keys: Object.keys(cookieJar),
+          }),
+        );
+      } catch (e) {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
     return;
   }
 
