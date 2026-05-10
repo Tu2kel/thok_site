@@ -184,12 +184,12 @@ Can you provide pricing on any or all of the above? If you need manufacturer par
 
 Thank you,
 
-Anthony Kelley Sr. | Founder & CAO
+Anthony K Kelley | Founder & CEO
 Imperio Federal Logistics
 The House of Kel LLC · CAGE 152U4
-SDVOSB | VetHUB | TVC Certified
+SDVOSB | ⭐ | VetHUB
 anthony@ifedlog.com | ifedlog.com
-(254) 265-9335`;
+(254) 226-5216`;
   }
 
   // ── BLAST LOG (localStorage) ────────────────────────────────────────
@@ -1021,9 +1021,9 @@ anthony@ifedlog.com | ifedlog.com
                                   "a",
                                   {
                                     href:
-                                      "mailto:" +
-                                      dist.email +
-                                      "?subject=" +
+                                      "https://mail.google.com/mail/?view=cm&to=" +
+                                      encodeURIComponent(dist.email) +
+                                      "&su=" +
                                       encodeURIComponent(
                                         "RFQ – " +
                                           (FSC_NAMES[fsc] || fsc) +
@@ -1031,6 +1031,8 @@ anthony@ifedlog.com | ifedlog.com
                                       ) +
                                       "&body=" +
                                       encodeURIComponent(emailText),
+                                    target: "_blank",
+                                    rel: "noopener",
                                     style: {
                                       ...S.btn,
                                       textDecoration: "none",
@@ -1038,7 +1040,7 @@ anthony@ifedlog.com | ifedlog.com
                                       padding: "4px 12px",
                                     },
                                   },
-                                  "✉ Open in Mail",
+                                  "✉ Open in Gmail",
                                 ),
                               h(
                                 "button",
