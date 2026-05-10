@@ -75,7 +75,13 @@ exports.handler = async (event) => {
     switch (action) {
       // ── Get all distributors ──
       case "distGetAll": {
-        result = await dist.find({}).sort({ tier: 1, name: 1 }).toArray();
+        const all = await dist.find({}).sort({ tier: 1, name: 1 }).toArray();
+        // Normalize: if record uses 'fsc_codes' (solGo schema), copy to 'fsc'
+        result = all.map((d) => {
+          if (!d.fsc && d.fsc_codes) d.fsc = d.fsc_codes;
+          if (!d.fsc) d.fsc = [];
+          return d;
+        });
         break;
       }
 
@@ -179,9 +185,13 @@ exports.handler = async (event) => {
       }
 
       // ── Get distributors by FSC code ──
+      // Queries both 'fsc' (SCC seed schema) and 'fsc_codes' (solGo export schema)
       case "distGetByFSC": {
         const { fsc } = payload;
-        result = await dist.find({ fsc: fsc }).sort({ tier: 1 }).toArray();
+        result = await dist
+          .find({ $or: [{ fsc: fsc }, { fsc_codes: fsc }] })
+          .sort({ tier: 1 })
+          .toArray();
         break;
       }
 
