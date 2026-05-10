@@ -95,13 +95,20 @@
 
   // ── API call to SCC backend ─────────────────────────────────────────
   async function apiCall(action, payload = {}) {
+    console.log("[Blast] →", action, JSON.stringify(payload));
     const res = await fetch("/.netlify/functions/scc-distributors", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, payload }),
     });
-    if (!res.ok) throw new Error("API error " + res.status);
-    return res.json();
+    if (!res.ok) {
+      const txt = await res.text().catch(() => String(res.status));
+      console.error("[Blast] HTTP", res.status, txt);
+      throw new Error("API " + res.status + ": " + txt);
+    }
+    const data = await res.json();
+    console.log("[Blast] ←", action, JSON.stringify(data).slice(0, 300));
+    return data;
   }
 
   // ── Parse pasted sol lines ──────────────────────────────────────────
@@ -442,12 +449,24 @@ anthony@ifedlog.com | ifedlog.com
       for (const fsc of Object.keys(groups)) {
         setLoadingFsc(fsc);
         try {
-          const dists = await apiCall("distGetByFSC", { fsc });
-          result[fsc] = {
-            sols: groups[fsc],
-            dists: Array.isArray(dists) ? dists : [],
-          };
+          const raw = await apiCall("distGetByFSC", { fsc });
+          // Backend returns result directly or wrapped in { result: [...] }
+          const dists = Array.isArray(raw)
+            ? raw
+            : Array.isArray(raw.result)
+              ? raw.result
+              : [];
+          console.log(
+            "[Blast] FSC",
+            fsc,
+            "→",
+            dists.length,
+            "dists",
+            dists.map((d) => d.name || d.id),
+          );
+          result[fsc] = { sols: groups[fsc], dists };
         } catch (e) {
+          console.error("[Blast] FSC", fsc, "error:", e.message);
           result[fsc] = { sols: groups[fsc], dists: [], error: e.message };
         }
       }
