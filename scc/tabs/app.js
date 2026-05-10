@@ -755,7 +755,6 @@
                   { id: "intake", label: "Intake", icon: "" },
                   { id: "pipeline", label: "Pipeline", icon: "" },
                   { id: "source", label: "Source", icon: "◆ " },
-                  { id: "blast", label: "Blast", icon: "🚀 " },
                   { id: "rfq", label: "RFQ", icon: "⚡ " },
                   { id: "fu", label: "Follow-Up", icon: "✉ " },
                   { id: "esbd", label: "State/Fed", icon: "🏛 " },
@@ -1037,11 +1036,6 @@
             preload: sourcePreload,
             onPreloadConsumed: () => setSourcePreload(null),
           }),
-
-        tab === "blast" &&
-          (window.SCC_TABS && window.SCC_TABS.BlastTab
-            ? h(window.SCC_TABS.BlastTab, null)
-            : h("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Blast engine loading...")),
 
         tab === "rfq" && hA(RFQTab, null),
 
