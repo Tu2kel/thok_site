@@ -461,6 +461,7 @@
     const [awardPrefill, setAwardPrefill] = useState(null);
     const [fuPrefill, setFuPrefill] = useState(null);
     const [highlightSol, setHighlightSol] = useState(null);
+    const [blastPrefill, setBlastPrefill] = useState(null);
 
     const goPipeline = (sol_number) => {
       setFilter("All"); // ensure sol is visible regardless of active filter
@@ -493,6 +494,35 @@
       setTheme((t) =>
         t === "dark" ? "metallic" : t === "metallic" ? "light" : "dark",
       );
+
+    // ── BLAST → INTAKE BRIDGE ──────────────────────────────────────────
+    // Called by blast.js when user hits Push to Pipeline on a quoted entry.
+    // Builds a parser-friendly string from blast log data, drops it in boxA,
+    // then switches to Intake so user can complete NSN/qty/unit price from DIBBS.
+    const goBlastIntake = useCallback((entry) => {
+      const lines = [
+        entry.sol_ids && entry.sol_ids[0] ? entry.sol_ids[0] : "",
+        entry.sol_noms && entry.sol_noms[0] ? entry.sol_noms[0] : "",
+        "FSC: " + (entry.fsc || ""),
+        entry.fsc_name || "",
+        entry.dist_name ? "Ref Supplier: " + entry.dist_name : "",
+        entry.dist_email ? "Supplier Email: " + entry.dist_email : "",
+        entry.quote_note ? "Quote Note: " + entry.quote_note : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      setBoxA(lines);
+      setBoxB("");
+      setParsed(null);
+      setBlastPrefill(entry);
+      setTab("intake");
+    }, []);
+
+    // Expose goBlastIntake so blast.js can call it directly
+    useEffect(() => {
+      window.SCC_TABS = window.SCC_TABS || {};
+      window.SCC_TABS.goBlastIntake = goBlastIntake;
+    }, [goBlastIntake]);
 
     const goSource = (r) => {
       setSourcePreload({
@@ -1011,7 +1041,18 @@
             onParse: handleParse,
             onClear: handleClear,
             onSave: handleSave,
+            blastPrefill,
+            onBlastPrefillConsumed: () => setBlastPrefill(null),
           }),
+
+        tab === "blast" &&
+          (window.SCC_TABS && window.SCC_TABS.BlastTab
+            ? hA(window.SCC_TABS.BlastTab, null)
+            : hA(
+                "div",
+                { style: { padding: "20px", color: "var(--body-dim)" } },
+                "Blast engine loading...",
+              )),
 
         tab === "pipeline" &&
           hA(PipelineTab, {
@@ -1037,15 +1078,6 @@
             preload: sourcePreload,
             onPreloadConsumed: () => setSourcePreload(null),
           }),
-
-        tab === "blast" &&
-          (window.SCC_TABS && window.SCC_TABS.BlastTab
-            ? hA(window.SCC_TABS.BlastTab, null)
-            : hA(
-                "div",
-                { style: { padding: "20px", color: "var(--body-dim)" } },
-                "Blast engine loading...",
-              )),
 
         tab === "rfq" && hA(RFQTab, null),
 
