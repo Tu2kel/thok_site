@@ -1508,11 +1508,7 @@
                               h(
                                 "button",
                                 {
-                                  style: {
-                                    ...S.btnSm,
-                                    color: "rgba(46,204,113,.8)",
-                                    borderColor: "rgba(46,204,113,.3)",
-                                  },
+                                  style: S.btnSm,
                                   onClick: () => {
                                     if (
                                       confirm(
@@ -1524,7 +1520,7 @@
                                       handleMarkSent(fsc, dist, sols);
                                   },
                                 },
-                                "\u2713 Mark Sent",
+                                "Mark Sent",
                               ),
                             ),
 
