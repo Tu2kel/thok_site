@@ -4,7 +4,7 @@
   //  Pre-pipeline sourcing engine.
   //  Flow: Paste sols → FSC auto-sort → pull distributors from MongoDB
   //        → RFQ drafts per distributor → send → track response
-  //        → quote received → push to pipeline
+  //        → quote received → parse quote → paste DIBBS → push to pipeline
   //  Pre-compiled React · No Babel · No JSX
   //  Exposes: window.SCC_TABS.BlastTab
   // ═══════════════════════════════════════════════════════════════════════
@@ -366,7 +366,7 @@
     },
   };
 
-  // ── Quote parser component ───────────────────────────────────────────
+  // ── Quote Parser ─────────────────────────────────────────────────────
   function parseQuoteText(raw) {
     const t = raw.replace(/\r/g, "");
     const r = {
@@ -378,43 +378,35 @@
       coo: null,
       contact: null,
     };
-
     const pn = t.match(
       /part\s*(?:number|no\.?|#)?\s*[:\-|]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,})/i,
     );
     if (pn) r.part_number = pn[1].trim();
-
     const qty = t.match(
       /quant(?:ity)?\s*[:\-|]?\s*([\d,]+)\s*(ea|pcs?|each|units?|pc)?/i,
     );
     if (qty)
       r.qty =
         qty[1].replace(/,/g, "") + (qty[2] ? " " + qty[2].toUpperCase() : "");
-
     let price = t.match(
       /(?:price\s*(?:\(each\)|each|per\s*unit|unit)?|unit\s*price|each)\s*[:\-|]?\s*\$?\s*([\d,]+\.\d{2})/i,
     );
     if (!price) price = t.match(/\$\s*([\d,]+\.\d{2})/);
     if (price) r.unit_price = "$" + price[1].replace(/,/g, "");
-
     const lt = t.match(/lead\s*time\s*[:\-|]?\s*([^\n\r]{3,80})/i);
     if (lt) r.lead_time = lt[1].trim();
-
     const exp = t.match(
       /(?:expir(?:es?|ation)|valid(?:\s*until)?|quote\s*(?:expires?|valid))\s*[:\-|]?\s*([\d\/\-]{5,})/i,
     );
     if (exp) r.expires = exp[1].trim();
-
     const coo = t.match(
       /(?:country\s*of\s*origin|COO|made\s*in|origin)\s*[:\-|]?\s*([A-Za-z\s]{2,30})/i,
     );
     if (coo) r.coo = coo[1].trim();
-
     const con = t.match(
       /(?:contact|rep|from|sent\s*by|regards?|sincerely)[,:\s]+([A-Z][a-z]+\s+[A-Z][a-z]+)/,
     );
     if (con) r.contact = con[1].trim();
-
     return r;
   }
 
@@ -549,7 +541,7 @@
           ),
           Field("Part #", parsed.part_number),
           Field("Qty", parsed.qty),
-          Field("Unit Price", parsed.unit_price, false),
+          Field("Unit Price", parsed.unit_price),
           Field("Lead Time", parsed.lead_time),
           Field("Expires", parsed.expires),
           Field(
@@ -560,6 +552,321 @@
                 parsed.coo.toUpperCase().includes("TAIWAN")),
           ),
           Field("Contact", parsed.contact),
+        ),
+    );
+  }
+
+  // ── Push to Pipeline ─────────────────────────────────────────────────
+  // Paste DIBBS listing → runs parseListing → merges with quote data → dbSave directly.
+  // No Intake tab needed. Supplier drawer fields pre-filled from blast quote.
+  function PushToPipeline({ entry }) {
+    const [dibbsRaw, setDibbsRaw] = useState("");
+    const [preview, setPreview] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState("");
+
+    function handlePreview() {
+      setError("");
+      if (!dibbsRaw.trim()) {
+        setError("Paste the DIBBS listing or Navigator row first.");
+        return;
+      }
+      const parser = window.SCC_PARSER;
+      const math = window.SCC_MATH;
+      if (!parser) {
+        setError("Parser not loaded \u2014 refresh page.");
+        return;
+      }
+
+      let parsed = parser.parseListing(dibbsRaw);
+
+      // AI text enrichment if available
+      if (parser.parseAIText) {
+        const ai = parser.parseAIText(dibbsRaw);
+        Object.entries(ai).forEach(([k, v]) => {
+          if (v && !parsed[k]) parsed[k] = v;
+        });
+      }
+
+      // Fallback sol_number from blast entry
+      if (!parsed.sol_number && entry.sol_ids && entry.sol_ids[0]) {
+        parsed.sol_number = entry.sol_ids[0];
+      }
+
+      // Fallback item_name from blast entry
+      if (!parsed.item_name && entry.sol_noms && entry.sol_noms[0]) {
+        parsed.item_name = entry.sol_noms[0];
+      }
+
+      // Calc pricing
+      if (parsed.unit_price && parsed.quote_due && math) {
+        const pricing = math.calcPricing(
+          parsed.unit_price,
+          parsed.quote_due,
+          parsed.posted_date,
+        );
+        parsed = { ...parsed, ...pricing };
+      }
+
+      // Merge blast quote data into supplier drawer fields
+      const qp = entry.quote_parsed || {};
+      const merged = {
+        ...parsed,
+        status: "Sourced",
+        date_added: new Date().toLocaleDateString(),
+        notes: "Sourced via Blast Engine \u2014 " + (entry.dist_name || ""),
+        supplier_poc: qp.contact || entry.dist_name || "",
+        supplier_website: entry.dist_website || "",
+        supplier_phone: entry.dist_phone || "",
+        supplier_email: entry.dist_email || "",
+        supplier_quote_price: qp.unit_price
+          ? qp.unit_price.replace("$", "")
+          : "",
+        supplier_quote_date: new Date().toLocaleDateString(),
+        supplier_quote_expires: qp.expires || "",
+        supplier_lead_time: qp.lead_time || "",
+        supplier_moq: "",
+        ref_part_number: parsed.ref_part_number || qp.part_number || "",
+      };
+
+      setPreview(merged);
+    }
+
+    async function handleSave() {
+      if (!preview) return;
+      if (!preview.sol_number) {
+        setError("Sol number missing \u2014 check DIBBS paste.");
+        return;
+      }
+      setSaving(true);
+      setError("");
+      try {
+        await window.SCC_DB.dbSave(preview);
+        setSaved(true);
+        setPreview(null);
+        setDibbsRaw("");
+      } catch (e) {
+        setError("Save failed: " + e.message);
+      }
+      setSaving(false);
+    }
+
+    const boxStyle = {
+      marginTop: "14px",
+      background: "rgba(0,0,0,.2)",
+      border: "1px solid rgba(201,168,76,.15)",
+      borderRadius: "3px",
+      padding: "14px",
+    };
+    const lbl = {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "9px",
+      color: "rgba(201,168,76,.6)",
+      width: "130px",
+      flexShrink: 0,
+    };
+    const val = {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      color: "var(--alabaster,#F5F0E8)",
+      flex: 1,
+    };
+    const miss = {
+      ...val,
+      color: "rgba(245,240,232,.25)",
+      fontStyle: "italic",
+    };
+
+    function PField(label, value) {
+      return h(
+        "div",
+        { style: { display: "flex", gap: "8px", marginBottom: "3px" } },
+        h("span", { style: lbl }, label),
+        value
+          ? h("span", { style: val }, String(value))
+          : h("span", { style: miss }, "not captured"),
+      );
+    }
+
+    if (saved) {
+      return h(
+        "div",
+        {
+          style: {
+            marginTop: "12px",
+            fontFamily: "JetBrains Mono,monospace",
+            fontSize: "10px",
+            color: "#2ecc71",
+          },
+        },
+        "\u2713 Pushed to pipeline successfully.",
+      );
+    }
+
+    return h(
+      "div",
+      { style: boxStyle },
+      h(
+        "div",
+        {
+          style: {
+            fontFamily: "Cinzel,serif",
+            fontSize: "9px",
+            letterSpacing: ".12em",
+            color: "var(--gold-solid,#C9A84C)",
+            textTransform: "uppercase",
+            marginBottom: "6px",
+          },
+        },
+        "Complete & Push to Pipeline",
+      ),
+      h(
+        "div",
+        { style: { ...S.dim, marginBottom: "10px" } },
+        "Paste DIBBS listing, Navigator row, or PDF text. Supplier quote data merges automatically.",
+      ),
+
+      !preview &&
+        h(
+          "div",
+          null,
+          h("textarea", {
+            style: { ...S.textarea, minHeight: "90px" },
+            placeholder: "Paste DIBBS listing or Navigator row here...",
+            value: dibbsRaw,
+            onChange: (e) => setDibbsRaw(e.target.value),
+          }),
+          h(
+            "div",
+            { style: { ...S.row, marginTop: "8px" } },
+            h(
+              "button",
+              { style: S.btnPrimary, onClick: handlePreview },
+              "Preview Record",
+            ),
+          ),
+          error &&
+            h(
+              "div",
+              {
+                style: {
+                  color: "#e74c3c",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "10px",
+                  marginTop: "6px",
+                },
+              },
+              "\u26a0 " + error,
+            ),
+        ),
+
+      preview &&
+        h(
+          "div",
+          null,
+          h(
+            "div",
+            { style: { marginBottom: "10px" } },
+            h(
+              "div",
+              {
+                style: {
+                  ...S.dim,
+                  marginBottom: "6px",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "9px",
+                  letterSpacing: ".1em",
+                  color: "rgba(201,168,76,.5)",
+                },
+              },
+              "SOL DATA",
+            ),
+            PField("Sol #", preview.sol_number),
+            PField("Item", preview.item_name),
+            PField("NSN", preview.nsn),
+            PField("FSC", preview.fsc),
+            PField(
+              "Qty",
+              preview.quantity
+                ? preview.quantity + " " + (preview.unit_of_issue || "")
+                : null,
+            ),
+            PField(
+              "Unit Price",
+              preview.unit_price ? "$" + preview.unit_price : null,
+            ),
+            PField("Quote Due", preview.quote_due),
+            PField("Ship To", preview.ship_to),
+            PField(
+              "Delivery",
+              preview.delivery_days ? preview.delivery_days + " days" : null,
+            ),
+            PField("Part #", preview.ref_part_number),
+            h("div", {
+              style: {
+                height: "1px",
+                background: "rgba(201,168,76,.1)",
+                margin: "8px 0",
+              },
+            }),
+            h(
+              "div",
+              {
+                style: {
+                  ...S.dim,
+                  marginBottom: "6px",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "9px",
+                  letterSpacing: ".1em",
+                  color: "rgba(201,168,76,.5)",
+                },
+              },
+              "SUPPLIER DRAWER",
+            ),
+            PField("Supplier", preview.supplier_poc),
+            PField("Email", preview.supplier_email),
+            PField(
+              "Quote $",
+              preview.supplier_quote_price
+                ? "$" + preview.supplier_quote_price
+                : null,
+            ),
+            PField("Lead Time", preview.supplier_lead_time),
+            PField("Expires", preview.supplier_quote_expires),
+            PField("Website", preview.supplier_website),
+          ),
+          error &&
+            h(
+              "div",
+              {
+                style: {
+                  color: "#e74c3c",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "10px",
+                  marginBottom: "8px",
+                },
+              },
+              "\u26a0 " + error,
+            ),
+          h(
+            "div",
+            { style: S.row },
+            h(
+              "button",
+              {
+                style: { ...S.btnPrimary, opacity: saving ? 0.6 : 1 },
+                onClick: handleSave,
+                disabled: saving,
+              },
+              saving ? "Saving..." : "\u2192 Push to Pipeline",
+            ),
+            h(
+              "button",
+              { style: S.btnSm, onClick: () => setPreview(null) },
+              "Re-paste",
+            ),
+          ),
         ),
     );
   }
@@ -656,9 +963,10 @@
         dist_id: dist.id,
         dist_name: dist.name,
         dist_email: dist.email || "",
+        dist_website: dist.website || "",
+        dist_phone: dist.phone || "",
         sol_ids: sols.map((s) => s.id),
         sol_noms: sols.map((s) => s.nom),
-        sol_qtys: sols.map((s) => s.qty),
         email_body: buildRFQEmail(dist, sols),
         status: "sent",
         quoted: false,
@@ -679,25 +987,12 @@
       updateBlastEntry(id, { [field]: value });
       refreshLog();
     }, []);
+
     const handleClearLog = useCallback(() => {
       if (!confirm("Clear entire blast log?")) return;
       saveBlastLog([]);
       refreshLog();
     }, []);
-
-    const statusBar = (c) => ({
-      fontFamily: "JetBrains Mono,monospace",
-      fontSize: "10px",
-      color: c,
-      background:
-        c === "#2ecc71" ? "rgba(46,204,113,.08)" : "rgba(231,76,60,.08)",
-      border:
-        "1px solid " +
-        (c === "#2ecc71" ? "rgba(46,204,113,.2)" : "rgba(231,76,60,.2)"),
-      borderRadius: "3px",
-      padding: "7px 12px",
-      marginBottom: "14px",
-    });
 
     return h(
       "div",
@@ -758,7 +1053,24 @@
         ),
       ),
 
-      status && h("div", { style: statusBar("#2ecc71") }, "\u25b6 " + status),
+      // Status bar
+      status &&
+        h(
+          "div",
+          {
+            style: {
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "10px",
+              color: "#2ecc71",
+              background: "rgba(46,204,113,.08)",
+              border: "1px solid rgba(46,204,113,.2)",
+              borderRadius: "3px",
+              padding: "7px 12px",
+              marginBottom: "14px",
+            },
+          },
+          "\u25b6 " + status,
+        ),
 
       // ── BLAST VIEW ──
       activeView === "blast" &&
@@ -766,6 +1078,7 @@
           Frag,
           null,
 
+          // Step 1
           h(
             "div",
             { style: S.card },
@@ -784,7 +1097,7 @@
               value: solInput,
               onChange: (e) => setSolInput(e.target.value),
               placeholder:
-                "SPE4A7-26-R-0001 | BOLT HEX HEAD | 2026-05-15 | 5306 | 12450.00 | GO",
+                "SPE4A7-26-R-0001 | BOLT HEX HEAD | 2026-05-15 | 5306 | 12450.00 | GO\nSPE4A7-26-R-0002 | VALVE GATE | 2026-05-20 | 4820 | 8200.00 | GO",
             }),
             parseError &&
               h(
@@ -833,6 +1146,7 @@
             ),
           ),
 
+          // Step 2
           parsedSols.length > 0 &&
             h(
               "div",
@@ -860,6 +1174,7 @@
               ),
             ),
 
+          // Step 3
           Object.keys(fscGroups).length > 0 &&
             h(
               "div",
@@ -880,6 +1195,7 @@
                   return h(
                     "div",
                     { key: fsc, style: S.fscSection },
+
                     h(
                       "div",
                       {
@@ -944,6 +1260,7 @@
                       h(
                         "div",
                         null,
+
                         h(
                           "div",
                           {
@@ -1324,27 +1641,6 @@
                   },
                   entry.quoted ? "\u2713 Quoted" : "Mark Quoted",
                 ),
-                entry.quoted &&
-                  h(
-                    "button",
-                    {
-                      style: {
-                        ...S.btnSm,
-                        color: "#2ecc71",
-                        borderColor: "rgba(46,204,113,.5)",
-                        background: "rgba(46,204,113,.08)",
-                        fontWeight: "700",
-                      },
-                      onClick: () => {
-                        window.SCC_TABS && window.SCC_TABS.goBlastIntake
-                          ? window.SCC_TABS.goBlastIntake(entry)
-                          : alert(
-                              "Navigation bridge not ready \u2014 refresh and try again.",
-                            );
-                      },
-                    },
-                    "\u2192 Push to Intake",
-                  ),
               ),
 
               entry.quoted &&
@@ -1354,6 +1650,8 @@
                   savedParsed: entry.quote_parsed || null,
                   onUpdate: handleLogUpdate,
                 }),
+
+              entry.quoted && h(PushToPipeline, { entry: entry }),
             ),
           ),
         ),
