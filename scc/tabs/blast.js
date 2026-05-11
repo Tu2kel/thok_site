@@ -148,55 +148,45 @@
   }
 
   // ── DIBBS enrichment parser ──────────────────────────────────────────
-  // Runs parseListing on raw DIBBS text, then matches each parsed record
-  // back to its sol by sol number. Returns enriched sol array.
-  function enrichSolsFromDibbs(sols, dibbsRaw) {
+  // Uses the exact same dual-parser merge as Intake (app.js handleParse).
+  // boxA = DIBBS listing text, boxB = Navigator row / AI column
+  // parseListing wins; parseAIText fills only missing fields.
+  function enrichSolsFromDibbs(sols, boxA, boxB) {
     const parser = window.SCC_PARSER;
     if (!parser) return sols;
 
-    // Split DIBBS paste into per-sol blocks by sol number boundaries
-    // Each block starts with a sol number line
-    const solNumRx = /\b(SP[A-Z][A-Z0-9][A-Z0-9\-]*[A-Z0-9])\b/gi;
-    const blocks = [];
-    let lastIdx = 0;
-    let match;
-    const matches = [];
-    while ((match = solNumRx.exec(dibbsRaw)) !== null) {
-      matches.push({ idx: match.index, sol: match[1].toUpperCase() });
-    }
+    const { parseListing, parseAIText, isListing } = parser;
 
-    if (matches.length === 0) {
-      // Single sol in paste -- run both parsers and merge
-      const listing = parser.parseListing(dibbsRaw);
-      const ai = parser.parseAIText ? parser.parseAIText(dibbsRaw) : {};
-      const merged = { ...ai, ...listing }; // listing wins over ai on conflicts
-      return sols.map((s) => {
-        if (merged.sol_number && merged.sol_number !== s.id) return s;
-        return mergeEnrichment(s, merged);
-      });
-    }
-
-    // Multiple sol blocks
-    for (let i = 0; i < matches.length; i++) {
-      const start = matches[i].idx;
-      const end = matches[i + 1] ? matches[i + 1].idx : dibbsRaw.length;
-      blocks.push({ sol: matches[i].sol, text: dibbsRaw.slice(start, end) });
-    }
-
+    // For each sol, run the same merge Intake uses
     return sols.map((s) => {
-      const norm = (str) => str.replace(/-/g, "").toUpperCase();
-      const block = blocks.find(
-        (b) =>
-          norm(b.sol) === norm(s.id) ||
-          norm(s.id).includes(norm(b.sol)) ||
-          norm(b.sol).includes(norm(s.id)),
-      );
-      if (!block) return s;
-      // Run both parsers, merge -- listing wins on conflicts
-      const listing = parser.parseListing(block.text);
-      const ai = parser.parseAIText ? parser.parseAIText(block.text) : {};
-      const merged = { ...ai, ...listing };
-      return mergeEnrichment(s, merged);
+      // Determine which box is the listing and which is AI text
+      let listingText = "",
+        aiText = "";
+      if (isListing(boxA)) {
+        listingText = boxA;
+        aiText = boxB;
+      } else if (isListing(boxB)) {
+        listingText = boxB;
+        aiText = boxA;
+      } else {
+        listingText = boxA;
+        aiText = boxB;
+      }
+
+      // Run parseListing first
+      let data = listingText ? parseListing(listingText) : {};
+
+      // parseAIText fills only missing fields (same as Intake merge)
+      const aiSrc = aiText.trim() || listingText;
+      if (aiSrc) {
+        const ai = parseAIText(aiSrc);
+        Object.entries(ai).forEach(([k, v]) => {
+          if (v !== null && v !== undefined && v !== "" && !data[k])
+            data[k] = v;
+        });
+      }
+
+      return mergeEnrichment(s, data);
     });
   }
 
@@ -915,6 +905,7 @@
   function BlastTab() {
     const [solInput, setSolInput] = useState("");
     const [dibbsInput, setDibbsInput] = useState("");
+    const [dibbsInputB, setDibbsInputB] = useState("");
     const [parsedSols, setParsedSols] = useState([]);
     const [parseError, setParseError] = useState("");
     const [enriched, setEnriched] = useState(false);
@@ -954,7 +945,7 @@
     // Step 2: Enrich sols from DIBBS paste
     const handleEnrich = useCallback(() => {
       if (!parsedSols.length) return;
-      if (!dibbsInput.trim()) {
+      if (!dibbsInput.trim() && !dibbsInputB.trim()) {
         // Skip enrichment, proceed with base sol data
         setEnriched(true);
         setStatus(
@@ -962,7 +953,11 @@
         );
         return;
       }
-      const enrichedSols = enrichSolsFromDibbs(parsedSols, dibbsInput);
+      const enrichedSols = enrichSolsFromDibbs(
+        parsedSols,
+        dibbsInput,
+        dibbsInputB,
+      );
       setParsedSols(enrichedSols);
       setEnriched(true);
       const enrichedCount = enrichedSols.filter(
@@ -975,7 +970,7 @@
           enrichedSols.length +
           " sols with part data. Ready to load distributors.",
       );
-    }, [parsedSols, dibbsInput]);
+    }, [parsedSols, dibbsInput, dibbsInputB]);
 
     // Step 3: Load distributors by FSC
     const handleLoadDists = useCallback(async () => {
@@ -1203,6 +1198,7 @@
                       setFscGroups({});
                       setSolInput("");
                       setDibbsInput("");
+                      setDibbsInputB("");
                       setEnriched(false);
                       setStatus("");
                     },
@@ -1212,7 +1208,7 @@
             ),
           ),
 
-          // ── STEP 2: DIBBS Paste (part numbers + specs) ──
+          // ── STEP 2: DIBBS Paste — Box A + Box B (same as Intake) ──
           parsedSols.length > 0 &&
             h(
               "div",
@@ -1220,23 +1216,60 @@
               h(
                 "div",
                 { style: S.cardTitle },
-                "Step 2 \u2014 Paste DIBBS Listings",
+                "Step 2 \u2014 Enrich with DIBBS Data",
               ),
               h(
                 "div",
-                { style: { ...S.dim, marginBottom: "8px" } },
-                "Paste Navigator rows or DIBBS PDF text for all sols. Extracts NSN, part number, qty, and delivery requirements for the RFQ email. Skip if unavailable \u2014 email will still send without part data.",
+                { style: { ...S.dim, marginBottom: "12px" } },
+                "Same as Intake: Box A = DIBBS PDF text, Box B = Navigator row. Use what you have. Both optional.",
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    ...S.dim,
+                    marginBottom: "4px",
+                    fontSize: "9px",
+                    letterSpacing: ".06em",
+                  },
+                },
+                "BOX A \u2014 DIBBS LISTING / PDF TEXT",
               ),
               h("textarea", {
-                style: { ...S.textarea, minHeight: "160px" },
+                style: {
+                  ...S.textarea,
+                  minHeight: "100px",
+                  marginBottom: "10px",
+                },
                 value: dibbsInput,
                 onChange: (e) => setDibbsInput(e.target.value),
-                placeholder:
-                  "Paste DIBBS listing text here...\nExample: SPE7M426T094C  BACKSHELL ELECTRICA  1 EA  $44,450.00  NSN: 5935-01-234-5678  P/N: M85049/52-1-12A  30 days ARO",
+                placeholder: "Paste DIBBS PDF listing text here...",
               }),
               h(
                 "div",
-                { style: { ...S.row, marginTop: "10px" } },
+                {
+                  style: {
+                    ...S.dim,
+                    marginBottom: "4px",
+                    fontSize: "9px",
+                    letterSpacing: ".06em",
+                  },
+                },
+                "BOX B \u2014 NAVIGATOR ROW / AI COLUMN",
+              ),
+              h("textarea", {
+                style: {
+                  ...S.textarea,
+                  minHeight: "60px",
+                  marginBottom: "10px",
+                },
+                value: dibbsInputB,
+                onChange: (e) => setDibbsInputB(e.target.value),
+                placeholder: "JOSLYN SUNBANK COMPANY, LLC|07418|J1432|",
+              }),
+              h(
+                "div",
+                { style: { ...S.row, marginTop: "4px" } },
                 h(
                   "button",
                   { style: S.btnPrimary, onClick: handleEnrich },
