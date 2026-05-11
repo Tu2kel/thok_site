@@ -2,9 +2,10 @@
   // ═══════════════════════════════════════════════════════════════════════
   //  IMPERIO SCC — BLAST TAB
   //  Pre-pipeline sourcing engine.
-  //  Flow: Paste sols → FSC auto-sort → pull distributors from MongoDB
-  //        → RFQ drafts per distributor → send → track response
-  //        → quote received → parse quote → paste DIBBS → push to pipeline
+  //  Step 1: Paste sol lines → parse FSC lanes
+  //  Step 2: Paste DIBBS listings → enrich sols with NSN, part#, qty, specs
+  //  Step 3: Load distributors by FSC from MongoDB
+  //  Step 4: Review enriched RFQ emails → fire blast → log → quote → pipeline
   //  Pre-compiled React · No Babel · No JSX
   //  Exposes: window.SCC_TABS.BlastTab
   // ═══════════════════════════════════════════════════════════════════════
@@ -104,7 +105,8 @@
     return data;
   }
 
-  // ── Sol parser ───────────────────────────────────────────────────────
+  // ── Sol line parser ──────────────────────────────────────────────────
+  // Format: SOL_ID | ITEM_NAME | DUE | FSC | EXT | STATUS
   function parseSolLines(raw) {
     const sols = [];
     for (const line of raw
@@ -123,6 +125,14 @@
         fsc: fsc.trim(),
         ext: parseFloat((ext || "0").replace(/[$,]/g, "")) || 0,
         status: (status || "GO").trim().toUpperCase(),
+        // Enriched fields (filled in Step 2)
+        nsn: "",
+        part_number: "",
+        qty: "",
+        unit_of_issue: "",
+        delivery_days: "",
+        ship_to: "",
+        specs: "",
       });
     }
     return sols;
@@ -137,19 +147,89 @@
     return map;
   }
 
-  // ── RFQ email ────────────────────────────────────────────────────────
+  // ── DIBBS enrichment parser ──────────────────────────────────────────
+  // Runs parseListing on raw DIBBS text, then matches each parsed record
+  // back to its sol by sol number. Returns enriched sol array.
+  function enrichSolsFromDibbs(sols, dibbsRaw) {
+    const parser = window.SCC_PARSER;
+    if (!parser) return sols;
+
+    // Split DIBBS paste into per-sol blocks by sol number boundaries
+    // Each block starts with a sol number line
+    const solNumRx = /\b(SP[A-Z][A-Z0-9][A-Z0-9\-]*[A-Z0-9])\b/gi;
+    const blocks = [];
+    let lastIdx = 0;
+    let match;
+    const matches = [];
+    while ((match = solNumRx.exec(dibbsRaw)) !== null) {
+      matches.push({ idx: match.index, sol: match[1].toUpperCase() });
+    }
+
+    if (matches.length === 0) {
+      // Single sol in paste -- try to match by content
+      const parsed = parser.parseListing(dibbsRaw);
+      return sols.map((s) => {
+        if (parsed.sol_number && parsed.sol_number !== s.id) return s;
+        return mergeEnrichment(s, parsed);
+      });
+    }
+
+    // Multiple sol blocks
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].idx;
+      const end = matches[i + 1] ? matches[i + 1].idx : dibbsRaw.length;
+      blocks.push({ sol: matches[i].sol, text: dibbsRaw.slice(start, end) });
+    }
+
+    return sols.map((s) => {
+      const block = blocks.find(
+        (b) => b.sol === s.id || s.id.includes(b.sol) || b.sol.includes(s.id),
+      );
+      if (!block) return s;
+      const parsed = parser.parseListing(block.text);
+      return mergeEnrichment(s, parsed);
+    });
+  }
+
+  function mergeEnrichment(sol, parsed) {
+    return {
+      ...sol,
+      nsn: parsed.nsn || sol.nsn || "",
+      part_number: parsed.ref_part_number || sol.part_number || "",
+      qty: parsed.quantity ? String(parsed.quantity) : sol.qty || "",
+      unit_of_issue: parsed.unit_of_issue || sol.unit_of_issue || "",
+      delivery_days: parsed.delivery_days || sol.delivery_days || "",
+      ship_to: parsed.ship_to || sol.ship_to || "",
+      nom: parsed.item_name || sol.nom,
+    };
+  }
+
+  // ── RFQ email (enriched with part data) ─────────────────────────────
   function buildRFQEmail(dist, sols) {
     const fscName = FSC_NAMES[sols[0].fsc] || "Industrial Supplies";
+
     const items = sols
-      .map(
-        (s, i) =>
-          "  " +
-          (i + 1) +
-          ". " +
-          s.nom +
-          (s.ext > 0 ? " \u2014 Est. Value $" + s.ext.toLocaleString() : ""),
-      )
-      .join("\n");
+      .map((s, i) => {
+        const lines = [];
+        lines.push("  " + (i + 1) + ". " + s.nom);
+        if (s.nsn) lines.push("     NSN: " + s.nsn);
+        if (s.part_number) lines.push("     Part Number: " + s.part_number);
+        if (s.qty)
+          lines.push(
+            "     Quantity: " +
+              s.qty +
+              (s.unit_of_issue ? " " + s.unit_of_issue : ""),
+          );
+        if (s.delivery_days)
+          lines.push(
+            "     Required Delivery: " + s.delivery_days + " days ARO",
+          );
+        if (s.ext > 0)
+          lines.push("     Est. Gov. Value: $" + s.ext.toLocaleString());
+        return lines.join("\n");
+      })
+      .join("\n\n");
+
     return [
       "Subject: RFQ \u2013 " +
         fscName +
@@ -159,20 +239,20 @@
       "",
       "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have an active government procurement need in your lane.",
       "",
-      "I need pricing and availability on the following items:",
+      "I need pricing and availability on the following item" +
+        (sols.length > 1 ? "s" : "") +
+        ":",
       "",
       items,
       "",
-      "Details:",
+      "Requirements:",
       "- Destination: Government delivery address (continental US)",
-      "- Payment: Immediate PO upon award \u2014 we use third-party PO funding (Factoring Express) \u2014 supplier receives direct wire payment before shipment",
-      "- Delivery: Standard lead time acceptable; expedited preferred where available",
+      "- Payment: Immediate PO upon award \u2014 we use third-party PO funding (Factoring Express). Supplier receives direct wire payment before shipment.",
       "- Compliance: BAA/TAA required \u2014 please confirm country of origin on all items",
       "- Shipping: FOB Destination required",
+      "- Condition: New/unused only. No substitutions without prior approval.",
       "",
-      "We are not looking for a one-time transaction. We are building a recurring government supplier relationship in this lane. We issue POs immediately upon award and have established government payment infrastructure.",
-      "",
-      "Can you provide pricing on any or all of the above? If you need manufacturer part numbers or additional specs, I can provide those item by item.",
+      "Please provide unit price, lead time, and confirm country of origin. We issue POs immediately upon award.",
       "",
       "Thank you,",
       "",
@@ -360,7 +440,7 @@
       color: "rgba(245,240,232,.75)",
       whiteSpace: "pre-wrap",
       lineHeight: "1.65",
-      maxHeight: "280px",
+      maxHeight: "320px",
       overflowY: "auto",
       marginTop: "8px",
     },
@@ -557,8 +637,6 @@
   }
 
   // ── Push to Pipeline ─────────────────────────────────────────────────
-  // Paste DIBBS listing → runs parseListing → merges with quote data → dbSave directly.
-  // No Intake tab needed. Supplier drawer fields pre-filled from blast quote.
   function PushToPipeline({ entry }) {
     const [dibbsRaw, setDibbsRaw] = useState("");
     const [preview, setPreview] = useState(null);
@@ -569,7 +647,7 @@
     function handlePreview() {
       setError("");
       if (!dibbsRaw.trim()) {
-        setError("Paste the DIBBS listing or Navigator row first.");
+        setError("Paste the DIBBS listing first.");
         return;
       }
       const parser = window.SCC_PARSER;
@@ -578,28 +656,17 @@
         setError("Parser not loaded \u2014 refresh page.");
         return;
       }
-
       let parsed = parser.parseListing(dibbsRaw);
-
-      // AI text enrichment if available
       if (parser.parseAIText) {
         const ai = parser.parseAIText(dibbsRaw);
         Object.entries(ai).forEach(([k, v]) => {
           if (v && !parsed[k]) parsed[k] = v;
         });
       }
-
-      // Fallback sol_number from blast entry
-      if (!parsed.sol_number && entry.sol_ids && entry.sol_ids[0]) {
+      if (!parsed.sol_number && entry.sol_ids && entry.sol_ids[0])
         parsed.sol_number = entry.sol_ids[0];
-      }
-
-      // Fallback item_name from blast entry
-      if (!parsed.item_name && entry.sol_noms && entry.sol_noms[0]) {
+      if (!parsed.item_name && entry.sol_noms && entry.sol_noms[0])
         parsed.item_name = entry.sol_noms[0];
-      }
-
-      // Calc pricing
       if (parsed.unit_price && parsed.quote_due && math) {
         const pricing = math.calcPricing(
           parsed.unit_price,
@@ -608,8 +675,6 @@
         );
         parsed = { ...parsed, ...pricing };
       }
-
-      // Merge blast quote data into supplier drawer fields
       const qp = entry.quote_parsed || {};
       const merged = {
         ...parsed,
@@ -629,18 +694,16 @@
         supplier_moq: "",
         ref_part_number: parsed.ref_part_number || qp.part_number || "",
       };
-
       setPreview(merged);
     }
 
     async function handleSave() {
       if (!preview) return;
       if (!preview.sol_number) {
-        setError("Sol number missing \u2014 check DIBBS paste.");
+        setError("Sol number missing.");
         return;
       }
       setSaving(true);
-      setError("");
       try {
         await window.SCC_DB.dbSave(preview);
         setSaved(true);
@@ -689,7 +752,7 @@
       );
     }
 
-    if (saved) {
+    if (saved)
       return h(
         "div",
         {
@@ -700,9 +763,8 @@
             color: "#2ecc71",
           },
         },
-        "\u2713 Pushed to pipeline successfully.",
+        "\u2713 Pushed to pipeline.",
       );
-    }
 
     return h(
       "div",
@@ -724,16 +786,15 @@
       h(
         "div",
         { style: { ...S.dim, marginBottom: "10px" } },
-        "Paste DIBBS listing, Navigator row, or PDF text. Supplier quote data merges automatically.",
+        "Paste DIBBS listing or Navigator row. Supplier quote data merges automatically.",
       ),
-
       !preview &&
         h(
           "div",
           null,
           h("textarea", {
-            style: { ...S.textarea, minHeight: "90px" },
-            placeholder: "Paste DIBBS listing or Navigator row here...",
+            style: { ...S.textarea, minHeight: "80px" },
+            placeholder: "Paste DIBBS listing or Navigator row...",
             value: dibbsRaw,
             onChange: (e) => setDibbsRaw(e.target.value),
           }),
@@ -760,82 +821,43 @@
               "\u26a0 " + error,
             ),
         ),
-
       preview &&
         h(
           "div",
           null,
-          h(
-            "div",
-            { style: { marginBottom: "10px" } },
-            h(
-              "div",
-              {
-                style: {
-                  ...S.dim,
-                  marginBottom: "6px",
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "9px",
-                  letterSpacing: ".1em",
-                  color: "rgba(201,168,76,.5)",
-                },
-              },
-              "SOL DATA",
-            ),
-            PField("Sol #", preview.sol_number),
-            PField("Item", preview.item_name),
-            PField("NSN", preview.nsn),
-            PField("FSC", preview.fsc),
-            PField(
-              "Qty",
-              preview.quantity
-                ? preview.quantity + " " + (preview.unit_of_issue || "")
-                : null,
-            ),
-            PField(
-              "Unit Price",
-              preview.unit_price ? "$" + preview.unit_price : null,
-            ),
-            PField("Quote Due", preview.quote_due),
-            PField("Ship To", preview.ship_to),
-            PField(
-              "Delivery",
-              preview.delivery_days ? preview.delivery_days + " days" : null,
-            ),
-            PField("Part #", preview.ref_part_number),
-            h("div", {
-              style: {
-                height: "1px",
-                background: "rgba(201,168,76,.1)",
-                margin: "8px 0",
-              },
-            }),
-            h(
-              "div",
-              {
-                style: {
-                  ...S.dim,
-                  marginBottom: "6px",
-                  fontFamily: "Cinzel,serif",
-                  fontSize: "9px",
-                  letterSpacing: ".1em",
-                  color: "rgba(201,168,76,.5)",
-                },
-              },
-              "SUPPLIER DRAWER",
-            ),
-            PField("Supplier", preview.supplier_poc),
-            PField("Email", preview.supplier_email),
-            PField(
-              "Quote $",
-              preview.supplier_quote_price
-                ? "$" + preview.supplier_quote_price
-                : null,
-            ),
-            PField("Lead Time", preview.supplier_lead_time),
-            PField("Expires", preview.supplier_quote_expires),
-            PField("Website", preview.supplier_website),
+          PField("Sol #", preview.sol_number),
+          PField("Item", preview.item_name),
+          PField("NSN", preview.nsn),
+          PField("Part #", preview.ref_part_number),
+          PField(
+            "Qty",
+            preview.quantity
+              ? preview.quantity + " " + (preview.unit_of_issue || "")
+              : null,
           ),
+          PField(
+            "Unit Price",
+            preview.unit_price ? "$" + preview.unit_price : null,
+          ),
+          PField("Quote Due", preview.quote_due),
+          PField("Ship To", preview.ship_to),
+          h("div", {
+            style: {
+              height: "1px",
+              background: "rgba(201,168,76,.1)",
+              margin: "8px 0",
+            },
+          }),
+          PField("Supplier", preview.supplier_poc),
+          PField("Email", preview.supplier_email),
+          PField(
+            "Quote $",
+            preview.supplier_quote_price
+              ? "$" + preview.supplier_quote_price
+              : null,
+          ),
+          PField("Lead Time", preview.supplier_lead_time),
+          PField("Expires", preview.supplier_quote_expires),
           error &&
             h(
               "div",
@@ -874,8 +896,10 @@
   // ── Blast Tab ────────────────────────────────────────────────────────
   function BlastTab() {
     const [solInput, setSolInput] = useState("");
+    const [dibbsInput, setDibbsInput] = useState("");
     const [parsedSols, setParsedSols] = useState([]);
     const [parseError, setParseError] = useState("");
+    const [enriched, setEnriched] = useState(false);
     const [fscGroups, setFscGroups] = useState({});
     const [loading, setLoading] = useState(false);
     const [loadingFsc, setLoadingFsc] = useState("");
@@ -888,26 +912,54 @@
 
     const refreshLog = () => setBlastLog(loadBlastLog());
 
+    // Step 1: Parse sol lines
     const handleParse = useCallback(() => {
       setParseError("");
       const sols = parseSolLines(solInput);
       if (!sols.length) {
         setParseError(
-          "No valid sol lines found. Format: SOL_ID | ITEM_NAME | DUE | FSC | EXT | STATUS",
+          "No valid sol lines. Format: SOL_ID | ITEM_NAME | DUE | FSC | EXT | STATUS",
         );
         return;
       }
       setParsedSols(sols);
+      setEnriched(false);
       setFscGroups({});
-      setExpandedFsc({});
       setStatus(
         sols.length +
           " sols parsed. " +
           Object.keys(groupByFsc(sols)).length +
-          " FSC lanes. Ready to load distributors.",
+          " lanes. Now paste DIBBS listings in Step 2.",
       );
     }, [solInput]);
 
+    // Step 2: Enrich sols from DIBBS paste
+    const handleEnrich = useCallback(() => {
+      if (!parsedSols.length) return;
+      if (!dibbsInput.trim()) {
+        // Skip enrichment, proceed with base sol data
+        setEnriched(true);
+        setStatus(
+          "Step 2 skipped \u2014 RFQ emails will not include part numbers. Proceed to Step 3.",
+        );
+        return;
+      }
+      const enrichedSols = enrichSolsFromDibbs(parsedSols, dibbsInput);
+      setParsedSols(enrichedSols);
+      setEnriched(true);
+      const enrichedCount = enrichedSols.filter(
+        (s) => s.nsn || s.part_number,
+      ).length;
+      setStatus(
+        "Enriched " +
+          enrichedCount +
+          " of " +
+          enrichedSols.length +
+          " sols with part data. Ready to load distributors.",
+      );
+    }, [parsedSols, dibbsInput]);
+
+    // Step 3: Load distributors by FSC
     const handleLoadDists = useCallback(async () => {
       if (!parsedSols.length) return;
       setLoading(true);
@@ -923,10 +975,8 @@
             : Array.isArray(raw.result)
               ? raw.result
               : [];
-          console.log("[Blast] FSC", fsc, "->", dists.length, "dists");
           result[fsc] = { sols: groups[fsc], dists };
         } catch (e) {
-          console.error("[Blast] FSC", fsc, "error:", e.message);
           result[fsc] = { sols: groups[fsc], dists: [], error: e.message };
         }
       }
@@ -945,7 +995,7 @@
           Object.keys(result).length +
           " lanes \u00b7 " +
           total +
-          " distributor contacts ready.",
+          " distributor contacts ready. Review emails in Step 4.",
       );
     }, [parsedSols]);
 
@@ -975,11 +1025,7 @@
       });
       refreshLog();
       setStatus(
-        "Logged blast to " +
-          dist.name +
-          " covering " +
-          sols.length +
-          " sol(s).",
+        "Logged blast to " + dist.name + " \u00b7 " + sols.length + " sol(s).",
       );
     }, []);
 
@@ -1078,7 +1124,7 @@
           Frag,
           null,
 
-          // Step 1
+          // ── STEP 1: Sol Lines ──
           h(
             "div",
             { style: S.card },
@@ -1097,7 +1143,7 @@
               value: solInput,
               onChange: (e) => setSolInput(e.target.value),
               placeholder:
-                "SPE4A7-26-R-0001 | BOLT HEX HEAD | 2026-05-15 | 5306 | 12450.00 | GO\nSPE4A7-26-R-0002 | VALVE GATE | 2026-05-20 | 4820 | 8200.00 | GO",
+                "SPE4A7-26-R-0001 | BACKSHELL ELECTRICAL | 2026-06-15 | 5935 | 44450.00 | GO",
             }),
             parseError &&
               h(
@@ -1138,15 +1184,17 @@
                       setParsedSols([]);
                       setFscGroups({});
                       setSolInput("");
+                      setDibbsInput("");
+                      setEnriched(false);
                       setStatus("");
                     },
                   },
-                  "Clear",
+                  "Clear All",
                 ),
             ),
           ),
 
-          // Step 2
+          // ── STEP 2: DIBBS Paste (part numbers + specs) ──
           parsedSols.length > 0 &&
             h(
               "div",
@@ -1154,7 +1202,58 @@
               h(
                 "div",
                 { style: S.cardTitle },
-                "Step 2 \u2014 Load Distributor Blast Groups",
+                "Step 2 \u2014 Paste DIBBS Listings",
+              ),
+              h(
+                "div",
+                { style: { ...S.dim, marginBottom: "8px" } },
+                "Paste Navigator rows or DIBBS PDF text for all sols. Extracts NSN, part number, qty, and delivery requirements for the RFQ email. Skip if unavailable \u2014 email will still send without part data.",
+              ),
+              h("textarea", {
+                style: { ...S.textarea, minHeight: "160px" },
+                value: dibbsInput,
+                onChange: (e) => setDibbsInput(e.target.value),
+                placeholder:
+                  "Paste DIBBS listing text here...\nExample: SPE7M426T094C  BACKSHELL ELECTRICA  1 EA  $44,450.00  NSN: 5935-01-234-5678  P/N: M85049/52-1-12A  30 days ARO",
+              }),
+              h(
+                "div",
+                { style: { ...S.row, marginTop: "10px" } },
+                h(
+                  "button",
+                  { style: S.btnPrimary, onClick: handleEnrich },
+                  enriched ? "\u2713 Enriched \u2014 Re-run" : "Enrich Sols",
+                ),
+                enriched &&
+                  h(
+                    "span",
+                    { style: { ...S.dim, color: "#2ecc71" } },
+                    "\u2713 Part data loaded",
+                  ),
+                h(
+                  "button",
+                  {
+                    style: { ...S.btnSm, opacity: enriched ? 1 : 0.5 },
+                    onClick: () => {
+                      setEnriched(true);
+                      setStatus("Skipped enrichment.");
+                    },
+                  },
+                  "Skip \u2014 no part data",
+                ),
+              ),
+            ),
+
+          // ── STEP 3: Load Distributors ──
+          parsedSols.length > 0 &&
+            enriched &&
+            h(
+              "div",
+              { style: S.card },
+              h(
+                "div",
+                { style: S.cardTitle },
+                "Step 3 \u2014 Load Distributor Blast Groups",
               ),
               h(
                 "div",
@@ -1174,7 +1273,7 @@
               ),
             ),
 
-          // Step 3
+          // ── STEP 4: Review & Fire RFQs ──
           Object.keys(fscGroups).length > 0 &&
             h(
               "div",
@@ -1182,7 +1281,7 @@
               h(
                 "div",
                 { style: { ...S.cardTitle, marginBottom: "12px" } },
-                "Step 3 \u2014 Review & Fire RFQs",
+                "Step 4 \u2014 Review & Fire RFQs",
               ),
 
               Object.keys(fscGroups)
@@ -1261,6 +1360,7 @@
                         "div",
                         null,
 
+                        // Sol list with enriched data
                         h(
                           "div",
                           {
@@ -1278,45 +1378,72 @@
                           sols.map((sol) =>
                             h(
                               "div",
-                              {
-                                key: sol.id,
-                                style: { ...S.row, marginBottom: "4px" },
-                              },
+                              { key: sol.id, style: { marginBottom: "8px" } },
                               h(
-                                "span",
-                                {
-                                  style: {
-                                    fontFamily: "JetBrains Mono,monospace",
-                                    fontSize: "10px",
-                                    color: "var(--gold-solid,#C9A84C)",
-                                    minWidth: "160px",
-                                  },
-                                },
-                                sol.id,
-                              ),
-                              h(
-                                "span",
-                                {
-                                  style: {
-                                    fontFamily: "JetBrains Mono,monospace",
-                                    fontSize: "10px",
-                                    color: "rgba(245,240,232,.75)",
-                                    flex: 1,
-                                  },
-                                },
-                                sol.nom,
-                              ),
-                              sol.ext > 0 &&
+                                "div",
+                                { style: S.row },
                                 h(
                                   "span",
                                   {
                                     style: {
                                       fontFamily: "JetBrains Mono,monospace",
                                       fontSize: "10px",
-                                      color: "#2ecc71",
+                                      color: "var(--gold-solid,#C9A84C)",
+                                      minWidth: "160px",
                                     },
                                   },
-                                  "$" + sol.ext.toLocaleString(),
+                                  sol.id,
+                                ),
+                                h(
+                                  "span",
+                                  {
+                                    style: {
+                                      fontFamily: "JetBrains Mono,monospace",
+                                      fontSize: "10px",
+                                      color: "rgba(245,240,232,.75)",
+                                      flex: 1,
+                                    },
+                                  },
+                                  sol.nom,
+                                ),
+                                sol.ext > 0 &&
+                                  h(
+                                    "span",
+                                    {
+                                      style: {
+                                        fontFamily: "JetBrains Mono,monospace",
+                                        fontSize: "10px",
+                                        color: "#2ecc71",
+                                      },
+                                    },
+                                    "$" + sol.ext.toLocaleString(),
+                                  ),
+                              ),
+                              (sol.nsn || sol.part_number || sol.qty) &&
+                                h(
+                                  "div",
+                                  {
+                                    style: {
+                                      ...S.dim,
+                                      paddingLeft: "160px",
+                                      marginTop: "2px",
+                                    },
+                                  },
+                                  [
+                                    sol.nsn && "NSN: " + sol.nsn,
+                                    sol.part_number &&
+                                      "P/N: " + sol.part_number,
+                                    sol.qty &&
+                                      "Qty: " +
+                                        sol.qty +
+                                        (sol.unit_of_issue
+                                          ? " " + sol.unit_of_issue
+                                          : ""),
+                                    sol.delivery_days &&
+                                      "Del: " + sol.delivery_days + " days",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" \u00b7 "),
                                 ),
                             ),
                           ),
@@ -1335,7 +1462,7 @@
                             },
                             "\u26a0 No distributors loaded for FSC " +
                               fsc +
-                              ". Add contacts to the distributor DB first.",
+                              ".",
                           ),
 
                         dists.map((dist) => {
