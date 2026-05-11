@@ -166,11 +166,13 @@
     }
 
     if (matches.length === 0) {
-      // Single sol in paste -- try to match by content
-      const parsed = parser.parseListing(dibbsRaw);
+      // Single sol in paste -- run both parsers and merge
+      const listing = parser.parseListing(dibbsRaw);
+      const ai = parser.parseAIText ? parser.parseAIText(dibbsRaw) : {};
+      const merged = { ...ai, ...listing }; // listing wins over ai on conflicts
       return sols.map((s) => {
-        if (parsed.sol_number && parsed.sol_number !== s.id) return s;
-        return mergeEnrichment(s, parsed);
+        if (merged.sol_number && merged.sol_number !== s.id) return s;
+        return mergeEnrichment(s, merged);
       });
     }
 
@@ -186,8 +188,11 @@
         (b) => b.sol === s.id || s.id.includes(b.sol) || b.sol.includes(s.id),
       );
       if (!block) return s;
-      const parsed = parser.parseListing(block.text);
-      return mergeEnrichment(s, parsed);
+      // Run both parsers, merge -- listing wins on conflicts
+      const listing = parser.parseListing(block.text);
+      const ai = parser.parseAIText ? parser.parseAIText(block.text) : {};
+      const merged = { ...ai, ...listing };
+      return mergeEnrichment(s, merged);
     });
   }
 
@@ -198,9 +203,18 @@
       part_number: parsed.ref_part_number || sol.part_number || "",
       qty: parsed.quantity ? String(parsed.quantity) : sol.qty || "",
       unit_of_issue: parsed.unit_of_issue || sol.unit_of_issue || "",
-      delivery_days: parsed.delivery_days || sol.delivery_days || "",
+      delivery_days: parsed.delivery_days
+        ? String(parsed.delivery_days)
+        : sol.delivery_days || "",
       ship_to: parsed.ship_to || sol.ship_to || "",
       nom: parsed.item_name || sol.nom,
+      unit_price: parsed.unit_price ? String(parsed.unit_price) : "",
+      quote_due: parsed.quote_due || "",
+      fob: parsed.fob || "",
+      set_aside: parsed.set_aside || "",
+      ref_supplier: parsed.ref_supplier || "",
+      ref_supplier_cage: parsed.ref_supplier_cage || "",
+      all_suppliers: parsed.all_suppliers || "",
     };
   }
 
