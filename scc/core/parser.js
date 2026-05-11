@@ -153,6 +153,37 @@
         .join(" · ");
     }
 
+    // Part number fallbacks — catches formats not in pipe-delimited supplier block:
+    // "P/N J1432", "PART NO: M85049/52-1-12A", "PART NUMBER: ABC-123"
+    if (!d.ref_part_number) {
+      const pnPatterns = [
+        /\bP\/N[:\s]+([A-Z0-9][A-Z0-9\-\/\.]{1,30})/i,
+        /\bPART\s+NO\.?[:\s]+([A-Z0-9][A-Z0-9\-\/\.]{1,30})/i,
+        /\bPART\s+NUMBER[:\s]+([A-Z0-9][A-Z0-9\-\/\.]{1,30})/i,
+        /\bPART\s+PIECE\s+NUMBER[:\s]+([A-Z0-9][A-Z0-9\-\/\.]{1,30})/i,
+        /\bPIECE\s+NUMBER[:\s]+([A-Z0-9][A-Z0-9\-\/\.]{1,30})/i,
+        /\bMFR\s+P\/N[:\s]+([A-Z0-9][A-Z0-9\-\/\.]{1,30})/i,
+      ];
+      for (const rx of pnPatterns) {
+        const m = text.match(rx);
+        if (m) {
+          d.ref_part_number = m[1].trim();
+          break;
+        }
+      }
+    }
+
+    // Supplier name + CAGE from "COMPANY NAME  CAGE  P/N XXXXX" format
+    // e.g. "JOSLYN SUNBANK COMPANY, LLC 07418 P/N J1432"
+    if (!d.ref_supplier && d.ref_part_number) {
+      const supLineRx = /([A-Z][A-Z0-9 ,\.&]{4,}?)\s+([A-Z0-9]{5})\s+P\/N/i;
+      const supLine = text.match(supLineRx);
+      if (supLine) {
+        d.ref_supplier = supLine[1].trim();
+        d.ref_supplier_cage = supLine[2];
+      }
+    }
+
     return d;
   }
 
