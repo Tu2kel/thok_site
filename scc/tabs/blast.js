@@ -9,83 +9,112 @@
   //  Exposes: window.SCC_TABS.BlastTab
   // ═══════════════════════════════════════════════════════════════════════
 
-  const {
-    createElement: h,
-    useState,
-    useEffect,
-    useCallback,
-    useRef,
-    Fragment: Frag,
-  } = React;
+  const { createElement: h, useState, useCallback, Fragment: Frag } = React;
 
-  // ── FSC name map (shared with rest of SCC) ──────────────────────────
+  // ── FSC name map ────────────────────────────────────────────────────
   const FSC_NAMES = {
-    2510: "Vehicular Cab/Body/Frame", 2530: "Brake/Steering/Axle",
-    2540: "Vehicular Furniture", 2910: "Engine Fuel System",
-    2940: "Engine Filters", 2990: "Engine Accessories",
-    3020: "Gears/Pulleys/Sprockets", 3030: "Belting/Drive Belts",
-    3110: "Bearings", 4110: "Refrigeration Equipment",
-    4210: "Fire Fighting Equipment", 4240: "Safety/PPE/Rescue Equipment",
-    4320: "Power/Hand Pumps", 4330: "Filters/Separators",
-    4710: "Pipe/Tube", 4730: "Hose/Pipe Fittings/Valves",
-    4820: "Valves", 4910: "Shop Equipment", 4940: "Maintenance Equipment",
-    5110: "Hand Tools", 5120: "Power Tools",
-    5305: "Screws", 5306: "Bolts", 5310: "Nuts/Washers",
-    5315: "Pins/Rivets", 5320: "Rivets", 5330: "Packing/Gaskets",
-    5331: "Seals/O-Rings", 5340: "Commercial Hardware",
+    2510: "Vehicular Cab/Body/Frame",
+    2530: "Brake/Steering/Axle",
+    2540: "Vehicular Furniture",
+    2910: "Engine Fuel System",
+    2940: "Engine Filters",
+    2990: "Engine Accessories",
+    3020: "Gears/Pulleys/Sprockets",
+    3030: "Belting/Drive Belts",
+    3110: "Bearings",
+    4110: "Refrigeration Equipment",
+    4210: "Fire Fighting Equipment",
+    4240: "Safety/PPE/Rescue Equipment",
+    4320: "Power/Hand Pumps",
+    4330: "Filters/Separators",
+    4710: "Pipe/Tube",
+    4730: "Hose/Pipe Fittings/Valves",
+    4820: "Valves",
+    4910: "Shop Equipment",
+    4940: "Maintenance Equipment",
+    5110: "Hand Tools",
+    5120: "Power Tools",
+    5305: "Screws",
+    5306: "Bolts",
+    5310: "Nuts/Washers",
+    5315: "Pins/Rivets",
+    5320: "Rivets",
+    5330: "Packing/Gaskets",
+    5331: "Seals/O-Rings",
+    5340: "Commercial Hardware",
     5365: "Bushings/Bearings/Mountings",
-    5920: "Fuses/Arrestors", 5925: "Circuit Breakers",
-    5935: "Electrical Connectors", 5961: "Semiconductors",
-    5962: "Electronic Components", 5975: "Electrical Hardware",
-    6110: "Electrical Control Equipment", 6120: "Power Distribution Equipment",
-    6135: "Primary Batteries", 6140: "Secondary Batteries",
-    6145: "Wire/Cable", 6150: "Electrical Wire/Cable",
-    6210: "Indoor/Outdoor Lighting Fixtures", 6230: "Portable/Hand Lighting",
-    6240: "Electric Lamps", 6350: "Signal/Warning Devices",
-    6505: "Drugs/Biologicals", 6530: "Medical/Dental Instruments",
-    6532: "Hospital/Surgical Equipment", 6630: "Chemical Analysis Instruments",
-    6640: "Laboratory Equipment", 6810: "Chemicals",
-    6840: "Pest Control", 6850: "Misc Chemical Specialties",
-    6910: "Training Aids", 7110: "Office Furniture",
-    7125: "Containers/Bins", 7310: "Food Cooking Equipment",
-    7320: "Kitchen Equipment", 7330: "Food Service Equipment",
-    7930: "Cleaning Compounds", 8415: "Individual Equipment",
-    8430: "Footwear", 8455: "Badges/Insignia", 8465: "Packs/Bags",
-    8470: "Armor/Body Protection", 9150: "Oils/Lubricants",
-    9510: "Ferrous Metal Bar/Sheet", 9520: "Nonferrous Metal Bar",
-    9535: "Metal Plate/Sheet/Strip", 9540: "Structural Metal",
+    5920: "Fuses/Arrestors",
+    5925: "Circuit Breakers",
+    5935: "Electrical Connectors",
+    5961: "Semiconductors",
+    5962: "Electronic Components",
+    5975: "Electrical Hardware",
+    6110: "Electrical Control Equipment",
+    6120: "Power Distribution Equipment",
+    6135: "Primary Batteries",
+    6140: "Secondary Batteries",
+    6145: "Wire/Cable",
+    6150: "Electrical Wire/Cable",
+    6210: "Indoor/Outdoor Lighting Fixtures",
+    6230: "Portable/Hand Lighting",
+    6240: "Electric Lamps",
+    6350: "Signal/Warning Devices",
+    6505: "Drugs/Biologicals",
+    6530: "Medical/Dental Instruments",
+    6532: "Hospital/Surgical Equipment",
+    6630: "Chemical Analysis Instruments",
+    6640: "Laboratory Equipment",
+    6810: "Chemicals",
+    6840: "Pest Control",
+    6850: "Misc Chemical Specialties",
+    6910: "Training Aids",
+    7110: "Office Furniture",
+    7125: "Containers/Bins",
+    7310: "Food Cooking Equipment",
+    7320: "Kitchen Equipment",
+    7330: "Food Service Equipment",
+    7930: "Cleaning Compounds",
+    8415: "Individual Equipment",
+    8430: "Footwear",
+    8455: "Badges/Insignia",
+    8465: "Packs/Bags",
+    8470: "Armor/Body Protection",
+    9150: "Oils/Lubricants",
+    9510: "Ferrous Metal Bar/Sheet",
+    9520: "Nonferrous Metal Bar",
+    9535: "Metal Plate/Sheet/Strip",
+    9540: "Structural Metal",
   };
 
-  // ── API call to SCC backend ─────────────────────────────────────────
-  async function apiCall(action, payload = {}) {
-    console.log("[Blast] →", action, JSON.stringify(payload));
+  // ── API ──────────────────────────────────────────────────────────────
+  async function apiCall(action, payload) {
+    console.log("[Blast] ->", action, payload);
     const res = await fetch("/.netlify/functions/scc-distributors", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, payload }),
+      body: JSON.stringify({ action, payload: payload || {} }),
     });
     if (!res.ok) {
-      const txt = await res.text().catch(() => String(res.status));
+      const txt = await res.text().catch(() => res.status + "");
       console.error("[Blast] HTTP", res.status, txt);
-      throw new Error("API " + res.status + ": " + txt);
+      throw new Error("API " + res.status);
     }
     const data = await res.json();
-    console.log("[Blast] ←", action, JSON.stringify(data).slice(0,300));
+    console.log("[Blast] <-", action, JSON.stringify(data).slice(0, 200));
     return data;
   }
 
-  // ── Parse pasted sol lines ──────────────────────────────────────────
-  // Accepts the standard SCC batch format:
-  // SOL_ID | ITEM_NAME | DUE | FSC | EXT | STATUS
+  // ── Sol parser ───────────────────────────────────────────────────────
   function parseSolLines(raw) {
     const sols = [];
-    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
-    for (const line of lines) {
-      // Skip comment/header lines
+    for (const line of raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)) {
       if (line.startsWith("//") || line.startsWith("#")) continue;
-      const parts = line.split("|").map((p) => p.trim());
-      if (parts.length < 4) continue;
-      const [id, nom, due, fsc, ext, status] = parts;
+      const p = line.split("|").map((x) => x.trim());
+      if (p.length < 4) continue;
+      const [id, nom, due, fsc, ext, status] = p;
       if (!id || !nom || !fsc) continue;
       sols.push({
         id: id.toUpperCase(),
@@ -99,111 +128,248 @@
     return sols;
   }
 
-  // ── Group sols by FSC ───────────────────────────────────────────────
   function groupByFsc(sols) {
     const map = {};
-    for (const sol of sols) {
-      if (!map[sol.fsc]) map[sol.fsc] = [];
-      map[sol.fsc].push(sol);
+    for (const s of sols) {
+      if (!map[s.fsc]) map[s.fsc] = [];
+      map[s.fsc].push(s);
     }
     return map;
   }
 
-  // ── Build RFQ email body ────────────────────────────────────────────
-  // One email per distributor covers ALL sols in their FSC lane.
-  // No SOL numbers, no NSNs per protocol.
+  // ── RFQ email ────────────────────────────────────────────────────────
   function buildRFQEmail(dist, sols) {
     const fscName = FSC_NAMES[sols[0].fsc] || "Industrial Supplies";
-    const itemLines = sols
-      .map((s, i) => `  ${i + 1}. ${s.nom}${s.ext > 0 ? " — Est. Value $" + s.ext.toLocaleString() : ""}`)
+    const items = sols
+      .map(
+        (s, i) =>
+          "  " +
+          (i + 1) +
+          ". " +
+          s.nom +
+          (s.ext > 0 ? " \u2014 Est. Value $" + s.ext.toLocaleString() : ""),
+      )
       .join("\n");
-
-    return `Subject: RFQ – ${fscName} | Government Requirement | Imperio Federal Logistics
-
-Hi ${dist.name},
-
-My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have an active government procurement need in your lane.
-
-I need pricing and availability on the following items:
-
-${itemLines}
-
-Details:
-- Destination: Government delivery address (continental US)
-- Payment: Immediate PO upon award — we use third-party PO funding (Factoring Express) — supplier receives direct wire payment before shipment
-- Delivery: Standard lead time acceptable; expedited preferred where available
-- Compliance: BAA/TAA required — please confirm country of origin on all items
-- Shipping: FOB Destination required
-
-We are not looking for a one-time transaction. We are building a recurring government supplier relationship in this lane. We issue POs immediately upon award and have established government payment infrastructure.
-
-Can you provide pricing on any or all of the above? If you need manufacturer part numbers or additional specs, I can provide those item by item.
-
-Thank you,
-
-Anthony K Kelley | Founder & CEO
-Imperio Federal Logistics
-The House of Kel LLC · CAGE 152U4
-SDVOSB | VetHUB
-anthony@ifedlog.com | ifedlog.com
-(254) 226-5216`;
+    return [
+      "Subject: RFQ \u2013 " +
+        fscName +
+        " | Government Requirement | Imperio Federal Logistics",
+      "",
+      "Hi " + dist.name + ",",
+      "",
+      "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have an active government procurement need in your lane.",
+      "",
+      "I need pricing and availability on the following items:",
+      "",
+      items,
+      "",
+      "Details:",
+      "- Destination: Government delivery address (continental US)",
+      "- Payment: Immediate PO upon award \u2014 we use third-party PO funding (Factoring Express) \u2014 supplier receives direct wire payment before shipment",
+      "- Delivery: Standard lead time acceptable; expedited preferred where available",
+      "- Compliance: BAA/TAA required \u2014 please confirm country of origin on all items",
+      "- Shipping: FOB Destination required",
+      "",
+      "We are not looking for a one-time transaction. We are building a recurring government supplier relationship in this lane. We issue POs immediately upon award and have established government payment infrastructure.",
+      "",
+      "Can you provide pricing on any or all of the above? If you need manufacturer part numbers or additional specs, I can provide those item by item.",
+      "",
+      "Thank you,",
+      "",
+      "Anthony K Kelley | Founder & CEO",
+      "Imperio Federal Logistics",
+      "The House of Kel LLC \u00b7 CAGE 152U4",
+      "SDVOSB | VetHUB",
+      "anthony@ifedlog.com | ifedlog.com",
+      "(254) 226-5216",
+    ].join("\n");
   }
 
-  // ── BLAST LOG (localStorage) ────────────────────────────────────────
+  // ── Blast log ────────────────────────────────────────────────────────
   const BLAST_LOG_KEY = "imperio_blast_log_v1";
-
   function loadBlastLog() {
-    try { return JSON.parse(localStorage.getItem(BLAST_LOG_KEY) || "[]"); }
-    catch { return []; }
+    try {
+      return JSON.parse(localStorage.getItem(BLAST_LOG_KEY) || "[]");
+    } catch (e) {
+      return [];
+    }
   }
   function saveBlastLog(log) {
     localStorage.setItem(BLAST_LOG_KEY, JSON.stringify(log));
   }
-  function addBlastEntry(entry) {
+  function addBlastEntry(e) {
     const log = loadBlastLog();
-    log.unshift({ ...entry, id: Date.now(), sent_at: new Date().toISOString() });
-    saveBlastLog(log.slice(0, 500)); // keep last 500
+    log.unshift({ ...e, id: Date.now(), sent_at: new Date().toISOString() });
+    saveBlastLog(log.slice(0, 500));
   }
   function updateBlastEntry(id, updates) {
     const log = loadBlastLog();
-    const idx = log.findIndex((e) => e.id === id);
-    if (idx === -1) return;
-    log[idx] = { ...log[idx], ...updates };
+    const i = log.findIndex((e) => e.id === id);
+    if (i < 0) return;
+    log[i] = { ...log[i], ...updates };
     saveBlastLog(log);
   }
 
-  // ── STYLES ──────────────────────────────────────────────────────────
+  // ── Styles ───────────────────────────────────────────────────────────
   const S = {
     page: { animation: "fadeUp .5s ease both" },
-    header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", flexWrap: "wrap", gap: "12px" },
-    title: { fontFamily: "Cinzel,serif", fontSize: "18px", letterSpacing: ".12em", color: "var(--gold-solid,#C9A84C)", textTransform: "uppercase" },
-    sub: { fontFamily: "Cormorant Garamond,serif", fontSize: "13px", fontStyle: "italic", color: "var(--body-dim,rgba(245,240,232,.45))", marginTop: "4px" },
-    card: { background: "var(--card-bg,rgba(42,0,10,.55))", border: "1px solid rgba(201,168,76,.15)", borderRadius: "4px", padding: "18px 20px", marginBottom: "14px" },
-    cardTitle: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".14em", color: "var(--gold-solid,#C9A84C)", textTransform: "uppercase", marginBottom: "10px" },
-    textarea: { width: "100%", minHeight: "120px", background: "var(--inset-bg,rgba(0,0,0,.35))", border: "1px solid rgba(201,168,76,.2)", color: "var(--alabaster,#F5F0E8)", fontFamily: "JetBrains Mono,monospace", fontSize: "11px", padding: "10px 12px", borderRadius: "3px", outline: "none", resize: "vertical", boxSizing: "border-box", letterSpacing: ".03em" },
-    btn: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", letterSpacing: ".08em", padding: "8px 18px", border: "1px solid rgba(201,168,76,.4)", background: "transparent", color: "var(--gold-solid,#C9A84C)", cursor: "pointer", borderRadius: "3px", textTransform: "uppercase", transition: "background .15s,color .15s" },
-    btnPrimary: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", letterSpacing: ".08em", padding: "8px 18px", border: "none", background: "linear-gradient(135deg,#8a5c00,#c9930a,#7a5000)", color: "#111", cursor: "pointer", borderRadius: "3px", textTransform: "uppercase", fontWeight: "700" },
-    btnDanger: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", letterSpacing: ".08em", padding: "6px 14px", border: "1px solid rgba(231,76,60,.3)", background: "transparent", color: "rgba(231,76,60,.7)", cursor: "pointer", borderRadius: "3px", textTransform: "uppercase" },
-    btnSm: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", letterSpacing: ".06em", padding: "4px 10px", border: "1px solid rgba(201,168,76,.25)", background: "transparent", color: "rgba(245,240,232,.6)", cursor: "pointer", borderRadius: "3px" },
-    badge: (color) => ({ display: "inline-block", fontFamily: "JetBrains Mono,monospace", fontSize: "9px", padding: "2px 7px", borderRadius: "2px", letterSpacing: ".06em", background: color, color: "#111", fontWeight: "700" }),
-    row: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" },
-    mono: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--alabaster,#F5F0E8)" },
-    dim: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: "var(--body-dim,rgba(245,240,232,.45))" },
-    divider: { height: "1px", background: "rgba(201,168,76,.12)", margin: "14px 0" },
-    fscSection: { marginBottom: "20px", border: "1px solid rgba(201,168,76,.12)", borderRadius: "4px", overflow: "hidden" },
-    fscHeader: { background: "rgba(201,168,76,.06)", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(201,168,76,.1)" },
-    distCard: { padding: "12px 14px", borderBottom: "1px solid rgba(201,168,76,.07)", background: "var(--card-bg,rgba(42,0,10,.35))" },
-    emailBox: { background: "rgba(0,0,0,.4)", border: "1px solid rgba(201,168,76,.15)", borderRadius: "3px", padding: "12px 14px", fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: "rgba(245,240,232,.75)", whiteSpace: "pre-wrap", lineHeight: "1.65", maxHeight: "280px", overflowY: "auto", marginTop: "8px" },
-    logRow: { padding: "10px 14px", borderBottom: "1px solid rgba(201,168,76,.07)", display: "flex", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" },
+    header: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: "20px",
+      flexWrap: "wrap",
+      gap: "12px",
+    },
+    title: {
+      fontFamily: "Cinzel,serif",
+      fontSize: "18px",
+      letterSpacing: ".12em",
+      color: "var(--gold-solid,#C9A84C)",
+      textTransform: "uppercase",
+    },
+    sub: {
+      fontFamily: "Cormorant Garamond,serif",
+      fontSize: "13px",
+      fontStyle: "italic",
+      color: "var(--body-dim,rgba(245,240,232,.45))",
+      marginTop: "4px",
+    },
+    card: {
+      background: "var(--card-bg,rgba(42,0,10,.55))",
+      border: "1px solid rgba(201,168,76,.15)",
+      borderRadius: "4px",
+      padding: "18px 20px",
+      marginBottom: "14px",
+    },
+    cardTitle: {
+      fontFamily: "Cinzel,serif",
+      fontSize: "11px",
+      letterSpacing: ".14em",
+      color: "var(--gold-solid,#C9A84C)",
+      textTransform: "uppercase",
+      marginBottom: "10px",
+    },
+    textarea: {
+      width: "100%",
+      minHeight: "120px",
+      background: "var(--inset-bg,rgba(0,0,0,.35))",
+      border: "1px solid rgba(201,168,76,.2)",
+      color: "var(--alabaster,#F5F0E8)",
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "11px",
+      padding: "10px 12px",
+      borderRadius: "3px",
+      outline: "none",
+      resize: "vertical",
+      boxSizing: "border-box",
+    },
+    btn: {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      letterSpacing: ".08em",
+      padding: "8px 18px",
+      border: "1px solid rgba(201,168,76,.4)",
+      background: "transparent",
+      color: "var(--gold-solid,#C9A84C)",
+      cursor: "pointer",
+      borderRadius: "3px",
+      textTransform: "uppercase",
+    },
+    btnPrimary: {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      letterSpacing: ".08em",
+      padding: "8px 18px",
+      border: "none",
+      background: "linear-gradient(135deg,#8a5c00,#c9930a,#7a5000)",
+      color: "#111",
+      cursor: "pointer",
+      borderRadius: "3px",
+      textTransform: "uppercase",
+      fontWeight: "700",
+    },
+    btnDanger: {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      padding: "6px 14px",
+      border: "1px solid rgba(231,76,60,.3)",
+      background: "transparent",
+      color: "rgba(231,76,60,.7)",
+      cursor: "pointer",
+      borderRadius: "3px",
+    },
+    btnSm: {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "9px",
+      padding: "4px 10px",
+      border: "1px solid rgba(201,168,76,.25)",
+      background: "transparent",
+      color: "rgba(245,240,232,.6)",
+      cursor: "pointer",
+      borderRadius: "3px",
+    },
+    badge: (c) => ({
+      display: "inline-block",
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "9px",
+      padding: "2px 7px",
+      borderRadius: "2px",
+      background: c,
+      color: "#111",
+      fontWeight: "700",
+    }),
+    row: {
+      display: "flex",
+      gap: "8px",
+      alignItems: "center",
+      flexWrap: "wrap",
+    },
+    dim: {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      color: "var(--body-dim,rgba(245,240,232,.45))",
+    },
+    fscSection: {
+      marginBottom: "20px",
+      border: "1px solid rgba(201,168,76,.12)",
+      borderRadius: "4px",
+      overflow: "hidden",
+    },
+    fscHeader: {
+      background: "rgba(201,168,76,.06)",
+      padding: "10px 14px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderBottom: "1px solid rgba(201,168,76,.1)",
+      cursor: "pointer",
+    },
+    distCard: {
+      padding: "12px 14px",
+      borderBottom: "1px solid rgba(201,168,76,.07)",
+      background: "var(--card-bg,rgba(42,0,10,.35))",
+    },
+    emailBox: {
+      background: "rgba(0,0,0,.4)",
+      border: "1px solid rgba(201,168,76,.15)",
+      borderRadius: "3px",
+      padding: "12px 14px",
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      color: "rgba(245,240,232,.75)",
+      whiteSpace: "pre-wrap",
+      lineHeight: "1.65",
+      maxHeight: "280px",
+      overflowY: "auto",
+      marginTop: "8px",
+    },
   };
 
-
-  // ── QUOTE PARSER COMPONENT ─────────────────────────────────────────
-  // Accepts any supplier quote format -- email text, table paste, PDF copy.
-  // Extracts: part number, qty, unit price, lead time, expiry, COO, contact.
+  // ── Quote parser component ───────────────────────────────────────────
   function parseQuoteText(raw) {
-    const text = raw.replace(/\r/g, '');
-    const result = {
+    const t = raw.replace(/\r/g, "");
+    const r = {
       part_number: null,
       qty: null,
       unit_price: null,
@@ -211,16 +377,989 @@ anthony@ifedlog.com | ifedlog.com
       expires: null,
       coo: null,
       contact: null,
-      raw: raw,
     };
 
-    // ── Part Number ──
-    const pnMatch = text.match(/part\s*(?:number|no\.?|#)?\s*[:\-|]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,})/i);
-    if (pnMatch) result.part_number = pnMatch[1].trim();
+    const pn = t.match(
+      /part\s*(?:number|no\.?|#)?\s*[:\-|]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,})/i,
+    );
+    if (pn) r.part_number = pn[1].trim();
 
-    // ── Quantity ──
-    const qtyMatch = text.match(/quant(?:ity)?\s*[:\-|]?\s*([\d,]+)\s*(ea|pcs?|each|units?|pc)?/i);
-    if (qtyMatch) result.qty = qtyMatch[1].replace(/,/g,'') + (qtyMatch[2] ? ' ' + qtyMatch[2].toUpperCase() : '');
+    const qty = t.match(
+      /quant(?:ity)?\s*[:\-|]?\s*([\d,]+)\s*(ea|pcs?|each|units?|pc)?/i,
+    );
+    if (qty)
+      r.qty =
+        qty[1].replace(/,/g, "") + (qty[2] ? " " + qty[2].toUpperCase() : "");
 
-    // ── Unit Price ──
-    const priceMatch = text.match(/(?:price\s*(?:\(each\)|each|per\s*unit|unit)?|unit\s*price|each)\s*[:\-|]?\s*\
+    let price = t.match(
+      /(?:price\s*(?:\(each\)|each|per\s*unit|unit)?|unit\s*price|each)\s*[:\-|]?\s*\$?\s*([\d,]+\.\d{2})/i,
+    );
+    if (!price) price = t.match(/\$\s*([\d,]+\.\d{2})/);
+    if (price) r.unit_price = "$" + price[1].replace(/,/g, "");
+
+    const lt = t.match(/lead\s*time\s*[:\-|]?\s*([^\n\r]{3,80})/i);
+    if (lt) r.lead_time = lt[1].trim();
+
+    const exp = t.match(
+      /(?:expir(?:es?|ation)|valid(?:\s*until)?|quote\s*(?:expires?|valid))\s*[:\-|]?\s*([\d\/\-]{5,})/i,
+    );
+    if (exp) r.expires = exp[1].trim();
+
+    const coo = t.match(
+      /(?:country\s*of\s*origin|COO|made\s*in|origin)\s*[:\-|]?\s*([A-Za-z\s]{2,30})/i,
+    );
+    if (coo) r.coo = coo[1].trim();
+
+    const con = t.match(
+      /(?:contact|rep|from|sent\s*by|regards?|sincerely)[,:\s]+([A-Z][a-z]+\s+[A-Z][a-z]+)/,
+    );
+    if (con) r.contact = con[1].trim();
+
+    return r;
+  }
+
+  function QuoteParser({ entryId, savedNote, savedParsed, onUpdate }) {
+    const [raw, setRaw] = useState(savedNote || "");
+    const [parsed, setParsed] = useState(savedParsed || null);
+    const [editing, setEditing] = useState(!savedParsed);
+
+    function handleParse() {
+      if (!raw.trim()) return;
+      const result = parseQuoteText(raw);
+      setParsed(result);
+      setEditing(false);
+      onUpdate(entryId, "quote_note", raw);
+      onUpdate(entryId, "quote_parsed", result);
+    }
+
+    const lbl = {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "9px",
+      color: "rgba(201,168,76,.6)",
+      width: "110px",
+      flexShrink: 0,
+    };
+    const val = {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      color: "var(--alabaster,#F5F0E8)",
+      flex: 1,
+      borderBottom: "1px solid rgba(201,168,76,.07)",
+      paddingBottom: "4px",
+      marginBottom: "4px",
+    };
+    const miss = {
+      ...val,
+      color: "rgba(245,240,232,.25)",
+      fontStyle: "italic",
+    };
+
+    function Field(label, value, warn) {
+      return h(
+        "div",
+        {
+          style: {
+            display: "flex",
+            gap: "8px",
+            alignItems: "flex-start",
+            marginBottom: "3px",
+          },
+        },
+        h("span", { style: lbl }, label),
+        value
+          ? h(
+              "span",
+              { style: { ...val, ...(warn ? { color: "#e74c3c" } : {}) } },
+              value,
+            )
+          : h("span", { style: miss }, "not found"),
+      );
+    }
+
+    return h(
+      "div",
+      { style: { marginTop: "10px" } },
+      editing &&
+        h(
+          "div",
+          null,
+          h("textarea", {
+            style: { ...S.textarea, minHeight: "80px" },
+            placeholder:
+              "Paste supplier quote here \u2014 email, table, PDF text, any format...",
+            value: raw,
+            onChange: (e) => setRaw(e.target.value),
+          }),
+          h(
+            "div",
+            { style: { ...S.row, marginTop: "6px" } },
+            h(
+              "button",
+              { style: S.btnPrimary, onClick: handleParse },
+              "Parse Quote",
+            ),
+            parsed &&
+              h(
+                "button",
+                { style: S.btnSm, onClick: () => setEditing(false) },
+                "Cancel",
+              ),
+          ),
+        ),
+      !editing &&
+        parsed &&
+        h(
+          "div",
+          {
+            style: {
+              background: "rgba(0,0,0,.3)",
+              border: "1px solid rgba(201,168,76,.15)",
+              borderRadius: "3px",
+              padding: "10px 14px",
+              marginTop: "8px",
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                ...S.row,
+                justifyContent: "space-between",
+                marginBottom: "8px",
+              },
+            },
+            h(
+              "span",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "9px",
+                  letterSpacing: ".12em",
+                  color: "var(--gold-solid,#C9A84C)",
+                  textTransform: "uppercase",
+                },
+              },
+              "Quote Parsed",
+            ),
+            h(
+              "button",
+              { style: S.btnSm, onClick: () => setEditing(true) },
+              "Edit",
+            ),
+          ),
+          Field("Part #", parsed.part_number),
+          Field("Qty", parsed.qty),
+          Field("Unit Price", parsed.unit_price, false),
+          Field("Lead Time", parsed.lead_time),
+          Field("Expires", parsed.expires),
+          Field(
+            "COO",
+            parsed.coo,
+            parsed.coo &&
+              (parsed.coo.toUpperCase().includes("CHINA") ||
+                parsed.coo.toUpperCase().includes("TAIWAN")),
+          ),
+          Field("Contact", parsed.contact),
+        ),
+    );
+  }
+
+  // ── Blast Tab ────────────────────────────────────────────────────────
+  function BlastTab() {
+    const [solInput, setSolInput] = useState("");
+    const [parsedSols, setParsedSols] = useState([]);
+    const [parseError, setParseError] = useState("");
+    const [fscGroups, setFscGroups] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [loadingFsc, setLoadingFsc] = useState("");
+    const [expandedFsc, setExpandedFsc] = useState({});
+    const [expandedEmail, setExpandedEmail] = useState({});
+    const [blastLog, setBlastLog] = useState(loadBlastLog());
+    const [activeView, setActiveView] = useState("blast");
+    const [copiedKey, setCopiedKey] = useState("");
+    const [status, setStatus] = useState("");
+
+    const refreshLog = () => setBlastLog(loadBlastLog());
+
+    const handleParse = useCallback(() => {
+      setParseError("");
+      const sols = parseSolLines(solInput);
+      if (!sols.length) {
+        setParseError(
+          "No valid sol lines found. Format: SOL_ID | ITEM_NAME | DUE | FSC | EXT | STATUS",
+        );
+        return;
+      }
+      setParsedSols(sols);
+      setFscGroups({});
+      setExpandedFsc({});
+      setStatus(
+        sols.length +
+          " sols parsed. " +
+          Object.keys(groupByFsc(sols)).length +
+          " FSC lanes. Ready to load distributors.",
+      );
+    }, [solInput]);
+
+    const handleLoadDists = useCallback(async () => {
+      if (!parsedSols.length) return;
+      setLoading(true);
+      setStatus("Loading distributors from DB...");
+      const groups = groupByFsc(parsedSols);
+      const result = {};
+      for (const fsc of Object.keys(groups)) {
+        setLoadingFsc(fsc);
+        try {
+          const raw = await apiCall("distGetByFSC", { fsc });
+          const dists = Array.isArray(raw)
+            ? raw
+            : Array.isArray(raw.result)
+              ? raw.result
+              : [];
+          console.log("[Blast] FSC", fsc, "->", dists.length, "dists");
+          result[fsc] = { sols: groups[fsc], dists };
+        } catch (e) {
+          console.error("[Blast] FSC", fsc, "error:", e.message);
+          result[fsc] = { sols: groups[fsc], dists: [], error: e.message };
+        }
+      }
+      setFscGroups(result);
+      setExpandedFsc(
+        Object.fromEntries(Object.keys(result).map((f) => [f, true])),
+      );
+      setLoading(false);
+      setLoadingFsc("");
+      const total = Object.values(result).reduce(
+        (s, g) => s + g.dists.length,
+        0,
+      );
+      setStatus(
+        "Loaded. " +
+          Object.keys(result).length +
+          " lanes \u00b7 " +
+          total +
+          " distributor contacts ready.",
+      );
+    }, [parsedSols]);
+
+    const handleCopy = useCallback((key, text) => {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedKey(key);
+        setTimeout(() => setCopiedKey(""), 2000);
+      });
+    }, []);
+
+    const handleMarkSent = useCallback((fsc, dist, sols) => {
+      addBlastEntry({
+        fsc,
+        fsc_name: FSC_NAMES[fsc] || fsc,
+        dist_id: dist.id,
+        dist_name: dist.name,
+        dist_email: dist.email || "",
+        sol_ids: sols.map((s) => s.id),
+        sol_noms: sols.map((s) => s.nom),
+        email_body: buildRFQEmail(dist, sols),
+        status: "sent",
+        quoted: false,
+        quote_note: "",
+        quote_parsed: null,
+      });
+      refreshLog();
+      setStatus(
+        "Logged blast to " +
+          dist.name +
+          " covering " +
+          sols.length +
+          " sol(s).",
+      );
+    }, []);
+
+    const handleLogUpdate = useCallback((id, field, value) => {
+      updateBlastEntry(id, { [field]: value });
+      refreshLog();
+    }, []);
+    const handleClearLog = useCallback(() => {
+      if (!confirm("Clear entire blast log?")) return;
+      saveBlastLog([]);
+      refreshLog();
+    }, []);
+
+    const statusBar = (c) => ({
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "10px",
+      color: c,
+      background:
+        c === "#2ecc71" ? "rgba(46,204,113,.08)" : "rgba(231,76,60,.08)",
+      border:
+        "1px solid " +
+        (c === "#2ecc71" ? "rgba(46,204,113,.2)" : "rgba(231,76,60,.2)"),
+      borderRadius: "3px",
+      padding: "7px 12px",
+      marginBottom: "14px",
+    });
+
+    return h(
+      "div",
+      { style: S.page },
+
+      // Header
+      h(
+        "div",
+        { style: S.header },
+        h(
+          "div",
+          null,
+          h("div", { style: S.title }, "\u26a1 Blast Engine"),
+          h(
+            "div",
+            { style: S.sub },
+            "Pre-pipeline sourcing \u00b7 FSC routing \u00b7 Distributor RFQ blast",
+          ),
+        ),
+        h(
+          "div",
+          { style: S.row },
+          h(
+            "button",
+            {
+              style: {
+                ...S.btn,
+                ...(activeView === "blast"
+                  ? {
+                      borderColor: "rgba(201,168,76,.7)",
+                      color: "var(--gold-solid,#C9A84C)",
+                    }
+                  : {}),
+              },
+              onClick: () => setActiveView("blast"),
+            },
+            "\u26a1 Blast",
+          ),
+          h(
+            "button",
+            {
+              style: {
+                ...S.btn,
+                ...(activeView === "log"
+                  ? {
+                      borderColor: "rgba(201,168,76,.7)",
+                      color: "var(--gold-solid,#C9A84C)",
+                    }
+                  : {}),
+              },
+              onClick: () => {
+                setActiveView("log");
+                refreshLog();
+              },
+            },
+            "\ud83d\udccb Blast Log (" + blastLog.length + ")",
+          ),
+        ),
+      ),
+
+      status && h("div", { style: statusBar("#2ecc71") }, "\u25b6 " + status),
+
+      // ── BLAST VIEW ──
+      activeView === "blast" &&
+        h(
+          Frag,
+          null,
+
+          h(
+            "div",
+            { style: S.card },
+            h(
+              "div",
+              { style: S.cardTitle },
+              "Step 1 \u2014 Paste Surviving Sols",
+            ),
+            h(
+              "div",
+              { style: { ...S.dim, marginBottom: "8px" } },
+              "Format: SOL_ID | ITEM_NAME | DUE | FSC | EXT | STATUS \u2014 one per line.",
+            ),
+            h("textarea", {
+              style: S.textarea,
+              value: solInput,
+              onChange: (e) => setSolInput(e.target.value),
+              placeholder:
+                "SPE4A7-26-R-0001 | BOLT HEX HEAD | 2026-05-15 | 5306 | 12450.00 | GO",
+            }),
+            parseError &&
+              h(
+                "div",
+                {
+                  style: {
+                    color: "#e74c3c",
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "10px",
+                    marginTop: "6px",
+                  },
+                },
+                "\u26a0 " + parseError,
+              ),
+            h(
+              "div",
+              { style: { ...S.row, marginTop: "10px" } },
+              h(
+                "button",
+                { style: S.btnPrimary, onClick: handleParse },
+                "Parse Sols",
+              ),
+              parsedSols.length > 0 &&
+                h(
+                  "span",
+                  { style: S.dim },
+                  parsedSols.length +
+                    " sols \u00b7 " +
+                    Object.keys(groupByFsc(parsedSols)).length +
+                    " lanes",
+                ),
+              parsedSols.length > 0 &&
+                h(
+                  "button",
+                  {
+                    style: S.btnDanger,
+                    onClick: () => {
+                      setParsedSols([]);
+                      setFscGroups({});
+                      setSolInput("");
+                      setStatus("");
+                    },
+                  },
+                  "Clear",
+                ),
+            ),
+          ),
+
+          parsedSols.length > 0 &&
+            h(
+              "div",
+              { style: S.card },
+              h(
+                "div",
+                { style: S.cardTitle },
+                "Step 2 \u2014 Load Distributor Blast Groups",
+              ),
+              h(
+                "div",
+                { style: { ...S.dim, marginBottom: "10px" } },
+                "Pulls every distributor mapped to each FSC lane from MongoDB.",
+              ),
+              h(
+                "button",
+                {
+                  style: { ...S.btnPrimary, opacity: loading ? 0.6 : 1 },
+                  onClick: handleLoadDists,
+                  disabled: loading,
+                },
+                loading
+                  ? "Loading " + loadingFsc + "..."
+                  : "Load Distributors by FSC",
+              ),
+            ),
+
+          Object.keys(fscGroups).length > 0 &&
+            h(
+              "div",
+              null,
+              h(
+                "div",
+                { style: { ...S.cardTitle, marginBottom: "12px" } },
+                "Step 3 \u2014 Review & Fire RFQs",
+              ),
+
+              Object.keys(fscGroups)
+                .sort()
+                .map((fsc) => {
+                  const { sols, dists, error } = fscGroups[fsc];
+                  const isOpen = expandedFsc[fsc] !== false;
+                  const totalExt = sols.reduce((s, d) => s + d.ext, 0);
+
+                  return h(
+                    "div",
+                    { key: fsc, style: S.fscSection },
+                    h(
+                      "div",
+                      {
+                        style: S.fscHeader,
+                        onClick: () =>
+                          setExpandedFsc((p) => ({ ...p, [fsc]: !isOpen })),
+                      },
+                      h(
+                        "div",
+                        { style: S.row },
+                        h(
+                          "span",
+                          {
+                            style: {
+                              fontFamily: "Cinzel,serif",
+                              fontSize: "11px",
+                              color: "var(--gold-solid,#C9A84C)",
+                              letterSpacing: ".1em",
+                            },
+                          },
+                          "FSC " + fsc + " \u2014 " + (FSC_NAMES[fsc] || fsc),
+                        ),
+                        h(
+                          "span",
+                          { style: S.badge("rgba(201,168,76,.15)") },
+                          sols.length + " sol" + (sols.length !== 1 ? "s" : ""),
+                        ),
+                        h(
+                          "span",
+                          { style: S.badge("rgba(46,204,113,.12)") },
+                          "$" + totalExt.toLocaleString(),
+                        ),
+                        dists.length > 0 &&
+                          h(
+                            "span",
+                            { style: S.badge("rgba(52,152,219,.15)") },
+                            dists.length +
+                              " dist" +
+                              (dists.length !== 1 ? "s" : ""),
+                          ),
+                        error &&
+                          h(
+                            "span",
+                            {
+                              style: {
+                                color: "#e74c3c",
+                                fontSize: "10px",
+                                fontFamily: "JetBrains Mono,monospace",
+                              },
+                            },
+                            "\u26a0 " + error,
+                          ),
+                      ),
+                      h(
+                        "span",
+                        { style: { color: "rgba(201,168,76,.5)" } },
+                        isOpen ? "\u25b2" : "\u25bc",
+                      ),
+                    ),
+
+                    isOpen &&
+                      h(
+                        "div",
+                        null,
+                        h(
+                          "div",
+                          {
+                            style: {
+                              padding: "10px 14px",
+                              background: "rgba(0,0,0,.2)",
+                              borderBottom: "1px solid rgba(201,168,76,.07)",
+                            },
+                          },
+                          h(
+                            "div",
+                            { style: { ...S.dim, marginBottom: "6px" } },
+                            "SOLICITATIONS IN THIS LANE:",
+                          ),
+                          sols.map((sol) =>
+                            h(
+                              "div",
+                              {
+                                key: sol.id,
+                                style: { ...S.row, marginBottom: "4px" },
+                              },
+                              h(
+                                "span",
+                                {
+                                  style: {
+                                    fontFamily: "JetBrains Mono,monospace",
+                                    fontSize: "10px",
+                                    color: "var(--gold-solid,#C9A84C)",
+                                    minWidth: "160px",
+                                  },
+                                },
+                                sol.id,
+                              ),
+                              h(
+                                "span",
+                                {
+                                  style: {
+                                    fontFamily: "JetBrains Mono,monospace",
+                                    fontSize: "10px",
+                                    color: "rgba(245,240,232,.75)",
+                                    flex: 1,
+                                  },
+                                },
+                                sol.nom,
+                              ),
+                              sol.ext > 0 &&
+                                h(
+                                  "span",
+                                  {
+                                    style: {
+                                      fontFamily: "JetBrains Mono,monospace",
+                                      fontSize: "10px",
+                                      color: "#2ecc71",
+                                    },
+                                  },
+                                  "$" + sol.ext.toLocaleString(),
+                                ),
+                            ),
+                          ),
+                        ),
+
+                        dists.length === 0 &&
+                          h(
+                            "div",
+                            {
+                              style: {
+                                padding: "16px 14px",
+                                color: "rgba(231,76,60,.7)",
+                                fontFamily: "JetBrains Mono,monospace",
+                                fontSize: "10px",
+                              },
+                            },
+                            "\u26a0 No distributors loaded for FSC " +
+                              fsc +
+                              ". Add contacts to the distributor DB first.",
+                          ),
+
+                        dists.map((dist) => {
+                          const ek = fsc + "-" + (dist.id || dist.name);
+                          const emailText = buildRFQEmail(dist, sols);
+                          const isEmailOpen = expandedEmail[ek];
+                          const isCopied = copiedKey === ek;
+                          const tierStr =
+                            typeof dist.tier === "number"
+                              ? "L" + dist.tier
+                              : dist.tier || "L2";
+                          const tierColor =
+                            tierStr === "L1"
+                              ? "rgba(201,168,76,.3)"
+                              : tierStr === "L3"
+                                ? "rgba(231,76,60,.2)"
+                                : "rgba(52,152,219,.2)";
+                          const website = dist.website || "";
+                          const websiteHref = website.startsWith("http")
+                            ? website
+                            : website
+                              ? "https://" + website
+                              : "";
+
+                          return h(
+                            "div",
+                            { key: ek, style: S.distCard },
+                            h(
+                              "div",
+                              { style: { ...S.row, marginBottom: "8px" } },
+                              h(
+                                "span",
+                                {
+                                  style: {
+                                    fontFamily: "JetBrains Mono,monospace",
+                                    fontSize: "11px",
+                                    color: "var(--alabaster,#F5F0E8)",
+                                    fontWeight: "700",
+                                    flex: 1,
+                                  },
+                                },
+                                dist.name,
+                              ),
+                              h("span", { style: S.badge(tierColor) }, tierStr),
+                            ),
+                            h(
+                              "div",
+                              {
+                                style: {
+                                  ...S.row,
+                                  marginBottom: "8px",
+                                  gap: "16px",
+                                },
+                              },
+                              website &&
+                                h(
+                                  "a",
+                                  {
+                                    href: websiteHref,
+                                    target: "_blank",
+                                    rel: "noopener",
+                                    style: {
+                                      fontFamily: "JetBrains Mono,monospace",
+                                      fontSize: "10px",
+                                      color: "rgba(52,152,219,.8)",
+                                      textDecoration: "none",
+                                    },
+                                  },
+                                  website
+                                    .replace("https://", "")
+                                    .replace("http://", ""),
+                                ),
+                              dist.email &&
+                                h(
+                                  "span",
+                                  {
+                                    style: {
+                                      fontFamily: "JetBrains Mono,monospace",
+                                      fontSize: "10px",
+                                      color: "rgba(245,240,232,.5)",
+                                    },
+                                  },
+                                  dist.email,
+                                ),
+                              dist.phone &&
+                                h(
+                                  "span",
+                                  {
+                                    style: {
+                                      fontFamily: "JetBrains Mono,monospace",
+                                      fontSize: "10px",
+                                      color: "rgba(245,240,232,.5)",
+                                    },
+                                  },
+                                  dist.phone,
+                                ),
+                            ),
+                            dist.products &&
+                              h(
+                                "div",
+                                {
+                                  style: {
+                                    ...S.dim,
+                                    marginBottom: "8px",
+                                    fontStyle: "italic",
+                                  },
+                                },
+                                dist.products,
+                              ),
+
+                            h(
+                              "div",
+                              { style: S.row },
+                              h(
+                                "button",
+                                {
+                                  style: S.btnSm,
+                                  onClick: () =>
+                                    setExpandedEmail((p) => ({
+                                      ...p,
+                                      [ek]: !isEmailOpen,
+                                    })),
+                                },
+                                isEmailOpen
+                                  ? "Hide Email"
+                                  : "Preview RFQ Email",
+                              ),
+                              dist.email &&
+                                h(
+                                  "a",
+                                  {
+                                    href:
+                                      "https://mail.google.com/mail/?view=cm&to=" +
+                                      encodeURIComponent(dist.email) +
+                                      "&su=" +
+                                      encodeURIComponent(
+                                        "RFQ \u2013 " +
+                                          (FSC_NAMES[fsc] || fsc) +
+                                          " | Government Requirement | Imperio Federal Logistics",
+                                      ) +
+                                      "&body=" +
+                                      encodeURIComponent(emailText),
+                                    target: "_blank",
+                                    rel: "noopener",
+                                    style: {
+                                      ...S.btn,
+                                      textDecoration: "none",
+                                      fontSize: "9px",
+                                      padding: "4px 12px",
+                                    },
+                                  },
+                                  "\u2709 Open in Gmail",
+                                ),
+                              h(
+                                "button",
+                                {
+                                  style: {
+                                    ...S.btnSm,
+                                    ...(isCopied
+                                      ? {
+                                          color: "#2ecc71",
+                                          borderColor: "rgba(46,204,113,.4)",
+                                        }
+                                      : {}),
+                                  },
+                                  onClick: () => handleCopy(ek, emailText),
+                                },
+                                isCopied ? "\u2713 Copied" : "Copy Email",
+                              ),
+                              h(
+                                "button",
+                                {
+                                  style: {
+                                    ...S.btnSm,
+                                    color: "rgba(46,204,113,.8)",
+                                    borderColor: "rgba(46,204,113,.3)",
+                                  },
+                                  onClick: () => {
+                                    if (
+                                      confirm(
+                                        "Mark RFQ to " +
+                                          dist.name +
+                                          " as sent?",
+                                      )
+                                    )
+                                      handleMarkSent(fsc, dist, sols);
+                                  },
+                                },
+                                "\u2713 Mark Sent",
+                              ),
+                            ),
+
+                            isEmailOpen &&
+                              h("div", { style: S.emailBox }, emailText),
+                          );
+                        }),
+                      ),
+                  );
+                }),
+            ),
+        ),
+
+      // ── BLAST LOG VIEW ──
+      activeView === "log" &&
+        h(
+          "div",
+          null,
+          h(
+            "div",
+            { style: { ...S.row, marginBottom: "14px" } },
+            h(
+              "div",
+              { style: { ...S.cardTitle, margin: 0 } },
+              "Blast Log \u2014 " + blastLog.length + " entries",
+            ),
+            blastLog.length > 0 &&
+              h(
+                "button",
+                { style: S.btnDanger, onClick: handleClearLog },
+                "Clear Log",
+              ),
+          ),
+
+          blastLog.length === 0 &&
+            h(
+              "div",
+              { style: { ...S.dim, padding: "24px 0", textAlign: "center" } },
+              "No blasts logged yet.",
+            ),
+
+          blastLog.map((entry) =>
+            h(
+              "div",
+              { key: entry.id, style: { ...S.card, padding: "12px 16px" } },
+
+              h(
+                "div",
+                { style: { ...S.row, marginBottom: "8px" } },
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "11px",
+                      color: "var(--alabaster,#F5F0E8)",
+                      fontWeight: "700",
+                    },
+                  },
+                  entry.dist_name,
+                ),
+                h(
+                  "span",
+                  { style: S.badge("rgba(52,152,219,.2)") },
+                  "FSC " + entry.fsc,
+                ),
+                h(
+                  "span",
+                  {
+                    style: S.badge(
+                      entry.quoted
+                        ? "rgba(46,204,113,.25)"
+                        : "rgba(201,168,76,.15)",
+                    ),
+                  },
+                  entry.quoted ? "QUOTED \u2713" : "AWAITING",
+                ),
+                h(
+                  "span",
+                  { style: S.dim },
+                  new Date(entry.sent_at).toLocaleDateString(),
+                ),
+              ),
+
+              h(
+                "div",
+                { style: { ...S.dim, marginBottom: "6px" } },
+                "Sols: " + (entry.sol_ids || []).join(", "),
+              ),
+              entry.dist_email &&
+                h(
+                  "div",
+                  { style: { ...S.dim, marginBottom: "8px" } },
+                  "\u2192 " + entry.dist_email,
+                ),
+
+              h(
+                "div",
+                { style: S.row },
+                h(
+                  "button",
+                  {
+                    style: {
+                      ...S.btnSm,
+                      ...(entry.quoted
+                        ? {
+                            color: "rgba(46,204,113,.8)",
+                            borderColor: "rgba(46,204,113,.4)",
+                          }
+                        : {}),
+                    },
+                    onClick: () =>
+                      handleLogUpdate(entry.id, "quoted", !entry.quoted),
+                  },
+                  entry.quoted ? "\u2713 Quoted" : "Mark Quoted",
+                ),
+                entry.quoted &&
+                  h(
+                    "button",
+                    {
+                      style: {
+                        ...S.btnSm,
+                        color: "#2ecc71",
+                        borderColor: "rgba(46,204,113,.5)",
+                        background: "rgba(46,204,113,.08)",
+                        fontWeight: "700",
+                      },
+                      onClick: () => {
+                        window.SCC_TABS && window.SCC_TABS.goBlastIntake
+                          ? window.SCC_TABS.goBlastIntake(entry)
+                          : alert(
+                              "Navigation bridge not ready \u2014 refresh and try again.",
+                            );
+                      },
+                    },
+                    "\u2192 Push to Intake",
+                  ),
+              ),
+
+              entry.quoted &&
+                h(QuoteParser, {
+                  entryId: entry.id,
+                  savedNote: entry.quote_note || "",
+                  savedParsed: entry.quote_parsed || null,
+                  onUpdate: handleLogUpdate,
+                }),
+            ),
+          ),
+        ),
+    );
+  }
+
+  // ── Expose ───────────────────────────────────────────────────────────
+  window.SCC_TABS = window.SCC_TABS || {};
+  window.SCC_TABS.BlastTab = BlastTab;
+})();
