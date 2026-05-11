@@ -548,7 +548,7 @@
             ),
           ),
           Field("Part #", parsed.part_number),
-          Field("Qty", (props.solQtys && props.solQtys[0]) || parsed.qty),
+          Field("Qty", parsed.qty),
           Field("Unit Price", parsed.unit_price, false),
           Field("Lead Time", parsed.lead_time),
           Field("Expires", parsed.expires),
