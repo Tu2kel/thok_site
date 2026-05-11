@@ -184,8 +184,12 @@
     }
 
     return sols.map((s) => {
+      const norm = (str) => str.replace(/-/g, "").toUpperCase();
       const block = blocks.find(
-        (b) => b.sol === s.id || s.id.includes(b.sol) || b.sol.includes(s.id),
+        (b) =>
+          norm(b.sol) === norm(s.id) ||
+          norm(s.id).includes(norm(b.sol)) ||
+          norm(b.sol).includes(norm(s.id)),
       );
       if (!block) return s;
       // Run both parsers, merge -- listing wins on conflicts
