@@ -185,34 +185,29 @@
     return sols.map((s) => {
       const key = normId(s.id);
 
-      // Get the chunk for this specific sol, or fall back to full text
-      const aText = hasManyA
-        ? chunksA[key] ||
-          Object.values(chunksA).find(
-            (_, i) => Object.keys(chunksA)[i] === key,
-          ) ||
-          ""
-        : boxA || "";
-      const bText = hasManyB ? chunksB[key] || "" : boxB || "";
+      // Box A: use sol-specific chunk if available, else full text
+      const aText = chunksA[key] || (hasManyA ? "" : boxA || "");
+      // Box B: use sol-specific chunk if available (per-row Navigator), else full text
+      const bText = chunksB[key] || (hasManyB ? "" : boxB || "");
 
-      // Determine which is listing vs AI text
-      let listingText, aiText;
-      if (isListing(aText)) {
-        listingText = aText;
-        aiText = bText;
-      } else if (isListing(bText)) {
-        listingText = bText;
-        aiText = aText;
-      } else {
-        listingText = aText;
-        aiText = bText;
+      // Run both parsers independently -- listing wins on conflicts
+      let data = {};
+
+      // Box A: run parseListing if it looks like a listing, else parseAIText
+      if (aText.trim()) {
+        if (isListing(aText)) {
+          data = parseListing(aText);
+        } else {
+          data = parseAIText(aText);
+        }
       }
 
-      let data = listingText ? parseListing(listingText) : {};
-      const aiSrc = aiText.trim() || listingText;
-      if (aiSrc) {
-        const ai = parseAIText(aiSrc);
-        Object.entries(ai).forEach(([k, v]) => {
+      // Box B: always run parseAIText (Navigator rows), fill only missing fields
+      if (bText.trim()) {
+        const bData = isListing(bText)
+          ? parseListing(bText)
+          : parseAIText(bText);
+        Object.entries(bData).forEach(([k, v]) => {
           if (v !== null && v !== undefined && v !== "" && !data[k])
             data[k] = v;
         });
