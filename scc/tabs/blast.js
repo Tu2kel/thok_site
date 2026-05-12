@@ -148,35 +148,67 @@
   }
 
   // ── DIBBS enrichment parser ──────────────────────────────────────────
-  // Uses the exact same dual-parser merge as Intake (app.js handleParse).
-  // boxA = DIBBS listing text, boxB = Navigator row / AI column
-  // parseListing wins; parseAIText fills only missing fields.
+  // Splits both Box A and Box B by sol number, then runs the dual-parser
+  // merge on each sol's specific chunk. Same logic as Intake but per-sol.
   function enrichSolsFromDibbs(sols, boxA, boxB) {
     const parser = window.SCC_PARSER;
     if (!parser) return sols;
-
     const { parseListing, parseAIText, isListing } = parser;
+    const normId = (str) => str.replace(/-/g, "").toUpperCase();
 
-    // For each sol, run the same merge Intake uses
+    // Split a text block into per-sol chunks by sol number
+    function splitBySol(text) {
+      if (!text || !text.trim()) return {};
+      const rx = /(SP[A-Z][A-Z0-9][A-Z0-9-]*[A-Z0-9])/gi;
+      const matches = [];
+      let m;
+      while ((m = rx.exec(text)) !== null)
+        matches.push({ idx: m.index, sol: normId(m[1]) });
+      if (!matches.length) return { __any__: text };
+      // Merge all segments for same sol (handles page-repeated headers)
+      const map = {};
+      for (let i = 0; i < matches.length; i++) {
+        const key = matches[i].sol;
+        const start = matches[i].idx;
+        const end = matches[i + 1] ? matches[i + 1].idx : text.length;
+        if (!map[key]) map[key] = "";
+        map[key] += text.slice(start, end);
+      }
+      return map;
+    }
+
+    const chunksA = splitBySol(boxA);
+    const chunksB = splitBySol(boxB);
+    const hasManyA = Object.keys(chunksA).length > 1;
+    const hasManyB = Object.keys(chunksB).length > 1;
+
     return sols.map((s) => {
-      // Determine which box is the listing and which is AI text
-      let listingText = "",
-        aiText = "";
-      if (isListing(boxA)) {
-        listingText = boxA;
-        aiText = boxB;
-      } else if (isListing(boxB)) {
-        listingText = boxB;
-        aiText = boxA;
+      const key = normId(s.id);
+
+      // Get the chunk for this specific sol, or fall back to full text
+      const aText = hasManyA
+        ? chunksA[key] ||
+          Object.values(chunksA).find(
+            (_, i) => Object.keys(chunksA)[i] === key,
+          ) ||
+          ""
+        : boxA || "";
+      const bText = hasManyB ? chunksB[key] || "" : boxB || "";
+
+      // Determine which is listing vs AI text
+      let listingText, aiText;
+      if (isListing(aText)) {
+        listingText = aText;
+        aiText = bText;
+      } else if (isListing(bText)) {
+        listingText = bText;
+        aiText = aText;
       } else {
-        listingText = boxA;
-        aiText = boxB;
+        listingText = aText;
+        aiText = bText;
       }
 
-      // Run parseListing first
       let data = listingText ? parseListing(listingText) : {};
-
-      // parseAIText fills only missing fields (same as Intake merge)
       const aiSrc = aiText.trim() || listingText;
       if (aiSrc) {
         const ai = parseAIText(aiSrc);
@@ -232,8 +264,7 @@
           lines.push(
             "     Required Delivery: " + s.delivery_days + " days ARO",
           );
-        if (s.ext > 0)
-          lines.push("     Est. Gov. Value: $" + s.ext.toLocaleString());
+        // Est. Gov. Value intentionally omitted -- never reveal gov reference price to suppliers
         return lines.join("\n");
       })
       .join("\n\n");
@@ -264,12 +295,12 @@
       "",
       "Thank you,",
       "",
-      /*"Anthony K Kelley | Founder & CEO",
+      "Anthony K Kelley | Founder & CEO",
       "Imperio Federal Logistics",
       "The House of Kel LLC \u00b7 CAGE 152U4",
       "SDVOSB | VetHUB",
       "anthony@ifedlog.com | ifedlog.com",
-      "(254) 226-5216",*/
+      "(254) 226-5216",
     ].join("\n");
   }
 
