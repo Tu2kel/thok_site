@@ -264,12 +264,12 @@
       "",
       "Thank you,",
       "",
-      "Anthony K Kelley | Founder & CEO",
+      /*"Anthony K Kelley | Founder & CEO",
       "Imperio Federal Logistics",
       "The House of Kel LLC \u00b7 CAGE 152U4",
       "SDVOSB | VetHUB",
       "anthony@ifedlog.com | ifedlog.com",
-      "(254) 226-5216",
+      "(254) 226-5216",*/
     ].join("\n");
   }
 
@@ -901,14 +901,30 @@
     );
   }
 
+  // ── Blast session persistence ─────────────────────────────────────────
+  const BLAST_SESSION_KEY = "imperio_blast_session_v1";
+  function loadBlastSession() {
+    try {
+      return JSON.parse(localStorage.getItem(BLAST_SESSION_KEY) || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveBlastSession(data) {
+    try {
+      localStorage.setItem(BLAST_SESSION_KEY, JSON.stringify(data));
+    } catch (e) {}
+  }
+
   // ── Blast Tab ────────────────────────────────────────────────────────
   function BlastTab() {
-    const [solInput, setSolInput] = useState("");
-    const [dibbsInput, setDibbsInput] = useState("");
-    const [dibbsInputB, setDibbsInputB] = useState("");
-    const [parsedSols, setParsedSols] = useState([]);
+    const _sess = loadBlastSession();
+    const [solInput, setSolInput] = useState(_sess.solInput || "");
+    const [dibbsInput, setDibbsInput] = useState(_sess.dibbsInput || "");
+    const [dibbsInputB, setDibbsInputB] = useState(_sess.dibbsInputB || "");
+    const [parsedSols, setParsedSols] = useState(_sess.parsedSols || []);
     const [parseError, setParseError] = useState("");
-    const [enriched, setEnriched] = useState(false);
+    const [enriched, setEnriched] = useState(_sess.enriched || false);
     const [fscGroups, setFscGroups] = useState({});
     const [loading, setLoading] = useState(false);
     const [loadingFsc, setLoadingFsc] = useState("");
@@ -917,6 +933,7 @@
     const [blastLog, setBlastLog] = useState(loadBlastLog());
     const [activeView, setActiveView] = useState("blast");
     const [copiedKey, setCopiedKey] = useState("");
+    const [sentKeys, setSentKeys] = useState({});
     const [status, setStatus] = useState("");
 
     const refreshLog = () => setBlastLog(loadBlastLog());
@@ -940,6 +957,13 @@
           Object.keys(groupByFsc(sols)).length +
           " lanes. Now paste DIBBS listings in Step 2.",
       );
+      saveBlastSession({
+        solInput,
+        dibbsInput,
+        dibbsInputB,
+        parsedSols: sols,
+        enriched: false,
+      });
     }, [solInput]);
 
     // Step 2: Enrich sols from DIBBS paste
@@ -970,6 +994,13 @@
           enrichedSols.length +
           " sols with part data. Ready to load distributors.",
       );
+      saveBlastSession({
+        solInput,
+        dibbsInput,
+        dibbsInputB,
+        parsedSols: enrichedSols,
+        enriched: true,
+      });
     }, [parsedSols, dibbsInput, dibbsInputB]);
 
     // Step 3: Load distributors by FSC
@@ -1037,6 +1068,10 @@
         quote_parsed: null,
       });
       refreshLog();
+      setSentKeys((p) => ({
+        ...p,
+        [fsc + "-" + (dist.id || dist.name)]: true,
+      }));
       setStatus(
         "Logged blast to " + dist.name + " \u00b7 " + sols.length + " sol(s).",
       );
@@ -1201,6 +1236,7 @@
                       setDibbsInputB("");
                       setEnriched(false);
                       setStatus("");
+                      saveBlastSession({});
                     },
                   },
                   "Clear All",
@@ -1288,6 +1324,13 @@
                     onClick: () => {
                       setEnriched(true);
                       setStatus("Skipped enrichment.");
+                      saveBlastSession({
+                        solInput,
+                        dibbsInput,
+                        dibbsInputB,
+                        parsedSols,
+                        enriched: true,
+                      });
                     },
                   },
                   "Skip \u2014 no part data",
@@ -1686,9 +1729,19 @@
                               h(
                                 "button",
                                 {
-                                  style: S.btnSm,
+                                  style: {
+                                    ...S.btnSm,
+                                    ...(sentKeys[ek]
+                                      ? {
+                                          color: "#2ecc71",
+                                          borderColor: "rgba(46,204,113,.5)",
+                                          cursor: "default",
+                                        }
+                                      : {}),
+                                  },
                                   onClick: () => {
                                     if (
+                                      !sentKeys[ek] &&
                                       confirm(
                                         "Mark RFQ to " +
                                           dist.name +
@@ -1698,7 +1751,7 @@
                                       handleMarkSent(fsc, dist, sols);
                                   },
                                 },
-                                "Mark Sent",
+                                sentKeys[ek] ? "\u2713 Sent" : "Mark Sent",
                               ),
                             ),
 
