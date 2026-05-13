@@ -1823,21 +1823,52 @@
                     { style: { ...S.dim, marginBottom: "3px" } },
                     (entry.sol_noms || []).join(" \u00b7 "),
                   ),
-                (entry.sol_pns || []).some(Boolean) &&
+                h(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginBottom: "3px",
+                    },
+                  },
                   h(
-                    "div",
+                    "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "10px",
+                        fontSize: "9px",
                         color: "var(--gold-dim,rgba(201,168,76,.55))",
-                        marginBottom: "3px",
-                        letterSpacing: ".03em",
+                        letterSpacing: ".04em",
+                        flexShrink: 0,
                       },
                     },
-                    "P/N: " +
-                      (entry.sol_pns || []).filter(Boolean).join(" \u00b7 "),
+                    "P/N:",
                   ),
+                  h("input", {
+                    defaultValue: (entry.sol_pns || [])
+                      .filter(Boolean)
+                      .join(" \u00b7 "),
+                    placeholder: "enter p/n\u2026",
+                    onBlur: (e) => {
+                      const val = e.target.value.trim();
+                      handleLogUpdate(entry.id, "sol_pns", val ? [val] : []);
+                    },
+                    style: {
+                      flex: 1,
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: "1px solid rgba(201,168,76,.15)",
+                      color: "var(--gold-dim,rgba(201,168,76,.7))",
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "10px",
+                      outline: "none",
+                      padding: "1px 4px",
+                      letterSpacing: ".03em",
+                    },
+                  }),
+                ),
                 (entry.sol_ids || []).length > 0 &&
                   h(
                     "div",
