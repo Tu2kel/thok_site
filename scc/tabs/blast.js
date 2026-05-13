@@ -1831,12 +1831,26 @@
                         fontFamily: "JetBrains Mono,monospace",
                         fontSize: "10px",
                         color: "var(--gold-dim,rgba(201,168,76,.55))",
-                        marginBottom: "6px",
+                        marginBottom: "3px",
                         letterSpacing: ".03em",
                       },
                     },
                     "P/N: " +
                       (entry.sol_pns || []).filter(Boolean).join(" \u00b7 "),
+                  ),
+                (entry.sol_ids || []).length > 0 &&
+                  h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "9px",
+                        color: "rgba(245,240,232,.3)",
+                        marginBottom: "6px",
+                        letterSpacing: ".04em",
+                      },
+                    },
+                    "SOL: " + (entry.sol_ids || []).join(" \u00b7 "),
                   ),
                 entry.dist_email &&
                   h(
