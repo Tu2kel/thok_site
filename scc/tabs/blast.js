@@ -1031,7 +1031,7 @@
         dist_phone: dist.phone || "",
         sol_ids: sols.map((s) => s.id),
         sol_noms: sols.map((s) => s.nom),
-        sol_pns: sols.map((s) => s.part_number || ""),
+        sol_pns: sols.map((s) => s.part_number || s.ref_part_number || ""),
         email_body: buildRFQEmail(dist, sols),
         status: "sent",
         quoted: false,
@@ -1876,7 +1876,7 @@
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
                         fontSize: "9px",
-                        color: "rgba(245,240,232,.3)",
+                        color: "#65e10a",
                         marginBottom: "6px",
                         letterSpacing: ".04em",
                       },
@@ -1886,7 +1886,14 @@
                 entry.dist_email &&
                   h(
                     "div",
-                    { style: { ...S.dim, marginBottom: "8px" } },
+
+                    {
+                      style: {
+                        ...S.dim,
+                        marginBottom: "8px",
+                        color: "#1eb4ff",
+                      },
+                    },
                     "\u2192 " + entry.dist_email,
                   ),
 
