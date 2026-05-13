@@ -148,66 +148,39 @@
   }
 
   // ── DIBBS enrichment parser ──────────────────────────────────────────
-  // Splits both Box A and Box B by sol number, then runs the dual-parser
-  // merge on each sol's specific chunk. Same logic as Intake but per-sol.
+  // Uses the exact same dual-parser merge as Intake (app.js handleParse).
+  // boxA = DIBBS listing text, boxB = Navigator row / AI column
+  // parseListing wins; parseAIText fills only missing fields.
   function enrichSolsFromDibbs(sols, boxA, boxB) {
     const parser = window.SCC_PARSER;
     if (!parser) return sols;
+
     const { parseListing, parseAIText, isListing } = parser;
-    const normId = (str) => str.replace(/-/g, "").toUpperCase();
 
-    // Split a text block into per-sol chunks by sol number
-    function splitBySol(text) {
-      if (!text || !text.trim()) return {};
-      const rx = /(SP[A-Z][A-Z0-9][A-Z0-9-]*[A-Z0-9])/gi;
-      const matches = [];
-      let m;
-      while ((m = rx.exec(text)) !== null)
-        matches.push({ idx: m.index, sol: normId(m[1]) });
-      if (!matches.length) return { __any__: text };
-      // Merge all segments for same sol (handles page-repeated headers)
-      const map = {};
-      for (let i = 0; i < matches.length; i++) {
-        const key = matches[i].sol;
-        const start = matches[i].idx;
-        const end = matches[i + 1] ? matches[i + 1].idx : text.length;
-        if (!map[key]) map[key] = "";
-        map[key] += text.slice(start, end);
-      }
-      return map;
-    }
-
-    const chunksA = splitBySol(boxA);
-    const chunksB = splitBySol(boxB);
-    const hasManyA = Object.keys(chunksA).length > 1;
-    const hasManyB = Object.keys(chunksB).length > 1;
-
+    // For each sol, run the same merge Intake uses
     return sols.map((s) => {
-      const key = normId(s.id);
-
-      // Box A: use sol-specific chunk if available, else full text
-      const aText = chunksA[key] || (hasManyA ? "" : boxA || "");
-      // Box B: use sol-specific chunk if available (per-row Navigator), else full text
-      const bText = chunksB[key] || (hasManyB ? "" : boxB || "");
-
-      // Run both parsers independently -- listing wins on conflicts
-      let data = {};
-
-      // Box A: run parseListing if it looks like a listing, else parseAIText
-      if (aText.trim()) {
-        if (isListing(aText)) {
-          data = parseListing(aText);
-        } else {
-          data = parseAIText(aText);
-        }
+      // Determine which box is the listing and which is AI text
+      let listingText = "",
+        aiText = "";
+      if (isListing(boxA)) {
+        listingText = boxA;
+        aiText = boxB;
+      } else if (isListing(boxB)) {
+        listingText = boxB;
+        aiText = boxA;
+      } else {
+        listingText = boxA;
+        aiText = boxB;
       }
 
-      // Box B: always run parseAIText (Navigator rows), fill only missing fields
-      if (bText.trim()) {
-        const bData = isListing(bText)
-          ? parseListing(bText)
-          : parseAIText(bText);
-        Object.entries(bData).forEach(([k, v]) => {
+      // Run parseListing first
+      let data = listingText ? parseListing(listingText) : {};
+
+      // parseAIText fills only missing fields (same as Intake merge)
+      const aiSrc = aiText.trim() || listingText;
+      if (aiSrc) {
+        const ai = parseAIText(aiSrc);
+        Object.entries(ai).forEach(([k, v]) => {
           if (v !== null && v !== undefined && v !== "" && !data[k])
             data[k] = v;
         });
@@ -259,7 +232,8 @@
           lines.push(
             "     Required Delivery: " + s.delivery_days + " days ARO",
           );
-        // Est. Gov. Value intentionally omitted -- never reveal gov reference price to suppliers
+        if (s.ext > 0)
+          lines.push("     Est. Gov. Value: $" + s.ext.toLocaleString());
         return lines.join("\n");
       })
       .join("\n\n");
@@ -927,30 +901,14 @@
     );
   }
 
-  // ── Blast session persistence ─────────────────────────────────────────
-  const BLAST_SESSION_KEY = "imperio_blast_session_v1";
-  function loadBlastSession() {
-    try {
-      return JSON.parse(localStorage.getItem(BLAST_SESSION_KEY) || "{}");
-    } catch (e) {
-      return {};
-    }
-  }
-  function saveBlastSession(data) {
-    try {
-      localStorage.setItem(BLAST_SESSION_KEY, JSON.stringify(data));
-    } catch (e) {}
-  }
-
   // ── Blast Tab ────────────────────────────────────────────────────────
   function BlastTab() {
-    const _sess = loadBlastSession();
-    const [solInput, setSolInput] = useState(_sess.solInput || "");
-    const [dibbsInput, setDibbsInput] = useState(_sess.dibbsInput || "");
-    const [dibbsInputB, setDibbsInputB] = useState(_sess.dibbsInputB || "");
-    const [parsedSols, setParsedSols] = useState(_sess.parsedSols || []);
+    const [solInput, setSolInput] = useState("");
+    const [dibbsInput, setDibbsInput] = useState("");
+    const [dibbsInputB, setDibbsInputB] = useState("");
+    const [parsedSols, setParsedSols] = useState([]);
     const [parseError, setParseError] = useState("");
-    const [enriched, setEnriched] = useState(_sess.enriched || false);
+    const [enriched, setEnriched] = useState(false);
     const [fscGroups, setFscGroups] = useState({});
     const [loading, setLoading] = useState(false);
     const [loadingFsc, setLoadingFsc] = useState("");
@@ -958,8 +916,8 @@
     const [expandedEmail, setExpandedEmail] = useState({});
     const [blastLog, setBlastLog] = useState(loadBlastLog());
     const [activeView, setActiveView] = useState("blast");
+    const [logSearch, setLogSearch] = useState("");
     const [copiedKey, setCopiedKey] = useState("");
-    const [sentKeys, setSentKeys] = useState({});
     const [status, setStatus] = useState("");
 
     const refreshLog = () => setBlastLog(loadBlastLog());
@@ -983,13 +941,6 @@
           Object.keys(groupByFsc(sols)).length +
           " lanes. Now paste DIBBS listings in Step 2.",
       );
-      saveBlastSession({
-        solInput,
-        dibbsInput,
-        dibbsInputB,
-        parsedSols: sols,
-        enriched: false,
-      });
     }, [solInput]);
 
     // Step 2: Enrich sols from DIBBS paste
@@ -1020,13 +971,6 @@
           enrichedSols.length +
           " sols with part data. Ready to load distributors.",
       );
-      saveBlastSession({
-        solInput,
-        dibbsInput,
-        dibbsInputB,
-        parsedSols: enrichedSols,
-        enriched: true,
-      });
     }, [parsedSols, dibbsInput, dibbsInputB]);
 
     // Step 3: Load distributors by FSC
@@ -1087,6 +1031,7 @@
         dist_phone: dist.phone || "",
         sol_ids: sols.map((s) => s.id),
         sol_noms: sols.map((s) => s.nom),
+        sol_pns: sols.map((s) => s.part_number || ""),
         email_body: buildRFQEmail(dist, sols),
         status: "sent",
         quoted: false,
@@ -1094,10 +1039,6 @@
         quote_parsed: null,
       });
       refreshLog();
-      setSentKeys((p) => ({
-        ...p,
-        [fsc + "-" + (dist.id || dist.name)]: true,
-      }));
       setStatus(
         "Logged blast to " + dist.name + " \u00b7 " + sols.length + " sol(s).",
       );
@@ -1262,7 +1203,6 @@
                       setDibbsInputB("");
                       setEnriched(false);
                       setStatus("");
-                      saveBlastSession({});
                     },
                   },
                   "Clear All",
@@ -1350,13 +1290,6 @@
                     onClick: () => {
                       setEnriched(true);
                       setStatus("Skipped enrichment.");
-                      saveBlastSession({
-                        solInput,
-                        dibbsInput,
-                        dibbsInputB,
-                        parsedSols,
-                        enriched: true,
-                      });
                     },
                   },
                   "Skip \u2014 no part data",
@@ -1755,19 +1688,9 @@
                               h(
                                 "button",
                                 {
-                                  style: {
-                                    ...S.btnSm,
-                                    ...(sentKeys[ek]
-                                      ? {
-                                          color: "#2ecc71",
-                                          borderColor: "rgba(46,204,113,.5)",
-                                          cursor: "default",
-                                        }
-                                      : {}),
-                                  },
+                                  style: S.btnSm,
                                   onClick: () => {
                                     if (
-                                      !sentKeys[ek] &&
                                       confirm(
                                         "Mark RFQ to " +
                                           dist.name +
@@ -1777,7 +1700,7 @@
                                       handleMarkSent(fsc, dist, sols);
                                   },
                                 },
-                                sentKeys[ek] ? "\u2713 Sent" : "Mark Sent",
+                                "Mark Sent",
                               ),
                             ),
 
@@ -1812,6 +1735,26 @@
               ),
           ),
 
+          blastLog.length > 0 &&
+            h("input", {
+              value: logSearch,
+              onChange: (e) => setLogSearch(e.target.value),
+              placeholder: "Search distributor, P/N, or item name\u2026",
+              style: {
+                width: "100%",
+                padding: "7px 12px",
+                marginBottom: "14px",
+                background: "var(--inset-bg,rgba(0,0,0,.35))",
+                border: "1px solid rgba(201,168,76,.2)",
+                color: "var(--alabaster,#F5F0E8)",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "11px",
+                outline: "none",
+                borderRadius: "3px",
+                boxSizing: "border-box",
+              },
+            }),
+
           blastLog.length === 0 &&
             h(
               "div",
@@ -1819,94 +1762,122 @@
               "No blasts logged yet.",
             ),
 
-          blastLog.map((entry) =>
-            h(
-              "div",
-              { key: entry.id, style: { ...S.card, padding: "12px 16px" } },
-
+          blastLog
+            .filter((entry) => {
+              if (!logSearch.trim()) return true;
+              const q = logSearch.toLowerCase();
+              return (
+                (entry.dist_name || "").toLowerCase().includes(q) ||
+                (entry.sol_pns || []).some((p) =>
+                  p.toLowerCase().includes(q),
+                ) ||
+                (entry.sol_noms || []).some((n) => n.toLowerCase().includes(q))
+              );
+            })
+            .map((entry) =>
               h(
                 "div",
-                { style: { ...S.row, marginBottom: "8px" } },
-                h(
-                  "span",
-                  {
-                    style: {
-                      fontFamily: "JetBrains Mono,monospace",
-                      fontSize: "11px",
-                      color: "var(--alabaster,#F5F0E8)",
-                      fontWeight: "700",
-                    },
-                  },
-                  entry.dist_name,
-                ),
-                h(
-                  "span",
-                  { style: S.badge("rgba(52,152,219,.2)") },
-                  "FSC " + entry.fsc,
-                ),
-                h(
-                  "span",
-                  {
-                    style: S.badge(
-                      entry.quoted
-                        ? "rgba(46,204,113,.25)"
-                        : "rgba(201,168,76,.15)",
-                    ),
-                  },
-                  entry.quoted ? "QUOTED \u2713" : "AWAITING",
-                ),
-                h(
-                  "span",
-                  { style: S.dim },
-                  new Date(entry.sent_at).toLocaleDateString(),
-                ),
-              ),
+                { key: entry.id, style: { ...S.card, padding: "12px 16px" } },
 
-              h(
-                "div",
-                { style: { ...S.dim, marginBottom: "6px" } },
-                "Sols: " + (entry.sol_ids || []).join(", "),
-              ),
-              entry.dist_email &&
                 h(
                   "div",
-                  { style: { ...S.dim, marginBottom: "8px" } },
-                  "\u2192 " + entry.dist_email,
-                ),
-
-              h(
-                "div",
-                { style: S.row },
-                h(
-                  "button",
-                  {
-                    style: {
-                      ...S.btnSm,
-                      ...(entry.quoted
-                        ? {
-                            color: "rgba(46,204,113,.8)",
-                            borderColor: "rgba(46,204,113,.4)",
-                          }
-                        : {}),
+                  { style: { ...S.row, marginBottom: "8px" } },
+                  h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "11px",
+                        color: "var(--alabaster,#F5F0E8)",
+                        fontWeight: "700",
+                      },
                     },
-                    onClick: () =>
-                      handleLogUpdate(entry.id, "quoted", !entry.quoted),
-                  },
-                  entry.quoted ? "\u2713 Quoted" : "Mark Quoted",
+                    entry.dist_name,
+                  ),
+                  h(
+                    "span",
+                    { style: S.badge("rgba(52,152,219,.2)") },
+                    "FSC " + entry.fsc,
+                  ),
+                  h(
+                    "span",
+                    {
+                      style: S.badge(
+                        entry.quoted
+                          ? "rgba(46,204,113,.25)"
+                          : "rgba(201,168,76,.15)",
+                      ),
+                    },
+                    entry.quoted ? "QUOTED \u2713" : "AWAITING",
+                  ),
+                  h(
+                    "span",
+                    { style: S.dim },
+                    new Date(entry.sent_at).toLocaleDateString(),
+                  ),
                 ),
+
+                (entry.sol_noms || []).length > 0 &&
+                  h(
+                    "div",
+                    { style: { ...S.dim, marginBottom: "3px" } },
+                    (entry.sol_noms || []).join(" \u00b7 "),
+                  ),
+                (entry.sol_pns || []).some(Boolean) &&
+                  h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "10px",
+                        color: "var(--gold-dim,rgba(201,168,76,.55))",
+                        marginBottom: "6px",
+                        letterSpacing: ".03em",
+                      },
+                    },
+                    "P/N: " +
+                      (entry.sol_pns || []).filter(Boolean).join(" \u00b7 "),
+                  ),
+                entry.dist_email &&
+                  h(
+                    "div",
+                    { style: { ...S.dim, marginBottom: "8px" } },
+                    "\u2192 " + entry.dist_email,
+                  ),
+
+                h(
+                  "div",
+                  { style: S.row },
+                  h(
+                    "button",
+                    {
+                      style: {
+                        ...S.btnSm,
+                        ...(entry.quoted
+                          ? {
+                              color: "rgba(46,204,113,.8)",
+                              borderColor: "rgba(46,204,113,.4)",
+                            }
+                          : {}),
+                      },
+                      onClick: () =>
+                        handleLogUpdate(entry.id, "quoted", !entry.quoted),
+                    },
+                    entry.quoted ? "\u2713 Quoted" : "Mark Quoted",
+                  ),
+                ),
+
+                entry.quoted &&
+                  h(QuoteParser, {
+                    entryId: entry.id,
+                    savedNote: entry.quote_note || "",
+                    savedParsed: entry.quote_parsed || null,
+                    onUpdate: handleLogUpdate,
+                  }),
+
+                entry.quoted && h(PushToPipeline, { entry: entry }),
               ),
-
-              entry.quoted &&
-                h(QuoteParser, {
-                  entryId: entry.id,
-                  savedNote: entry.quote_note || "",
-                  savedParsed: entry.quote_parsed || null,
-                  onUpdate: handleLogUpdate,
-                }),
-
-              entry.quoted && h(PushToPipeline, { entry: entry }),
             ),
-          ),
         ),
     );
   }
