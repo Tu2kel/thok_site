@@ -1629,18 +1629,29 @@
                                     .replace("https://", "")
                                     .replace("http://", ""),
                                 ),
-                              dist.email &&
-                                h(
-                                  "span",
-                                  {
-                                    style: {
-                                      fontFamily: "JetBrains Mono,monospace",
-                                      fontSize: "10px",
-                                      color: "rgba(245,240,232,.5)",
-                                    },
-                                  },
-                                  dist.email,
-                                ),
+                              (() => {
+                                const displayEmail =
+                                  emailOverrides[ek] !== undefined
+                                    ? emailOverrides[ek]
+                                    : dist.email || "";
+                                return displayEmail
+                                  ? h(
+                                      "span",
+                                      {
+                                        style: {
+                                          fontFamily:
+                                            "JetBrains Mono,monospace",
+                                          fontSize: "10px",
+                                          color:
+                                            emailOverrides[ek] !== undefined
+                                              ? "#1eb4ff"
+                                              : "rgba(245,240,232,.5)",
+                                        },
+                                      },
+                                      displayEmail,
+                                    )
+                                  : null;
+                              })(),
                               dist.phone &&
                                 h(
                                   "span",
