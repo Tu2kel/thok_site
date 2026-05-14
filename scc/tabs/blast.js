@@ -298,6 +298,24 @@
     saveBlastLog(log);
   }
 
+  // ── Blast state persistence ─────────────────────────────────────────
+  const BLAST_STATE_KEY = "imperio_blast_state_v1";
+  function loadBlastState() {
+    try {
+      return JSON.parse(localStorage.getItem(BLAST_STATE_KEY) || "null");
+    } catch (e) {
+      return null;
+    }
+  }
+  function saveBlastState(state) {
+    try {
+      localStorage.setItem(BLAST_STATE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+  function clearBlastState() {
+    localStorage.removeItem(BLAST_STATE_KEY);
+  }
+
   // ── Styles ───────────────────────────────────────────────────────────
   const S = {
     page: { animation: "fadeUp .5s ease both" },
@@ -903,24 +921,44 @@
 
   // ── Blast Tab ────────────────────────────────────────────────────────
   function BlastTab() {
-    const [solInput, setSolInput] = useState("");
-    const [dibbsInput, setDibbsInput] = useState("");
-    const [dibbsInputB, setDibbsInputB] = useState("");
-    const [parsedSols, setParsedSols] = useState([]);
+    const _s = loadBlastState() || {};
+    const [solInput, setSolInput] = useState(_s.solInput || "");
+    const [dibbsInput, setDibbsInput] = useState(_s.dibbsInput || "");
+    const [dibbsInputB, setDibbsInputB] = useState(_s.dibbsInputB || "");
+    const [parsedSols, setParsedSols] = useState(_s.parsedSols || []);
     const [parseError, setParseError] = useState("");
-    const [enriched, setEnriched] = useState(false);
-    const [fscGroups, setFscGroups] = useState({});
+    const [enriched, setEnriched] = useState(_s.enriched || false);
+    const [fscGroups, setFscGroups] = useState(_s.fscGroups || {});
     const [loading, setLoading] = useState(false);
     const [loadingFsc, setLoadingFsc] = useState("");
-    const [expandedFsc, setExpandedFsc] = useState({});
+    const [expandedFsc, setExpandedFsc] = useState(_s.expandedFsc || {});
     const [expandedEmail, setExpandedEmail] = useState({});
     const [blastLog, setBlastLog] = useState(loadBlastLog());
     const [activeView, setActiveView] = useState("blast");
     const [logSearch, setLogSearch] = useState("");
     const [copiedKey, setCopiedKey] = useState("");
-    const [status, setStatus] = useState("");
+    const [status, setStatus] = useState(_s.status || "");
     const [emailOverrides, setEmailOverrides] = useState({});
     const [editingEmailKey, setEditingEmailKey] = useState("");
+
+    // Persist blast state on every meaningful change
+    const { useEffect, useRef } = React;
+    const _persistTimer = useRef(null);
+    useEffect(() => {
+      if (_persistTimer.current) clearTimeout(_persistTimer.current);
+      _persistTimer.current = setTimeout(() => {
+        saveBlastState({
+          solInput,
+          dibbsInput,
+          dibbsInputB,
+          parsedSols,
+          enriched,
+          fscGroups,
+          expandedFsc,
+          status,
+        });
+      }, 300);
+    });
 
     const refreshLog = () => setBlastLog(loadBlastLog());
 
@@ -1205,6 +1243,7 @@
                       setDibbsInputB("");
                       setEnriched(false);
                       setStatus("");
+                      clearBlastState();
                     },
                   },
                   "Clear All",
