@@ -919,6 +919,8 @@
     const [logSearch, setLogSearch] = useState("");
     const [copiedKey, setCopiedKey] = useState("");
     const [status, setStatus] = useState("");
+    const [emailOverrides, setEmailOverrides] = useState({});
+    const [editingEmailKey, setEditingEmailKey] = useState("");
 
     const refreshLog = () => setBlastLog(loadBlastLog());
 
@@ -1626,6 +1628,61 @@
                                 dist.products,
                               ),
 
+                            editingEmailKey === ek &&
+                              h(
+                                "div",
+                                { style: { ...S.row, marginBottom: "8px" } },
+                                h("input", {
+                                  id: "email-edit-" + ek,
+                                  defaultValue:
+                                    emailOverrides[ek] !== undefined
+                                      ? emailOverrides[ek]
+                                      : dist.email || "",
+                                  placeholder: "enter email address...",
+                                  style: {
+                                    flex: 1,
+                                    background:
+                                      "var(--inset-bg,rgba(0,0,0,.35))",
+                                    border: "1px solid rgba(201,168,76,.4)",
+                                    color: "var(--alabaster,#F5F0E8)",
+                                    fontFamily: "JetBrains Mono,monospace",
+                                    fontSize: "11px",
+                                    outline: "none",
+                                    padding: "5px 10px",
+                                    borderRadius: "3px",
+                                  },
+                                }),
+                                h(
+                                  "button",
+                                  {
+                                    style: {
+                                      ...S.btnSm,
+                                      color: "#2ecc71",
+                                      borderColor: "rgba(46,204,113,.4)",
+                                    },
+                                    onClick: () => {
+                                      const val = document
+                                        .getElementById("email-edit-" + ek)
+                                        .value.trim();
+                                      setEmailOverrides((p) => ({
+                                        ...p,
+                                        [ek]: val,
+                                      }));
+                                      setEditingEmailKey("");
+                                    },
+                                  },
+                                  "Save",
+                                ),
+                                h(
+                                  "button",
+                                  {
+                                    style: S.btnSm,
+                                    onClick: () => setEditingEmailKey(""),
+                                  },
+                                  "Cancel",
+                                ),
+                              ),
+
                             h(
                               "div",
                               { style: S.row },
@@ -1643,32 +1700,58 @@
                                   ? "Hide Email"
                                   : "Preview RFQ Email",
                               ),
-                              dist.email &&
-                                h(
-                                  "a",
-                                  {
-                                    href:
-                                      "https://mail.google.com/mail/?view=cm&to=" +
-                                      encodeURIComponent(dist.email) +
-                                      "&su=" +
-                                      encodeURIComponent(
-                                        "RFQ \u2013 " +
-                                          (FSC_NAMES[fsc] || fsc) +
-                                          " | Government Requirement | Imperio Federal Logistics",
-                                      ) +
-                                      "&body=" +
-                                      encodeURIComponent(emailText),
-                                    target: "_blank",
-                                    rel: "noopener",
-                                    style: {
-                                      ...S.btn,
-                                      textDecoration: "none",
-                                      fontSize: "9px",
-                                      padding: "4px 12px",
-                                    },
+                              h(
+                                "button",
+                                {
+                                  style: {
+                                    ...S.btnSm,
+                                    ...(editingEmailKey === ek
+                                      ? {
+                                          color: "#c9a84c",
+                                          borderColor: "rgba(201,168,76,.5)",
+                                        }
+                                      : {}),
                                   },
-                                  "\u2709 Open in Gmail",
-                                ),
+                                  onClick: () =>
+                                    setEditingEmailKey((p) =>
+                                      p === ek ? "" : ek,
+                                    ),
+                                },
+                                "Edit Email",
+                              ),
+                              (() => {
+                                const effectiveEmail =
+                                  emailOverrides[ek] !== undefined
+                                    ? emailOverrides[ek]
+                                    : dist.email || "";
+                                return effectiveEmail
+                                  ? h(
+                                      "a",
+                                      {
+                                        href:
+                                          "https://mail.google.com/mail/?view=cm&to=" +
+                                          encodeURIComponent(effectiveEmail) +
+                                          "&su=" +
+                                          encodeURIComponent(
+                                            "RFQ \u2013 " +
+                                              (FSC_NAMES[fsc] || fsc) +
+                                              " | Government Requirement | Imperio Federal Logistics",
+                                          ) +
+                                          "&body=" +
+                                          encodeURIComponent(emailText),
+                                        target: "_blank",
+                                        rel: "noopener",
+                                        style: {
+                                          ...S.btn,
+                                          textDecoration: "none",
+                                          fontSize: "9px",
+                                          padding: "4px 12px",
+                                        },
+                                      },
+                                      "\u2709 Open in Gmail",
+                                    )
+                                  : null;
+                              })(),
                               h(
                                 "button",
                                 {
@@ -1690,6 +1773,14 @@
                                 {
                                   style: S.btnSm,
                                   onClick: () => {
+                                    const effectiveEmail =
+                                      emailOverrides[ek] !== undefined
+                                        ? emailOverrides[ek]
+                                        : dist.email || "";
+                                    const distWithEmail = {
+                                      ...dist,
+                                      email: effectiveEmail,
+                                    };
                                     if (
                                       confirm(
                                         "Mark RFQ to " +
@@ -1697,7 +1788,7 @@
                                           " as sent?",
                                       )
                                     )
-                                      handleMarkSent(fsc, dist, sols);
+                                      handleMarkSent(fsc, distWithEmail, sols);
                                   },
                                 },
                                 "Mark Sent",
@@ -1876,7 +1967,7 @@
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
                         fontSize: "9px",
-                        color: "#65e10a",
+                        color: "rgba(245,240,232,.3)",
                         marginBottom: "6px",
                         letterSpacing: ".04em",
                       },
@@ -1886,14 +1977,7 @@
                 entry.dist_email &&
                   h(
                     "div",
-
-                    {
-                      style: {
-                        ...S.dim,
-                        marginBottom: "8px",
-                        color: "#1eb4ff",
-                      },
-                    },
+                    { style: { ...S.dim, marginBottom: "8px" } },
                     "\u2192 " + entry.dist_email,
                   ),
 
