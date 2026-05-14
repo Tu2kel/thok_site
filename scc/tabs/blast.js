@@ -297,6 +297,10 @@
     log[i] = { ...log[i], ...updates };
     saveBlastLog(log);
   }
+  function deleteBlastEntry(id) {
+    const log = loadBlastLog();
+    saveBlastLog(log.filter((e) => e.id !== id));
+  }
 
   // ── Blast state persistence ─────────────────────────────────────────
   const BLAST_STATE_KEY = "imperio_blast_state_v1";
@@ -940,6 +944,8 @@
     const [status, setStatus] = useState(_s.status || "");
     const [emailOverrides, setEmailOverrides] = useState({});
     const [editingEmailKey, setEditingEmailKey] = useState("");
+    const [editingLogId, setEditingLogId] = useState(null);
+    const [editDraft, setEditDraft] = useState({});
 
     // Persist blast state on every meaningful change
     const { useEffect, useRef } = React;
@@ -1094,6 +1100,50 @@
       saveBlastLog([]);
       refreshLog();
     }, []);
+
+    const handleDeleteEntry = useCallback((id, label) => {
+      if (!confirm('Remove "' + label + '" from blast log?')) return;
+      deleteBlastEntry(id);
+      refreshLog();
+    }, []);
+
+    const handleEditOpen = useCallback((entry) => {
+      setEditDraft({
+        sol_ids: (entry.sol_ids || []).join(", "),
+        sol_noms: (entry.sol_noms || []).join(", "),
+        sol_pns: (entry.sol_pns || []).join(", "),
+        dist_name: entry.dist_name || "",
+        dist_email: entry.dist_email || "",
+        dist_phone: entry.dist_phone || "",
+        fsc: entry.fsc || "",
+      });
+      setEditingLogId(entry.id);
+    }, []);
+
+    const handleEditSave = useCallback(() => {
+      if (!editingLogId) return;
+      updateBlastEntry(editingLogId, {
+        sol_ids: editDraft.sol_ids
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        sol_noms: editDraft.sol_noms
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        sol_pns: editDraft.sol_pns
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        dist_name: editDraft.dist_name.trim(),
+        dist_email: editDraft.dist_email.trim(),
+        dist_phone: editDraft.dist_phone.trim(),
+        fsc: editDraft.fsc.trim(),
+      });
+      refreshLog();
+      setEditingLogId(null);
+      setEditDraft({});
+    }, [editingLogId, editDraft]);
 
     return h(
       "div",
@@ -1920,6 +1970,101 @@
                 "div",
                 { key: entry.id, style: { ...S.card, padding: "12px 16px" } },
 
+                // ── Edit modal (inline, shown when this entry is being edited) ──
+                editingLogId === entry.id &&
+                  h(
+                    "div",
+                    {
+                      style: {
+                        background: "rgba(0,0,0,.45)",
+                        border: "1px solid rgba(201,168,76,.35)",
+                        borderRadius: "4px",
+                        padding: "14px",
+                        marginBottom: "12px",
+                      },
+                    },
+                    h(
+                      "div",
+                      {
+                        style: {
+                          ...S.cardTitle,
+                          marginBottom: "10px",
+                          color: "var(--gold-solid,#C9A84C)",
+                        },
+                      },
+                      "Edit Entry",
+                    ),
+                    ...[
+                      ["Sol IDs (comma-separated)", "sol_ids"],
+                      ["Item Names (comma-separated)", "sol_noms"],
+                      ["Part Numbers (comma-separated)", "sol_pns"],
+                      ["Distributor Name", "dist_name"],
+                      ["Distributor Email", "dist_email"],
+                      ["Distributor Phone", "dist_phone"],
+                      ["FSC", "fsc"],
+                    ].map(([label, field]) =>
+                      h(
+                        "div",
+                        {
+                          key: field,
+                          style: { marginBottom: "8px" },
+                        },
+                        h(
+                          "div",
+                          {
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "9px",
+                              color: "rgba(201,168,76,.6)",
+                              marginBottom: "3px",
+                            },
+                          },
+                          label,
+                        ),
+                        h("input", {
+                          value: editDraft[field] || "",
+                          onChange: (e) =>
+                            setEditDraft((d) => ({
+                              ...d,
+                              [field]: e.target.value,
+                            })),
+                          style: {
+                            width: "100%",
+                            background: "rgba(0,0,0,.3)",
+                            border: "1px solid rgba(201,168,76,.2)",
+                            color: "var(--alabaster,#F5F0E8)",
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "10px",
+                            padding: "5px 8px",
+                            borderRadius: "3px",
+                            outline: "none",
+                            boxSizing: "border-box",
+                          },
+                        }),
+                      ),
+                    ),
+                    h(
+                      "div",
+                      { style: { ...S.row, marginTop: "10px" } },
+                      h(
+                        "button",
+                        { style: S.btnPrimary, onClick: handleEditSave },
+                        "Save Changes",
+                      ),
+                      h(
+                        "button",
+                        {
+                          style: S.btnSm,
+                          onClick: () => {
+                            setEditingLogId(null);
+                            setEditDraft({});
+                          },
+                        },
+                        "Cancel",
+                      ),
+                    ),
+                  ),
+
                 h(
                   "div",
                   { style: { ...S.row, marginBottom: "8px" } },
@@ -1931,6 +2076,7 @@
                         fontSize: "11px",
                         color: "var(--alabaster,#F5F0E8)",
                         fontWeight: "700",
+                        flex: 1,
                       },
                     },
                     entry.dist_name,
@@ -1955,6 +2101,48 @@
                     "span",
                     { style: S.dim },
                     new Date(entry.sent_at).toLocaleDateString(),
+                  ),
+                  // ── Edit button ──
+                  h(
+                    "button",
+                    {
+                      title: "Edit entry",
+                      style: {
+                        ...S.btnSm,
+                        padding: "2px 8px",
+                        fontSize: "10px",
+                        color: "rgba(201,168,76,.8)",
+                        borderColor: "rgba(201,168,76,.3)",
+                        marginLeft: "4px",
+                      },
+                      onClick: () =>
+                        editingLogId === entry.id
+                          ? (setEditingLogId(null), setEditDraft({}))
+                          : handleEditOpen(entry),
+                    },
+                    editingLogId === entry.id ? "✕ Cancel" : "✎ Edit",
+                  ),
+                  // ── Delete X button ──
+                  h(
+                    "button",
+                    {
+                      title: "Delete entry",
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "12px",
+                        lineHeight: "1",
+                        padding: "2px 7px",
+                        border: "1px solid rgba(231,76,60,.3)",
+                        background: "transparent",
+                        color: "rgba(231,76,60,.7)",
+                        cursor: "pointer",
+                        borderRadius: "3px",
+                        marginLeft: "2px",
+                      },
+                      onClick: () =>
+                        handleDeleteEntry(entry.id, entry.dist_name),
+                    },
+                    "\u2715",
                   ),
                 ),
 
