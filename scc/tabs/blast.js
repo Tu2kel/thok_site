@@ -1967,7 +1967,7 @@
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
                         fontSize: "9px",
-                        color: "rgba(245,240,232,.3)",
+                        color: "#65e10a",
                         marginBottom: "6px",
                         letterSpacing: ".04em",
                       },
@@ -1977,7 +1977,13 @@
                 entry.dist_email &&
                   h(
                     "div",
-                    { style: { ...S.dim, marginBottom: "8px" } },
+                    {
+                      style: {
+                        ...S.dim,
+                        marginBottom: "8px",
+                        color: "#1eb4ff",
+                      },
+                    },
                     "\u2192 " + entry.dist_email,
                   ),
 
