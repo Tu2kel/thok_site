@@ -50,7 +50,7 @@ const warn = (msg) => console.warn(`[navigator-scraper] ⚠️  ${msg}`);
 const error = (msg) => console.error(`[navigator-scraper] ❌ ${msg}`);
 
 // ── NAVIGATOR URL & SELECTORS ───────────────────────────────────────────
-const NAVIGATOR_URL = "https://www.dibbsnavigator.com";
+const NAVIGATOR_URL = "https://dibbsnavigator.com/login.aspx";
 const SELECTORS = {
   loginUsernameInput: "#Main_Input_Customer_Name",
   loginPasswordInput: "#Main_Input_Password",
