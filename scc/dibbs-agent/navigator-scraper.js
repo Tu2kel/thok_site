@@ -20,11 +20,19 @@ const path = require("path");
 
 dotenv.config();
 
-// ── Config ───────────────────────────────────────────────────────────────
+// ── CONFIG ───────────────────────────────────────────────────────────────
 const CONFIG = {
   username: process.env.NAVIGATOR_USERNAME,
   password: process.env.NAVIGATOR_PASSWORD,
+  // All FSC lanes — used for Pass 1 (daily)
   fscLanes: (process.env.NAVIGATOR_FSC_LANES || "5305,5310,5315,5320")
+    .split(",")
+    .map((f) => f.trim()),
+  // Winning lanes only — used for Pass 2 (30-day LHF)
+  fscLanesWinning: (
+    process.env.NAVIGATOR_FSC_LANES_WINNING ||
+    "5305,5310,5315,5320,5340,4330,4730,2910,9510"
+  )
     .split(",")
     .map((f) => f.trim()),
   headless: process.env.NAVIGATOR_HEADLESS !== "false",
@@ -96,7 +104,181 @@ async function clickRadio(page, selector) {
   }, selector);
 }
 
-// ── MAIN SCRAPER ─────────────────────────────────────────────────────────
+// ── SINGLE PASS SCRAPE ────────────────────────────────────────────────────
+// passConfig: { fscLanes, dateRadioId, dateLabel, passNum }
+async function runScrapePass(page, passConfig) {
+  const { fscLanes, dateRadioId, dateLabel, passNum } = passConfig;
+  info(`\n── PASS ${passNum}: ${dateLabel} | ${fscLanes.length} FSC lanes ──`);
+
+  // Navigate to Search DIBBS fresh for each pass
+  await page.goto("https://dibbsnavigator.com/dn.aspx", {
+    waitUntil: "domcontentloaded",
+    timeout: 120000,
+  });
+
+  await page.waitForSelector("#btnFullDN", { timeout: 120000 });
+
+  // Dismiss yellow popup
+  await page.evaluate(() => {
+    const btn = document.querySelector("#Button111");
+    if (btn) btn.click();
+  });
+  await new Promise((r) => setTimeout(r, 500));
+  await page.keyboard.press("Escape");
+  await new Promise((r) => setTimeout(r, 500));
+
+  // FSC Lanes
+  const fscInput = await page.$("#Main_NSN_Search");
+  if (fscInput) {
+    await fscInput.click({ clickCount: 3 });
+    await fscInput.type(fscLanes.join(","), { delay: 30 });
+    info(`✅ FSC lanes: ${fscLanes.join(",")}`);
+  } else {
+    info("⚠️ FSC input not found");
+  }
+
+  // Date radio
+  await clickRadio(page, `#${dateRadioId}`);
+  info(`✅ Date: ${dateLabel}`);
+
+  // Not Already Awarded
+  await clickRadio(page, "#Main_rbAwarded_2");
+  info("✅ Not Already Awarded");
+
+  // Filter Set: None
+  await clickRadio(page, "#Main_rbDefaultSets_4");
+  info("✅ Filter set: None");
+
+  // Not Expired
+  await ensureChecked(page, "#Main_chNotExpired");
+  await ensureUnchecked(page, "#Main_chExpired");
+  info("✅ Not Expired");
+
+  // Com. Pack
+  await page.evaluate(() => {
+    const cb = document.querySelector("#Main_chCPac");
+    if (cb && !cb.checked) cb.click();
+  });
+  await new Promise((r) => setTimeout(r, 2000));
+  info("✅ Com. Pack");
+
+  // Supplier Restrictions: COTS
+  await page.select("#Main_DropDownList_SupRestrict", "COTS");
+  await new Promise((r) => setTimeout(r, 2000));
+  info("✅ Supplier Restrictions: COTS");
+
+  // JCP: No JCP Cert.
+  await page.select("#Main_DropDownListJCP", "No JCP Cert.");
+  await new Promise((r) => setTimeout(r, 2000));
+  info("✅ JCP: No JCP Cert.");
+
+  // Apply
+  info("Clicking Apply Selections...");
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
+    page.click("#btnFullDN"),
+  ]);
+  info("✅ Results loaded");
+
+  // Sort Extended Price desc
+  info("Sorting by Extended Price...");
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
+    page.evaluate(() => {
+      __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+    }),
+  ]);
+
+  // Check sort direction
+  const firstPrice = await page.evaluate((colIdx) => {
+    const rows = document.querySelectorAll("#Main_GridView1 tbody tr");
+    for (const row of rows) {
+      const cells = row.querySelectorAll("td");
+      if (cells.length < 20) continue;
+      const val = parseFloat(
+        (cells[colIdx]?.textContent || "0").replace(/[$,\s]/g, ""),
+      );
+      if (!isNaN(val) && val > 0) return val;
+    }
+    return 0;
+  }, COL.ext_price);
+
+  if (firstPrice > 0 && firstPrice < 5000) {
+    info("Ascending — clicking sort again...");
+    await Promise.all([
+      page.waitForNavigation({
+        waitUntil: "domcontentloaded",
+        timeout: 120000,
+      }),
+      page.evaluate(() => {
+        __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+      }),
+    ]);
+  }
+  info("✅ Sorted desc");
+
+  // Scrape first page
+  const sols = await page.evaluate(
+    (colMap, minPrice, passNum, dateLabel) => {
+      const rows = Array.from(
+        document.querySelectorAll("#Main_GridView1 tbody tr"),
+      );
+      const results = [];
+      const getText = (cells, idx) =>
+        cells[idx]?.textContent?.replace(/\s+/g, " ").trim() || "";
+      const getNum = (cells, idx) =>
+        parseFloat(getText(cells, idx).replace(/[$,]/g, "")) || 0;
+
+      for (const row of rows) {
+        const cells = row.querySelectorAll("td");
+        if (cells.length < 20) continue;
+        const extPrice = getNum(cells, colMap.ext_price);
+        if (extPrice > 0 && extPrice < minPrice) break;
+        if (extPrice === 0 && getNum(cells, colMap.unit_price) === 0) continue;
+        const solNum = getText(cells, colMap.sol_number);
+        if (!solNum || solNum.length < 8) continue;
+        const nsn = getText(cells, colMap.nsn).replace(/[^0-9]/g, "");
+        results.push({
+          sol_number: solNum,
+          ai: getText(cells, colMap.ai),
+          sol_type: getText(cells, colMap.sol_type),
+          item_name: getText(cells, colMap.nomenclature),
+          qty: getNum(cells, colMap.qty),
+          unit_issue: getText(cells, colMap.unit_issue),
+          unit_price: getNum(cells, colMap.unit_price),
+          hist_price: getNum(cells, colMap.hist_price),
+          ext_price: extPrice,
+          quote_due: getText(cells, colMap.quote_due),
+          delivery_days: getNum(cells, colMap.delivery_days),
+          nsn: nsn,
+          fsc: nsn.slice(0, 4) || "",
+          piece_part_no: getText(cells, colMap.piece_part_no),
+          set_aside: getText(cells, colMap.set_aside),
+          material: getText(cells, colMap.material),
+          part_char: getText(cells, colMap.part_char),
+          supplier_restrictions: getText(cells, colMap.supplier_restrictions),
+          fob: getText(cells, colMap.fob),
+          com_pack: getText(cells, colMap.com_pack),
+          naics: getText(cells, colMap.naics),
+          supplier_list: getText(cells, colMap.supplier_list),
+          pass: passNum,
+          pass_label: dateLabel,
+          scraped_at: new Date().toISOString(),
+        });
+      }
+      return results;
+    },
+    COL,
+    CONFIG.minExtPrice,
+    passNum,
+    dateLabel,
+  );
+
+  info(`✅ Pass ${passNum} scraped ${sols.length} sols`);
+  return sols;
+}
+
+// ── MAIN: TWO-PASS SCRAPER ────────────────────────────────────────────────
 async function scrapeNavigatorBatch() {
   let browser;
   try {
@@ -113,6 +295,13 @@ async function scrapeNavigatorBatch() {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
+        "--disable-notifications",
+        "--disable-infobars",
+        "--disable-extensions",
+        "--disable-popup-blocking",
+        "--deny-permission-prompts",
+        "--no-first-run",
+        "--no-default-browser-check",
       ],
     });
 
@@ -120,23 +309,20 @@ async function scrapeNavigatorBatch() {
     page.setDefaultTimeout(120000);
     await page.setViewport({ width: 1920, height: 1080 });
 
-    // ── STEP 1: LOGIN ──────────────────────────────────────────────────
+    // ── LOGIN ──────────────────────────────────────────────────────────
     info("Navigating to login page...");
     await page.goto("https://dibbsnavigator.com/login.aspx", {
       waitUntil: "domcontentloaded",
       timeout: 120000,
     });
-
     await page.waitForSelector("#Main_Input_Customer_Name", {
       timeout: 120000,
     });
-    info("Login form found — typing credentials...");
-
+    info("Typing credentials...");
     await page.type("#Main_Input_Customer_Name", CONFIG.username, {
       delay: 60,
     });
     await page.type("#Main_Input_Password", CONFIG.password, { delay: 60 });
-
     await Promise.all([
       page.waitForNavigation({
         waitUntil: "domcontentloaded",
@@ -146,221 +332,62 @@ async function scrapeNavigatorBatch() {
     ]);
 
     const postLoginUrl = page.url();
-    info("Post-login URL:", postLoginUrl);
-
     if (postLoginUrl.includes("login.aspx")) {
       throw new Error(
-        "Login failed — still on login page. Check NAVIGATOR_USERNAME and NAVIGATOR_PASSWORD in .env.",
+        "Login failed — check NAVIGATOR_USERNAME / NAVIGATOR_PASSWORD in .env",
       );
     }
-    info("✅ Login successful");
+    info("✅ Login successful:", postLoginUrl);
 
-    // Navigate to Search DIBBS if not already there
-    if (!postLoginUrl.includes("dn.aspx")) {
-      info("Navigating to Search DIBBS (dn.aspx)...");
-      await page.goto("https://dibbsnavigator.com/dn.aspx", {
-        waitUntil: "domcontentloaded",
-        timeout: 120000,
-      });
-    }
-
-    // ── STEP 2: SET FILTERS ────────────────────────────────────────────
-    info("Waiting for filter form...");
-    await page.waitForSelector("#btnFullDN", { timeout: 120000 });
-    info("Filter form ready — applying filters...");
-
-    // FSC Lanes — confirmed selector: #Main_NSN_Search
-    const fscInput = await page.$("#Main_NSN_Search");
-    if (fscInput) {
-      await fscInput.click({ clickCount: 3 });
-      await fscInput.type(CONFIG.fscLanes.join(","), { delay: 30 });
-      info("✅ FSC lanes:", CONFIG.fscLanes.join(","));
-    } else {
-      info("⚠️ FSC input (#Main_NSN_Search) not found — no FSC filter applied");
-    }
-
-    // Date: Last 30 days (#Main_rbDateRange_3, value=30)
-    await clickRadio(page, "#Main_rbDateRange_3");
-    info("✅ Date: Last 30 days");
-
-    // Not Already Awarded (#Main_rbAwarded_2, value=Not_Awarded)
-    await clickRadio(page, "#Main_rbAwarded_2");
-    info("✅ Not Already Awarded");
-
-    // Filter Set: None (#Main_rbDefaultSets_4, value=4)
-    await clickRadio(page, "#Main_rbDefaultSets_4");
-    info("✅ Filter set: None");
-
-    // Not Expired: check (#Main_chNotExpired)
-    await ensureChecked(page, "#Main_chNotExpired");
-    info("✅ Not Expired: checked");
-
-    // Expired: uncheck (#Main_chExpired)
-    await ensureUnchecked(page, "#Main_chExpired");
-    info("✅ Expired: unchecked");
-
-    // Com. Pack: check (#Main_chCPac)
-    await ensureChecked(page, "#Main_chCPac");
-    info("✅ Com. Pack: checked");
-
-    // Supplier Restrictions: COTS
-    await page.select("#Main_DropDownList_SupRestrict", "COTS");
-    info("✅ Supplier Restrictions: COTS");
-
-    // JCP: No JCP Cert.
-    await page.select("#Main_DropDownListJCP", "No JCP Cert.");
-    info("✅ JCP: No JCP Cert.");
-
-    // ── STEP 3: APPLY SELECTIONS ───────────────────────────────────────
-    info("Clicking Apply Selections...");
-    await Promise.all([
-      page.waitForNavigation({
-        waitUntil: "domcontentloaded",
-        timeout: 120000,
-      }),
-      page.click("#btnFullDN"),
-    ]);
-    info("✅ Results loaded");
-
-    // Grab result count for logging
-    const resultCount = await page.evaluate(() => {
-      const el = document.querySelector(
-        ".GridViewCount, [id*='lblCount'], #Main_lblCount",
-      );
-      return el?.textContent?.trim() || "unknown";
+    // ── PASS 1: SELECTED DATE — ALL FSC LANES ─────────────────────────
+    const pass1 = await runScrapePass(page, {
+      passNum: 1,
+      dateRadioId: "Main_rbDateRange_0",
+      dateLabel: "Selected (today)",
+      fscLanes: CONFIG.fscLanes,
     });
-    info("Result count:", resultCount);
 
-    // ── STEP 4: SORT BY EXTENDED PRICE DESC ───────────────────────────
-    info("Sorting by Extended Price descending...");
+    // ── PASS 2: LAST 30 DAYS — WINNING LANES ONLY ─────────────────────
+    const pass2 = await runScrapePass(page, {
+      passNum: 2,
+      dateRadioId: "Main_rbDateRange_3",
+      dateLabel: "Last 30 days (LHF)",
+      fscLanes: CONFIG.fscLanesWinning,
+    });
 
-    // First click — may sort ascending
-    await Promise.all([
-      page.waitForNavigation({
-        waitUntil: "domcontentloaded",
-        timeout: 120000,
-      }),
-      page.evaluate(() => {
-        __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
-      }),
-    ]);
+    await browser.close();
 
-    // Check first row price — if low, we're ascending, click again
-    const firstPrice = await page.evaluate((colIdx) => {
-      const rows = document.querySelectorAll("#Main_GridView1 tbody tr");
-      for (const row of rows) {
-        const cells = row.querySelectorAll("td");
-        if (cells.length < 20) continue;
-        const txt = cells[colIdx]?.textContent?.replace(/[$,\s]/g, "") || "0";
-        const val = parseFloat(txt);
-        if (!isNaN(val) && val > 0) return val;
+    // Merge, dedupe by sol_number (pass1 wins on conflict)
+    const seen = new Set();
+    const allSols = [];
+    for (const sol of [...pass1, ...pass2]) {
+      if (!seen.has(sol.sol_number)) {
+        seen.add(sol.sol_number);
+        allSols.push(sol);
       }
-      return 0;
-    }, COL.ext_price);
-
-    info("First row Extended Price after sort:", firstPrice);
-
-    // If under $5K on the first visible row, likely ascending — click again
-    if (firstPrice > 0 && firstPrice < 5000) {
-      info("Appears ascending — clicking sort again for descending...");
-      await Promise.all([
-        page.waitForNavigation({
-          waitUntil: "domcontentloaded",
-          timeout: 120000,
-        }),
-        page.evaluate(() => {
-          __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
-        }),
-      ]);
     }
-    info("✅ Sort applied");
 
-    // ── STEP 5: SCRAPE FIRST PAGE ──────────────────────────────────────
-    info(`Scraping rows with Extended Price ≥ $${CONFIG.minExtPrice}...`);
-
-    const sols = await page.evaluate(
-      (colMap, minPrice) => {
-        const rows = Array.from(
-          document.querySelectorAll("#Main_GridView1 tbody tr"),
-        );
-        const results = [];
-
-        const getText = (cells, idx) =>
-          cells[idx]?.textContent?.replace(/\s+/g, " ").trim() || "";
-        const getNum = (cells, idx) =>
-          parseFloat(getText(cells, idx).replace(/[$,]/g, "")) || 0;
-
-        for (const row of rows) {
-          const cells = row.querySelectorAll("td");
-          if (cells.length < 20) continue;
-
-          const extPrice = getNum(cells, colMap.ext_price);
-
-          // Once we hit below floor, stop
-          if (extPrice > 0 && extPrice < minPrice) break;
-
-          // Skip zero-price rows (spacer/header rows)
-          if (extPrice === 0 && getNum(cells, colMap.unit_price) === 0)
-            continue;
-
-          const solNum = getText(cells, colMap.sol_number);
-          if (!solNum || solNum.length < 8) continue;
-
-          const nsn = getText(cells, colMap.nsn).replace(/[^0-9]/g, "");
-
-          results.push({
-            sol_number: solNum,
-            ai: getText(cells, colMap.ai),
-            sol_type: getText(cells, colMap.sol_type),
-            item_name: getText(cells, colMap.nomenclature),
-            qty: getNum(cells, colMap.qty),
-            unit_issue: getText(cells, colMap.unit_issue),
-            unit_price: getNum(cells, colMap.unit_price),
-            hist_price: getNum(cells, colMap.hist_price),
-            ext_price: extPrice,
-            quote_due: getText(cells, colMap.quote_due),
-            delivery_days: getNum(cells, colMap.delivery_days),
-            nsn: nsn,
-            fsc: nsn.slice(0, 4) || "",
-            piece_part_no: getText(cells, colMap.piece_part_no),
-            set_aside: getText(cells, colMap.set_aside),
-            material: getText(cells, colMap.material),
-            part_char: getText(cells, colMap.part_char),
-            supplier_restrictions: getText(cells, colMap.supplier_restrictions),
-            fob: getText(cells, colMap.fob),
-            com_pack: getText(cells, colMap.com_pack),
-            naics: getText(cells, colMap.naics),
-            supplier_list: getText(cells, colMap.supplier_list),
-            scraped_at: new Date().toISOString(),
-          });
-        }
-
-        return results;
-      },
-      COL,
-      CONFIG.minExtPrice,
+    info(
+      `\n✅ COMPLETE — Pass 1: ${pass1.length} | Pass 2: ${pass2.length} | Total unique: ${allSols.length}`,
     );
 
-    info(`✅ Scraped ${sols.length} solicitations`);
-
-    // ── STEP 6: BACKUP & RETURN ────────────────────────────────────────
+    // Backup
     const timestamp = new Date().toISOString().split("T")[0];
     const backupPath = path.join(
       CONFIG.backupDir,
       `navigator-batch-${timestamp}.json`,
     );
-    fs.writeFileSync(backupPath, JSON.stringify(sols, null, 2));
-    info(`✅ Backup saved: ${backupPath}`);
-
-    await browser.close();
+    fs.writeFileSync(backupPath, JSON.stringify(allSols, null, 2));
+    info(`✅ Backup: ${backupPath}`);
 
     return {
       ok: true,
       timestamp: new Date().toISOString(),
-      count: sols.length,
-      fscLanes: CONFIG.fscLanes,
+      count: allSols.length,
+      pass1: pass1.length,
+      pass2: pass2.length,
       minPrice: CONFIG.minExtPrice,
-      sols,
+      sols: allSols,
       backupPath,
     };
   } catch (e) {
