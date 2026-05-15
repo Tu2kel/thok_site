@@ -732,6 +732,7 @@ server.listen(PORT, "127.0.0.1", () => {
   );
   console.log("[agent] Ready.\n");
 });
+/* something should work */
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
