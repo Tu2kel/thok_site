@@ -22,8 +22,12 @@ dotenv.config();
 const CONFIG = {
   username: process.env.NAVIGATOR_USERNAME,
   password: process.env.NAVIGATOR_PASSWORD,
-  fscLanes: (process.env.NAVIGATOR_FSC_LANES || "5305,5310,5315,5320").split(","),
-  setAsideFilter: (process.env.NAVIGATOR_SET_ASIDE_FILTER || "Y,R,ST").split(","),
+  fscLanes: (process.env.NAVIGATOR_FSC_LANES || "5305,5310,5315,5320").split(
+    ",",
+  ),
+  setAsideFilter: (process.env.NAVIGATOR_SET_ASIDE_FILTER || "Y,R,ST").split(
+    ",",
+  ),
   excludeRestricted: process.env.NAVIGATOR_EXCLUDE_RESTRICTED === "true",
   excludeAidc: process.env.NAVIGATOR_EXCLUDE_AIDC === "true",
   dateOffset: parseInt(process.env.NAVIGATOR_DATE_OFFSET || "0"),
@@ -39,20 +43,23 @@ if (!fs.existsSync(CONFIG.backupDir)) {
   fs.mkdirSync(CONFIG.backupDir, { recursive: true });
 }
 
-const log  = (msg) => { if (CONFIG.verbose) console.log(`[navigator-scraper] ${msg}`); };
+const log = (msg) => {
+  if (CONFIG.verbose) console.log(`[navigator-scraper] ${msg}`);
+};
 const warn = (msg) => console.warn(`[navigator-scraper] ⚠️  ${msg}`);
 const error = (msg) => console.error(`[navigator-scraper] ❌ ${msg}`);
 
 // ── NAVIGATOR URL & SELECTORS ───────────────────────────────────────────
 const NAVIGATOR_URL = "https://www.dibbsnavigator.com";
 const SELECTORS = {
-  loginEmailInput:       'input[type="email"]',
-  loginPasswordInput:    'input[type="password"]',
-  loginSubmit:           'button[type="submit"]',
-  selectedDateButton:    'button:has-text("Selected"), span:contains("Selected")',
-  nsnFscInput:           "#Main_NSN_Search, #ct1005MainSNSearch",
-  applySelectionsButton: 'button:contains("Apply Selections"), input[value="Apply Selections"]',
-  resultsTable:          "table, tbody tr, [role='grid'] [role='row'], .search-results",
+  loginUsernameInput: "#Main_Input_Customer_Name",
+  loginPasswordInput: "#Main_Input_Password",
+  loginSubmit: "#Main_btnCustOK",
+  selectedDateButton: 'button:has-text("Selected"), span:contains("Selected")',
+  nsnFscInput: "#Main_NSN_Search, #ct1005MainSNSearch",
+  applySelectionsButton:
+    'button:contains("Apply Selections"), input[value="Apply Selections"]',
+  resultsTable: "table, tbody tr, [role='grid'] [role='row'], .search-results",
 };
 
 // ── MAIN SCRAPER FUNCTION ───────────────────────────────────────────────
@@ -64,12 +71,18 @@ async function scrapeNavigatorBatch() {
     log(`Config: Set-aside filter = ${CONFIG.setAsideFilter.join(", ")}`);
 
     if (!CONFIG.username || !CONFIG.password) {
-      throw new Error("NAVIGATOR_USERNAME or NAVIGATOR_PASSWORD not set in .env");
+      throw new Error(
+        "NAVIGATOR_USERNAME or NAVIGATOR_PASSWORD not set in .env",
+      );
     }
 
     browser = await puppeteer.launch({
       headless: CONFIG.headless,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+      ],
     });
 
     const page = await browser.newPage();
@@ -81,8 +94,12 @@ async function scrapeNavigatorBatch() {
 
     // ── LOGIN ──────────────────────────────────────────────────────────
     log("Attempting login...");
-    await page.type(SELECTORS.loginEmailInput, CONFIG.username, { delay: 50 });
-    await page.type(SELECTORS.loginPasswordInput, CONFIG.password, { delay: 50 });
+    await page.type(SELECTORS.loginUsernameInput, CONFIG.username, {
+      delay: 50,
+    });
+    await page.type(SELECTORS.loginPasswordInput, CONFIG.password, {
+      delay: 50,
+    });
     await page.click(SELECTORS.loginSubmit);
     await page.waitForNavigation({ waitUntil: "networkidle2" });
     log("✅ Login successful");
@@ -92,7 +109,9 @@ async function scrapeNavigatorBatch() {
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() - CONFIG.dateOffset);
     const dateStr = targetDate.toLocaleDateString("en-US", {
-      month: "2-digit", day: "2-digit", year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric",
     });
     log(`Target date: ${dateStr} (offset: ${CONFIG.dateOffset} days)`);
 
@@ -149,20 +168,20 @@ async function scrapeNavigatorBatch() {
           if (cells.length < 5) return;
 
           const row = {
-            sol_number:            cells[0]?.textContent?.trim() || "",
-            nsn:                   cells[1]?.textContent?.trim() || "",
-            fsc:                   cells[2]?.textContent?.trim() || "",
-            item_name:             cells[3]?.textContent?.trim() || "",
-            qty:                   cells[4]?.textContent?.trim() || "",
-            unit_price:            cells[5]?.textContent?.trim() || "",
-            ext_price:             cells[6]?.textContent?.trim() || "",
-            delivery_days:         cells[7]?.textContent?.trim() || "",
-            set_aside:             cells[8]?.textContent?.trim() || "",
+            sol_number: cells[0]?.textContent?.trim() || "",
+            nsn: cells[1]?.textContent?.trim() || "",
+            fsc: cells[2]?.textContent?.trim() || "",
+            item_name: cells[3]?.textContent?.trim() || "",
+            qty: cells[4]?.textContent?.trim() || "",
+            unit_price: cells[5]?.textContent?.trim() || "",
+            ext_price: cells[6]?.textContent?.trim() || "",
+            delivery_days: cells[7]?.textContent?.trim() || "",
+            set_aside: cells[8]?.textContent?.trim() || "",
             supplier_restrictions: cells[9]?.textContent?.trim() || "",
-            jcp_status:            cells[10]?.textContent?.trim() || "",
-            drawings_available:    cells[11]?.textContent?.trim() || "",
-            quote_due:             cells[12]?.textContent?.trim() || "",
-            award_status:          cells[13]?.textContent?.trim() || "",
+            jcp_status: cells[10]?.textContent?.trim() || "",
+            drawings_available: cells[11]?.textContent?.trim() || "",
+            quote_due: cells[12]?.textContent?.trim() || "",
+            award_status: cells[13]?.textContent?.trim() || "",
           };
 
           if (row.sol_number) rows.push(row);
@@ -180,7 +199,7 @@ async function scrapeNavigatorBatch() {
 
     const backupPath = path.join(
       CONFIG.backupDir,
-      `navigator-batch-${new Date().toISOString().split("T")[0]}.json`
+      `navigator-batch-${new Date().toISOString().split("T")[0]}.json`,
     );
     fs.writeFileSync(backupPath, JSON.stringify(filtered, null, 2));
     log(`✅ Results backed up to ${backupPath}`);
@@ -199,7 +218,11 @@ async function scrapeNavigatorBatch() {
   } catch (err) {
     error(`Scrape failed: ${err.message}`);
     if (browser) await browser.close();
-    return { ok: false, error: err.message, timestamp: new Date().toISOString() };
+    return {
+      ok: false,
+      error: err.message,
+      timestamp: new Date().toISOString(),
+    };
   }
 }
 
@@ -207,34 +230,38 @@ async function scrapeNavigatorBatch() {
 function filterAndNormalize(sols) {
   return sols
     .map((sol) => {
-      const qty         = parseFloat(sol.qty.replace(/[^0-9.]/g, "")) || 0;
-      const unitPrice   = parseFloat(sol.unit_price.replace(/[^0-9.]/g, "")) || 0;
-      const extPrice    = qty * unitPrice;
-      const deliveryDays = parseInt(sol.delivery_days.replace(/[^0-9]/g, "")) || 0;
+      const qty = parseFloat(sol.qty.replace(/[^0-9.]/g, "")) || 0;
+      const unitPrice = parseFloat(sol.unit_price.replace(/[^0-9.]/g, "")) || 0;
+      const extPrice = qty * unitPrice;
+      const deliveryDays =
+        parseInt(sol.delivery_days.replace(/[^0-9]/g, "")) || 0;
 
       return {
-        sol_number:            sol.sol_number.toUpperCase(),
-        nsn:                   sol.nsn.replace(/[^0-9]/g, ""),
-        fsc:                   sol.fsc.replace(/[^0-9]/g, ""),
-        item_name:             sol.item_name,
+        sol_number: sol.sol_number.toUpperCase(),
+        nsn: sol.nsn.replace(/[^0-9]/g, ""),
+        fsc: sol.fsc.replace(/[^0-9]/g, ""),
+        item_name: sol.item_name,
         qty,
-        unit_price:            unitPrice,
-        ext_price:             extPrice,
-        delivery_days:         deliveryDays,
-        set_aside:             sol.set_aside,
+        unit_price: unitPrice,
+        ext_price: extPrice,
+        delivery_days: deliveryDays,
+        set_aside: sol.set_aside,
         supplier_restrictions: sol.supplier_restrictions,
-        jcp_status:            sol.jcp_status,
-        drawings_available:    sol.drawings_available,
-        quote_due:             sol.quote_due,
-        award_status:          sol.award_status,
-        scraped_at:            new Date().toISOString(),
+        jcp_status: sol.jcp_status,
+        drawings_available: sol.drawings_available,
+        quote_due: sol.quote_due,
+        award_status: sol.award_status,
+        scraped_at: new Date().toISOString(),
       };
     })
     .filter((sol) => {
       if (CONFIG.excludeAidc && sol.item_name.includes("AIDC")) return false;
-      if (CONFIG.excludeRestricted && sol.drawings_available === "Restricted") return false;
-      if (sol.award_status === "Awarded" || sol.award_status === "Removed") return false;
-      if (!sol.sol_number || !sol.nsn || sol.qty <= 0 || sol.unit_price <= 0) return false;
+      if (CONFIG.excludeRestricted && sol.drawings_available === "Restricted")
+        return false;
+      if (sol.award_status === "Awarded" || sol.award_status === "Removed")
+        return false;
+      if (!sol.sol_number || !sol.nsn || sol.qty <= 0 || sol.unit_price <= 0)
+        return false;
       return true;
     });
 }
