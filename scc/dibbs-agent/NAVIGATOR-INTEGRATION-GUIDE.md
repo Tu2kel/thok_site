@@ -1,4 +1,5 @@
 # IMPERIO SCC × NAVIGATOR INTEGRATION GUIDE
+
 # Step-by-step setup for automated batch scraping + win-prob analysis
 
 ---
@@ -8,12 +9,14 @@
 The Navigator workflow runs in two places:
 
 **1. LOCAL AGENT** (Node.js on your Windows machine)
+
 - Files: `dibbs-agent.js` (existing) + `navigator-scraper.js` (new)
 - Puppeteer login to Navigator → scrape daily batch by FSC lanes
 - Exposes HTTP endpoint: `http://localhost:3100/navigator/batch`
 - Returns raw JSON: `{ sols: [...], count, timestamp, ... }`
 
 **2. SCC** (Browser app, Netlify)
+
 - Files: `navigator-analyzer.js`, `rfq-seed-router.js`, `rfq-router-ui.js` (all client-side)
 - Calls agent → receives raw sols
 - Runs hard-reject gate → bid math → win-probability calc
@@ -56,11 +59,13 @@ npm list puppeteer
 ## STEP 2 — Create .env File
 
 Rename `_env_navigator.mock` → `.env` and save to:
+
 ```
 /home/tu2kel/thok_Apps/thokWebsite/THOK_Site/scc/dibbs-agent/.env
 ```
 
 Fill in your actual Navigator credentials:
+
 ```
 NAVIGATOR_USERNAME=your_navigator_email@gmail.com
 NAVIGATOR_PASSWORD=your_navigator_password
@@ -75,21 +80,21 @@ All other config (FSC lanes, FE fees, thresholds, blocked CAGEs/OEMs) is pre-fil
 Near the top of `dibbs-agent.js`, after your existing requires:
 
 ```js
-const NavigatorScraper = require('./navigator-scraper');
+const NavigatorScraper = require("./navigator-scraper");
 ```
 
 In the HTTP request handler, add this route (around line 200–250, alongside your other routes):
 
 ```js
-if (req.url === '/navigator/batch' && req.method === 'GET') {
-  console.log('[agent] /navigator/batch request received');
+if (req.url === "/navigator/batch" && req.method === "GET") {
+  console.log("[agent] /navigator/batch request received");
   try {
     const result = await NavigatorScraper.scrapeNavigatorBatch();
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(result, null, 2));
   } catch (err) {
-    console.error('[agent] Navigator error:', err.message);
-    res.writeHead(500, { 'Content-Type': 'application/json' });
+    console.error("[agent] Navigator error:", err.message);
+    res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: false, error: err.message }));
   }
   return;
@@ -111,7 +116,10 @@ Before `</body>`, add in this order (router must load before UI):
 Add the Navigator batch fetch button wherever fits in your layout:
 
 ```html
-<button id="fetch-navigator-btn" style="background: #c9a84c; color: #111012; padding: 10px 20px; border: none; cursor: pointer; font-weight: bold;">
+<button
+  id="fetch-navigator-btn"
+  style="background: #c9a84c; color: #111012; padding: 10px 20px; border: none; cursor: pointer; font-weight: bold;"
+>
   ⬇️ Fetch Navigator Batch
 </button>
 
@@ -130,21 +138,23 @@ const rolodex = await db.getRolodex();
 
 // Initialize RFQ Router UI (wires analyzer + seed router together)
 RFQRouterUI.init(rolodex, {
-  blockedCAGEs: ['07482', '062W0', '81SA7', 'R9004', '75Q65'],
-  blockedOEMs:  ['SUREFIRE', 'STREAMLIGHT', 'FURUNO'],
-  blockedNSNs:  [],
+  blockedCAGEs: ["07482", "062W0", "81SA7", "R9004", "75Q65"],
+  blockedOEMs: ["SUREFIRE", "STREAMLIGHT", "FURUNO"],
+  blockedNSNs: [],
 });
 
 // Bind fetch button to Navigator Tab
-document.getElementById('fetch-navigator-btn')?.addEventListener('click', async () => {
-  const res = await fetch('http://localhost:3100/navigator/batch');
-  const data = await res.json();
-  if (data.ok) {
-    RFQRouterUI.analyzeBatch(data.sols);
-  } else {
-    alert('Navigator fetch failed: ' + data.error);
-  }
-});
+document
+  .getElementById("fetch-navigator-btn")
+  ?.addEventListener("click", async () => {
+    const res = await fetch("http://localhost:3100/navigator/batch");
+    const data = await res.json();
+    if (data.ok) {
+      RFQRouterUI.analyzeBatch(data.sols);
+    } else {
+      alert("Navigator fetch failed: " + data.error);
+    }
+  });
 ```
 
 ---
@@ -166,13 +176,13 @@ document.getElementById('fetch-navigator-btn')?.addEventListener('click', async 
 
 ## TROUBLESHOOTING
 
-| Error | Fix |
-|---|---|
-| `Failed to fetch: CORS` | Agent not running, or wrong port (check 3100) |
-| `Login failed` | Check `.env` credentials — NAVIGATOR_USERNAME / NAVIGATOR_PASSWORD |
-| `No table found` | Navigator HTML structure changed — update column indices in `navigator-scraper.js` |
-| Puppeteer timeout | Increase `NAVIGATOR_PAGE_TIMEOUT` in `.env` (try 30000) |
-| Puppeteer install fail | Run `npm install puppeteer --save` in the agent folder |
+| Error                   | Fix                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `Failed to fetch: CORS` | Agent not running, or wrong port (check 3100)                                      |
+| `Login failed`          | Check `.env` credentials — NAVIGATOR_USERNAME / NAVIGATOR_PASSWORD                 |
+| `No table found`        | Navigator HTML structure changed — update column indices in `navigator-scraper.js` |
+| Puppeteer timeout       | Increase `NAVIGATOR_PAGE_TIMEOUT` in `.env` (try 30000)                            |
+| Puppeteer install fail  | Run `npm install puppeteer --save` in the agent folder                             |
 
 ---
 
@@ -185,11 +195,11 @@ npm install node-cron
 ```
 
 ```js
-const cron = require('node-cron');
+const cron = require("node-cron");
 
 // Run at 6:00 AM daily
-cron.schedule('0 6 * * *', async () => {
-  console.log('[agent] Scheduled Navigator batch starting...');
+cron.schedule("0 6 * * *", async () => {
+  console.log("[agent] Scheduled Navigator batch starting...");
   const result = await NavigatorScraper.scrapeNavigatorBatch();
   console.log(`[agent] Batch complete: ${result.count} sols`);
 });
