@@ -13,7 +13,6 @@ const https = require("https");
 const url = require("url");
 const fs = require("fs");
 const path = require("path");
-const NavigatorScraper = require("./navigator-scraper");
 
 const PORT = 3100;
 const DIBBS_HOST = "www.dibbs.bsm.dla.mil";
@@ -296,7 +295,7 @@ async function fetchSolPage(solNumber) {
 async function fetchNsnPage(nsn) {
   if (!nsn) return "";
   // DIBBS NSN page: /RFQ/RFQNsn.aspx?value=XXXXXXXXXXXXXXXXX&category=&Scope=
-  const nsnPath = `/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=&Scope=`;
+  const nsnPath = `/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=sol&Scope=open`;
   console.log("[agent] Fetching NSN page:", nsnPath);
   const res = await dibbsFetch(nsnPath);
   return res.body.toString("utf8");
@@ -696,20 +695,144 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Navigator batch scrape endpoint
-  if (req.method === "GET" && req.url === "/navigator/batch") {
-    console.log("[agent] /navigator/batch request received");
-    (async () => {
+  // ── /navigator/batch ──────────────────────────────────────────────────
+  // Accepts: POST { sols: [ { sol_number, nsn, fsc, ... } ] }
+  // For each sol: fetches RFQNsn.aspx → extracts AMSC + approved_sources
+  // Returns enriched sol array. Hard rejects (AMSC G/B/A, blocked CAGEs)
+  // are flagged inline — caller decides what to save.
+  if (req.method === "POST" && req.url === "/navigator/batch") {
+    let rawBody = "";
+    req.on("data", (c) => (rawBody += c));
+    req.on("end", async () => {
+      let body;
       try {
-        const result = await NavigatorScraper.scrapeNavigatorBatch();
-        res.writeHead(200, CORS);
-        res.end(JSON.stringify(result, null, 2));
-      } catch (err) {
-        console.error("[agent] Navigator error:", err.message);
-        res.writeHead(500, CORS);
-        res.end(JSON.stringify({ ok: false, error: err.message }));
+        body = JSON.parse(rawBody);
+      } catch {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ ok: false, error: "Invalid JSON" }));
+        return;
       }
-    })();
+
+      const sols = body.sols || [];
+      if (!sols.length) {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ ok: false, error: "sols array required" }));
+        return;
+      }
+
+      const BLOCKED_CAGES = ["81SA7", "R9004", "07482", "062W0"];
+      const BLOCKED_AMSC = ["G", "B", "A"];
+      const HARD_SA = /^(FG|PO|FI|H|L|E)$/i;
+
+      console.log("[agent] /navigator/batch — enriching", sols.length, "sols");
+      const results = [];
+      let enriched = 0,
+        rejected = 0,
+        errors = 0;
+
+      for (const sol of sols) {
+        const out = { ...sol, amsc: "", approved_sources: [], reject: null };
+
+        // Hard reject: set-aside
+        const sa = (sol.set_aside || "").toUpperCase().trim();
+        if (HARD_SA.test(sa)) {
+          out.reject = "Set-aside ineligible: " + sa;
+          rejected++;
+          results.push(out);
+          continue;
+        }
+
+        // Hard reject: AIDC
+        if (
+          /AIDC/i.test(sol.ai || "") ||
+          /AIDC/i.test(sol.supplier_restrictions || "")
+        ) {
+          out.reject = "AIDC — no certification";
+          rejected++;
+          results.push(out);
+          continue;
+        }
+
+        // NSN required for enrichment
+        if (!sol.nsn || sol.nsn.length < 13) {
+          out.reject = "No NSN — cannot enrich";
+          rejected++;
+          results.push(out);
+          continue;
+        }
+
+        // Fetch NSN page
+        try {
+          const nsnHtml = await fetchNsnPage(sol.nsn);
+          const nsnData = parseNsnPage(nsnHtml);
+          out.amsc = nsnData.amsc || "";
+          out.approved_sources = nsnData.approved_sources || [];
+
+          // Hard reject: AMSC lock
+          if (BLOCKED_AMSC.includes(out.amsc.toUpperCase())) {
+            out.reject =
+              "AMSC:" + out.amsc + " — Government drawing/sole source lock";
+            rejected++;
+            results.push(out);
+            continue;
+          }
+
+          // Hard reject: blocked CAGE in approved sources
+          const blockedCage = out.approved_sources.find((s) =>
+            BLOCKED_CAGES.includes((s.cage || "").toUpperCase()),
+          );
+          if (blockedCage) {
+            out.reject = "Blocked CAGE: " + blockedCage.cage;
+            rejected++;
+            results.push(out);
+            continue;
+          }
+
+          enriched++;
+          console.log(
+            "[agent] ✅",
+            sol.sol_number,
+            "| AMSC:",
+            out.amsc || "N/A",
+            "| Sources:",
+            out.approved_sources.length,
+          );
+        } catch (e) {
+          out.enrich_error = e.message;
+          errors++;
+          console.warn(
+            "[agent] ⚠️ NSN fetch failed for",
+            sol.sol_number,
+            ":",
+            e.message,
+          );
+        }
+
+        results.push(out);
+        // Throttle — be polite to DIBBS
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
+      console.log(
+        "[agent] /navigator/batch complete — enriched:",
+        enriched,
+        "| rejected:",
+        rejected,
+        "| errors:",
+        errors,
+      );
+      res.writeHead(200, CORS);
+      res.end(
+        JSON.stringify({
+          ok: true,
+          total: sols.length,
+          enriched,
+          rejected,
+          errors,
+          sols: results,
+        }),
+      );
+    });
     return;
   }
 
@@ -732,7 +855,6 @@ server.listen(PORT, "127.0.0.1", () => {
   );
   console.log("[agent] Ready.\n");
 });
-/* something should work */
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
