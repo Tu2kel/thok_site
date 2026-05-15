@@ -94,6 +94,9 @@ async function scrapeNavigatorBatch() {
 
     // ── LOGIN ──────────────────────────────────────────────────────────
     log("Attempting login...");
+    await page.waitForSelector(SELECTORS.loginUsernameInput, {
+      timeout: 15000,
+    });
     await page.type(SELECTORS.loginUsernameInput, CONFIG.username, {
       delay: 50,
     });
