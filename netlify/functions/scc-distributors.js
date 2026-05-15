@@ -302,6 +302,21 @@ exports.handler = async (event) => {
         break;
       }
 
+      // ── Batch delete by id array ──
+      case "distBatchDelete": {
+        const { ids } = payload;
+        if (!Array.isArray(ids) || ids.length === 0) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: "ids must be a non-empty array" }),
+          };
+        }
+        const del = await dist.deleteMany({ id: { $in: ids } });
+        result = { deleted: del.deletedCount, requested: ids.length };
+        break;
+      }
+
       // ── Purge entire collection ──
       case "distPurge": {
         const { count } = await dist.countDocuments({});
