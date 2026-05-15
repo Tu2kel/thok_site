@@ -13,6 +13,7 @@ const https = require("https");
 const url = require("url");
 const fs = require("fs");
 const path = require("path");
+const NavigatorScraper = require("./navigator-scraper");
 
 const PORT = 3100;
 const DIBBS_HOST = "www.dibbs.bsm.dla.mil";
@@ -692,6 +693,23 @@ const server = http.createServer((req, res) => {
       res.writeHead(result.ok ? 200 : 502, CORS);
       res.end(JSON.stringify(result));
     });
+    return;
+  }
+
+  // Navigator batch scrape endpoint
+  if (req.method === "GET" && req.url === "/navigator/batch") {
+    console.log("[agent] /navigator/batch request received");
+    (async () => {
+      try {
+        const result = await NavigatorScraper.scrapeNavigatorBatch();
+        res.writeHead(200, CORS);
+        res.end(JSON.stringify(result, null, 2));
+      } catch (err) {
+        console.error("[agent] Navigator error:", err.message);
+        res.writeHead(500, CORS);
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      }
+    })();
     return;
   }
 
