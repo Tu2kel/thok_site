@@ -284,7 +284,15 @@ const NavigatorAnalyzer = (() => {
     }
     totalScore += priceCeilingScore;
 
-    const winProbability = totalScore / 100;
+    // WINNING LANE BONUS (+15 pts) — verified supplier bench exists
+    const WINNING_LANES = ["5305","5310","5315","5320","5340","4330","4730","2910","9510"];
+    const laneBonusScore = WINNING_LANES.includes(sol.fsc) ? 15 : 0;
+    scores.laneBonus = laneBonusScore > 0
+      ? { raw: 15, pct: 100, rationale: `Home turf FSC ${sol.fsc} — verified supplier bench` }
+      : { raw: 0,  pct: 0,   rationale: `FSC ${sol.fsc} — no verified bench yet` };
+    totalScore += laneBonusScore;
+
+    const winProbability = Math.min(totalScore / 115, 1.0); // 115 = 100 base + 15 bonus max
     return { scores, totalScore, winProbability, winProbabilityPct: Math.round(winProbability * 100) };
   }
 

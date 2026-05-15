@@ -105,10 +105,10 @@ async function clickRadio(page, selector) {
 }
 
 // ── SINGLE PASS SCRAPE ────────────────────────────────────────────────────
-// passConfig: { fscLanes, dateRadioId, dateLabel, passNum }
+// passConfig: { dateRadioId, dateLabel, passNum }
 async function runScrapePass(page, passConfig) {
-  const { fscLanes, dateRadioId, dateLabel, passNum } = passConfig;
-  info(`\n── PASS ${passNum}: ${dateLabel} | ${fscLanes.length} FSC lanes ──`);
+  const { dateRadioId, dateLabel, passNum } = passConfig;
+  info(`\n── PASS ${passNum}: ${dateLabel} — broad search ──`);
 
   // Navigate to Search DIBBS fresh for each pass
   await page.goto("https://dibbsnavigator.com/dn.aspx", {
@@ -127,14 +127,12 @@ async function runScrapePass(page, passConfig) {
   await page.keyboard.press("Escape");
   await new Promise((r) => setTimeout(r, 500));
 
-  // FSC Lanes
+  // FSC field — CLEAR it. Broad search. Analyzer handles FSC filtering.
   const fscInput = await page.$("#Main_NSN_Search");
   if (fscInput) {
     await fscInput.click({ clickCount: 3 });
-    await fscInput.type(fscLanes.join(","), { delay: 30 });
-    info(`✅ FSC lanes: ${fscLanes.join(",")}`);
-  } else {
-    info("⚠️ FSC input not found");
+    await page.keyboard.press("Backspace");
+    info("✅ FSC field cleared — broad search");
   }
 
   // Date radio
@@ -339,20 +337,18 @@ async function scrapeNavigatorBatch() {
     }
     info("✅ Login successful:", postLoginUrl);
 
-    // ── PASS 1: SELECTED DATE — ALL FSC LANES ─────────────────────────
+    // ── PASS 1: SELECTED DATE — BROAD SEARCH ──────────────────────────
     const pass1 = await runScrapePass(page, {
       passNum: 1,
       dateRadioId: "Main_rbDateRange_0",
       dateLabel: "Selected (today)",
-      fscLanes: CONFIG.fscLanes,
     });
 
-    // ── PASS 2: LAST 30 DAYS — WINNING LANES ONLY ─────────────────────
+    // ── PASS 2: LAST 30 DAYS — BROAD SEARCH (LHF) ─────────────────────
     const pass2 = await runScrapePass(page, {
       passNum: 2,
       dateRadioId: "Main_rbDateRange_3",
       dateLabel: "Last 30 days (LHF)",
-      fscLanes: CONFIG.fscLanesWinning,
     });
 
     await browser.close();
