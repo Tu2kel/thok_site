@@ -170,7 +170,7 @@ async function runScrapePass(page, passConfig) {
   await new Promise((r) => setTimeout(r, 2000));
   info("✅ JCP: No JCP Cert.");
 
-  // Apply Selections — force click via evaluate to bypass any overlay
+  // Apply Selections — force click via evaluate to bypass any overlay/popup
   info("Clicking Apply Selections...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
@@ -185,10 +185,14 @@ async function runScrapePass(page, passConfig) {
 
   // Sort Extended Price desc
   info("Sorting by Extended Price...");
+  await new Promise((r) => setTimeout(r, 1500));
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
-    page.evaluate(() => {
-      __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+    page.evaluate(function () {
+      // wrapped in non-strict function to allow __doPostBack's use of `arguments`
+      (function () {
+        __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+      })();
     }),
   ]);
 
@@ -213,8 +217,10 @@ async function runScrapePass(page, passConfig) {
         waitUntil: "domcontentloaded",
         timeout: 120000,
       }),
-      page.evaluate(() => {
-        __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+      page.evaluate(function () {
+        (function () {
+          __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+        })();
       }),
     ]);
   }
