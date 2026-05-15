@@ -111,10 +111,13 @@ async function runScrapePass(page, passConfig) {
   info(`\n── PASS ${passNum}: ${dateLabel} — broad search ──`);
 
   // Navigate to Search DIBBS fresh for each pass
+  // Extra settle + networkidle2 prevents 'Execution context was destroyed' on pass 2
+  await new Promise((r) => setTimeout(r, 1000));
   await page.goto("https://dibbsnavigator.com/dn.aspx", {
-    waitUntil: "domcontentloaded",
+    waitUntil: "networkidle2",
     timeout: 120000,
   });
+  await new Promise((r) => setTimeout(r, 1000));
 
   await page.waitForSelector("#btnFullDN", { timeout: 120000 });
 
@@ -354,6 +357,15 @@ async function scrapeNavigatorBatch() {
       dateRadioId: "Main_rbDateRange_0",
       dateLabel: "Selected (today)",
     });
+
+    // Save pass1 immediately — don't lose it if pass2 fails
+    const p1Timestamp = new Date().toISOString().split("T")[0];
+    const p1BackupPath = require("path").join(
+      CONFIG.backupDir,
+      "navigator-pass1-" + p1Timestamp + ".json",
+    );
+    require("fs").writeFileSync(p1BackupPath, JSON.stringify(pass1, null, 2));
+    info("✅ Pass 1 saved (" + pass1.length + " sols): " + p1BackupPath);
 
     // ── PASS 2: LAST 30 DAYS — BROAD SEARCH (LHF) ─────────────────────
     const pass2 = await runScrapePass(page, {
