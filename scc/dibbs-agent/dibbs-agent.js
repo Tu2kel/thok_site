@@ -743,10 +743,9 @@ const server = http.createServer((req, res) => {
         }
 
         // Hard reject: AIDC
-        if (
-          /AIDC/i.test(sol.ai || "") ||
-          /AIDC/i.test(sol.supplier_restrictions || "")
-        ) {
+        // ai column = 'AI' means Approved Item (normal) — NOT the AIDC flag
+        // AIDC only appears explicitly in supplier_restrictions field
+        if (/AIDC/i.test(sol.supplier_restrictions || "")) {
           out.reject = "AIDC — no certification";
           rejected++;
           results.push(out);

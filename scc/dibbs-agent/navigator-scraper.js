@@ -111,13 +111,10 @@ async function runScrapePass(page, passConfig) {
   info(`\n── PASS ${passNum}: ${dateLabel} — broad search ──`);
 
   // Navigate to Search DIBBS fresh for each pass
-  // Extra settle + networkidle2 prevents 'Execution context was destroyed' on pass 2
-  await new Promise((r) => setTimeout(r, 1000));
   await page.goto("https://dibbsnavigator.com/dn.aspx", {
-    waitUntil: "networkidle2",
+    waitUntil: "domcontentloaded",
     timeout: 120000,
   });
-  await new Promise((r) => setTimeout(r, 1000));
 
   await page.waitForSelector("#btnFullDN", { timeout: 120000 });
 
@@ -156,6 +153,7 @@ async function runScrapePass(page, passConfig) {
   info("✅ Not Expired");
 
   // Com. Pack
+  await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
   await page.evaluate(() => {
     const cb = document.querySelector("#Main_chCPac");
     if (cb && !cb.checked) cb.click();
@@ -164,11 +162,15 @@ async function runScrapePass(page, passConfig) {
   info("✅ Com. Pack");
 
   // Supplier Restrictions: COTS
+  await page.waitForSelector("#Main_DropDownList_SupRestrict", {
+    timeout: 30000,
+  });
   await page.select("#Main_DropDownList_SupRestrict", "COTS");
   await new Promise((r) => setTimeout(r, 2000));
   info("✅ Supplier Restrictions: COTS");
 
   // JCP: No JCP Cert.
+  await page.waitForSelector("#Main_DropDownListJCP", { timeout: 30000 });
   await page.select("#Main_DropDownListJCP", "No JCP Cert.");
   await new Promise((r) => setTimeout(r, 2000));
   info("✅ JCP: No JCP Cert.");
@@ -357,15 +359,6 @@ async function scrapeNavigatorBatch() {
       dateRadioId: "Main_rbDateRange_0",
       dateLabel: "Selected (today)",
     });
-
-    // Save pass1 immediately — don't lose it if pass2 fails
-    const p1Timestamp = new Date().toISOString().split("T")[0];
-    const p1BackupPath = require("path").join(
-      CONFIG.backupDir,
-      "navigator-pass1-" + p1Timestamp + ".json",
-    );
-    require("fs").writeFileSync(p1BackupPath, JSON.stringify(pass1, null, 2));
-    info("✅ Pass 1 saved (" + pass1.length + " sols): " + p1BackupPath);
 
     // ── PASS 2: LAST 30 DAYS — BROAD SEARCH (LHF) ─────────────────────
     const pass2 = await runScrapePass(page, {
