@@ -170,11 +170,16 @@ async function runScrapePass(page, passConfig) {
   await new Promise((r) => setTimeout(r, 2000));
   info("✅ JCP: No JCP Cert.");
 
-  // Apply
+  // Apply Selections — force click via evaluate to bypass any overlay
   info("Clicking Apply Selections...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
-    page.click("#btnFullDN"),
+    page.evaluate(() => {
+      const btn = document.querySelector("#btnFullDN");
+      if (!btn) throw new Error("#btnFullDN not found");
+      btn.scrollIntoView();
+      btn.click();
+    }),
   ]);
   info("✅ Results loaded");
 
