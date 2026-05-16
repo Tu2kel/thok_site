@@ -121,12 +121,17 @@ async function runScrapePass(page, passConfig) {
   await page.keyboard.press("Escape");
   await new Promise((r) => setTimeout(r, 500));
 
-  // FSC field — CLEAR it. Broad search. Analyzer handles FSC filtering.
+  // FSC field — set specific FSC or clear for broad search
   const fscInput = await page.$("#Main_NSN_Search");
   if (fscInput) {
     await fscInput.click({ clickCount: 3 });
     await page.keyboard.press("Backspace");
-    info("✅ FSC field cleared — broad search");
+    if (fsc) {
+      await fscInput.type(fsc, { delay: 40 });
+      info(`✅ FSC field set: ${fsc}`);
+    } else {
+      info("✅ FSC field cleared — broad search");
+    }
   }
 
   // Date radio
