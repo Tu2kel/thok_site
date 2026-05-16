@@ -421,6 +421,13 @@ if (require.main === module) {
   (async () => {
     const result = await scrapeNavigatorBatch();
     console.log("\n=== NAVIGATOR BATCH RESULT ===");
-    console.log(JSON.stringify(result, null, 2));
+    if (result.ok) {
+      console.log("✅ Total sols:", result.count);
+      console.log("   Pass 1 (today):", result.pass1);
+      console.log("   Pass 2 (LHF)  :", result.pass2);
+      console.log("   Backup:", result.backupPath);
+    } else {
+      console.log("❌ Failed:", result.error);
+    }
   })();
 }
