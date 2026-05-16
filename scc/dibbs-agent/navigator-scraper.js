@@ -1,26 +1,17 @@
 // ═══════════════════════════════════════════════════════════════════════
-// IMPERIO SCC — DIBBS NAVIGATOR SCRAPER v3.0
+// IMPERIO SCC — DIBBS NAVIGATOR SCRAPER v4.0
 //
-// PHASE 1 — Today, broad, first page only:
-//   1. Login
+// PHASE 1 — Today, broad, first page:
+//   1. Login → lands on dn.aspx with Selected + Filter Set: None already set
 //   2. Dismiss yellow popup
-//   3. Filter Set: None (postback — resets form)
-//   4. Com. Pack checkbox
-//   5. Not Expired checkbox
-//   6. Not Already Awarded radio
-//   7. Supplier Restrictions: COTS (dropdown, no postback)
-//   8. JCP: No JCP Cert. (dropdown, no postback)
-//   9. Apply Selections (postback — loads results)
-//  10. Sort Extended Price HIGH→LOW
-//  11. Scrape first page, stop at $1000 floor
+//   3. Single evaluate() sets all fields (no postbacks)
+//   4. Apply Selections → sort → scrape
 //
 // PHASE 2 — Last 30 days, per-FSC, first page each:
-//   1. Last 30 days radio (no postback)
-//   2. Type FSC into NSN/FSC field
-//   3. Apply Selections (postback)
-//   4. Sort + scrape first page
-//   5. Clear FSC field via Clear button (#btnClearNSN_PartNo1)
-//   6. Type next FSC → repeat
+//   1. Navigate fresh to dn.aspx (Filter Set: None already default)
+//   2. Dismiss popup
+//   3. Single evaluate() sets all fields + Last 30 days + FSC
+//   4. Apply Selections → sort → scrape → repeat
 // ═══════════════════════════════════════════════════════════════════════
 
 const puppeteer = require("puppeteer");
@@ -30,7 +21,6 @@ const path = require("path");
 
 dotenv.config();
 
-// ── CONFIG ───────────────────────────────────────────────────────────────
 const CONFIG = {
   username: process.env.NAVIGATOR_USERNAME,
   password: process.env.NAVIGATOR_PASSWORD,
@@ -38,19 +28,16 @@ const CONFIG = {
     .split(",")
     .map((f) => f.trim()),
   headless: process.env.NAVIGATOR_HEADLESS !== "false",
-  verbose: process.env.NAVIGATOR_VERBOSE === "true",
   backupDir: process.env.NAVIGATOR_BACKUP_DIR || "./navigator-backups",
   minExtPrice: parseFloat(process.env.NAVIGATOR_MIN_EXT_PRICE || "1000"),
 };
 
-if (!fs.existsSync(CONFIG.backupDir)) {
+if (!fs.existsSync(CONFIG.backupDir))
   fs.mkdirSync(CONFIG.backupDir, { recursive: true });
-}
 
 const info = (...a) => console.log("[navigator-scraper]", ...a);
 const fail = (...a) => console.error("[navigator-scraper] ❌", ...a);
 
-// ── COLUMN MAP ───────────────────────────────────────────────────────────
 const COL = {
   sol_number: 0,
   ai: 1,
@@ -75,47 +62,75 @@ const COL = {
   supplier_list: 28,
 };
 
-// ── HELPERS ───────────────────────────────────────────────────────────────
-async function ensureChecked(page, selector) {
-  await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    if (el && !el.checked) el.click();
-  }, selector);
+// ── SET ALL FORM FIELDS IN ONE EVALUATE ───────────────────────────────
+// No postbacks — just DOM value setting. ASP.NET reads these on Apply.
+async function setFormFields(page, { fsc = "", last30 = false } = {}) {
+  await page.evaluate(
+    (fscVal, useLast30) => {
+      // Com. Pack
+      const comPack = document.querySelector("#Main_chCPac");
+      if (comPack) comPack.checked = true;
+
+      // Not Expired
+      const notExpired = document.querySelector("#Main_chNotExpired");
+      if (notExpired) notExpired.checked = true;
+      const expired = document.querySelector("#Main_chExpired");
+      if (expired) expired.checked = false;
+
+      // Not Already Awarded
+      const notAwarded = document.querySelector("#Main_rbAwarded_2");
+      if (notAwarded) notAwarded.checked = true;
+
+      // Date — Selected (default) or Last 30 days
+      if (useLast30) {
+        const date30 = document.querySelector("#Main_rbDateRange_3");
+        if (date30) date30.checked = true;
+        const dateSelected = document.querySelector("#Main_rbDateRange_0");
+        if (dateSelected) dateSelected.checked = false;
+      }
+
+      // Supplier Restrictions: COTS = "C"
+      const supRestrict = document.querySelector(
+        "#Main_DropDownList_SupRestrict",
+      );
+      if (supRestrict) supRestrict.value = "C";
+
+      // JCP: No JCP Cert. = "N"
+      const jcp = document.querySelector("#Main_DropDownListJCP");
+      if (jcp) jcp.value = "N";
+
+      // FSC field
+      const nsnField = document.querySelector("#Main_NSN_Search");
+      if (nsnField) nsnField.value = fscVal;
+    },
+    fsc,
+    last30,
+  );
+
+  info(
+    `✅ Fields set — FSC: ${fsc || "none"} | Date: ${last30 ? "Last 30 days" : "Selected"} | COTS | No JCP`,
+  );
 }
 
-async function ensureUnchecked(page, selector) {
-  await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    if (el && el.checked) el.click();
-  }, selector);
+// ── APPLY SELECTIONS ─────────────────────────────────────────────────
+async function applySelections(page) {
+  info("Clicking Apply Selections...");
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
+    page.evaluate(() => {
+      const btn = document.querySelector("#btnFullDN");
+      if (!btn) throw new Error("#btnFullDN not found");
+      btn.scrollIntoView();
+      btn.click();
+    }),
+  ]);
+  info("✅ Results loaded");
 }
 
-async function clickRadio(page, selector, causesPostback = false) {
-  if (causesPostback) {
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 })
-        .catch(() => {}),
-      page.evaluate((sel) => {
-        const el = document.querySelector(sel);
-        if (el) el.click();
-      }, selector),
-    ]);
-    await new Promise((r) => setTimeout(r, 500));
-  } else {
-    await page.evaluate((sel) => {
-      const el = document.querySelector(sel);
-      if (el) el.click();
-    }, selector);
-    await new Promise((r) => setTimeout(r, 200));
-  }
-}
-
-// ── SORT + SCRAPE — called after results are loaded ───────────────────────
+// ── SORT + SCRAPE FIRST PAGE ──────────────────────────────────────────
 async function sortAndScrape(page, label) {
-  // Sort Extended Price desc
-  info(`Sorting by Extended Price...`);
-  await new Promise((r) => setTimeout(r, 1500));
+  info("Sorting by Extended Price...");
+  await new Promise((r) => setTimeout(r, 1000));
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
     page.evaluate(function () {
@@ -125,7 +140,7 @@ async function sortAndScrape(page, label) {
     }),
   ]);
 
-  // Check direction — if ascending, click again
+  // Check sort direction
   const firstPrice = await page.evaluate((colIdx) => {
     const rows = document.querySelectorAll("#Main_GridView1 tbody tr");
     for (const row of rows) {
@@ -140,7 +155,7 @@ async function sortAndScrape(page, label) {
   }, COL.ext_price);
 
   if (firstPrice > 0 && firstPrice < 5000) {
-    info("Ascending — clicking sort again...");
+    info("Ascending — sorting again...");
     await Promise.all([
       page.waitForNavigation({
         waitUntil: "domcontentloaded",
@@ -155,7 +170,6 @@ async function sortAndScrape(page, label) {
   }
   info("✅ Sorted desc");
 
-  // Scrape first page
   const sols = await page.evaluate(
     (colMap, minPrice, label) => {
       const rows = Array.from(
@@ -214,22 +228,26 @@ async function sortAndScrape(page, label) {
   return sols;
 }
 
-// ── APPLY SELECTIONS ─────────────────────────────────────────────────────
-async function applySelections(page) {
-  info("Clicking Apply Selections...");
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
-    page.evaluate(() => {
-      const btn = document.querySelector("#btnFullDN");
-      if (!btn) throw new Error("#btnFullDN not found");
-      btn.scrollIntoView();
-      btn.click();
-    }),
-  ]);
-  info("✅ Results loaded");
+// ── NAVIGATE TO SEARCH PAGE ───────────────────────────────────────────
+async function goToSearchPage(page) {
+  await new Promise((r) => setTimeout(r, 500));
+  await page.goto("https://dibbsnavigator.com/dn.aspx", {
+    waitUntil: "load",
+    timeout: 120000,
+  });
+  await new Promise((r) => setTimeout(r, 2000));
+  await page.waitForSelector("#btnFullDN", { timeout: 30000 });
+
+  // Dismiss yellow popup
+  await page.evaluate(() => {
+    const btn = document.querySelector("#Button111");
+    if (btn) btn.click();
+  });
+  await page.keyboard.press("Escape");
+  await new Promise((r) => setTimeout(r, 300));
 }
 
-// ── MAIN ──────────────────────────────────────────────────────────────────
+// ── MAIN ──────────────────────────────────────────────────────────────
 async function scrapeNavigatorBatch() {
   let browser;
   try {
@@ -261,7 +279,7 @@ async function scrapeNavigatorBatch() {
     await page.setViewport({ width: 1920, height: 1080 });
 
     // ── LOGIN ─────────────────────────────────────────────────────────
-    info("Navigating to login page...");
+    info("Navigating to login...");
     await page.goto("https://dibbsnavigator.com/login.aspx", {
       waitUntil: "domcontentloaded",
       timeout: 120000,
@@ -282,160 +300,40 @@ async function scrapeNavigatorBatch() {
       page.click("#Main_btnCustOK"),
     ]);
     if (page.url().includes("login.aspx")) {
-      throw new Error(
-        "Login failed — check NAVIGATOR_USERNAME / NAVIGATOR_PASSWORD in .env",
-      );
+      throw new Error("Login failed");
     }
-    info("✅ Login successful:", page.url());
+    info("✅ Login successful");
 
-    await page.waitForSelector("#btnFullDN", { timeout: 120000 });
-
-    // ── PHASE 1 SETUP ─────────────────────────────────────────────────
+    // ── PHASE 1: Today — broad ────────────────────────────────────────
     info("\n── PHASE 1: Today — broad ──");
-
-    // Step 2: Dismiss yellow popup
-    await page.evaluate(() => {
-      const btn = document.querySelector("#Button111");
-      if (btn) btn.click();
-    });
-    await new Promise((r) => setTimeout(r, 500));
-    await page.keyboard.press("Escape");
-    await new Promise((r) => setTimeout(r, 500));
-    info("✅ Popup dismissed");
-
-    // Step 3: Filter Set: None — triggers postback, resets form
-    await clickRadio(page, "#Main_rbDefaultSets_4", true);
+    await goToSearchPage(page);
     await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
-    info("✅ Filter set: None");
-
-    // Step 4: Com. Pack
-    await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
-    await page.evaluate(() => {
-      const cb = document.querySelector("#Main_chCPac");
-      if (cb && !cb.checked) cb.click();
-    });
-    await new Promise((r) => setTimeout(r, 500));
-    info("✅ Com. Pack");
-
-    // Step 5: Not Expired
-    await ensureChecked(page, "#Main_chNotExpired");
-    await ensureUnchecked(page, "#Main_chExpired");
-    info("✅ Not Expired");
-
-    // Step 6: Not Already Awarded
-    await clickRadio(page, "#Main_rbAwarded_2", false);
-    info("✅ Not Already Awarded");
-
-    // Step 7: Supplier Restrictions: COTS
-    await page.waitForSelector("#Main_DropDownList_SupRestrict", {
-      timeout: 30000,
-    });
-    await page.select("#Main_DropDownList_SupRestrict", "COTS");
-    await new Promise((r) => setTimeout(r, 500));
-    info("✅ Supplier Restrictions: COTS");
-
-    // Step 8: JCP: No JCP Cert.
-    await page.waitForSelector("#Main_DropDownListJCP", { timeout: 30000 });
-    await page.select("#Main_DropDownListJCP", "No JCP Cert.");
-    await new Promise((r) => setTimeout(r, 500));
-    info("✅ JCP: No JCP Cert.");
-
-    // Step 9: Apply Selections
+    await setFormFields(page, { last30: false });
     await applySelections(page);
-
-    // Step 10+11: Sort + scrape
     const pass1 = await sortAndScrape(page, "Today (broad)");
 
-    // Save pass1 immediately
-    const p1Timestamp = new Date().toISOString().split("T")[0];
-    const p1BackupPath = path.join(
+    // Save immediately
+    const p1Date = new Date().toISOString().split("T")[0];
+    const p1Path = path.join(
       CONFIG.backupDir,
-      `navigator-pass1-${p1Timestamp}.json`,
+      `navigator-pass1-${p1Date}.json`,
     );
-    fs.writeFileSync(p1BackupPath, JSON.stringify(pass1, null, 2));
-    info(`✅ Pass 1 saved (${pass1.length} sols): ${p1BackupPath}`);
+    fs.writeFileSync(p1Path, JSON.stringify(pass1, null, 2));
+    info(`✅ Pass 1 saved (${pass1.length} sols): ${p1Path}`);
 
-    // ── PHASE 2: Last 30 days, per-FSC ───────────────────────────────
-    info("\n── PHASE 2: Last 30 days — per FSC lane ──");
-
+    // ── PHASE 2: Last 30 days — per FSC ──────────────────────────────
+    info("\n── PHASE 2: Last 30 days — per FSC ──");
     const pass2Sols = [];
     const seen = new Set(pass1.map((s) => s.sol_number));
 
     for (let i = 0; i < CONFIG.fscLanes.length; i++) {
       const fsc = CONFIG.fscLanes[i];
-      info(`\n── FSC LANE ${i + 1}/${CONFIG.fscLanes.length}: ${fsc} ──`);
+      info(`\n── FSC ${i + 1}/${CONFIG.fscLanes.length}: ${fsc} ──`);
       try {
-        // Navigate fresh for each FSC lane — ensures clean form state
-        await new Promise((r) => setTimeout(r, 1000));
-        await page.goto("https://dibbsnavigator.com/dn.aspx", {
-          waitUntil: "load",
-          timeout: 120000,
-        });
-        await new Promise((r) => setTimeout(r, 2000));
-        await page.waitForSelector("#btnFullDN", { timeout: 30000 });
-
-        // Dismiss popup if present
-        await page.evaluate(() => {
-          const btn = document.querySelector("#Button111");
-          if (btn) btn.click();
-        });
-        await page.keyboard.press("Escape");
-        await new Promise((r) => setTimeout(r, 300));
-
-        // Filter Set: None — postback resets form
-        await clickRadio(page, "#Main_rbDefaultSets_4", true);
+        await goToSearchPage(page);
         await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
-        info("✅ Filter set: None");
-
-        // Com. Pack
-        await page.evaluate(() => {
-          const cb = document.querySelector("#Main_chCPac");
-          if (cb && !cb.checked) cb.click();
-        });
-        info("✅ Com. Pack");
-
-        // Not Expired
-        await ensureChecked(page, "#Main_chNotExpired");
-        await ensureUnchecked(page, "#Main_chExpired");
-        info("✅ Not Expired");
-
-        // Not Already Awarded
-        await clickRadio(page, "#Main_rbAwarded_2", false);
-        info("✅ Not Already Awarded");
-
-        // Last 30 days
-        await clickRadio(page, "#Main_rbDateRange_3", false);
-        info("✅ Date: Last 30 days");
-
-        // Supplier Restrictions: COTS
-        await page.waitForSelector("#Main_DropDownList_SupRestrict", {
-          timeout: 30000,
-        });
-        await page.select("#Main_DropDownList_SupRestrict", "COTS");
-        await new Promise((r) => setTimeout(r, 300));
-        info("✅ Supplier Restrictions: COTS");
-
-        // JCP: No JCP Cert.
-        await page.waitForSelector("#Main_DropDownListJCP", { timeout: 30000 });
-        await page.select("#Main_DropDownListJCP", "No JCP Cert.");
-        await new Promise((r) => setTimeout(r, 300));
-        info("✅ JCP: No JCP Cert.");
-
-        // Type FSC last — after all postback-triggering steps
-        await page.waitForSelector("#Main_NSN_Search", { timeout: 30000 });
-        const fscInput = await page.$("#Main_NSN_Search");
-        if (fscInput) {
-          await fscInput.click({ clickCount: 3 });
-          await page.keyboard.press("Backspace");
-          await fscInput.type(fsc, { delay: 40 });
-          await new Promise((r) => setTimeout(r, 300));
-          info(`✅ FSC set: ${fsc}`);
-        }
-
-        // Apply Selections
+        await setFormFields(page, { fsc, last30: true });
         await applySelections(page);
-
-        // Sort + scrape
         const fscSols = await sortAndScrape(page, `Last 30 days FSC ${fsc}`);
         const newSols = fscSols.filter((s) => !seen.has(s.sol_number));
         newSols.forEach((s) => seen.add(s.sol_number));
@@ -443,8 +341,8 @@ async function scrapeNavigatorBatch() {
         info(
           `   +${newSols.length} new from FSC ${fsc} (${fscSols.length} on page)`,
         );
-      } catch (fscErr) {
-        fail(`FSC ${fsc} failed: ${fscErr.message} — skipping`);
+      } catch (e) {
+        fail(`FSC ${fsc} failed: ${e.message} — skipping`);
       }
     }
 
@@ -484,10 +382,8 @@ async function scrapeNavigatorBatch() {
   }
 }
 
-// ── EXPORTS ───────────────────────────────────────────────────────────────
 module.exports = { scrapeNavigatorBatch, CONFIG };
 
-// ── CLI ───────────────────────────────────────────────────────────────────
 if (require.main === module) {
   (async () => {
     const result = await scrapeNavigatorBatch();
