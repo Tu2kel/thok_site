@@ -834,7 +834,151 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+  // ── Navigator scrape endpoint ─────────────────────────────────────────
+  // POST /navigator/scrape
+  // Streams SSE progress log then fires final result event.
+  // dibbs-tab.js reads the stream and updates the live log in the UI.
+  //
+  // Requires navigator-scraper.js in the same directory.
+  // navigator-scraper.js must export { scrapeNavigatorBatch }.
+  //
+  // SSE event format:
+  //   data: {"type":"log",   "msg":"...", "level":"info"|"ok"|"err"}
+  //   data: {"type":"result","ok":true,   "sols":[...], "count":N}
+  //   data: {"type":"result","ok":false,  "error":"..."}
+  //   data: [DONE]
+  if (req.method === "POST" && req.url === "/navigator/scrape") {
+    // SSE headers — no Content-Type in CORS object (that has application/json)
+    res.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
 
+    // Helper — write one SSE event
+    const send = (payload) => {
+      try {
+        res.write("data: " + JSON.stringify(payload) + "\n\n");
+      } catch {}
+    };
+
+    send({ type: "log", msg: "Navigator scrape initiated", level: "info" });
+
+    // Intercept console.log so scraper progress lines stream to browser.
+    // navigator-scraper uses info() → console.log("[navigator-scraper]", ...)
+    const origLog = console.log;
+    const origError = console.error;
+
+    const patchLog = (...args) => {
+      origLog(...args);
+      const msg = args
+        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+        .join(" ");
+      const level = msg.includes("❌")
+        ? "err"
+        : msg.includes("✅")
+          ? "ok"
+          : "info";
+      send({
+        type: "log",
+        msg: msg.replace("[navigator-scraper] ", ""),
+        level,
+      });
+    };
+    const patchErr = (...args) => {
+      origError(...args);
+      const msg = args
+        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+        .join(" ");
+      send({
+        type: "log",
+        msg: msg.replace("[navigator-scraper] ", ""),
+        level: "err",
+      });
+    };
+
+    console.log = patchLog;
+    console.error = patchErr;
+
+    let scraper;
+    try {
+      scraper = require("./navigator-scraper");
+    } catch (e) {
+      console.log = origLog;
+      console.error = origError;
+      send({
+        type: "log",
+        msg: "navigator-scraper.js not found: " + e.message,
+        level: "err",
+      });
+      send({
+        type: "result",
+        ok: false,
+        error: "navigator-scraper.js not found",
+      });
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    // Run scrape — this takes 2-4 minutes, stream keeps the connection alive
+    scraper
+      .scrapeNavigatorBatch()
+      .then((result) => {
+        console.log = origLog;
+        console.error = origError;
+
+        if (result.ok) {
+          send({
+            type: "result",
+            ok: true,
+            sols: result.sols,
+            count: result.count,
+            pass1: result.pass1,
+            pass2: result.pass2 || 0,
+            backupPath: result.backupPath,
+          });
+        } else {
+          send({
+            type: "result",
+            ok: false,
+            error: result.error || "Scrape failed",
+          });
+        }
+
+        res.write("data: [DONE]\n\n");
+        res.end();
+      })
+      .catch((e) => {
+        console.log = origLog;
+        console.error = origError;
+        send({ type: "log", msg: "Fatal: " + e.message, level: "err" });
+        send({ type: "result", ok: false, error: e.message });
+        res.write("data: [DONE]\n\n");
+        res.end();
+      });
+
+    // Keep-alive ping every 20s so browser doesn't time out during long scrape
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(": keep-alive\n\n");
+      } catch {
+        clearInterval(keepAlive);
+      }
+    }, 20000);
+
+    // Clean up on client disconnect
+    req.on("close", () => {
+      clearInterval(keepAlive);
+      console.log = origLog;
+      console.error = origError;
+    });
+
+    return;
+  }
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });
@@ -853,6 +997,9 @@ server.listen(PORT, "127.0.0.1", () => {
     "stored cookies",
   );
   console.log("[agent] Ready.\n");
+  console.log(
+    "║   Navigator: http://localhost:" + PORT + "/navigator/scrape  ║",
+  );
 });
 
 server.on("error", (err) => {

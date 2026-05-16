@@ -781,6 +781,7 @@
                 id: "workflow",
                 label: "Workflow",
                 tabs: [
+                  { id: "dibbs", label: "DIBBS", icon: "⬇ " },
                   { id: "dashboard", label: "Dashboard", icon: "" },
                   { id: "intake", label: "Intake", icon: "" },
                   { id: "pipeline", label: "Pipeline", icon: "" },
@@ -1030,6 +1031,15 @@
         "main",
         null,
         tab === "dashboard" && hA(DashboardTab, { rows, goPipeline }),
+
+        tab === "dibbs" &&
+          (window.SCC_TABS && window.SCC_TABS.DibbsTab
+            ? hA(window.SCC_TABS.DibbsTab, null)
+            : hA(
+                "div",
+                { style: { padding: "20px", color: "var(--body-dim)" } },
+                "DIBBS loading...",
+              )),
 
         tab === "intake" &&
           hA(IntakeTab, {
