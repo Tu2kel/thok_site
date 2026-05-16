@@ -321,34 +321,11 @@ async function scrapeNavigatorBatch() {
     fs.writeFileSync(p1Path, JSON.stringify(pass1, null, 2));
     info(`✅ Pass 1 saved (${pass1.length} sols): ${p1Path}`);
 
-    // ── PHASE 2: Last 30 days — per FSC ──────────────────────────────
-    info("\n── PHASE 2: Last 30 days — per FSC ──");
-    const pass2Sols = [];
-    const seen = new Set(pass1.map((s) => s.sol_number));
-
-    for (let i = 0; i < CONFIG.fscLanes.length; i++) {
-      const fsc = CONFIG.fscLanes[i];
-      info(`\n── FSC ${i + 1}/${CONFIG.fscLanes.length}: ${fsc} ──`);
-      try {
-        await goToSearchPage(page);
-        await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
-        await setFormFields(page, { fsc, last30: true });
-        await applySelections(page);
-        const fscSols = await sortAndScrape(page, `Last 30 days FSC ${fsc}`);
-        const newSols = fscSols.filter((s) => !seen.has(s.sol_number));
-        newSols.forEach((s) => seen.add(s.sol_number));
-        pass2Sols.push(...newSols);
-        info(
-          `   +${newSols.length} new from FSC ${fsc} (${fscSols.length} on page)`,
-        );
-      } catch (e) {
-        fail(`FSC ${fsc} failed: ${e.message} — skipping`);
-      }
-    }
+    // Phase 2 stripped — daily broad scrape is sufficient for now
 
     await browser.close();
 
-    const allSols = [...pass1, ...pass2Sols];
+    const allSols = [...pass1];
     info(
       `\n✅ COMPLETE — Pass 1: ${pass1.length} | Pass 2: ${pass2Sols.length} | Total: ${allSols.length}`,
     );
@@ -366,7 +343,7 @@ async function scrapeNavigatorBatch() {
       timestamp: new Date().toISOString(),
       count: allSols.length,
       pass1: pass1.length,
-      pass2: pass2Sols.length,
+      pass2: 0,
       minPrice: CONFIG.minExtPrice,
       sols: allSols,
       backupPath,
