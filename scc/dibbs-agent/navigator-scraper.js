@@ -28,13 +28,7 @@ const CONFIG = {
   fscLanes: (process.env.NAVIGATOR_FSC_LANES || "5305,5310,5315,5320")
     .split(",")
     .map((f) => f.trim()),
-  // Winning lanes only — used for Pass 2 (30-day LHF)
-  fscLanesWinning: (
-    process.env.NAVIGATOR_FSC_LANES_WINNING ||
-    "5305,5310,5315,5320,5340,4330,4730,2910,9510"
-  )
-    .split(",")
-    .map((f) => f.trim()),
+  // fscLanesWinning removed — Pass 2 now loops CONFIG.fscLanes per-FSC
   headless: process.env.NAVIGATOR_HEADLESS !== "false",
   verbose: process.env.NAVIGATOR_VERBOSE === "true",
   backupDir: process.env.NAVIGATOR_BACKUP_DIR || "./navigator-backups",
@@ -105,9 +99,9 @@ async function clickRadio(page, selector) {
 }
 
 // ── SINGLE PASS SCRAPE ────────────────────────────────────────────────────
-// passConfig: { dateRadioId, dateLabel, passNum }
+// passConfig: { dateRadioId, dateLabel, passNum, fsc? }
 async function runScrapePass(page, passConfig) {
-  const { dateRadioId, dateLabel, passNum } = passConfig;
+  const { dateRadioId, dateLabel, passNum, fsc } = passConfig;
   info(`\n── PASS ${passNum}: ${dateLabel} — broad search ──`);
 
   // Navigate to Search DIBBS fresh for each pass
@@ -353,36 +347,55 @@ async function scrapeNavigatorBatch() {
     }
     info("✅ Login successful:", postLoginUrl);
 
-    // ── PASS 1: SELECTED DATE — BROAD SEARCH ──────────────────────────
+    // ── PASS 1: TODAY — BROAD SEARCH ──────────────────────────────────
     const pass1 = await runScrapePass(page, {
       passNum: 1,
       dateRadioId: "Main_rbDateRange_0",
-      dateLabel: "Selected (today)",
+      dateLabel: "Today (broad)",
     });
 
-    // ── PASS 2: LAST 30 DAYS — BROAD SEARCH (LHF) ─────────────────────
-    const pass2 = await runScrapePass(page, {
-      passNum: 2,
-      dateRadioId: "Main_rbDateRange_3",
-      dateLabel: "Last 30 days (LHF)",
-    });
+    // Save pass1 immediately
+    const p1Timestamp = new Date().toISOString().split("T")[0];
+    const p1BackupPath = path.join(
+      CONFIG.backupDir,
+      `navigator-pass1-${p1Timestamp}.json`,
+    );
+    fs.writeFileSync(p1BackupPath, JSON.stringify(pass1, null, 2));
+    info(`✅ Pass 1 saved (${pass1.length} sols): ${p1BackupPath}`);
 
-    await browser.close();
+    // ── PASS 2: PER-FSC LANE — TODAY — TOP PAGE EACH ──────────────────
+    // For each FSC lane: set FSC filter, grab first page high→low.
+    // Picks up top deals per lane that broad pass1 may have missed.
+    const pass2Sols = [];
+    const pass1Seen = new Set(pass1.map((s) => s.sol_number));
 
-    // Merge, dedupe by sol_number (pass1 wins on conflict)
-    const seen = new Set();
-    const allSols = [];
-    for (const sol of [...pass1, ...pass2]) {
-      if (!seen.has(sol.sol_number)) {
-        seen.add(sol.sol_number);
-        allSols.push(sol);
+    for (let i = 0; i < CONFIG.fscLanes.length; i++) {
+      const fsc = CONFIG.fscLanes[i];
+      info(`\n── FSC LANE ${i + 1}/${CONFIG.fscLanes.length}: ${fsc} ──`);
+      try {
+        const fscSols = await runScrapePass(page, {
+          passNum: `2-${fsc}`,
+          dateRadioId: "Main_rbDateRange_0",
+          dateLabel: "Today",
+          fsc,
+        });
+        const newSols = fscSols.filter((s) => !pass1Seen.has(s.sol_number));
+        newSols.forEach((s) => pass1Seen.add(s.sol_number));
+        pass2Sols.push(...newSols);
+        info(
+          `   +${newSols.length} new from FSC ${fsc} (${fscSols.length} on page)`,
+        );
+      } catch (fscErr) {
+        fail(`FSC ${fsc} failed: ${fscErr.message} — skipping`);
       }
     }
 
-    info(
-      `\n✅ COMPLETE — Pass 1: ${pass1.length} | Pass 2: ${pass2.length} | Total unique: ${allSols.length}`,
-    );
+    await browser.close();
 
+    const allSols = [...pass1, ...pass2Sols];
+    info(
+      `\n✅ COMPLETE — Pass 1 (broad): ${pass1.length} | Pass 2 (per-FSC): ${pass2Sols.length} | Total: ${allSols.length}`,
+    );
     // Backup
     const timestamp = new Date().toISOString().split("T")[0];
     const backupPath = path.join(
@@ -397,7 +410,7 @@ async function scrapeNavigatorBatch() {
       timestamp: new Date().toISOString(),
       count: allSols.length,
       pass1: pass1.length,
-      pass2: pass2.length,
+      pass2: pass2Sols.length,
       minPrice: CONFIG.minExtPrice,
       sols: allSols,
       backupPath,
@@ -424,7 +437,7 @@ if (require.main === module) {
     if (result.ok) {
       console.log("✅ Total sols:", result.count);
       console.log("   Pass 1 (today):", result.pass1);
-      console.log("   Pass 2 (LHF)  :", result.pass2);
+      console.log("   Pass 2 (per-FSC):", result.pass2);
       console.log("   Backup:", result.backupPath);
     } else {
       console.log("❌ Failed:", result.error);
