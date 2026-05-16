@@ -90,11 +90,25 @@ async function ensureUnchecked(page, selector) {
   }, selector);
 }
 
-async function clickRadio(page, selector) {
-  await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    if (el) el.click();
-  }, selector);
+async function clickRadio(page, selector, causesPostback = false) {
+  if (causesPostback) {
+    await Promise.all([
+      page
+        .waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 })
+        .catch(() => {}),
+      page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (el) el.click();
+      }, selector),
+    ]);
+    await new Promise((r) => setTimeout(r, 500));
+  } else {
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (el) el.click();
+    }, selector);
+    await new Promise((r) => setTimeout(r, 200));
+  }
 }
 
 // ── SORT + SCRAPE — called after results are loaded ───────────────────────
@@ -290,10 +304,8 @@ async function scrapeNavigatorBatch() {
     info("✅ Popup dismissed");
 
     // Step 3: Filter Set: None — triggers postback, resets form
-    await clickRadio(page, "#Main_rbDefaultSets_4");
-    // Wait for form to be ready after postback — don't use flat delay
+    await clickRadio(page, "#Main_rbDefaultSets_4", true);
     await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
-    await new Promise((r) => setTimeout(r, 300));
     info("✅ Filter set: None");
 
     // Step 4: Com. Pack
@@ -311,7 +323,7 @@ async function scrapeNavigatorBatch() {
     info("✅ Not Expired");
 
     // Step 6: Not Already Awarded
-    await clickRadio(page, "#Main_rbAwarded_2");
+    await clickRadio(page, "#Main_rbAwarded_2", false);
     info("✅ Not Already Awarded");
 
     // Step 7: Supplier Restrictions: COTS
@@ -346,11 +358,6 @@ async function scrapeNavigatorBatch() {
     // ── PHASE 2: Last 30 days, per-FSC ───────────────────────────────
     info("\n── PHASE 2: Last 30 days — per FSC lane ──");
 
-    // Step 1: Last 30 days radio — no postback, stays on results page
-    await clickRadio(page, "#Main_rbDateRange_3");
-    await new Promise((r) => setTimeout(r, 500));
-    info("✅ Date: Last 30 days");
-
     const pass2Sols = [];
     const seen = new Set(pass1.map((s) => s.sol_number));
 
@@ -358,7 +365,63 @@ async function scrapeNavigatorBatch() {
       const fsc = CONFIG.fscLanes[i];
       info(`\n── FSC LANE ${i + 1}/${CONFIG.fscLanes.length}: ${fsc} ──`);
       try {
-        // Step 2: Type FSC — wait for field after previous sort postback
+        // Navigate fresh for each FSC lane — ensures clean form state
+        await new Promise((r) => setTimeout(r, 1000));
+        await page.goto("https://dibbsnavigator.com/dn.aspx", {
+          waitUntil: "load",
+          timeout: 120000,
+        });
+        await new Promise((r) => setTimeout(r, 2000));
+        await page.waitForSelector("#btnFullDN", { timeout: 30000 });
+
+        // Dismiss popup if present
+        await page.evaluate(() => {
+          const btn = document.querySelector("#Button111");
+          if (btn) btn.click();
+        });
+        await page.keyboard.press("Escape");
+        await new Promise((r) => setTimeout(r, 300));
+
+        // Filter Set: None — postback resets form
+        await clickRadio(page, "#Main_rbDefaultSets_4", true);
+        await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
+        info("✅ Filter set: None");
+
+        // Com. Pack
+        await page.evaluate(() => {
+          const cb = document.querySelector("#Main_chCPac");
+          if (cb && !cb.checked) cb.click();
+        });
+        info("✅ Com. Pack");
+
+        // Not Expired
+        await ensureChecked(page, "#Main_chNotExpired");
+        await ensureUnchecked(page, "#Main_chExpired");
+        info("✅ Not Expired");
+
+        // Not Already Awarded
+        await clickRadio(page, "#Main_rbAwarded_2", false);
+        info("✅ Not Already Awarded");
+
+        // Last 30 days
+        await clickRadio(page, "#Main_rbDateRange_3", false);
+        info("✅ Date: Last 30 days");
+
+        // Supplier Restrictions: COTS
+        await page.waitForSelector("#Main_DropDownList_SupRestrict", {
+          timeout: 30000,
+        });
+        await page.select("#Main_DropDownList_SupRestrict", "COTS");
+        await new Promise((r) => setTimeout(r, 300));
+        info("✅ Supplier Restrictions: COTS");
+
+        // JCP: No JCP Cert.
+        await page.waitForSelector("#Main_DropDownListJCP", { timeout: 30000 });
+        await page.select("#Main_DropDownListJCP", "No JCP Cert.");
+        await new Promise((r) => setTimeout(r, 300));
+        info("✅ JCP: No JCP Cert.");
+
+        // Type FSC last — after all postback-triggering steps
         await page.waitForSelector("#Main_NSN_Search", { timeout: 30000 });
         const fscInput = await page.$("#Main_NSN_Search");
         if (fscInput) {
@@ -369,10 +432,10 @@ async function scrapeNavigatorBatch() {
           info(`✅ FSC set: ${fsc}`);
         }
 
-        // Step 3: Apply Selections
+        // Apply Selections
         await applySelections(page);
 
-        // Step 4: Sort + scrape
+        // Sort + scrape
         const fscSols = await sortAndScrape(page, `Last 30 days FSC ${fsc}`);
         const newSols = fscSols.filter((s) => !seen.has(s.sol_number));
         newSols.forEach((s) => seen.add(s.sol_number));
@@ -380,13 +443,6 @@ async function scrapeNavigatorBatch() {
         info(
           `   +${newSols.length} new from FSC ${fsc} (${fscSols.length} on page)`,
         );
-
-        // Step 5: Clear FSC field via Clear button
-        await page.evaluate(() => {
-          const btn = document.querySelector("#btnClearNSN_PartNo1");
-          if (btn) btn.click();
-        });
-        await new Promise((r) => setTimeout(r, 300));
       } catch (fscErr) {
         fail(`FSC ${fsc} failed: ${fscErr.message} — skipping`);
       }
