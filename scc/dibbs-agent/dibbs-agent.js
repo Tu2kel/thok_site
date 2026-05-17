@@ -715,6 +715,8 @@ const server = http.createServer((req, res) => {
     const send = (payload) => {
       try {
         res.write("data: " + JSON.stringify(payload) + "\n\n");
+        // Also log to agent console so terminal shows progress
+        if (payload.type === "log") console.log("[enrich]", payload.msg);
       } catch {}
     };
 
@@ -790,8 +792,9 @@ const server = http.createServer((req, res) => {
         send({ type: "log", msg: "Navigating to DIBBS...", level: "info" });
         await page.goto(
           "https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=5940013763668&category=&Scope=",
-          { waitUntil: "domcontentloaded", timeout: 30000 },
+          { waitUntil: "domcontentloaded", timeout: 60000 },
         );
+        send({ type: "log", msg: "DIBBS page loaded", level: "info" });
 
         // Click banner if present
         try {
@@ -973,6 +976,7 @@ const server = http.createServer((req, res) => {
     const send = (payload) => {
       try {
         res.write("data: " + JSON.stringify(payload) + "\n\n");
+        if (payload.type === "log") console.log("[analyze]", payload.msg);
       } catch {}
     };
 
