@@ -24,7 +24,6 @@
     Fragment: Frag,
   } = React;
 
-  // const AGENT_URL = "https://agent.thehouseofkel.com";
   const AGENT_URL = "http://localhost:3100";
   const STORE_KEY = "scc_dibbs_tab_v1";
   const CRON_KEY = "scc_dibbs_cron_v1";
@@ -130,11 +129,10 @@
     };
   }
 
-  // ── CLAUDE API ANALYSIS ───────────────────────────────────────────────
-  // Sends batch to Claude API → returns enriched GO/VERIFY/REJECT per sol
-  async function analyzeWithClaude(sols) {
-    const systemPrompt = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), 
-an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
+  // ── SHARED SYSTEM PROMPT ─────────────────────────────────────────────
+  // Identical instructions sent to both Claude and GPT-4o so verdicts are
+  // consistent regardless of which provider handles the batch.
+  const ANALYSIS_SYSTEM_PROMPT = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
 
 For each solicitation, apply the full procurement protocol:
 
@@ -156,8 +154,7 @@ GO (verdict: GO) if:
 - Delivery window is achievable (standard commercial lead times)
 
 VERIFY FIRST (verdict: VERIFY FIRST) if:
-- Passes hard rejects but has one of: tight margin, spec-designator risk (MS-/MIL-/NAS-/AN- prefix), 
-  single approved source that may have dealer channel, short quote deadline, delivery risk
+- Passes hard rejects but has one of: tight margin, spec-designator risk (MS-/MIL-/NAS-/AN- prefix), single approved source that may have dealer channel, short quote deadline, delivery risk
 
 For each sol output a JSON object with:
 {
@@ -171,29 +168,45 @@ For each sol output a JSON object with:
 
 Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
 
+  // ── BUILD SOL PAYLOAD (same shape for both providers) ────────────────
+  function buildSolPayload(sols) {
+    return sols.map((s) => ({
+      sol_number: s.sol_number,
+      item_name: s.item_name,
+      fsc: s.fsc,
+      nsn: s.nsn,
+      amsc: s.amsc || "",
+      approved_sources: s.approved_sources || [],
+      qty: s.qty,
+      unit_issue: s.unit_issue,
+      unit_price: s.unit_price,
+      ext_price: s.ext_price,
+      delivery_days: s.delivery_days,
+      set_aside: s.set_aside,
+      supplier_restrictions: s.supplier_restrictions,
+      piece_part_no: s.piece_part_no,
+      material: s.material,
+      part_char: s.part_char,
+      quote_due: s.quote_due,
+    }));
+  }
+
+  function parseJsonResponse(raw) {
+    const clean = raw.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  }
+
+  // ── RATE-LIMIT / QUOTA ERROR DETECTION ───────────────────────────────
+  // These status codes mean "try the other provider".
+  function isQuotaError(status) {
+    return status === 429 || status === 529 || status === 503 || status === 402;
+  }
+
+  // ── CLAUDE API CALL ───────────────────────────────────────────────────
+  async function callClaude(sols) {
     const userMsg =
       "Analyze this batch of DLA DIBBS solicitations:\n\n" +
-      JSON.stringify(
-        sols.map((s) => ({
-          sol_number: s.sol_number,
-          item_name: s.item_name,
-          fsc: s.fsc,
-          nsn: s.nsn,
-          qty: s.qty,
-          unit_issue: s.unit_issue,
-          unit_price: s.unit_price,
-          ext_price: s.ext_price,
-          delivery_days: s.delivery_days,
-          set_aside: s.set_aside,
-          supplier_restrictions: s.supplier_restrictions,
-          piece_part_no: s.piece_part_no,
-          material: s.material,
-          part_char: s.part_char,
-          quote_due: s.quote_due,
-        })),
-        null,
-        2,
-      );
+      JSON.stringify(buildSolPayload(sols), null, 2);
 
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -201,14 +214,18 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
-        system: systemPrompt,
+        system: ANALYSIS_SYSTEM_PROMPT,
         messages: [{ role: "user", content: userMsg }],
       }),
     });
 
     if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error("Claude API " + resp.status + ": " + err.slice(0, 200));
+      const errText = await resp.text();
+      const err = new Error(
+        "Claude API " + resp.status + ": " + errText.slice(0, 200),
+      );
+      err.status = resp.status;
+      throw err;
     }
 
     const data = await resp.json();
@@ -216,8 +233,75 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
       .filter((b) => b.type === "text")
       .map((b) => b.text)
       .join("");
-    const clean = raw.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
+    return parseJsonResponse(raw);
+  }
+
+  // ── OPENAI GPT-4o FALLBACK CALL ───────────────────────────────────────
+  async function callGPT(sols) {
+    const userMsg =
+      "Analyze this batch of DLA DIBBS solicitations:\n\n" +
+      JSON.stringify(buildSolPayload(sols), null, 2);
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        max_tokens: 8000,
+        temperature: 0,
+        messages: [
+          { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
+          { role: "user", content: userMsg },
+        ],
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      const err = new Error(
+        "OpenAI API " + resp.status + ": " + errText.slice(0, 200),
+      );
+      err.status = resp.status;
+      throw err;
+    }
+
+    const data = await resp.json();
+    const raw = data.choices?.[0]?.message?.content || "";
+    return parseJsonResponse(raw);
+  }
+
+  // ── ANALYZE WITH FALLBACK ─────────────────────────────────────────────
+  // Tries Claude first. On quota/rate-limit errors falls back to GPT-4o.
+  // Any other error propagates to the caller.
+  async function analyzeWithClaude(sols, logFn) {
+    const log = logFn || (() => {});
+    try {
+      log("Calling Claude (Sonnet)…", "info");
+      const results = await callClaude(sols);
+      log("✓ Claude analysis complete", "ok");
+      return results;
+    } catch (claudeErr) {
+      // Only fall back on quota / rate-limit / overload — not on bad JSON etc.
+      if (!isQuotaError(claudeErr.status)) throw claudeErr;
+      log(
+        "Claude quota/rate-limit (" +
+          claudeErr.status +
+          ") — falling back to GPT-4o…",
+        "err",
+      );
+      try {
+        const results = await callGPT(sols);
+        log("✓ GPT-4o fallback analysis complete", "ok");
+        return results;
+      } catch (gptErr) {
+        throw new Error(
+          "Both providers failed. Claude: " +
+            claudeErr.message +
+            " | GPT: " +
+            gptErr.message,
+        );
+      }
+    }
   }
 
   // ── RFQ EMAIL BUILDER ─────────────────────────────────────────────────
@@ -479,14 +563,72 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
       setPushLog([]);
 
       try {
-        const results = await analyzeWithClaude(sols);
+        // ── STEP 1: NSN enrichment via agent /navigator/batch ──────────
+        // Fetches RFQNsn.aspx for every sol → grabs AMSC + approved sources.
+        // Agent hard-rejects AMSC G/B/A, blocked CAGEs, ineligible set-asides
+        // inline so they never reach Claude or GPT.
+        addLog("Enriching " + sols.length + " sols via NSN pages…", "info");
+        let enrichedSols = sols;
+        let agentRejects = [];
+        try {
+          const batchResp = await fetch(AGENT_URL + "/navigator/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sols }),
+            signal: AbortSignal.timeout(300000),
+          });
+          if (batchResp.ok) {
+            const batchData = await batchResp.json();
+            if (batchData.ok && Array.isArray(batchData.sols)) {
+              agentRejects = batchData.sols.filter((s) => s.reject);
+              enrichedSols = batchData.sols.filter((s) => !s.reject);
+              addLog(
+                "✓ NSN enrichment complete — " +
+                  enrichedSols.length +
+                  " clean · " +
+                  agentRejects.length +
+                  " agent-rejected",
+                "ok",
+              );
+            }
+          } else {
+            addLog(
+              "NSN batch returned " +
+                batchResp.status +
+                " — proceeding with raw sols",
+              "err",
+            );
+          }
+        } catch (enrichErr) {
+          addLog(
+            "NSN enrichment failed (" +
+              enrichErr.message +
+              ") — proceeding with raw sols",
+            "err",
+          );
+        }
+
+        // ── STEP 2: AI analysis on enriched (non-rejected) sols ────────
+        // Tries Claude first, falls back to GPT-4o on quota/rate-limit.
+        const results = await analyzeWithClaude(enrichedSols, addLog);
+
+        // ── STEP 3: Merge agent hard-rejects into reject bucket ────────
+        const agentRejectResults = agentRejects.map((s) => ({
+          sol_number: s.sol_number,
+          verdict: "REJECT",
+          reason: s.reject,
+          sourcing_path: "",
+          margin_flag: "blocked",
+          winProbabilityPct: 0,
+        }));
+        const allResults = [...results, ...agentRejectResults];
 
         const go = [];
         const verify = [];
         const reject = [];
 
-        // Merge Claude verdicts back with original sol data
-        for (const res of results) {
+        // Merge all verdicts back with original sol data
+        for (const res of allResults) {
           const original =
             sols.find((s) => s.sol_number === res.sol_number) || {};
           const merged = { ...original, ...res };
@@ -512,7 +654,7 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
       }
 
       setAnalyzing(false);
-    }, [sols, analyzing, toast_]);
+    }, [sols, analyzing, toast_, addLog]);
 
     // ── PUSH TO PIPELINE ──────────────────────────────────────────────
     const pushToPipeline = useCallback(async () => {
