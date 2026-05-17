@@ -955,6 +955,261 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ── /navigator/analyze ───────────────────────────────────────────────
+  // POST { sols: [...] }
+  // Runs Claude Sonnet (with GPT-4o fallback) on the local machine.
+  // No Netlify timeout. Reads keys from .env.
+  // SSE stream — sends batch progress + final result.
+  if (req.method === "POST" && req.url === "/navigator/analyze") {
+    res.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    const send = (payload) => {
+      try {
+        res.write("data: " + JSON.stringify(payload) + "\n\n");
+      } catch {}
+    };
+
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(": keep-alive\n\n");
+      } catch {
+        clearInterval(keepAlive);
+      }
+    }, 15000);
+
+    const cleanup = () => clearInterval(keepAlive);
+    req.on("close", cleanup);
+
+    let rawBody = "";
+    req.on("data", (c) => (rawBody += c));
+    req.on("end", async () => {
+      let sols;
+      try {
+        ({ sols } = JSON.parse(rawBody));
+        if (!Array.isArray(sols) || !sols.length)
+          throw new Error("sols array required");
+      } catch (e) {
+        send({ type: "result", ok: false, error: e.message });
+        res.write("data: [DONE]\n\n");
+        res.end();
+        cleanup();
+        return;
+      }
+
+      // ── Load keys from .env ───────────────────────────────────────────
+      const dotenv = require("dotenv");
+      dotenv.config();
+      const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+      const OPENAI_KEY = process.env.OPENAI_API_KEY;
+
+      const SYSTEM_PROMPT = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
+
+For each solicitation, apply the full procurement protocol:
+
+HARD REJECT (output verdict: REJECT) if ANY of:
+- Set-aside codes: AL (AbilityOne), FG, PO, FI, H (HUBZone), L, E — ineligible
+- AMSC: G, B, or A — government drawing / sole source lock
+- AIDC flag in item name
+- Blocked CAGEs in supplier_restrictions: 81SA7, R9004, 07482, 062W0, 75Q65
+- Blocked OEMs in item name: SureFire, Streamlight, Furuno TZT9F
+- QA = QSL
+- Restricted drawings with no COTS path
+- Prime-dominated FSCs with no resale channel: 1305,1310,1315,1320,1340,1350,1360,1376,2835,2840,1560,1720,1730,5860
+
+GO (verdict: GO) if:
+- Passes all hard reject gates
+- Item is sourceable via commercial distributor channel (COTS path exists)
+- Historical unit price supports 27.5%+ gross margin at 90% cost ceiling
+- Net after worst-case FE fees (7.5%) exceeds $500
+- Delivery window is achievable (standard commercial lead times)
+
+VERIFY FIRST (verdict: VERIFY FIRST) if:
+- Passes hard rejects but has one of: tight margin, spec-designator risk (MS-/MIL-/NAS-/AN- prefix), single approved source that may have dealer channel, short quote deadline, delivery risk
+
+For each sol output a JSON object with:
+{
+  "sol_number": "...",
+  "verdict": "GO" | "VERIFY FIRST" | "REJECT",
+  "reason": "one-line plain English reason",
+  "sourcing_path": "brief sourcing note for GO/VERIFY (skip for REJECT)",
+  "margin_flag": "ok" | "tight" | "blocked",
+  "winProbabilityPct": 0-100
+}
+
+Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
+
+      function parseJson(raw) {
+        return JSON.parse(raw.replace(/\`\`\`json|\`\`\`/g, "").trim());
+      }
+
+      function isQuotaErr(status) {
+        return (
+          status === 429 || status === 529 || status === 503 || status === 402
+        );
+      }
+
+      async function callClaude(batch) {
+        if (!ANTHROPIC_KEY)
+          throw Object.assign(new Error("ANTHROPIC_API_KEY not in .env"), {
+            status: 500,
+          });
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_KEY,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 4000,
+            system: SYSTEM_PROMPT,
+            messages: [
+              {
+                role: "user",
+                content:
+                  "Analyze this batch of DLA DIBBS solicitations:\n\n" +
+                  JSON.stringify(batch, null, 2),
+              },
+            ],
+          }),
+        });
+        if (!r.ok) {
+          const t = await r.text();
+          throw Object.assign(
+            new Error("Claude " + r.status + ": " + t.slice(0, 200)),
+            { status: r.status },
+          );
+        }
+        const d = await r.json();
+        return parseJson(
+          (d.content || [])
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join(""),
+        );
+      }
+
+      async function callGPT(batch) {
+        if (!OPENAI_KEY)
+          throw Object.assign(new Error("OPENAI_API_KEY not in .env"), {
+            status: 500,
+          });
+        const r = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + OPENAI_KEY,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            max_tokens: 4000,
+            temperature: 0,
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              {
+                role: "user",
+                content:
+                  "Analyze this batch of DLA DIBBS solicitations:\n\n" +
+                  JSON.stringify(batch, null, 2),
+              },
+            ],
+          }),
+        });
+        if (!r.ok) {
+          const t = await r.text();
+          throw Object.assign(
+            new Error("OpenAI " + r.status + ": " + t.slice(0, 200)),
+            { status: r.status },
+          );
+        }
+        const d = await r.json();
+        return parseJson(d.choices?.[0]?.message?.content || "");
+      }
+
+      // ── Chunk + run ───────────────────────────────────────────────────
+      const CHUNK = 25;
+      const chunks = [];
+      for (let i = 0; i < sols.length; i += CHUNK)
+        chunks.push(sols.slice(i, i + CHUNK));
+
+      send({
+        type: "log",
+        msg:
+          "Sending " +
+          sols.length +
+          " sols in " +
+          chunks.length +
+          " batches...",
+        level: "info",
+      });
+
+      const allResults = [];
+      let provider = "claude";
+
+      try {
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          send({
+            type: "log",
+            msg:
+              "Batch " +
+              (i + 1) +
+              "/" +
+              chunks.length +
+              " (" +
+              chunk.length +
+              " sols)...",
+            level: "info",
+          });
+
+          let results;
+          try {
+            results = await callClaude(chunk);
+            provider = "claude";
+          } catch (claudeErr) {
+            if (!isQuotaErr(claudeErr.status)) throw claudeErr;
+            send({
+              type: "log",
+              msg: "Claude quota — trying GPT-4o...",
+              level: "err",
+            });
+            results = await callGPT(chunk);
+            provider = "gpt-4o";
+          }
+
+          allResults.push(...results);
+          send({
+            type: "log",
+            msg: "✅ Batch " + (i + 1) + " complete via " + provider,
+            level: "ok",
+          });
+        }
+
+        send({ type: "result", ok: true, results: allResults, provider });
+      } catch (e) {
+        send({
+          type: "log",
+          msg: "Analysis failed: " + e.message,
+          level: "err",
+        });
+        send({ type: "result", ok: false, error: e.message });
+      }
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+      cleanup();
+    });
+    return;
+  }
+
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });

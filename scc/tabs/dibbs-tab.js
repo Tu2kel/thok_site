@@ -129,107 +129,85 @@
     };
   }
 
-  // ── AI ANALYSIS — via Netlify proxy ─────────────────────────────────
-  // Browser calls /.netlify/functions/analyze-sols (same origin = no CORS).
-  // The function holds both API keys server-side and handles the
-  // Claude → GPT-4o fallback internally.
+  // ── AI ANALYSIS — via local agent /navigator/analyze (SSE) ─────────
+  // Runs on your machine — no Netlify timeout.
+  // Agent reads ANTHROPIC_API_KEY + OPENAI_API_KEY from .env.
+  // Handles chunking + Claude/GPT fallback internally.
   async function analyzeWithClaude(sols, logFn) {
     const log = logFn || (() => {});
 
-    // ── Chunk into batches of 50 — keeps each Netlify call under 10s ──
-    const CHUNK = 25;
-    const chunks = [];
-    for (let i = 0; i < sols.length; i += CHUNK)
-      chunks.push(sols.slice(i, i + CHUNK));
+    const payload = sols.map((s) => ({
+      sol_number: s.sol_number,
+      item_name: s.item_name,
+      fsc: s.fsc,
+      nsn: s.nsn,
+      amsc: s.amsc || "",
+      approved_sources: s.approved_sources || [],
+      qty: s.qty,
+      unit_issue: s.unit_issue,
+      unit_price: s.unit_price,
+      ext_price: s.ext_price,
+      delivery_days: s.delivery_days,
+      set_aside: s.set_aside,
+      supplier_restrictions: s.supplier_restrictions,
+      piece_part_no: s.piece_part_no,
+      material: s.material,
+      part_char: s.part_char,
+      quote_due: s.quote_due,
+    }));
 
-    log(
-      "Sending " +
-        sols.length +
-        " sols in " +
-        chunks.length +
-        " batch" +
-        (chunks.length > 1 ? "es" : "") +
-        "…",
-      "info",
-    );
+    return await new Promise((resolve, reject) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => {
+        ctrl.abort();
+        reject(new Error("Analyze timeout after 10 min"));
+      }, 600000);
 
-    const allResults = [];
-
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      log(
-        "Batch " +
-          (i + 1) +
-          "/" +
-          chunks.length +
-          " (" +
-          chunk.length +
-          " sols)…",
-        "info",
-      );
-
-      const payload = chunk.map((s) => ({
-        sol_number: s.sol_number,
-        item_name: s.item_name,
-        fsc: s.fsc,
-        nsn: s.nsn,
-        amsc: s.amsc || "",
-        approved_sources: s.approved_sources || [],
-        qty: s.qty,
-        unit_issue: s.unit_issue,
-        unit_price: s.unit_price,
-        ext_price: s.ext_price,
-        delivery_days: s.delivery_days,
-        set_aside: s.set_aside,
-        supplier_restrictions: s.supplier_restrictions,
-        piece_part_no: s.piece_part_no,
-        material: s.material,
-        part_char: s.part_char,
-        quote_due: s.quote_due,
-      }));
-
-      const resp = await fetch("/.netlify/functions/analyze-sols", {
+      fetch(AGENT_URL + "/navigator/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sols: payload }),
-        signal: AbortSignal.timeout(60000), // 60s per chunk
-      });
+        signal: ctrl.signal,
+      })
+        .then(async (resp) => {
+          if (!resp.ok) {
+            clearTimeout(timer);
+            reject(new Error("Agent analyze returned " + resp.status));
+            return;
+          }
 
-      // Netlify 504s return an HTML error page — catch before .json()
-      const contentType = resp.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await resp.text();
-        throw new Error(
-          "Batch " +
-            (i + 1) +
-            " non-JSON response (" +
-            resp.status +
-            "): " +
-            text.slice(0, 100),
-        );
-      }
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
 
-      const data = await resp.json();
-
-      if (!resp.ok || !data.ok) {
-        throw new Error(
-          "Batch " + (i + 1) + " failed: " + (data.error || resp.status),
-        );
-      }
-
-      if (data.claudeFallback) {
-        log("⚠ Batch " + (i + 1) + ": Claude quota — GPT-4o used", "err");
-      } else {
-        log(
-          "✓ Batch " + (i + 1) + " complete via " + (data.provider || "AI"),
-          "ok",
-        );
-      }
-
-      allResults.push(...data.results);
-    }
-
-    return allResults;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("");
+            buf = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith("data:")) continue;
+              const raw = line.slice(5).trim();
+              if (!raw || raw === "[DONE]") continue;
+              try {
+                const evt = JSON.parse(raw);
+                if (evt.type === "log") log(evt.msg, evt.level || "info");
+                if (evt.type === "result") {
+                  clearTimeout(timer);
+                  if (evt.ok) resolve(evt.results);
+                  else reject(new Error(evt.error || "Analyze failed"));
+                }
+              } catch {}
+            }
+          }
+          clearTimeout(timer);
+        })
+        .catch((e) => {
+          clearTimeout(timer);
+          reject(e);
+        });
+    });
   }
 
   // ── RFQ EMAIL BUILDER ─────────────────────────────────────────────────
@@ -532,7 +510,7 @@
                   const { done, value } = await reader.read();
                   if (done) break;
                   buf += decoder.decode(value, { stream: true });
-                  const lines = buf.split("\n");
+                  const lines = buf.split("");
                   buf = lines.pop();
                   for (const line of lines) {
                     if (!line.startsWith("data:")) continue;
