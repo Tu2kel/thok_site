@@ -129,48 +129,15 @@
     };
   }
 
-  // ── SHARED SYSTEM PROMPT ─────────────────────────────────────────────
-  // Identical instructions sent to both Claude and GPT-4o so verdicts are
-  // consistent regardless of which provider handles the batch.
-  const ANALYSIS_SYSTEM_PROMPT = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
+  // ── AI ANALYSIS — via Netlify proxy ─────────────────────────────────
+  // Browser calls /.netlify/functions/analyze-sols (same origin = no CORS).
+  // The function holds both API keys server-side and handles the
+  // Claude → GPT-4o fallback internally.
+  async function analyzeWithClaude(sols, logFn) {
+    const log = logFn || (() => {});
+    log("Sending " + sols.length + " sols to analysis proxy…", "info");
 
-For each solicitation, apply the full procurement protocol:
-
-HARD REJECT (output verdict: REJECT) if ANY of:
-- Set-aside codes: AL (AbilityOne), FG, PO, FI, H (HUBZone), L, E — ineligible
-- AMSC: G, B, or A — government drawing / sole source lock
-- AIDC flag in item name
-- Blocked CAGEs in supplier_restrictions: 81SA7, R9004, 07482, 062W0, 75Q65
-- Blocked OEMs in item name: SureFire, Streamlight, Furuno TZT9F
-- QA = QSL
-- Restricted drawings with no COTS path
-- Prime-dominated FSCs with no resale channel: 1305,1310,1315,1320,1340,1350,1360,1376,2835,2840,1560,1720,1730,5860
-
-GO (verdict: GO) if:
-- Passes all hard reject gates
-- Item is sourceable via commercial distributor channel (COTS path exists)
-- Historical unit price supports 27.5%+ gross margin at 90% cost ceiling
-- Net after worst-case FE fees (7.5%) exceeds $500
-- Delivery window is achievable (standard commercial lead times)
-
-VERIFY FIRST (verdict: VERIFY FIRST) if:
-- Passes hard rejects but has one of: tight margin, spec-designator risk (MS-/MIL-/NAS-/AN- prefix), single approved source that may have dealer channel, short quote deadline, delivery risk
-
-For each sol output a JSON object with:
-{
-  "sol_number": "...",
-  "verdict": "GO" | "VERIFY FIRST" | "REJECT",
-  "reason": "one-line plain English reason",
-  "sourcing_path": "brief sourcing note for GO/VERIFY (skip for REJECT)",
-  "margin_flag": "ok" | "tight" | "blocked",
-  "winProbabilityPct": 0-100
-}
-
-Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
-
-  // ── BUILD SOL PAYLOAD (same shape for both providers) ────────────────
-  function buildSolPayload(sols) {
-    return sols.map((s) => ({
+    const payload = sols.map((s) => ({
       sol_number: s.sol_number,
       item_name: s.item_name,
       fsc: s.fsc,
@@ -189,119 +156,29 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
       part_char: s.part_char,
       quote_due: s.quote_due,
     }));
-  }
 
-  function parseJsonResponse(raw) {
-    const clean = raw.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
-  }
-
-  // ── RATE-LIMIT / QUOTA ERROR DETECTION ───────────────────────────────
-  // These status codes mean "try the other provider".
-  function isQuotaError(status) {
-    return status === 429 || status === 529 || status === 503 || status === 402;
-  }
-
-  // ── CLAUDE API CALL ───────────────────────────────────────────────────
-  async function callClaude(sols) {
-    const userMsg =
-      "Analyze this batch of DLA DIBBS solicitations:\n\n" +
-      JSON.stringify(buildSolPayload(sols), null, 2);
-
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    const resp = await fetch("/.netlify/functions/analyze-sols", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 8000,
-        system: ANALYSIS_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMsg }],
-      }),
+      body: JSON.stringify({ sols: payload }),
+      signal: AbortSignal.timeout(120000),
     });
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      const err = new Error(
-        "Claude API " + resp.status + ": " + errText.slice(0, 200),
-      );
-      err.status = resp.status;
-      throw err;
-    }
-
     const data = await resp.json();
-    const raw = (data.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-    return parseJsonResponse(raw);
-  }
 
-  // ── OPENAI GPT-4o FALLBACK CALL ───────────────────────────────────────
-  async function callGPT(sols) {
-    const userMsg =
-      "Analyze this batch of DLA DIBBS solicitations:\n\n" +
-      JSON.stringify(buildSolPayload(sols), null, 2);
-
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        max_tokens: 8000,
-        temperature: 0,
-        messages: [
-          { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
-          { role: "user", content: userMsg },
-        ],
-      }),
-    });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      const err = new Error(
-        "OpenAI API " + resp.status + ": " + errText.slice(0, 200),
+    if (!resp.ok || !data.ok) {
+      throw new Error(
+        data.error || "analyze-sols function returned " + resp.status,
       );
-      err.status = resp.status;
-      throw err;
     }
 
-    const data = await resp.json();
-    const raw = data.choices?.[0]?.message?.content || "";
-    return parseJsonResponse(raw);
-  }
-
-  // ── ANALYZE WITH FALLBACK ─────────────────────────────────────────────
-  // Tries Claude first. On quota/rate-limit errors falls back to GPT-4o.
-  // Any other error propagates to the caller.
-  async function analyzeWithClaude(sols, logFn) {
-    const log = logFn || (() => {});
-    try {
-      log("Calling Claude (Sonnet)…", "info");
-      const results = await callClaude(sols);
-      log("✓ Claude analysis complete", "ok");
-      return results;
-    } catch (claudeErr) {
-      // Only fall back on quota / rate-limit / overload — not on bad JSON etc.
-      if (!isQuotaError(claudeErr.status)) throw claudeErr;
-      log(
-        "Claude quota/rate-limit (" +
-          claudeErr.status +
-          ") — falling back to GPT-4o…",
-        "err",
-      );
-      try {
-        const results = await callGPT(sols);
-        log("✓ GPT-4o fallback analysis complete", "ok");
-        return results;
-      } catch (gptErr) {
-        throw new Error(
-          "Both providers failed. Claude: " +
-            claudeErr.message +
-            " | GPT: " +
-            gptErr.message,
-        );
-      }
+    if (data.claudeFallback) {
+      log("⚠ Claude quota — GPT-4o handled this batch", "err");
+    } else {
+      log("✓ Analysis complete via " + (data.provider || "AI"), "ok");
     }
+
+    return data.results;
   }
 
   // ── RFQ EMAIL BUILDER ─────────────────────────────────────────────────
