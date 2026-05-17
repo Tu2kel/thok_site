@@ -137,7 +137,7 @@
     const log = logFn || (() => {});
 
     // ── Chunk into batches of 50 — keeps each Netlify call under 10s ──
-    const CHUNK = 50;
+    const CHUNK = 25;
     const chunks = [];
     for (let i = 0; i < sols.length; i += CHUNK)
       chunks.push(sols.slice(i, i + CHUNK));

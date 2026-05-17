@@ -78,9 +78,7 @@ async function callClaude(sols) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 8000,
-      system: ANALYSIS_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserMsg(sols) }],
+      max_tokens: 4000,
     }),
   });
 
@@ -114,7 +112,7 @@ async function callGPT(sols) {
     },
     body: JSON.stringify({
       model: "gpt-4o",
-      max_tokens: 8000,
+      max_tokens: 4000,
       temperature: 0,
       messages: [
         { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
