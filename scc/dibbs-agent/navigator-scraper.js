@@ -210,29 +210,31 @@ async function goToSearchPage(page) {
   });
   await page.waitForSelector("#btnFullDN", { timeout: 30000 });
 
-  // Dismiss popup — click button then Escape, with longer waits
+  // Dismiss popup — force remove any modal overlay from the DOM
   await page.evaluate(() => {
+    // Try button click first
     const btn = document.querySelector("#Button111");
     if (btn) btn.click();
-  });
-  await new Promise((r) => setTimeout(r, 800));
-  await page.keyboard.press("Escape");
-  await new Promise((r) => setTimeout(r, 800));
 
-  // Wait until btnFullDN is actually clickable (not obscured by overlay)
-  await page.waitForFunction(
-    () => {
-      const btn = document.querySelector("#btnFullDN");
-      if (!btn) return false;
-      const rect = btn.getBoundingClientRect();
-      const el = document.elementFromPoint(
-        rect.left + rect.width / 2,
-        rect.top + rect.height / 2,
-      );
-      return el && (el === btn || btn.contains(el));
-    },
-    { timeout: 15000 },
-  );
+    // Nuke any modal/overlay divs that could block btnFullDN
+    const selectors = [
+      "#ModalPopupExtender1_backgroundElement",
+      ".modalBackground",
+      "[id*='Modal']",
+      "[id*='modal']",
+      "[id*='popup']",
+      "[id*='Popup']",
+      "[id*='overlay']",
+      "[id*='Overlay']",
+    ];
+    for (const sel of selectors) {
+      document.querySelectorAll(sel).forEach((el) => el.remove());
+    }
+    // Re-enable body scroll in case it was locked
+    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+  });
+  await new Promise((r) => setTimeout(r, 500));
 }
 
 // ── SET COMMON FILTERS ────────────────────────────────────────────────────
