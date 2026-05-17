@@ -294,10 +294,101 @@ async function fetchSolPage(solNumber) {
 // ── Step 3: Fetch NSN detail page ────────────────────────────────────────
 async function fetchNsnPage(nsn) {
   if (!nsn) return "";
-  // DIBBS NSN page: /RFQ/RFQNsn.aspx?value=XXXXXXXXXXXXXXXXX&category=&Scope=
+
+  // ── Ensure banner is dismissed before hitting NSN page ────────────────
+  // NSN pages hit the same DoD banner gate as sol pages. dismissBanner()
+  // was written for rfqrec.aspx but the cookie it sets covers all DIBBS
+  // endpoints. If cookies are stale the redirect chain stops and returns
+  // empty — so we force a fresh dismissal here using a known-good path.
+  const hasCookies = Object.keys(cookieJar).length > 2;
+  if (!hasCookies) {
+    console.log(
+      "[agent] No active session — running banner dismissal before NSN fetch",
+    );
+    try {
+      // Use the NSN page itself as the goto target so the banner POST
+      // redirects directly to the page we want.
+      const gotoPath = `/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=sol&Scope=open`;
+      const bannerPath = `/dodwarning.aspx?goto=${encodeURIComponent(gotoPath)}`;
+      const bannerRes = await dibbsFetch(bannerPath);
+      const bannerHtml = bannerRes.body.toString("utf8");
+
+      if (bannerHtml.includes("btnOK")) {
+        // Inject consent cookies
+        cookieJar["DodWarningAccepted"] = "true";
+        cookieJar["dodwarningaccepted"] = "true";
+        saveCookies();
+
+        // POST the banner form to get the real session cookie
+        const vsMatch = bannerHtml.match(/id="__VIEWSTATE"\s+value="([^"]+)"/);
+        const vsgMatch = bannerHtml.match(
+          /id="__VIEWSTATEGENERATOR"\s+value="([^"]+)"/,
+        );
+        const evMatch = bannerHtml.match(
+          /id="__EVENTVALIDATION"\s+value="([^"]+)"/,
+        );
+        const postBody = new URLSearchParams({
+          __VIEWSTATE: vsMatch ? vsMatch[1] : "",
+          __VIEWSTATEGENERATOR: vsgMatch ? vsgMatch[1] : "",
+          __EVENTVALIDATION: evMatch ? evMatch[1] : "",
+          __EVENTTARGET: "",
+          __EVENTARGUMENT: "",
+          btnOK: "OK",
+        }).toString();
+
+        await new Promise((resolve, reject) => {
+          const https = require("https");
+          const opts = {
+            hostname: "www.dibbs.bsm.dla.mil",
+            port: 443,
+            path: bannerPath,
+            method: "POST",
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+              "Content-Type": "application/x-www-form-urlencoded",
+              "Content-Length": Buffer.byteLength(postBody),
+              Cookie: buildCookieHeader(),
+              Referer: "https://www.dibbs.bsm.dla.mil" + bannerPath,
+            },
+          };
+          const req = https.request(opts, (res) => {
+            const sc = res.headers["set-cookie"];
+            if (sc) parseCookieHeader(Array.isArray(sc) ? sc : [sc]);
+            saveCookies();
+            res.resume();
+            resolve();
+          });
+          req.on("error", reject);
+          req.setTimeout(15000, () => req.destroy(new Error("POST timeout")));
+          req.write(postBody);
+          req.end();
+        });
+
+        console.log(
+          "[agent] Banner POST complete for NSN fetch. Cookies:",
+          Object.keys(cookieJar).length,
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "[agent] NSN banner dismissal failed (non-fatal):",
+        e.message,
+      );
+    }
+  }
+
+  // category=sol&Scope=open matches the URL DIBBS uses in the browser
   const nsnPath = `/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=sol&Scope=open`;
   console.log("[agent] Fetching NSN page:", nsnPath);
   const res = await dibbsFetch(nsnPath);
+
+  // If we got redirected to the banner again, return empty — caller handles
+  if (res.bannered || res.body.length < 200) {
+    console.warn("[agent] NSN page returned banner/empty for NSN:", nsn);
+    return "";
+  }
+
   return res.body.toString("utf8");
 }
 
@@ -695,291 +786,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ── /navigator/batch ──────────────────────────────────────────────────
-  // Accepts: POST { sols: [ { sol_number, nsn, fsc, ... } ] }
-  // For each sol: fetches RFQNsn.aspx → extracts AMSC + approved_sources
-  // Returns enriched sol array. Hard rejects (AMSC G/B/A, blocked CAGEs)
-  // are flagged inline — caller decides what to save.
-  if (req.method === "POST" && req.url === "/navigator/batch") {
-    let rawBody = "";
-    req.on("data", (c) => (rawBody += c));
-    req.on("end", async () => {
-      let body;
-      try {
-        body = JSON.parse(rawBody);
-      } catch {
-        res.writeHead(400, CORS);
-        res.end(JSON.stringify({ ok: false, error: "Invalid JSON" }));
-        return;
-      }
-
-      const sols = body.sols || [];
-      if (!sols.length) {
-        res.writeHead(400, CORS);
-        res.end(JSON.stringify({ ok: false, error: "sols array required" }));
-        return;
-      }
-
-      const BLOCKED_CAGES = ["81SA7", "R9004", "07482", "062W0"];
-      const BLOCKED_AMSC = ["G", "B", "A"];
-      const HARD_SA = /^(FG|PO|FI|H|L|E)$/i;
-
-      console.log("[agent] /navigator/batch — enriching", sols.length, "sols");
-      const results = [];
-      let enriched = 0,
-        rejected = 0,
-        errors = 0;
-
-      for (const sol of sols) {
-        const out = { ...sol, amsc: "", approved_sources: [], reject: null };
-
-        // Hard reject: set-aside
-        const sa = (sol.set_aside || "").toUpperCase().trim();
-        if (HARD_SA.test(sa)) {
-          out.reject = "Set-aside ineligible: " + sa;
-          rejected++;
-          results.push(out);
-          continue;
-        }
-
-        // Hard reject: AIDC
-        // ai column = 'AI' means Approved Item (normal) — NOT the AIDC flag
-        // AIDC only appears explicitly in supplier_restrictions field
-        if (/AIDC/i.test(sol.supplier_restrictions || "")) {
-          out.reject = "AIDC — no certification";
-          rejected++;
-          results.push(out);
-          continue;
-        }
-
-        // NSN required for enrichment
-        if (!sol.nsn || sol.nsn.length < 13) {
-          out.reject = "No NSN — cannot enrich";
-          rejected++;
-          results.push(out);
-          continue;
-        }
-
-        // Fetch NSN page
-        try {
-          const nsnHtml = await fetchNsnPage(sol.nsn);
-          const nsnData = parseNsnPage(nsnHtml);
-          out.amsc = nsnData.amsc || "";
-          out.approved_sources = nsnData.approved_sources || [];
-
-          // Hard reject: AMSC lock
-          if (BLOCKED_AMSC.includes(out.amsc.toUpperCase())) {
-            out.reject =
-              "AMSC:" + out.amsc + " — Government drawing/sole source lock";
-            rejected++;
-            results.push(out);
-            continue;
-          }
-
-          // Hard reject: blocked CAGE in approved sources
-          const blockedCage = out.approved_sources.find((s) =>
-            BLOCKED_CAGES.includes((s.cage || "").toUpperCase()),
-          );
-          if (blockedCage) {
-            out.reject = "Blocked CAGE: " + blockedCage.cage;
-            rejected++;
-            results.push(out);
-            continue;
-          }
-
-          enriched++;
-          console.log(
-            "[agent] ✅",
-            sol.sol_number,
-            "| AMSC:",
-            out.amsc || "N/A",
-            "| Sources:",
-            out.approved_sources.length,
-          );
-        } catch (e) {
-          out.enrich_error = e.message;
-          errors++;
-          console.warn(
-            "[agent] ⚠️ NSN fetch failed for",
-            sol.sol_number,
-            ":",
-            e.message,
-          );
-        }
-
-        results.push(out);
-        // Throttle — be polite to DIBBS
-        await new Promise((r) => setTimeout(r, 300));
-      }
-
-      console.log(
-        "[agent] /navigator/batch complete — enriched:",
-        enriched,
-        "| rejected:",
-        rejected,
-        "| errors:",
-        errors,
-      );
-      res.writeHead(200, CORS);
-      res.end(
-        JSON.stringify({
-          ok: true,
-          total: sols.length,
-          enriched,
-          rejected,
-          errors,
-          sols: results,
-        }),
-      );
-    });
-    return;
-  }
-  // ── Navigator scrape endpoint ─────────────────────────────────────────
-  // POST /navigator/scrape
-  // Streams SSE progress log then fires final result event.
-  // dibbs-tab.js reads the stream and updates the live log in the UI.
-  //
-  // Requires navigator-scraper.js in the same directory.
-  // navigator-scraper.js must export { scrapeNavigatorBatch }.
-  //
-  // SSE event format:
-  //   data: {"type":"log",   "msg":"...", "level":"info"|"ok"|"err"}
-  //   data: {"type":"result","ok":true,   "sols":[...], "count":N}
-  //   data: {"type":"result","ok":false,  "error":"..."}
-  //   data: [DONE]
-  if (req.method === "POST" && req.url === "/navigator/scrape") {
-    // SSE headers — no Content-Type in CORS object (that has application/json)
-    res.writeHead(200, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
-
-    // Helper — write one SSE event
-    const send = (payload) => {
-      try {
-        res.write("data: " + JSON.stringify(payload) + "\n\n");
-      } catch {}
-    };
-
-    send({ type: "log", msg: "Navigator scrape initiated", level: "info" });
-
-    // Intercept console.log so scraper progress lines stream to browser.
-    // navigator-scraper uses info() → console.log("[navigator-scraper]", ...)
-    const origLog = console.log;
-    const origError = console.error;
-
-    const patchLog = (...args) => {
-      origLog(...args);
-      const msg = args
-        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-        .join(" ");
-      const level = msg.includes("❌")
-        ? "err"
-        : msg.includes("✅")
-          ? "ok"
-          : "info";
-      send({
-        type: "log",
-        msg: msg.replace("[navigator-scraper] ", ""),
-        level,
-      });
-    };
-    const patchErr = (...args) => {
-      origError(...args);
-      const msg = args
-        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-        .join(" ");
-      send({
-        type: "log",
-        msg: msg.replace("[navigator-scraper] ", ""),
-        level: "err",
-      });
-    };
-
-    console.log = patchLog;
-    console.error = patchErr;
-
-    let scraper;
-    try {
-      delete require.cache[require.resolve("./navigator-scraper")];
-      scraper = require("./navigator-scraper");
-    } catch (e) {
-      console.log = origLog;
-      console.error = origError;
-      send({
-        type: "log",
-        msg: "navigator-scraper.js not found: " + e.message,
-        level: "err",
-      });
-      send({
-        type: "result",
-        ok: false,
-        error: "navigator-scraper.js not found",
-      });
-      res.write("data: [DONE]\n\n");
-      res.end();
-      return;
-    }
-
-    // Run scrape — this takes 2-4 minutes, stream keeps the connection alive
-    scraper
-      .scrapeNavigatorBatch()
-      .then((result) => {
-        console.log = origLog;
-        console.error = origError;
-
-        if (result.ok) {
-          send({
-            type: "result",
-            ok: true,
-            sols: result.sols,
-            count: result.count,
-            pass1: result.pass1,
-            pass2: result.pass2 || 0,
-            backupPath: result.backupPath,
-          });
-        } else {
-          send({
-            type: "result",
-            ok: false,
-            error: result.error || "Scrape failed",
-          });
-        }
-
-        res.write("data: [DONE]\n\n");
-        res.end();
-      })
-      .catch((e) => {
-        console.log = origLog;
-        console.error = origError;
-        send({ type: "log", msg: "Fatal: " + e.message, level: "err" });
-        send({ type: "result", ok: false, error: e.message });
-        res.write("data: [DONE]\n\n");
-        res.end();
-      });
-
-    // Keep-alive ping every 20s so browser doesn't time out during long scrape
-    const keepAlive = setInterval(() => {
-      try {
-        res.write(": keep-alive\n\n");
-      } catch {
-        clearInterval(keepAlive);
-      }
-    }, 20000);
-
-    // Clean up on client disconnect
-    req.on("close", () => {
-      clearInterval(keepAlive);
-      console.log = origLog;
-      console.error = origError;
-    });
-
-    return;
-  }
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });
@@ -998,9 +804,6 @@ server.listen(PORT, "127.0.0.1", () => {
     "stored cookies",
   );
   console.log("[agent] Ready.\n");
-  console.log(
-    "║   Navigator: http://localhost:" + PORT + "/navigator/scrape  ║",
-  );
 });
 
 server.on("error", (err) => {
