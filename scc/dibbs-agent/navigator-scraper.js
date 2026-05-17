@@ -208,7 +208,7 @@ async function goToSearchPage(page) {
     waitUntil: "domcontentloaded",
     timeout: 120000,
   });
-  await page.waitForSelector("#btnFullDN", { timeout: 30000 });
+  await page.waitForSelector("#Main_btnApplySelections", { timeout: 30000 });
   await new Promise((r) => setTimeout(r, 2000));
 
   // Dismiss popup with native click if present
@@ -262,7 +262,7 @@ async function runScrapePass(page, { passNum, dateRadioId, dateLabel }) {
   info("Clicking Apply Selections...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
-    page.click("#btnFullDN"),
+    page.click("#Main_btnApplySelections"),
   ]);
   info("✅ Results loaded");
 
@@ -302,7 +302,7 @@ async function runFscPass(page, { fsc, fscIndex, fscTotal, seen }) {
   info("Clicking Apply Selections...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
-    page.click("#btnFullDN"),
+    page.click("#Main_btnApplySelections"),
   ]);
   info("✅ Results loaded");
 
