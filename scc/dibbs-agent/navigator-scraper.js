@@ -418,6 +418,94 @@ async function scrapeNavigatorBatch() {
       }
     }
 
+    // ── HARVEST DIBBS SESSION COOKIES FOR AGENT ──────────────────────
+    // Navigate to DIBBS in the same browser session, accept the DoD banner,
+    // then POST the resulting cookies to the local agent so /navigator/batch
+    // can fetch NSN pages without hitting the banner redirect.
+    info("Harvesting DIBBS session cookies for agent...");
+    try {
+      const dibbsPage = await browser.newPage();
+      dibbsPage.setDefaultTimeout(60000);
+
+      // Hit an NSN page from the scraped batch — guaranteed to trigger
+      // the DoD banner when no session exists. Falls back to a known NSN.
+      const firstNsn = allSols.find((s) => s.nsn && s.nsn.length >= 13);
+      const targetNsn = firstNsn ? firstNsn.nsn : "5940013763668";
+      await dibbsPage.goto(
+        `https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=${targetNsn}&category=&Scope=`,
+        { waitUntil: "domcontentloaded", timeout: 60000 },
+      );
+
+      // Click OK on the DoD banner if present
+      // Button ID is #butAgree (confirmed from DIBBS source)
+      try {
+        await dibbsPage.waitForSelector("#butAgree", { timeout: 8000 });
+        await Promise.all([
+          dibbsPage.waitForNavigation({
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+          }),
+          dibbsPage.click("#butAgree"),
+        ]);
+        info("✅ DIBBS banner accepted");
+      } catch {
+        info("No DIBBS banner — session may already be active");
+      }
+
+      // Grab all cookies for dibbs.bsm.dla.mil
+      const allCookies = await dibbsPage.cookies();
+      const dibbsCookies = allCookies.filter(
+        (c) => c.domain.includes("dibbs") || c.domain.includes("dla.mil"),
+      );
+
+      if (dibbsCookies.length > 0) {
+        const cookieStr = dibbsCookies
+          .map((c) => `${c.name}=${c.value}`)
+          .join("; ");
+        info(`Injecting ${dibbsCookies.length} DIBBS cookies into agent...`);
+
+        // POST to agent /set-cookies
+        const http = require("http");
+        const body = JSON.stringify({ cookies: cookieStr });
+        await new Promise((resolve) => {
+          const req = http.request(
+            {
+              hostname: "127.0.0.1",
+              port: 3100,
+              path: "/set-cookies",
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(body),
+              },
+            },
+            (res) => {
+              res.resume();
+              resolve();
+            },
+          );
+          req.on("error", (e) => {
+            info("Agent cookie injection failed (non-fatal): " + e.message);
+            resolve();
+          });
+          req.setTimeout(5000, () => {
+            req.destroy();
+            resolve();
+          });
+          req.write(body);
+          req.end();
+        });
+
+        info("✅ DIBBS cookies injected into agent — NSN enrichment ready");
+      } else {
+        info("⚠ No DIBBS cookies captured — NSN enrichment may fail");
+      }
+
+      await dibbsPage.close();
+    } catch (e) {
+      info("DIBBS cookie harvest failed (non-fatal): " + e.message);
+    }
+
     await browser.close();
 
     // ── MERGE + DEDUPE (pass1 wins on conflict) ───────────────────────
