@@ -210,13 +210,29 @@ async function goToSearchPage(page) {
   });
   await page.waitForSelector("#btnFullDN", { timeout: 30000 });
 
+  // Dismiss popup — click button then Escape, with longer waits
   await page.evaluate(() => {
     const btn = document.querySelector("#Button111");
     if (btn) btn.click();
   });
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 800));
   await page.keyboard.press("Escape");
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 800));
+
+  // Wait until btnFullDN is actually clickable (not obscured by overlay)
+  await page.waitForFunction(
+    () => {
+      const btn = document.querySelector("#btnFullDN");
+      if (!btn) return false;
+      const rect = btn.getBoundingClientRect();
+      const el = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.top + rect.height / 2,
+      );
+      return el && (el === btn || btn.contains(el));
+    },
+    { timeout: 15000 },
+  );
 }
 
 // ── SET COMMON FILTERS ────────────────────────────────────────────────────
