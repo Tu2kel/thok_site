@@ -209,14 +209,17 @@ async function goToSearchPage(page) {
     timeout: 120000,
   });
   await page.waitForSelector("#btnFullDN", { timeout: 30000 });
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise((r) => setTimeout(r, 2000));
 
-  await page.evaluate(() => {
-    const btn = document.querySelector("#Button111");
-    if (btn) btn.click();
-  });
+  // Dismiss popup with native click if present
+  try {
+    await page.click("#Button111", { timeout: 3000 });
+    await new Promise((r) => setTimeout(r, 1000));
+  } catch {
+    // No popup present
+  }
   await page.keyboard.press("Escape");
-  await new Promise((r) => setTimeout(r, 800));
+  await new Promise((r) => setTimeout(r, 500));
 }
 
 // ── SET COMMON FILTERS ────────────────────────────────────────────────────
