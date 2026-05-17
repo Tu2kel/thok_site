@@ -24,7 +24,8 @@
     Fragment: Frag,
   } = React;
 
-  const AGENT_URL = "https://agent.thehouseofkel.com";
+  // const AGENT_URL = "https://agent.thehouseofkel.com";
+  const AGENT_URL = "http://localhost:3100";
   const STORE_KEY = "scc_dibbs_tab_v1";
   const CRON_KEY = "scc_dibbs_cron_v1";
 
