@@ -169,7 +169,7 @@ async function sortDescByExtPrice(page) {
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
     page.evaluate(() => {
-      __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+      window.__doPostBack("ctl00$Main$GridView1", "Sort$Extended");
     }),
   ]);
 
@@ -195,7 +195,7 @@ async function sortDescByExtPrice(page) {
         timeout: 120000,
       }),
       page.evaluate(() => {
-        __doPostBack("ctl00$Main$GridView1", "Sort$Extended");
+        window.__doPostBack("ctl00$Main$GridView1", "Sort$Extended");
       }),
     ]);
   }
