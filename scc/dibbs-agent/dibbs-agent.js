@@ -295,7 +295,7 @@ async function fetchSolPage(solNumber) {
 async function fetchNsnPage(nsn) {
   if (!nsn) return "";
   // DIBBS NSN page: /RFQ/RFQNsn.aspx?value=XXXXXXXXXXXXXXXXX&category=&Scope=
-  const nsnPath = `/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=sol&Scope=open`;
+  const nsnPath = `/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=&Scope=`;
   console.log("[agent] Fetching NSN page:", nsnPath);
   const res = await dibbsFetch(nsnPath);
   return res.body.toString("utf8");
