@@ -905,6 +905,7 @@ const server = http.createServer((req, res) => {
 
     let scraper;
     try {
+      delete require.cache[require.resolve("./navigator-scraper")];
       scraper = require("./navigator-scraper");
     } catch (e) {
       console.log = origLog;
