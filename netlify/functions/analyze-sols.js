@@ -79,6 +79,8 @@ async function callClaude(sols) {
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
+      system: ANALYSIS_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: buildUserMsg(sols) }],
     }),
   });
 
