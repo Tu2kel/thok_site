@@ -135,50 +135,101 @@
   // Claude → GPT-4o fallback internally.
   async function analyzeWithClaude(sols, logFn) {
     const log = logFn || (() => {});
-    log("Sending " + sols.length + " sols to analysis proxy…", "info");
 
-    const payload = sols.map((s) => ({
-      sol_number: s.sol_number,
-      item_name: s.item_name,
-      fsc: s.fsc,
-      nsn: s.nsn,
-      amsc: s.amsc || "",
-      approved_sources: s.approved_sources || [],
-      qty: s.qty,
-      unit_issue: s.unit_issue,
-      unit_price: s.unit_price,
-      ext_price: s.ext_price,
-      delivery_days: s.delivery_days,
-      set_aside: s.set_aside,
-      supplier_restrictions: s.supplier_restrictions,
-      piece_part_no: s.piece_part_no,
-      material: s.material,
-      part_char: s.part_char,
-      quote_due: s.quote_due,
-    }));
+    // ── Chunk into batches of 50 — keeps each Netlify call under 10s ──
+    const CHUNK = 50;
+    const chunks = [];
+    for (let i = 0; i < sols.length; i += CHUNK)
+      chunks.push(sols.slice(i, i + CHUNK));
 
-    const resp = await fetch("/.netlify/functions/analyze-sols", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sols: payload }),
-      signal: AbortSignal.timeout(120000),
-    });
+    log(
+      "Sending " +
+        sols.length +
+        " sols in " +
+        chunks.length +
+        " batch" +
+        (chunks.length > 1 ? "es" : "") +
+        "…",
+      "info",
+    );
 
-    const data = await resp.json();
+    const allResults = [];
 
-    if (!resp.ok || !data.ok) {
-      throw new Error(
-        data.error || "analyze-sols function returned " + resp.status,
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      log(
+        "Batch " +
+          (i + 1) +
+          "/" +
+          chunks.length +
+          " (" +
+          chunk.length +
+          " sols)…",
+        "info",
       );
+
+      const payload = chunk.map((s) => ({
+        sol_number: s.sol_number,
+        item_name: s.item_name,
+        fsc: s.fsc,
+        nsn: s.nsn,
+        amsc: s.amsc || "",
+        approved_sources: s.approved_sources || [],
+        qty: s.qty,
+        unit_issue: s.unit_issue,
+        unit_price: s.unit_price,
+        ext_price: s.ext_price,
+        delivery_days: s.delivery_days,
+        set_aside: s.set_aside,
+        supplier_restrictions: s.supplier_restrictions,
+        piece_part_no: s.piece_part_no,
+        material: s.material,
+        part_char: s.part_char,
+        quote_due: s.quote_due,
+      }));
+
+      const resp = await fetch("/.netlify/functions/analyze-sols", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sols: payload }),
+        signal: AbortSignal.timeout(60000), // 60s per chunk
+      });
+
+      // Netlify 504s return an HTML error page — catch before .json()
+      const contentType = resp.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await resp.text();
+        throw new Error(
+          "Batch " +
+            (i + 1) +
+            " non-JSON response (" +
+            resp.status +
+            "): " +
+            text.slice(0, 100),
+        );
+      }
+
+      const data = await resp.json();
+
+      if (!resp.ok || !data.ok) {
+        throw new Error(
+          "Batch " + (i + 1) + " failed: " + (data.error || resp.status),
+        );
+      }
+
+      if (data.claudeFallback) {
+        log("⚠ Batch " + (i + 1) + ": Claude quota — GPT-4o used", "err");
+      } else {
+        log(
+          "✓ Batch " + (i + 1) + " complete via " + (data.provider || "AI"),
+          "ok",
+        );
+      }
+
+      allResults.push(...data.results);
     }
 
-    if (data.claudeFallback) {
-      log("⚠ Claude quota — GPT-4o handled this batch", "err");
-    } else {
-      log("✓ Analysis complete via " + (data.provider || "AI"), "ok");
-    }
-
-    return data.results;
+    return allResults;
   }
 
   // ── RFQ EMAIL BUILDER ─────────────────────────────────────────────────
