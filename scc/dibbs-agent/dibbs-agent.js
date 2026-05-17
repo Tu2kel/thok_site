@@ -695,160 +695,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ── /navigator/batch ──────────────────────────────────────────────────
-  // Accepts: POST { sols: [ { sol_number, nsn, fsc, ... } ] }
-  // For each sol: fetches RFQNsn.aspx → extracts AMSC + approved_sources
-  // Returns enriched sol array. Hard rejects (AMSC G/B/A, blocked CAGEs)
-  // are flagged inline — caller decides what to save.
-  if (req.method === "POST" && req.url === "/navigator/batch") {
-    let rawBody = "";
-    req.on("data", (c) => (rawBody += c));
-    req.on("end", async () => {
-      let body;
-      try {
-        body = JSON.parse(rawBody);
-      } catch {
-        res.writeHead(400, CORS);
-        res.end(JSON.stringify({ ok: false, error: "Invalid JSON" }));
-        return;
-      }
-
-      const sols = body.sols || [];
-      if (!sols.length) {
-        res.writeHead(400, CORS);
-        res.end(JSON.stringify({ ok: false, error: "sols array required" }));
-        return;
-      }
-
-      const BLOCKED_CAGES = ["81SA7", "R9004", "07482", "062W0"];
-      const BLOCKED_AMSC = ["G", "B", "A"];
-      const HARD_SA = /^(FG|PO|FI|H|L|E)$/i;
-
-      console.log("[agent] /navigator/batch — enriching", sols.length, "sols");
-      const results = [];
-      let enriched = 0,
-        rejected = 0,
-        errors = 0;
-
-      for (const sol of sols) {
-        const out = { ...sol, amsc: "", approved_sources: [], reject: null };
-
-        // Hard reject: set-aside
-        const sa = (sol.set_aside || "").toUpperCase().trim();
-        if (HARD_SA.test(sa)) {
-          out.reject = "Set-aside ineligible: " + sa;
-          rejected++;
-          results.push(out);
-          continue;
-        }
-
-        // Hard reject: AIDC
-        // ai column = 'AI' means Approved Item (normal) — NOT the AIDC flag
-        // AIDC only appears explicitly in supplier_restrictions field
-        if (/AIDC/i.test(sol.supplier_restrictions || "")) {
-          out.reject = "AIDC — no certification";
-          rejected++;
-          results.push(out);
-          continue;
-        }
-
-        // NSN required for enrichment
-        if (!sol.nsn || sol.nsn.length < 13) {
-          out.reject = "No NSN — cannot enrich";
-          rejected++;
-          results.push(out);
-          continue;
-        }
-
-        // Fetch NSN page
-        try {
-          const nsnHtml = await fetchNsnPage(sol.nsn);
-          const nsnData = parseNsnPage(nsnHtml);
-          out.amsc = nsnData.amsc || "";
-          out.approved_sources = nsnData.approved_sources || [];
-
-          // Hard reject: AMSC lock
-          if (BLOCKED_AMSC.includes(out.amsc.toUpperCase())) {
-            out.reject =
-              "AMSC:" + out.amsc + " — Government drawing/sole source lock";
-            rejected++;
-            results.push(out);
-            continue;
-          }
-
-          // Hard reject: blocked CAGE in approved sources
-          const blockedCage = out.approved_sources.find((s) =>
-            BLOCKED_CAGES.includes((s.cage || "").toUpperCase()),
-          );
-          if (blockedCage) {
-            out.reject = "Blocked CAGE: " + blockedCage.cage;
-            rejected++;
-            results.push(out);
-            continue;
-          }
-
-          enriched++;
-          console.log(
-            "[agent] ✅",
-            sol.sol_number,
-            "| AMSC:",
-            out.amsc || "N/A",
-            "| Sources:",
-            out.approved_sources.length,
-          );
-        } catch (e) {
-          out.enrich_error = e.message;
-          errors++;
-          console.warn(
-            "[agent] ⚠️ NSN fetch failed for",
-            sol.sol_number,
-            ":",
-            e.message,
-          );
-        }
-
-        results.push(out);
-        // Throttle — be polite to DIBBS
-        await new Promise((r) => setTimeout(r, 300));
-      }
-
-      console.log(
-        "[agent] /navigator/batch complete — enriched:",
-        enriched,
-        "| rejected:",
-        rejected,
-        "| errors:",
-        errors,
-      );
-      res.writeHead(200, CORS);
-      res.end(
-        JSON.stringify({
-          ok: true,
-          total: sols.length,
-          enriched,
-          rejected,
-          errors,
-          sols: results,
-        }),
-      );
-    });
-    return;
-  }
-  // ── Navigator scrape endpoint ─────────────────────────────────────────
-  // POST /navigator/scrape
-  // Streams SSE progress log then fires final result event.
-  // dibbs-tab.js reads the stream and updates the live log in the UI.
-  //
-  // Requires navigator-scraper.js in the same directory.
-  // navigator-scraper.js must export { scrapeNavigatorBatch }.
-  //
-  // SSE event format:
-  //   data: {"type":"log",   "msg":"...", "level":"info"|"ok"|"err"}
-  //   data: {"type":"result","ok":true,   "sols":[...], "count":N}
-  //   data: {"type":"result","ok":false,  "error":"..."}
-  //   data: [DONE]
-  if (req.method === "POST" && req.url === "/navigator/scrape") {
-    // SSE headers — no Content-Type in CORS object (that has application/json)
+  // ── /navigator/enrich ────────────────────────────────────────────────
+  // POST { sols: [...] }
+  // Launches Puppeteer, navigates to DIBBS, clicks the DoD banner,
+  // then fetches each NSN page in the authenticated browser session.
+  // Returns enriched sols with AMSC + approved_sources.
+  // Hard-rejects AMSC G/B/A and blocked CAGEs inline.
+  // SSE stream — same format as /navigator/scrape so dibbs-tab can log progress.
+  if (req.method === "POST" && req.url === "/navigator/enrich") {
     res.writeHead(200, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type",
@@ -858,128 +712,249 @@ const server = http.createServer((req, res) => {
       "X-Accel-Buffering": "no",
     });
 
-    // Helper — write one SSE event
     const send = (payload) => {
       try {
         res.write("data: " + JSON.stringify(payload) + "\n\n");
       } catch {}
     };
 
-    send({ type: "log", msg: "Navigator scrape initiated", level: "info" });
-
-    // Intercept console.log so scraper progress lines stream to browser.
-    // navigator-scraper uses info() → console.log("[navigator-scraper]", ...)
-    const origLog = console.log;
-    const origError = console.error;
-
-    const patchLog = (...args) => {
-      origLog(...args);
-      const msg = args
-        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-        .join(" ");
-      const level = msg.includes("❌")
-        ? "err"
-        : msg.includes("✅")
-          ? "ok"
-          : "info";
-      send({
-        type: "log",
-        msg: msg.replace("[navigator-scraper] ", ""),
-        level,
-      });
-    };
-    const patchErr = (...args) => {
-      origError(...args);
-      const msg = args
-        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-        .join(" ");
-      send({
-        type: "log",
-        msg: msg.replace("[navigator-scraper] ", ""),
-        level: "err",
-      });
-    };
-
-    console.log = patchLog;
-    console.error = patchErr;
-
-    let scraper;
-    try {
-      delete require.cache[require.resolve("./navigator-scraper")];
-      scraper = require("./navigator-scraper");
-    } catch (e) {
-      console.log = origLog;
-      console.error = origError;
-      send({
-        type: "log",
-        msg: "navigator-scraper.js not found: " + e.message,
-        level: "err",
-      });
-      send({
-        type: "result",
-        ok: false,
-        error: "navigator-scraper.js not found",
-      });
-      res.write("data: [DONE]\n\n");
-      res.end();
-      return;
-    }
-
-    // Run scrape — this takes 2-4 minutes, stream keeps the connection alive
-    scraper
-      .scrapeNavigatorBatch()
-      .then((result) => {
-        console.log = origLog;
-        console.error = origError;
-
-        if (result.ok) {
-          send({
-            type: "result",
-            ok: true,
-            sols: result.sols,
-            count: result.count,
-            pass1: result.pass1,
-            pass2: result.pass2 || 0,
-            backupPath: result.backupPath,
-          });
-        } else {
-          send({
-            type: "result",
-            ok: false,
-            error: result.error || "Scrape failed",
-          });
-        }
-
-        res.write("data: [DONE]\n\n");
-        res.end();
-      })
-      .catch((e) => {
-        console.log = origLog;
-        console.error = origError;
-        send({ type: "log", msg: "Fatal: " + e.message, level: "err" });
-        send({ type: "result", ok: false, error: e.message });
-        res.write("data: [DONE]\n\n");
-        res.end();
-      });
-
-    // Keep-alive ping every 20s so browser doesn't time out during long scrape
+    // Keep-alive ping every 15s
     const keepAlive = setInterval(() => {
       try {
         res.write(": keep-alive\n\n");
       } catch {
         clearInterval(keepAlive);
       }
-    }, 20000);
+    }, 15000);
 
-    // Clean up on client disconnect
-    req.on("close", () => {
+    const cleanup = () => {
       clearInterval(keepAlive);
-      console.log = origLog;
-      console.error = origError;
-    });
+    };
+    req.on("close", cleanup);
 
+    let rawBody = "";
+    req.on("data", (c) => (rawBody += c));
+    req.on("end", async () => {
+      let sols;
+      try {
+        ({ sols } = JSON.parse(rawBody));
+        if (!Array.isArray(sols) || !sols.length)
+          throw new Error("sols array required");
+      } catch (e) {
+        send({ type: "result", ok: false, error: e.message });
+        res.write("data: [DONE]\n\n");
+        res.end();
+        cleanup();
+        return;
+      }
+
+      const BLOCKED_CAGES = ["81SA7", "R9004", "07482", "062W0"];
+      const BLOCKED_AMSC = ["G", "B", "A"];
+      const HARD_SA = /^(FG|PO|FI|H|L|E)$/i;
+
+      let puppeteer, browser;
+      try {
+        puppeteer = require("puppeteer");
+      } catch (e) {
+        send({
+          type: "result",
+          ok: false,
+          error: "puppeteer not found: " + e.message,
+        });
+        res.write("data: [DONE]\n\n");
+        res.end();
+        cleanup();
+        return;
+      }
+
+      try {
+        send({
+          type: "log",
+          msg: "Launching browser for DIBBS enrichment...",
+          level: "info",
+        });
+
+        browser = await puppeteer.launch({
+          headless: true,
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+          ],
+        });
+
+        const page = await browser.newPage();
+        page.setDefaultTimeout(30000);
+
+        // ── Navigate to DIBBS and accept the DoD banner ──────────────
+        send({ type: "log", msg: "Navigating to DIBBS...", level: "info" });
+        await page.goto(
+          "https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=5940013763668&category=&Scope=",
+          { waitUntil: "domcontentloaded", timeout: 30000 },
+        );
+
+        // Click banner if present
+        try {
+          await page.waitForSelector("#butAgree", { timeout: 8000 });
+          await Promise.all([
+            page.waitForNavigation({
+              waitUntil: "domcontentloaded",
+              timeout: 20000,
+            }),
+            page.click("#butAgree"),
+          ]);
+          send({ type: "log", msg: "✅ DIBBS banner accepted", level: "ok" });
+        } catch {
+          send({
+            type: "log",
+            msg: "No banner — session active",
+            level: "info",
+          });
+        }
+
+        // ── Loop NSN pages ────────────────────────────────────────────
+        const results = [];
+        let enriched = 0,
+          rejected = 0,
+          errors = 0;
+        const total = sols.length;
+
+        for (let i = 0; i < sols.length; i++) {
+          const sol = sols[i];
+          const out = { ...sol, amsc: "", approved_sources: [], reject: null };
+
+          // Hard reject: set-aside
+          const sa = (sol.set_aside || "").toUpperCase().trim();
+          if (HARD_SA.test(sa)) {
+            out.reject = "Set-aside ineligible: " + sa;
+            rejected++;
+            results.push(out);
+            continue;
+          }
+
+          // Hard reject: AIDC
+          if (/AIDC/i.test(sol.supplier_restrictions || "")) {
+            out.reject = "AIDC — no certification";
+            rejected++;
+            results.push(out);
+            continue;
+          }
+
+          // Need NSN
+          if (!sol.nsn || sol.nsn.length < 13) {
+            out.reject = "No NSN — cannot enrich";
+            rejected++;
+            results.push(out);
+            continue;
+          }
+
+          try {
+            const nsnUrl = `https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=${sol.nsn}&category=&Scope=`;
+            await page.goto(nsnUrl, {
+              waitUntil: "domcontentloaded",
+              timeout: 20000,
+            });
+
+            // If banner appeared again, click it
+            const bannerVisible = await page.$("#butAgree");
+            if (bannerVisible) {
+              await Promise.all([
+                page.waitForNavigation({
+                  waitUntil: "domcontentloaded",
+                  timeout: 20000,
+                }),
+                page.click("#butAgree"),
+              ]);
+            }
+
+            const html = await page.content();
+
+            // Parse AMSC
+            const amscMatch = html
+              .replace(/<[^>]+>/g, " ")
+              .match(/AMSC[:\s]+([A-Z])\b/);
+            out.amsc = amscMatch ? amscMatch[1] : "";
+
+            // Parse approved sources
+            out.approved_sources = parseSuppliers(html);
+
+            // Hard reject: AMSC lock
+            if (BLOCKED_AMSC.includes(out.amsc.toUpperCase())) {
+              out.reject =
+                "AMSC:" + out.amsc + " — Government drawing/sole source lock";
+              rejected++;
+              results.push(out);
+              continue;
+            }
+
+            // Hard reject: blocked CAGE
+            const blockedCage = out.approved_sources.find((s) =>
+              BLOCKED_CAGES.includes((s.cage || "").toUpperCase()),
+            );
+            if (blockedCage) {
+              out.reject = "Blocked CAGE: " + blockedCage.cage;
+              rejected++;
+              results.push(out);
+              continue;
+            }
+
+            enriched++;
+            if ((i + 1) % 10 === 0 || i === total - 1) {
+              send({
+                type: "log",
+                msg: `Enriched ${i + 1}/${total} — AMSC: ${out.amsc || "N/A"} | Sources: ${out.approved_sources.length}`,
+                level: "info",
+              });
+            }
+          } catch (e) {
+            out.enrich_error = e.message;
+            errors++;
+            console.warn(
+              "[agent] NSN fetch failed for",
+              sol.sol_number,
+              ":",
+              e.message,
+            );
+          }
+
+          results.push(out);
+        }
+
+        await browser.close();
+
+        send({
+          type: "log",
+          msg: `✅ Enrichment complete — ${enriched} enriched · ${rejected} rejected · ${errors} errors`,
+          level: "ok",
+        });
+        send({
+          type: "result",
+          ok: true,
+          sols: results,
+          enriched,
+          rejected,
+          errors,
+        });
+      } catch (e) {
+        if (browser)
+          try {
+            await browser.close();
+          } catch {}
+        send({
+          type: "log",
+          msg: "Enrichment failed: " + e.message,
+          level: "err",
+        });
+        send({ type: "result", ok: false, error: e.message });
+      }
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+      cleanup();
+    });
     return;
   }
+
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });
@@ -998,9 +973,6 @@ server.listen(PORT, "127.0.0.1", () => {
     "stored cookies",
   );
   console.log("[agent] Ready.\n");
-  console.log(
-    "║   Navigator: http://localhost:" + PORT + "/navigator/scrape  ║",
-  );
 });
 
 server.on("error", (err) => {
