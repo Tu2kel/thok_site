@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// IMPERIO SCC — DIBBS NAVIGATOR SCRAPER v3.0
+// IMPERIO SCC — DIBBS NAVIGATOR SCRAPER v3.1
 //
 // Three-pass scrape:
 //   Pass 1 — Today, broad (catches fresh daily sols)
@@ -7,9 +7,11 @@
 //   Pass 3 — Last 30 days, per-FSC with native typing (catches rows past
 //             page cap that broad passes miss)
 //
-// Fix vs v2.0: FSC field now uses page.type() so ASP.NET registers the
-// value. DOM .value injection alone does not fire the change events
-// ASP.NET needs — native typing does.
+// Fix vs v3.0: page.evaluate() calls that invoke __doPostBack now use
+//   string-form evaluate ('__doPostBack(...)') instead of a function
+//   callback. Puppeteer's function serializer accesses .caller/.arguments
+//   on strict-mode wrapper functions — banned in strict mode. String-form
+//   bypasses the serializer entirely and executes as raw JS in page context.
 // ═══════════════════════════════════════════════════════════════════════
 
 const puppeteer = require("puppeteer");
@@ -164,13 +166,15 @@ async function scrapePage(page, { passNum, passLabel, fscHint = "" }) {
 }
 
 // ── SORT DESC BY EXTENDED PRICE ───────────────────────────────────────────
+// FIX v3.1: Use string-form page.evaluate for __doPostBack calls.
+// Function-form evaluate wraps the callback in a Puppeteer serializer that
+// accesses .caller/.arguments — banned on strict-mode functions → throws.
+// String-form skips serialization and runs as raw JS in page context.
 async function sortDescByExtPrice(page) {
   info("Sorting by Extended Price...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
-    page.evaluate(() => {
-      window.__doPostBack("ctl00$Main$GridView1", "Sort$Extended");
-    }),
+    page.evaluate('__doPostBack("ctl00$Main$GridView1", "Sort$Extended")'),
   ]);
 
   // Check direction — if first price is low, it sorted asc; click again
@@ -194,9 +198,7 @@ async function sortDescByExtPrice(page) {
         waitUntil: "domcontentloaded",
         timeout: 120000,
       }),
-      page.evaluate(() => {
-        window.__doPostBack("ctl00$Main$GridView1", "Sort$Extended");
-      }),
+      page.evaluate('__doPostBack("ctl00$Main$GridView1", "Sort$Extended")'),
     ]);
   }
   info("✅ Sorted desc");
