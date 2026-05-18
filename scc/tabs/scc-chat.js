@@ -10,7 +10,6 @@
   const CHAT_KEY = "scc_chat_history_v1";
   const KEY_STORE = "scc_anthropic_key";
 
-  // ── Inject styles ──────────────────────────────────────────────────────
   const style = document.createElement("style");
   style.textContent = `
     #scc-chat-fab {
@@ -80,7 +79,6 @@
       opacity: 1;
       pointer-events: all;
     }
-
     #scc-chat-header {
       padding: 12px 16px;
       border-bottom: 1px solid rgba(160,110,0,.15);
@@ -113,7 +111,6 @@
       transition: color .15s;
     }
     #scc-chat-clear:hover { color: #e74c3c; }
-
     #scc-chat-messages {
       flex: 1;
       overflow-y: auto;
@@ -125,7 +122,6 @@
     #scc-chat-messages::-webkit-scrollbar { width: 4px; }
     #scc-chat-messages::-webkit-scrollbar-track { background: transparent; }
     #scc-chat-messages::-webkit-scrollbar-thumb { background: rgba(201,168,76,.2); border-radius: 2px; }
-
     .scc-msg {
       max-width: 88%;
       padding: 8px 12px;
@@ -162,7 +158,6 @@
       border: 1px solid rgba(231,76,60,.2);
       background: rgba(231,76,60,.05);
     }
-
     #scc-chat-input-row {
       padding: 10px 12px;
       border-top: 1px solid rgba(160,110,0,.15);
@@ -202,7 +197,6 @@
     }
     #scc-chat-send:hover { background: rgba(201,168,76,.2); }
     #scc-chat-send:disabled { opacity: .4; cursor: default; }
-
     .scc-suggestion-chips {
       display: flex;
       flex-wrap: wrap;
@@ -224,7 +218,6 @@
   `;
   document.head.appendChild(style);
 
-  // ── Mount HTML ─────────────────────────────────────────────────────────
   const fab = document.createElement("button");
   fab.id = "scc-chat-fab";
   fab.title = "SCC Assistant";
@@ -250,10 +243,9 @@
   `;
   document.body.appendChild(panel);
 
-  // ── State ──────────────────────────────────────────────────────────────
   let open = false;
   let thinking = false;
-  let history = []; // [{ role, content }]
+  let history = [];
 
   const CHIPS = [
     "What are my top 5 open sols by value?",
@@ -263,17 +255,15 @@
     "What's my pipeline status summary?",
   ];
 
-  // ── DOM refs ───────────────────────────────────────────────────────────
   const msgBox = document.getElementById("scc-chat-messages");
   const input = document.getElementById("scc-chat-input");
   const sendBtn = document.getElementById("scc-chat-send");
   const chips = document.getElementById("scc-chips");
   const clearBtn = document.getElementById("scc-chat-clear");
 
-  // ── Render suggestion chips ────────────────────────────────────────────
   function renderChips() {
     chips.innerHTML = "";
-    if (history.length > 0) return; // hide after first message
+    if (history.length > 0) return;
     CHIPS.forEach((q) => {
       const btn = document.createElement("button");
       btn.className = "scc-chip";
@@ -286,7 +276,6 @@
     });
   }
 
-  // ── Load/save history ──────────────────────────────────────────────────
   function loadHistory() {
     try {
       history = JSON.parse(localStorage.getItem(CHAT_KEY) || "[]");
@@ -300,7 +289,6 @@
     } catch {}
   }
 
-  // ── Append message to UI ───────────────────────────────────────────────
   function addMsg(role, text) {
     const div = document.createElement("div");
     div.className = "scc-msg " + role;
@@ -310,11 +298,10 @@
     return div;
   }
 
-  // ── Build context from live data ───────────────────────────────────────
   async function buildContext() {
     const parts = [];
 
-    // Pipeline snapshot
+    // Pipeline
     try {
       if (window.SCC_DB) {
         const recs = await window.SCC_DB.dbGetAll();
@@ -336,17 +323,16 @@
               (r) =>
                 `${r.sol_number} | ${r.item_name} | FSC ${r.fsc} | $${r.unit_price} x ${r.quantity} ${r.unit_issue} | Due: ${r.quote_due} | ${r.status}`,
             );
-          parts.push(`PIPELINE (${recs.length} total, ${open.length} open):
-Status breakdown: ${JSON.stringify(byStatus)}
-Top open sols by unit price:
-${topByValue.join("\n")}`);
+          parts.push(
+            `PIPELINE (${recs.length} total, ${open.length} open):\nStatus breakdown: ${JSON.stringify(byStatus)}\nTop open sols by unit price:\n${topByValue.join("\n")}`,
+          );
         }
       }
     } catch (e) {
       parts.push("Pipeline: unavailable (" + e.message + ")");
     }
 
-    // Today's scrape / analysis
+    // Last scrape / analysis
     try {
       const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
       if (saved.sols && saved.sols.length) {
@@ -362,51 +348,40 @@ ${topByValue.join("\n")}`);
             (r) =>
               `${r.sol_number} | ${r.item_name} | FSC ${r.fsc} | $${r.ext_price} | ${r.reason}`,
           );
-        parts.push(`LAST ANALYSIS: GO: ${(go || []).length} | VERIFY: ${(verify || []).length} | REJECT: ${(reject || []).length}
-Top GOs:
-${topGO.join("\n")}`);
+        parts.push(
+          `LAST ANALYSIS: GO: ${(go || []).length} | VERIFY: ${(verify || []).length} | REJECT: ${(reject || []).length}\nTop GOs:\n${topGO.join("\n")}`,
+        );
       }
     } catch {}
 
-    // Rolodex coverage
+    // Rolodex — full records so Claude can read and answer any question
     try {
       if (window.SCC_DIST) {
-        const dists = window.SCC_DIST._cache || [];
+        const dists = window.SCC_DIST.DISTRIBUTORS || [];
         if (dists.length) {
-          const fscCoverage = {};
-          for (const d of dists) {
-            const fscs = (d.fsc || d.FSCs || "")
-              .toString()
-              .split(/[,;\s]+/)
-              .filter((f) => /^\d{4}$/.test(f));
-            for (const f of fscs) fscCoverage[f] = (fscCoverage[f] || 0) + 1;
-          }
-          parts.push(`ROLODEX: ${dists.length} distributors
-FSC coverage: ${Object.entries(fscCoverage)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 20)
-            .map(([f, n]) => `${f}(${n})`)
-            .join(", ")}`);
+          parts.push(
+            "ROLODEX (" +
+              dists.length +
+              " distributors — full records):\n" +
+              JSON.stringify(dists),
+          );
         }
       }
-    } catch {}
+    } catch (e) {
+      parts.push("Rolodex error: " + e.message);
+    }
 
     return parts.join("\n\n");
   }
 
-  // ── Send message ───────────────────────────────────────────────────────
   async function send() {
     const text = input.value.trim();
     if (!text || thinking) return;
     input.value = "";
     input.style.height = "38px";
-
-    // Hide chips after first message
     chips.innerHTML = "";
-
     addMsg("user", text);
     history.push({ role: "user", content: text });
-
     const thinkingEl = addMsg("thinking", "Thinking…");
     thinking = true;
     sendBtn.disabled = true;
@@ -414,7 +389,6 @@ FSC coverage: ${Object.entries(fscCoverage)
     try {
       const context = await buildContext();
       const apiKey = localStorage.getItem(KEY_STORE) || "";
-
       if (!apiKey) {
         thinkingEl.remove();
         addMsg(
@@ -437,7 +411,6 @@ ${context}
 
 If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 = 1.67%, Day 30 = 2.50%, Day 60 = 5.00%. PO funding = 2.50% COGS. Net floor = $500 after worst-case fees.`;
 
-      // Route through local agent to avoid CORS
       const resp = await fetch(AGENT_URL + "/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -465,12 +438,9 @@ If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 =
         .map((b) => b.text)
         .join("")
         .trim();
-
       addMsg("assistant", reply);
       history.push({ role: "assistant", content: reply });
       saveHistory();
-
-      // Unread badge if panel closed
       if (!open) fab.classList.add("has-unread");
     } catch (e) {
       thinkingEl.remove();
@@ -482,7 +452,6 @@ If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 =
     sendBtn.disabled = false;
   }
 
-  // ── Restore history on load ────────────────────────────────────────────
   function restoreHistory() {
     loadHistory();
     for (const m of history) addMsg(m.role, m.content);
@@ -490,7 +459,6 @@ If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 =
     msgBox.scrollTop = msgBox.scrollHeight;
   }
 
-  // ── Toggle panel ───────────────────────────────────────────────────────
   fab.addEventListener("click", () => {
     open = !open;
     panel.classList.toggle("open", open);
@@ -507,7 +475,6 @@ If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 =
     renderChips();
   });
 
-  // ── Input handlers ─────────────────────────────────────────────────────
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -520,6 +487,5 @@ If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 =
   });
   sendBtn.addEventListener("click", send);
 
-  // ── Init ───────────────────────────────────────────────────────────────
   restoreHistory();
 })();
