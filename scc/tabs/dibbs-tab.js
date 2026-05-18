@@ -229,6 +229,7 @@
           lines.push(
             "     Required Delivery: " + s.delivery_days + " days ARO",
           );
+        if (s.sol_number) lines.push("     Ref #: " + s.sol_number);
         return lines.join("\n");
       })
       .join("\n\n");
