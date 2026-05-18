@@ -321,6 +321,7 @@
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
     const [rawExpanded, setRawExpanded] = useState(false);
+    const [rawSearch, setRawSearch] = useState("");
     const [anthropicKey, setAnthropicKey] = useState(
       () => localStorage.getItem("scc_anthropic_key") || "",
     );
@@ -614,11 +615,13 @@
         const verify = [];
         const reject = [];
 
-        // Merge all verdicts back with original sol data
+        // Merge all verdicts back with enriched sol data (carries approved_sources + amsc)
         for (const res of allResults) {
+          const enriched =
+            enrichedSols.find((s) => s.sol_number === res.sol_number) || {};
           const original =
             sols.find((s) => s.sol_number === res.sol_number) || {};
-          const merged = { ...original, ...res };
+          const merged = { ...original, ...enriched, ...res };
           if (res.verdict === "GO") go.push(merged);
           else if (res.verdict === "VERIFY FIRST") verify.push(merged);
           else reject.push(merged);
@@ -1039,7 +1042,27 @@
                 alignItems: "center",
               },
             },
-            h("span", null, "Raw Results — " + sols.length + " sols"),
+            h(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "10px" } },
+              h("span", null, "Raw Results — " + sols.length + " sols"),
+              h("input", {
+                type: "text",
+                placeholder: "Search FSC, item, sol#, NSN…",
+                value: rawSearch,
+                onChange: (e) => setRawSearch(e.target.value),
+                style: {
+                  background: "var(--inset-bg)",
+                  border: "1px solid rgba(201,168,76,.2)",
+                  color: "var(--alabaster)",
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "10px",
+                  padding: "4px 8px",
+                  width: "180px",
+                  outline: "none",
+                },
+              }),
+            ),
             h(
               "div",
               { style: { display: "flex", gap: "8px" } },
@@ -1123,135 +1146,145 @@
                 h(
                   "tbody",
                   null,
-                  ...sols.map((s, i) =>
-                    h(
-                      "tr",
-                      {
-                        key: s.sol_number,
-                        style: {
-                          background:
-                            i % 2 === 0
-                              ? "transparent"
-                              : "rgba(255,255,255,.02)",
-                        },
-                      },
+                  ...sols
+                    .filter(
+                      (s) =>
+                        !rawSearch ||
+                        Object.values(s).some((v) =>
+                          String(v || "")
+                            .toLowerCase()
+                            .includes(rawSearch.toLowerCase()),
+                        ),
+                    )
+                    .map((s, i) =>
                       h(
-                        "td",
+                        "tr",
                         {
+                          key: s.sol_number,
                           style: {
-                            padding: "5px 10px",
-                            color: "var(--gold-dim)",
-                            whiteSpace: "nowrap",
+                            background:
+                              i % 2 === 0
+                                ? "transparent"
+                                : "rgba(255,255,255,.02)",
                           },
                         },
                         h(
-                          "a",
+                          "td",
                           {
-                            href:
-                              "https://www.dibbs.bsm.dla.mil/RFQ/RFQRec.aspx?sn=" +
-                              s.sol_number,
-                            target: "_blank",
-                            rel: "noopener noreferrer",
                             style: {
-                              color: "var(--gold-solid)",
-                              textDecoration: "none",
+                              padding: "5px 10px",
+                              color: "var(--gold-dim)",
+                              whiteSpace: "nowrap",
                             },
                           },
-                          s.sol_number,
+                          h(
+                            "a",
+                            {
+                              href:
+                                "https://www.dibbs.bsm.dla.mil/RFQ/RFQRec.aspx?sn=" +
+                                s.sol_number,
+                              target: "_blank",
+                              rel: "noopener noreferrer",
+                              style: {
+                                color: "var(--gold-solid)",
+                                textDecoration: "none",
+                              },
+                            },
+                            s.sol_number,
+                          ),
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--body-dim)",
+                            },
+                          },
+                          s.nsn || "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--body-dim)",
+                            },
+                          },
+                          s.fsc || "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--alabaster)",
+                              maxWidth: "240px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          s.item_name || "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--body-dim)",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          s.qty
+                            ? s.qty + (s.unit_issue ? " " + s.unit_issue : "")
+                            : "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--body-dim)",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          fmtD(s.unit_price),
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--accent-yellow)",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          fmtD(s.ext_price),
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--body-faint)",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          s.quote_due || "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--body-faint)",
+                            },
+                          },
+                          s.set_aside || "—",
                         ),
                       ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--body-dim)",
-                          },
-                        },
-                        s.nsn || "—",
-                      ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--body-dim)",
-                          },
-                        },
-                        s.fsc || "—",
-                      ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--alabaster)",
-                            maxWidth: "240px",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          },
-                        },
-                        s.item_name || "—",
-                      ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--body-dim)",
-                            whiteSpace: "nowrap",
-                          },
-                        },
-                        s.qty
-                          ? s.qty + (s.unit_issue ? " " + s.unit_issue : "")
-                          : "—",
-                      ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--body-dim)",
-                            whiteSpace: "nowrap",
-                          },
-                        },
-                        fmtD(s.unit_price),
-                      ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--accent-yellow)",
-                            whiteSpace: "nowrap",
-                          },
-                        },
-                        fmtD(s.ext_price),
-                      ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--body-faint)",
-                            whiteSpace: "nowrap",
-                          },
-                        },
-                        s.quote_due || "—",
-                      ),
-                      h(
-                        "td",
-                        {
-                          style: {
-                            padding: "5px 10px",
-                            color: "var(--body-faint)",
-                          },
-                        },
-                        s.set_aside || "—",
-                      ),
                     ),
-                  ),
                 ),
               ),
             ),
