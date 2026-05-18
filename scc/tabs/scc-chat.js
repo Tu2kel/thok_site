@@ -62,6 +62,10 @@
       right: 80px;
       width: 420px;
       height: 560px;
+      min-height: 300px;
+      max-height: 90vh;
+      resize: vertical;
+      overflow: hidden;
       background: #faf7f2;
       border: 1px solid rgba(160,110,0,.25);
       border-radius: 4px;
@@ -402,9 +406,13 @@
 
       const systemPrompt = `You are the SCC Assistant for Imperio Federal Logistics (CAGE 152U4), an SDVOSB DLA DIBBS contractor run by Anthony Kelley.
 
-You have access to live data from the Supply Chain Command system. Use it to answer questions about the pipeline, solicitations, distributors, and bid math.
-
-Be direct and concise. Use numbers when available. Format lists cleanly. No fluff.
+CRITICAL RULES:
+- ONLY use data from the LIVE SYSTEM DATA below. Never invent, hallucinate, or supplement with outside knowledge.
+- If data is not in the system, say "Not in system" — do not guess.
+- When listing distributors or manufacturers, pull ONLY from the ROLODEX records provided.
+- Separate Manufacturers from Distributors when asked for both.
+- Include phone and email for every entry when available.
+- Be direct and concise. No fluff.
 
 LIVE SYSTEM DATA:
 ${context}
