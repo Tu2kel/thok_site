@@ -1216,6 +1216,236 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
     return;
   }
 
+  // ── /navigator/batch ──────────────────────────────────────────────────
+  if (req.method === "POST" && req.url === "/navigator/batch") {
+    let rawBody = "";
+    req.on("data", (c) => (rawBody += c));
+    req.on("end", async () => {
+      let body;
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ ok: false, error: "Invalid JSON" }));
+        return;
+      }
+      const sols = body.sols || [];
+      if (!sols.length) {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ ok: false, error: "sols array required" }));
+        return;
+      }
+      const BLOCKED_CAGES = ["81SA7", "R9004", "07482", "062W0"];
+      const BLOCKED_AMSC = ["G", "B", "A"];
+      const HARD_SA = /^(FG|PO|FI|H|L|E)$/i;
+      console.log("[agent] /navigator/batch — enriching", sols.length, "sols");
+      const results = [];
+      let enriched = 0,
+        rejected = 0,
+        errors = 0;
+      for (const sol of sols) {
+        const out = { ...sol, amsc: "", approved_sources: [], reject: null };
+        const sa = (sol.set_aside || "").toUpperCase().trim();
+        if (HARD_SA.test(sa)) {
+          out.reject = "Set-aside ineligible: " + sa;
+          rejected++;
+          results.push(out);
+          continue;
+        }
+        if (/AIDC/i.test(sol.supplier_restrictions || "")) {
+          out.reject = "AIDC — no certification";
+          rejected++;
+          results.push(out);
+          continue;
+        }
+        if (!sol.nsn || sol.nsn.length < 13) {
+          out.reject = "No NSN — cannot enrich";
+          rejected++;
+          results.push(out);
+          continue;
+        }
+        try {
+          const nsnHtml = await fetchNsnPage(sol.nsn);
+          const nsnData = parseNsnPage(nsnHtml);
+          out.amsc = nsnData.amsc || "";
+          out.approved_sources = nsnData.approved_sources || [];
+          if (BLOCKED_AMSC.includes(out.amsc.toUpperCase())) {
+            out.reject =
+              "AMSC:" + out.amsc + " — Government drawing/sole source lock";
+            rejected++;
+            results.push(out);
+            continue;
+          }
+          const blockedCage = out.approved_sources.find((s) =>
+            BLOCKED_CAGES.includes((s.cage || "").toUpperCase()),
+          );
+          if (blockedCage) {
+            out.reject = "Blocked CAGE: " + blockedCage.cage;
+            rejected++;
+            results.push(out);
+            continue;
+          }
+          enriched++;
+          console.log(
+            "[agent] ✅",
+            sol.sol_number,
+            "| AMSC:",
+            out.amsc || "N/A",
+            "| Sources:",
+            out.approved_sources.length,
+          );
+        } catch (e) {
+          out.enrich_error = e.message;
+          errors++;
+          console.warn(
+            "[agent] ⚠️ NSN fetch failed for",
+            sol.sol_number,
+            ":",
+            e.message,
+          );
+        }
+        results.push(out);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      console.log(
+        "[agent] /navigator/batch complete — enriched:",
+        enriched,
+        "| rejected:",
+        rejected,
+        "| errors:",
+        errors,
+      );
+      res.writeHead(200, CORS);
+      res.end(
+        JSON.stringify({
+          ok: true,
+          total: sols.length,
+          enriched,
+          rejected,
+          errors,
+          sols: results,
+        }),
+      );
+    });
+    return;
+  }
+
+  // ── /navigator/scrape ─────────────────────────────────────────────────
+  if (req.method === "POST" && req.url === "/navigator/scrape") {
+    res.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    const send = (payload) => {
+      try {
+        res.write("data: " + JSON.stringify(payload) + "\n\n");
+      } catch {}
+    };
+    send({ type: "log", msg: "Navigator scrape initiated", level: "info" });
+    const origLog = console.log;
+    const origError = console.error;
+    const patchLog = (...args) => {
+      origLog(...args);
+      const msg = args
+        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+        .join(" ");
+      const level = msg.includes("❌")
+        ? "err"
+        : msg.includes("✅")
+          ? "ok"
+          : "info";
+      send({
+        type: "log",
+        msg: msg.replace("[navigator-scraper] ", ""),
+        level,
+      });
+    };
+    const patchErr = (...args) => {
+      origError(...args);
+      const msg = args
+        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+        .join(" ");
+      send({
+        type: "log",
+        msg: msg.replace("[navigator-scraper] ", ""),
+        level: "err",
+      });
+    };
+    console.log = patchLog;
+    console.error = patchErr;
+    let scraper;
+    try {
+      delete require.cache[require.resolve("./navigator-scraper")];
+      scraper = require("./navigator-scraper");
+    } catch (e) {
+      console.log = origLog;
+      console.error = origError;
+      send({
+        type: "log",
+        msg: "navigator-scraper.js not found: " + e.message,
+        level: "err",
+      });
+      send({
+        type: "result",
+        ok: false,
+        error: "navigator-scraper.js not found",
+      });
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+    scraper
+      .scrapeNavigatorBatch()
+      .then((result) => {
+        console.log = origLog;
+        console.error = origError;
+        if (result.ok) {
+          send({
+            type: "result",
+            ok: true,
+            sols: result.sols,
+            count: result.count,
+            pass1: result.pass1,
+            pass2: result.pass2 || 0,
+            backupPath: result.backupPath,
+          });
+        } else {
+          send({
+            type: "result",
+            ok: false,
+            error: result.error || "Scrape failed",
+          });
+        }
+        res.write("data: [DONE]\n\n");
+        res.end();
+      })
+      .catch((e) => {
+        console.log = origLog;
+        console.error = origError;
+        send({ type: "log", msg: "Fatal: " + e.message, level: "err" });
+        send({ type: "result", ok: false, error: e.message });
+        res.write("data: [DONE]\n\n");
+        res.end();
+      });
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(": keep-alive\n\n");
+      } catch {
+        clearInterval(keepAlive);
+      }
+    }, 20000);
+    req.on("close", () => {
+      clearInterval(keepAlive);
+      console.log = origLog;
+      console.error = origError;
+    });
+    return;
+  }
+
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });
