@@ -220,7 +220,23 @@
     const items = sols
       .map((s, i) => {
         const lines = ["  " + (i + 1) + ". " + (s.item_name || "Item")];
-        if (s.piece_part_no) lines.push("     Part #: " + s.piece_part_no);
+        // Part number: prefer OEM P/N from approved sources, fall back to Navigator piece_part_no
+        const oemSrc = (s.approved_sources || []).find(
+          (a) => a.pn && a.pn.length > 1,
+        );
+        const partNum =
+          (oemSrc
+            ? oemSrc.pn +
+              (s.piece_part_no && s.piece_part_no !== oemSrc.pn
+                ? " / " + s.piece_part_no
+                : "")
+            : s.piece_part_no) || "";
+        if (partNum)
+          lines.push(
+            "     Part #: " +
+              partNum +
+              (oemSrc ? " (Mfr: " + oemSrc.name + ")" : ""),
+          );
         if (s.qty)
           lines.push(
             "     Qty: " + s.qty + (s.unit_issue ? " " + s.unit_issue : ""),
