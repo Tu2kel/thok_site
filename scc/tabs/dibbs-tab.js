@@ -1146,6 +1146,7 @@
                     "tr",
                     null,
                     ...[
+                      "",
                       "Sol Number",
                       "NSN",
                       "FSC",
@@ -1210,6 +1211,34 @@
                           key: s.sol_number,
                           style: { background: rowBg },
                         },
+                        h(
+                          "td",
+                          { style: { padding: "2px 6px", width: "24px" } },
+                          h(
+                            "button",
+                            {
+                              onClick: (e) => {
+                                e.stopPropagation();
+                                setSols((prev) =>
+                                  prev.filter(
+                                    (r) => r.sol_number !== s.sol_number,
+                                  ),
+                                );
+                              },
+                              title: "Remove from batch",
+                              style: {
+                                background: "none",
+                                border: "none",
+                                color: "rgba(231,76,60,.5)",
+                                cursor: "pointer",
+                                fontSize: "14px",
+                                lineHeight: 1,
+                                padding: 0,
+                              },
+                            },
+                            "×",
+                          ),
+                        ),
                         h(
                           "td",
                           {
