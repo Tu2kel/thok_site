@@ -312,6 +312,7 @@
     const [analyzeErr, setAnalyzeErr] = useState("");
 
     const [selected, setSelected] = useState(new Set());
+    const [dismissed, setDismissed] = useState(new Set());
     const [pushing, setPushing] = useState(false);
     const [pushLog, setPushLog] = useState([]);
 
@@ -494,6 +495,7 @@
       setAnalyzeErr("");
       setAnalysis(null);
       setSelected(new Set());
+      setDismissed(new Set());
       setPushLog([]);
 
       try {
@@ -1518,12 +1520,13 @@
 
           // Sol rows for active bucket
           (() => {
-            const bucketRecs =
+            const bucketRecs = (
               resultTab === "GO"
                 ? analysis.go
                 : resultTab === "VERIFY FIRST"
                   ? analysis.verify
-                  : analysis.reject;
+                  : analysis.reject
+            ).filter((r) => !dismissed.has(r.sol_number));
             const bucketColor =
               resultTab === "GO"
                 ? "var(--accent-green)"
@@ -1724,6 +1727,35 @@
                           },
                           "↳ " + rec.sourcing_path,
                         ),
+                    ),
+                    h(
+                      "button",
+                      {
+                        onClick: (e) => {
+                          e.stopPropagation();
+                          setDismissed(
+                            (prev) => new Set([...prev, rec.sol_number]),
+                          );
+                          setSelected((prev) => {
+                            const n = new Set(prev);
+                            n.delete(rec.sol_number);
+                            return n;
+                          });
+                        },
+                        title: "Dismiss sol",
+                        style: {
+                          flexShrink: 0,
+                          background: "none",
+                          border: "none",
+                          color: "rgba(201,168,76,.3)",
+                          cursor: "pointer",
+                          fontSize: "16px",
+                          lineHeight: 1,
+                          padding: "0 2px",
+                          alignSelf: "flex-start",
+                        },
+                      },
+                      "×",
                     ),
                   ),
                 );
