@@ -166,7 +166,11 @@
       fetch(AGENT_URL + "/navigator/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sols: payload }),
+        body: JSON.stringify({
+          sols: payload,
+          _anthropic_key: anthropicKey,
+          _openai_key: openaiKey,
+        }),
         signal: ctrl.signal,
       })
         .then(async (resp) => {
@@ -300,6 +304,12 @@
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
     const [rawExpanded, setRawExpanded] = useState(false);
+    const [anthropicKey, setAnthropicKey] = useState(
+      () => localStorage.getItem("scc_anthropic_key") || "",
+    );
+    const [openaiKey, setOpenaiKey] = useState(
+      () => localStorage.getItem("scc_openai_key") || "",
+    );
 
     const cronRef = useRef(null);
     const abortRef = useRef(false);
@@ -898,6 +908,57 @@
               },
               "Last: " + scrapeDate,
             ),
+        ),
+
+        // \u2500\u2500 API Key inputs \u2500\u2500
+        h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              gap: "10px",
+              marginTop: "10px",
+              flexWrap: "wrap",
+            },
+          },
+          h("input", {
+            type: "password",
+            placeholder: "Anthropic API Key (sk-ant-...)",
+            value: anthropicKey,
+            onChange: (e) => {
+              setAnthropicKey(e.target.value);
+              localStorage.setItem("scc_anthropic_key", e.target.value);
+            },
+            style: {
+              flex: 1,
+              minWidth: "220px",
+              background: "var(--inset-bg)",
+              border: "1px solid rgba(201,168,76,.2)",
+              color: "var(--alabaster)",
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "10px",
+              padding: "6px 10px",
+            },
+          }),
+          h("input", {
+            type: "password",
+            placeholder: "OpenAI API Key (sk-...) \u2014 fallback only",
+            value: openaiKey,
+            onChange: (e) => {
+              setOpenaiKey(e.target.value);
+              localStorage.setItem("scc_openai_key", e.target.value);
+            },
+            style: {
+              flex: 1,
+              minWidth: "220px",
+              background: "var(--inset-bg)",
+              border: "1px solid rgba(201,168,76,.2)",
+              color: "var(--alabaster)",
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "10px",
+              padding: "6px 10px",
+            },
+          }),
         ),
       ),
 

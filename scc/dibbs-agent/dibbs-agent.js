@@ -994,9 +994,10 @@ const server = http.createServer((req, res) => {
     let rawBody = "";
     req.on("data", (c) => (rawBody += c));
     req.on("end", async () => {
-      let sols;
+      let sols, body;
       try {
-        ({ sols } = JSON.parse(rawBody));
+        body = JSON.parse(rawBody);
+        sols = body.sols;
         if (!Array.isArray(sols) || !sols.length)
           throw new Error("sols array required");
       } catch (e) {
@@ -1007,11 +1008,12 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      // ── Load keys from .env ───────────────────────────────────────────
+      // ── Load keys from request body (set in SCC UI) or fall back to .env
       const dotenv = require("dotenv");
       dotenv.config();
-      const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-      const OPENAI_KEY = process.env.OPENAI_API_KEY;
+      const ANTHROPIC_KEY =
+        body._anthropic_key || process.env.ANTHROPIC_API_KEY;
+      const OPENAI_KEY = body._openai_key || process.env.OPENAI_API_KEY;
 
       const SYSTEM_PROMPT = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
 
