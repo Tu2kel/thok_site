@@ -614,11 +614,13 @@
         const verify = [];
         const reject = [];
 
-        // Merge all verdicts back with original sol data
+        // Merge all verdicts back with enriched sol data (carries approved_sources + amsc)
         for (const res of allResults) {
+          const enriched =
+            enrichedSols.find((s) => s.sol_number === res.sol_number) || {};
           const original =
             sols.find((s) => s.sol_number === res.sol_number) || {};
-          const merged = { ...original, ...res };
+          const merged = { ...original, ...enriched, ...res };
           if (res.verdict === "GO") go.push(merged);
           else if (res.verdict === "VERIFY FIRST") verify.push(merged);
           else reject.push(merged);
