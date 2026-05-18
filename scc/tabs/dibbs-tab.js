@@ -133,7 +133,7 @@
   // Runs on your machine — no Netlify timeout.
   // Agent reads ANTHROPIC_API_KEY + OPENAI_API_KEY from .env.
   // Handles chunking + Claude/GPT fallback internally.
-  async function analyzeWithClaude(sols, logFn) {
+  async function analyzeWithClaude(sols, logFn, anthropicKey, openaiKey) {
     const log = logFn || (() => {});
 
     const payload = sols.map((s) => ({
@@ -575,7 +575,12 @@
 
         // ── STEP 2: AI analysis on enriched (non-rejected) sols ────────
         // Tries Claude first, falls back to GPT-4o on quota/rate-limit.
-        const results = await analyzeWithClaude(enrichedSols, addLog);
+        const results = await analyzeWithClaude(
+          enrichedSols,
+          addLog,
+          anthropicKey,
+          openaiKey,
+        );
 
         // ── STEP 3: Merge agent hard-rejects into reject bucket ────────
         const agentRejectResults = agentRejects.map((s) => ({
