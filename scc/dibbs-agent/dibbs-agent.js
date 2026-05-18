@@ -1446,6 +1446,57 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
     return;
   }
 
+  // ── /chat ────────────────────────────────────────────────────────────
+  // POST { messages: [...], system: "...", key: "sk-ant-..." }
+  // Proxies to Claude API — no CORS, key never in browser network tab.
+  if (req.method === "POST" && req.url === "/chat") {
+    let rawBody = "";
+    req.on("data", (c) => (rawBody += c));
+    req.on("end", async () => {
+      let body;
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ ok: false, error: "Invalid JSON" }));
+        return;
+      }
+
+      const dotenv = require("dotenv");
+      dotenv.config();
+      const apiKey = body.key || process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ ok: false, error: "No API key" }));
+        return;
+      }
+
+      try {
+        const resp = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1024,
+            system: body.system || "",
+            messages: body.messages || [],
+          }),
+        });
+        const data = await resp.json();
+        res.writeHead(resp.ok ? 200 : 502, CORS);
+        res.end(JSON.stringify(data));
+      } catch (e) {
+        res.writeHead(502, CORS);
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });

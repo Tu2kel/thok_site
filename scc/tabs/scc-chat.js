@@ -15,13 +15,13 @@
   style.textContent = `
     #scc-chat-fab {
       position: fixed;
-      bottom: 72px;
+      bottom: 130px;
       right: 20px;
-      width: 46px;
-      height: 46px;
+      width: 70px;
+      height: 70px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #1a0a12 0%, #2a1020 100%);
-      border: 1px solid rgba(201,168,76,.45);
+      background: linear-gradient(135deg, #faf7f2 0%, #ece7db 100%);
+      border: 1px solid rgba(201,168,76,.6);
       color: #c9a84c;
       font-size: 20px;
       cursor: pointer;
@@ -31,10 +31,18 @@
       justify-content: center;
       box-shadow: 0 2px 16px rgba(0,0,0,.5);
       transition: border-color .2s, box-shadow .2s;
+      padding: 0;
+      overflow: hidden;
     }
     #scc-chat-fab:hover {
       border-color: rgba(201,168,76,.8);
       box-shadow: 0 2px 24px rgba(201,168,76,.2);
+    }
+    #scc-chat-fab img {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      object-fit: cover;
     }
     #scc-chat-fab .badge {
       position: absolute;
@@ -52,11 +60,11 @@
     #scc-chat-panel {
       position: fixed;
       bottom: 126px;
-      right: 20px;
-      width: 400px;
+      right: 80px;
+      width: 420px;
       height: 560px;
-      background: #0d0508;
-      border: 1px solid rgba(201,168,76,.2);
+      background: #faf7f2;
+      border: 1px solid rgba(160,110,0,.25);
       border-radius: 4px;
       z-index: 9997;
       display: flex;
@@ -75,7 +83,7 @@
 
     #scc-chat-header {
       padding: 12px 16px;
-      border-bottom: 1px solid rgba(201,168,76,.1);
+      border-bottom: 1px solid rgba(160,110,0,.15);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -85,13 +93,13 @@
       font-family: Cinzel,serif;
       font-size: 11px;
       letter-spacing: .14em;
-      color: var(--gold-solid, #c9a84c);
+      color: #7a5000;
       text-transform: uppercase;
     }
     #scc-chat-header .subtitle {
       font-family: JetBrains Mono,monospace;
       font-size: 9px;
-      color: rgba(201,168,76,.4);
+      color: rgba(122,80,0,.5);
       margin-top: 2px;
     }
     #scc-chat-clear {
@@ -130,19 +138,19 @@
     }
     .scc-msg.user {
       align-self: flex-end;
-      background: rgba(201,168,76,.1);
-      border: 1px solid rgba(201,168,76,.2);
-      color: #e8d5a0;
+      background: rgba(122,80,0,.08);
+      border: 1px solid rgba(122,80,0,.2);
+      color: #5a3a00;
     }
     .scc-msg.assistant {
       align-self: flex-start;
-      background: rgba(255,255,255,.03);
-      border: 1px solid rgba(255,255,255,.06);
-      color: rgba(255,255,255,.78);
+      background: rgba(26,10,18,.05);
+      border: 1px solid rgba(26,10,18,.1);
+      color: rgba(26,10,18,.75);
     }
     .scc-msg.thinking {
       align-self: flex-start;
-      color: rgba(201,168,76,.4);
+      color: rgba(122,80,0,.5);
       font-style: italic;
       border: none;
       background: none;
@@ -157,16 +165,16 @@
 
     #scc-chat-input-row {
       padding: 10px 12px;
-      border-top: 1px solid rgba(201,168,76,.1);
+      border-top: 1px solid rgba(160,110,0,.15);
       display: flex;
       gap: 8px;
       flex-shrink: 0;
     }
     #scc-chat-input {
       flex: 1;
-      background: rgba(255,255,255,.04);
-      border: 1px solid rgba(201,168,76,.2);
-      color: rgba(255,255,255,.85);
+      background: rgba(26,10,18,.04);
+      border: 1px solid rgba(160,110,0,.2);
+      color: rgba(26,10,18,.85);
       font-family: JetBrains Mono,monospace;
       font-size: 11px;
       padding: 8px 10px;
@@ -180,9 +188,9 @@
     }
     #scc-chat-input:focus { border-color: rgba(201,168,76,.5); }
     #scc-chat-send {
-      background: rgba(201,168,76,.1);
-      border: 1px solid rgba(201,168,76,.3);
-      color: #c9a84c;
+      background: rgba(122,80,0,.08);
+      border: 1px solid rgba(122,80,0,.3);
+      color: #7a5000;
       font-family: Cinzel,serif;
       font-size: 9px;
       letter-spacing: .1em;
@@ -220,7 +228,7 @@
   const fab = document.createElement("button");
   fab.id = "scc-chat-fab";
   fab.title = "SCC Assistant";
-  fab.innerHTML = `<span>⌘</span><span class="badge"></span>`;
+  fab.innerHTML = `<img src="../images/ifl_coin.png" alt="IFL" onerror="this.style.display='none';this.parentNode.innerHTML+='<span style=\'font-size:14px;color:#c9a84c\'>IFL</span><span class=\'badge\'></span>'"><span class="badge"></span>`;
   document.body.appendChild(fab);
 
   const panel = document.createElement("div");
@@ -429,16 +437,12 @@ ${context}
 
 If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 = 1.67%, Day 30 = 2.50%, Day 60 = 5.00%. PO funding = 2.50% COGS. Net floor = $500 after worst-case fees.`;
 
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      // Route through local agent to avoid CORS
+      const resp = await fetch(AGENT_URL + "/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1024,
+          key: apiKey,
           system: systemPrompt,
           messages: history,
         }),
