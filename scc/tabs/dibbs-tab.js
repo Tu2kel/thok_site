@@ -1046,22 +1046,54 @@
               "div",
               { style: { display: "flex", alignItems: "center", gap: "10px" } },
               h("span", null, "Raw Results — " + sols.length + " sols"),
-              h("input", {
-                type: "text",
-                placeholder: "Search FSC, item, sol#, NSN…",
-                value: rawSearch,
-                onChange: (e) => setRawSearch(e.target.value),
-                style: {
-                  background: "var(--inset-bg)",
-                  border: "1px solid rgba(201,168,76,.2)",
-                  color: "var(--alabaster)",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "10px",
-                  padding: "4px 8px",
-                  width: "180px",
-                  outline: "none",
+              h(
+                "div",
+                {
+                  style: {
+                    position: "relative",
+                    display: "inline-flex",
+                    alignItems: "center",
+                  },
                 },
-              }),
+                h("input", {
+                  type: "text",
+                  placeholder: "Search FSC, item, sol#, NSN…",
+                  value: rawSearch,
+                  onChange: (e) => {
+                    setRawSearch(e.target.value);
+                    if (e.target.value) setRawExpanded(true);
+                  },
+                  style: {
+                    background: "var(--inset-bg)",
+                    border: "1px solid rgba(201,168,76,.2)",
+                    color: "var(--alabaster)",
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "10px",
+                    padding: "4px 24px 4px 8px",
+                    width: "180px",
+                    outline: "none",
+                  },
+                }),
+                rawSearch &&
+                  h(
+                    "button",
+                    {
+                      onClick: () => setRawSearch(""),
+                      style: {
+                        position: "absolute",
+                        right: "6px",
+                        background: "none",
+                        border: "none",
+                        color: "rgba(201,168,76,.6)",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        lineHeight: 1,
+                        padding: 0,
+                      },
+                    },
+                    "×",
+                  ),
+              ),
             ),
             h(
               "div",
@@ -1156,17 +1188,25 @@
                             .includes(rawSearch.toLowerCase()),
                         ),
                     )
-                    .map((s, i) =>
-                      h(
+                    .map((s, i) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const due = s.quote_due ? new Date(s.quote_due) : null;
+                      const isDueToday =
+                        due && due.toDateString() === today.toDateString();
+                      const isPastDue = due && due < today;
+                      const rowBg = isDueToday
+                        ? "rgba(255,200,0,.1)"
+                        : isPastDue
+                          ? "rgba(231,76,60,.07)"
+                          : i % 2 === 0
+                            ? "transparent"
+                            : "rgba(255,255,255,.02)";
+                      return h(
                         "tr",
                         {
                           key: s.sol_number,
-                          style: {
-                            background:
-                              i % 2 === 0
-                                ? "transparent"
-                                : "rgba(255,255,255,.02)",
-                          },
+                          style: { background: rowBg },
                         },
                         h(
                           "td",
@@ -1283,8 +1323,8 @@
                           },
                           s.set_aside || "—",
                         ),
-                      ),
-                    ),
+                      );
+                    }),
                 ),
               ),
             ),
