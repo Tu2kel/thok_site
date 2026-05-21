@@ -102,6 +102,9 @@
     }, [distReloadCache]);
 
     const [purgeLoading, setPurgeLoading] = useState(false);
+    const [expandedCards, setExpandedCards] = useState({});
+    const toggleCard = (id) =>
+      setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }));
     const handlePurge = useCallback(async () => {
       if (
         !confirm(
@@ -542,8 +545,11 @@
             ),
           );
 
+        // per-card expanded state lives in component-level expandedCards map
+
         const renderDistCard = (d) => {
           const pref = isPreferred(d);
+          const expanded = !!expandedCards[d.id];
           const borderColor = !pref
             ? "rgba(201,168,76,.12)"
             : d.priority === 1
@@ -551,22 +557,48 @@
               : d.priority === 2
                 ? "rgba(201,168,76,.4)"
                 : "rgba(160,160,160,.3)";
+
+          const allFsc = d.fsc || [];
+          const shownFsc = expanded ? allFsc : allFsc.slice(0, 6);
+          const hiddenCount = allFsc.length - 6;
+
+          const chipStyle = {
+            fontFamily: "JetBrains Mono,monospace",
+            fontSize: "9px",
+            color: "rgba(201,168,76,.7)",
+            background: "rgba(201,168,76,.08)",
+            border: "1px solid rgba(201,168,76,.18)",
+            borderRadius: "3px",
+            padding: "1px 5px",
+            display: "inline-block",
+          };
+
+          const rowStyle = {
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            minWidth: 0,
+          };
+
+          const iconColor = "rgba(201,168,76,.5)";
+
           return h(
             "div",
             {
               key: d.id,
               style: {
                 background: "var(--surface-sheen)",
-                border: "1px solid rgba(201,168,76,.12)",
+                border: "1px solid rgba(201,168,76,.14)",
                 borderLeft: "3px solid " + borderColor,
                 borderRadius: "4px",
-                padding: "10px 12px",
+                padding: "14px 16px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "5px",
+                gap: "8px",
               },
             },
-            // Name + NSN badge
+
+            // ── Row 1: Name + badges + delete ──
             h(
               "div",
               {
@@ -574,7 +606,7 @@
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "flex-start",
-                  gap: "6px",
+                  gap: "8px",
                 },
               },
               h(
@@ -582,10 +614,12 @@
                 {
                   style: {
                     fontFamily: "Cinzel,serif",
-                    fontSize: "10px",
+                    fontSize: "12px",
                     letterSpacing: ".06em",
                     color: "var(--gold-solid)",
-                    lineHeight: 1.3,
+                    lineHeight: 1.35,
+                    flex: 1,
+                    minWidth: 0,
                   },
                 },
                 d.name,
@@ -595,7 +629,7 @@
                 {
                   style: {
                     display: "flex",
-                    gap: "3px",
+                    gap: "4px",
                     alignItems: "center",
                     flexShrink: 0,
                   },
@@ -606,11 +640,11 @@
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "7px",
+                        fontSize: "8px",
                         color: "#3dd68c",
                         background: "rgba(61,214,140,.12)",
                         border: "1px solid rgba(61,214,140,.3)",
-                        padding: "1px 4px",
+                        padding: "2px 5px",
                         borderRadius: "2px",
                       },
                     },
@@ -622,59 +656,149 @@
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "7px",
+                        fontSize: "8px",
                         color: "#7eb8f7",
                         background: "rgba(126,184,247,.12)",
                         border: "1px solid rgba(126,184,247,.3)",
-                        padding: "1px 4px",
+                        padding: "2px 5px",
                         borderRadius: "2px",
                       },
                     },
                     "NIIN",
                   ),
+                h(
+                  "button",
+                  {
+                    onClick: () => handleDelete(d.id),
+                    title: "Remove " + d.id,
+                    style: {
+                      padding: "2px 7px",
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "10px",
+                      background: "rgba(231,76,60,.08)",
+                      border: "1px solid rgba(231,76,60,.25)",
+                      color: "rgba(231,76,60,.6)",
+                      borderRadius: "3px",
+                      cursor: "pointer",
+                    },
+                  },
+                  "\u00D7",
+                ),
               ),
             ),
-            // Tags
+
+            // ── Row 2: Tags ──
+            (d.tags || []).filter((t) => t !== "preferred-alt").length > 0 &&
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "4px",
+                  },
+                },
+                ...(d.tags || [])
+                  .filter((t) => t !== "preferred-alt")
+                  .map((t) =>
+                    h(
+                      "span",
+                      {
+                        key: t,
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "9px",
+                          color: "var(--body-dim)",
+                          background: "rgba(255,255,255,.04)",
+                          border: "1px solid rgba(255,255,255,.08)",
+                          borderRadius: "3px",
+                          padding: "1px 5px",
+                        },
+                      },
+                      t,
+                    ),
+                  ),
+              ),
+
+            // ── Row 3: FSC chips + more button ──
+            allFsc.length > 0 &&
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "4px",
+                    alignItems: "center",
+                  },
+                },
+                ...shownFsc.map((f) =>
+                  h("span", { key: f, style: chipStyle }, f),
+                ),
+                !expanded &&
+                  hiddenCount > 0 &&
+                  h(
+                    "button",
+                    {
+                      onClick: () => toggleCard(d.id),
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "9px",
+                        color: "var(--gold-dim)",
+                        background: "rgba(201,168,76,.06)",
+                        border: "1px solid rgba(201,168,76,.2)",
+                        borderRadius: "3px",
+                        padding: "1px 6px",
+                        cursor: "pointer",
+                      },
+                    },
+                    "+" + hiddenCount + " more",
+                  ),
+                expanded &&
+                  allFsc.length > 6 &&
+                  h(
+                    "button",
+                    {
+                      onClick: () => toggleCard(d.id),
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "9px",
+                        color: "var(--body-faint)",
+                        background: "transparent",
+                        border: "1px solid rgba(201,168,76,.12)",
+                        borderRadius: "3px",
+                        padding: "1px 6px",
+                        cursor: "pointer",
+                      },
+                    },
+                    "collapse",
+                  ),
+              ),
+
+            // ── Divider ──
+            h("div", {
+              style: {
+                borderTop: "1px solid rgba(201,168,76,.08)",
+                margin: "0 -2px",
+              },
+            }),
+
+            // ── Row 4: Phone ──
             h(
               "div",
-              {
-                style: {
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "var(--body-faint)",
+              { style: rowStyle },
+              h(
+                "span",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "9px",
+                    color: iconColor,
+                    flexShrink: 0,
+                  },
                 },
-              },
-              (d.tags || [])
-                .filter((t) => t !== "preferred-alt")
-                .slice(0, 4)
-                .join(" \u00B7") || "\u00A0",
-            ),
-            // FSCs
-            h(
-              "div",
-              {
-                style: {
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "rgba(201,168,76,.45)",
-                },
-              },
-              (d.fsc || []).slice(0, 5).join(", ") +
-                ((d.fsc || []).length > 5
-                  ? " +" + ((d.fsc || []).length - 5)
-                  : ""),
-            ),
-            // Phone + delete
-            h(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginTop: "2px",
-                },
-              },
+                "\uD83D\uDCDE",
+              ),
               d.phone
                 ? h(
                     "a",
@@ -682,44 +806,152 @@
                       href: "tel:" + d.phone.replace(/[^0-9]/g, ""),
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "10px",
+                        fontSize: "11px",
                         color: "var(--accent-green)",
                         textDecoration: "none",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       },
                     },
-                    "\uD83D\uDCDE " + d.phone,
+                    d.phone,
                   )
                 : h(
                     "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "9px",
+                        fontSize: "10px",
                         color: "var(--body-faint)",
                         fontStyle: "italic",
                       },
                     },
                     "No phone",
                   ),
+            ),
+
+            // ── Row 5: Email ──
+            h(
+              "div",
+              { style: rowStyle },
               h(
-                "button",
+                "span",
                 {
-                  onClick: () => handleDelete(d.id),
-                  title: "Remove " + d.id,
                   style: {
-                    padding: "1px 6px",
                     fontFamily: "JetBrains Mono,monospace",
                     fontSize: "9px",
-                    background: "rgba(231,76,60,.08)",
-                    border: "1px solid rgba(231,76,60,.25)",
-                    color: "rgba(231,76,60,.6)",
-                    borderRadius: "3px",
-                    cursor: "pointer",
+                    color: iconColor,
+                    flexShrink: 0,
                   },
                 },
-                "\u00D7",
+                "\u2709",
               ),
+              d.email
+                ? h(
+                    "a",
+                    {
+                      href: "mailto:" + d.email,
+                      title: d.email,
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "11px",
+                        color: "#7eb8f7",
+                        textDecoration: "none",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        minWidth: 0,
+                      },
+                    },
+                    d.email,
+                  )
+                : h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "10px",
+                        color: "var(--body-faint)",
+                        fontStyle: "italic",
+                      },
+                    },
+                    "No email",
+                  ),
             ),
+
+            // ── Row 6: Website ──
+            h(
+              "div",
+              { style: rowStyle },
+              h(
+                "span",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "9px",
+                    color: iconColor,
+                    flexShrink: 0,
+                  },
+                },
+                "\uD83C\uDF10",
+              ),
+              d.website
+                ? h(
+                    "a",
+                    {
+                      href: d.website.startsWith("http")
+                        ? d.website
+                        : "https://" + d.website,
+                      target: "_blank",
+                      rel: "noopener noreferrer",
+                      title: d.website,
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "11px",
+                        color: "rgba(201,168,76,.8)",
+                        textDecoration: "none",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        minWidth: 0,
+                      },
+                    },
+                    (d.website || "")
+                      .replace(/^https?:\/\//, "")
+                      .replace(/\/$/, ""),
+                  )
+                : h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "10px",
+                        color: "var(--body-faint)",
+                        fontStyle: "italic",
+                      },
+                    },
+                    "No website",
+                  ),
+            ),
+
+            // ── Row 7: Notes (if any) ──
+            d.notes &&
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cormorant Garamond,serif",
+                    fontStyle: "italic",
+                    fontSize: "12px",
+                    color: "var(--body-dim)",
+                    lineHeight: 1.4,
+                    borderTop: "1px solid rgba(201,168,76,.06)",
+                    paddingTop: "6px",
+                    marginTop: "2px",
+                  },
+                },
+                d.notes,
+              ),
           );
         };
 
@@ -729,8 +961,8 @@
             {
               style: {
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
-                gap: "8px",
+                gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
+                gap: "10px",
                 marginBottom: "6px",
                 opacity: op || 1,
               },
