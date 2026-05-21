@@ -105,6 +105,74 @@
     const [expandedCards, setExpandedCards] = useState({});
     const toggleCard = (id) =>
       setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }));
+
+    const [editingCards, setEditingCards] = useState({}); // id → draft object | undefined
+    const [savingCards, setSavingCards] = useState({}); // id → bool
+
+    const startEdit = (d) =>
+      setEditingCards((prev) => ({
+        ...prev,
+        [d.id]: {
+          name: d.name || "",
+          phone: d.phone || "",
+          email: d.email || "",
+          website: d.website || "",
+          notes: d.notes || "",
+          fsc: (d.fsc || []).join(", "),
+          tags: (d.tags || []).filter((t) => t !== "preferred-alt").join(", "),
+        },
+      }));
+
+    const cancelEdit = (id) =>
+      setEditingCards((prev) => {
+        const n = { ...prev };
+        delete n[id];
+        return n;
+      });
+
+    const patchDraft = (id, field, val) =>
+      setEditingCards((prev) => ({
+        ...prev,
+        [id]: { ...prev[id], [field]: val },
+      }));
+
+    const saveCard = async (d) => {
+      const draft = editingCards[d.id];
+      if (!draft) return;
+      setSavingCards((prev) => ({ ...prev, [d.id]: true }));
+      try {
+        const parseCsv = (s) =>
+          s
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
+        const updated = {
+          ...d,
+          name: draft.name.trim() || d.name,
+          phone: draft.phone.trim(),
+          email: draft.email.trim(),
+          website: draft.website.trim(),
+          notes: draft.notes.trim(),
+          fsc: parseCsv(draft.fsc),
+          tags: [
+            ...parseCsv(draft.tags),
+            ...(d.tags || []).filter((t) => t === "preferred-alt"),
+          ],
+        };
+        await window.SCC_DIST.distSave(updated);
+        await window.SCC_DIST.distReloadCache();
+        setDists([...window.SCC_DIST.DISTRIBUTORS]);
+        cancelEdit(d.id);
+      } catch (e) {
+        alert("Save failed: " + e.message);
+      } finally {
+        setSavingCards((prev) => {
+          const n = { ...prev };
+          delete n[d.id];
+          return n;
+        });
+      }
+    };
     const handlePurge = useCallback(async () => {
       if (
         !confirm(
@@ -545,11 +613,15 @@
             ),
           );
 
-        // per-card expanded state lives in component-level expandedCards map
+        // per-card state lives in component-level maps (expandedCards, editingCards)
 
         const renderDistCard = (d) => {
           const pref = isPreferred(d);
           const expanded = !!expandedCards[d.id];
+          const draft = editingCards[d.id]; // undefined = view mode
+          const isEditing = !!draft;
+          const isSaving = !!savingCards[d.id];
+
           const borderColor = !pref
             ? "rgba(201,168,76,.12)"
             : d.priority === 1
@@ -582,23 +654,59 @@
 
           const iconColor = "rgba(201,168,76,.5)";
 
+          // ── shared input style ──
+          const inputStyle = {
+            flex: 1,
+            minWidth: 0,
+            fontFamily: "JetBrains Mono,monospace",
+            fontSize: "11px",
+            background: "rgba(201,168,76,.06)",
+            border: "1px solid rgba(201,168,76,.25)",
+            borderRadius: "3px",
+            color: "var(--alabaster)",
+            padding: "4px 8px",
+            outline: "none",
+          };
+
+          const fieldLabel = (txt) =>
+            h(
+              "span",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".12em",
+                  textTransform: "uppercase",
+                  color: "var(--gold-dim)",
+                  flexShrink: 0,
+                  width: "52px",
+                },
+              },
+              txt,
+            );
+
           return h(
             "div",
             {
               key: d.id,
               style: {
-                background: "var(--surface-sheen)",
-                border: "1px solid rgba(201,168,76,.14)",
+                background: isEditing
+                  ? "rgba(201,168,76,.04)"
+                  : "var(--surface-sheen)",
+                border: isEditing
+                  ? "1px solid rgba(201,168,76,.35)"
+                  : "1px solid rgba(201,168,76,.14)",
                 borderLeft: "3px solid " + borderColor,
                 borderRadius: "4px",
                 padding: "14px 16px",
                 display: "flex",
                 flexDirection: "column",
                 gap: "8px",
+                transition: "background .15s, border .15s",
               },
             },
 
-            // ── Row 1: Name + badges + delete ──
+            // ── Row 1: Name + badges + action buttons ──
             h(
               "div",
               {
@@ -609,21 +717,38 @@
                   gap: "8px",
                 },
               },
-              h(
-                "div",
-                {
-                  style: {
-                    fontFamily: "Cinzel,serif",
-                    fontSize: "12px",
-                    letterSpacing: ".06em",
-                    color: "var(--gold-solid)",
-                    lineHeight: 1.35,
-                    flex: 1,
-                    minWidth: 0,
-                  },
-                },
-                d.name,
-              ),
+              // Name (editable in edit mode)
+              isEditing
+                ? h("input", {
+                    value: draft.name,
+                    onChange: (e) => patchDraft(d.id, "name", e.target.value),
+                    style: {
+                      ...inputStyle,
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "12px",
+                      letterSpacing: ".05em",
+                      color: "var(--gold-solid)",
+                      flex: 1,
+                    },
+                    placeholder: "Company name",
+                  })
+                : h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "12px",
+                        letterSpacing: ".06em",
+                        color: "var(--gold-solid)",
+                        lineHeight: 1.35,
+                        flex: 1,
+                        minWidth: 0,
+                      },
+                    },
+                    d.name,
+                  ),
+
+              // Badges + buttons
               h(
                 "div",
                 {
@@ -634,7 +759,8 @@
                     flexShrink: 0,
                   },
                 },
-                d.nsn_search === "full" &&
+                !isEditing &&
+                  d.nsn_search === "full" &&
                   h(
                     "span",
                     {
@@ -650,7 +776,8 @@
                     },
                     "NSN\u2713",
                   ),
-                d.nsn_search === "niin" &&
+                !isEditing &&
+                  d.nsn_search === "niin" &&
                   h(
                     "span",
                     {
@@ -666,291 +793,483 @@
                     },
                     "NIIN",
                   ),
-                h(
-                  "button",
-                  {
-                    onClick: () => handleDelete(d.id),
-                    title: "Remove " + d.id,
-                    style: {
-                      padding: "2px 7px",
-                      fontFamily: "JetBrains Mono,monospace",
-                      fontSize: "10px",
-                      background: "rgba(231,76,60,.08)",
-                      border: "1px solid rgba(231,76,60,.25)",
-                      color: "rgba(231,76,60,.6)",
-                      borderRadius: "3px",
-                      cursor: "pointer",
-                    },
-                  },
-                  "\u00D7",
-                ),
-              ),
-            ),
-
-            // ── Row 2: Tags ──
-            (d.tags || []).filter((t) => t !== "preferred-alt").length > 0 &&
-              h(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "4px",
-                  },
-                },
-                ...(d.tags || [])
-                  .filter((t) => t !== "preferred-alt")
-                  .map((t) =>
-                    h(
-                      "span",
-                      {
-                        key: t,
-                        style: {
-                          fontFamily: "JetBrains Mono,monospace",
-                          fontSize: "9px",
-                          color: "var(--body-dim)",
-                          background: "rgba(255,255,255,.04)",
-                          border: "1px solid rgba(255,255,255,.08)",
-                          borderRadius: "3px",
-                          padding: "1px 5px",
-                        },
-                      },
-                      t,
-                    ),
-                  ),
-              ),
-
-            // ── Row 3: FSC chips + more button ──
-            allFsc.length > 0 &&
-              h(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "4px",
-                    alignItems: "center",
-                  },
-                },
-                ...shownFsc.map((f) =>
-                  h("span", { key: f, style: chipStyle }, f),
-                ),
-                !expanded &&
-                  hiddenCount > 0 &&
+                // Edit / Save / Cancel
+                !isEditing &&
                   h(
                     "button",
                     {
-                      onClick: () => toggleCard(d.id),
+                      onClick: () => startEdit(d),
+                      title: "Edit record",
                       style: {
-                        fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "9px",
+                        padding: "2px 8px",
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "8px",
+                        letterSpacing: ".08em",
+                        background: "rgba(201,168,76,.1)",
+                        border: "1px solid rgba(201,168,76,.3)",
                         color: "var(--gold-dim)",
-                        background: "rgba(201,168,76,.06)",
-                        border: "1px solid rgba(201,168,76,.2)",
                         borderRadius: "3px",
-                        padding: "1px 6px",
                         cursor: "pointer",
                       },
                     },
-                    "+" + hiddenCount + " more",
+                    "Edit",
                   ),
-                expanded &&
-                  allFsc.length > 6 &&
+                isEditing &&
                   h(
                     "button",
                     {
-                      onClick: () => toggleCard(d.id),
+                      onClick: () => saveCard(d),
+                      disabled: isSaving,
+                      title: "Save changes",
                       style: {
-                        fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "9px",
-                        color: "var(--body-faint)",
-                        background: "transparent",
-                        border: "1px solid rgba(201,168,76,.12)",
+                        padding: "2px 10px",
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "8px",
+                        letterSpacing: ".08em",
+                        background: isSaving
+                          ? "rgba(61,214,140,.1)"
+                          : "rgba(61,214,140,.18)",
+                        border: "1px solid rgba(61,214,140,.45)",
+                        color: "#3dd68c",
                         borderRadius: "3px",
-                        padding: "1px 6px",
+                        cursor: isSaving ? "wait" : "pointer",
+                      },
+                    },
+                    isSaving ? "Saving\u2026" : "Save",
+                  ),
+                isEditing &&
+                  h(
+                    "button",
+                    {
+                      onClick: () => cancelEdit(d.id),
+                      disabled: isSaving,
+                      title: "Cancel edit",
+                      style: {
+                        padding: "2px 8px",
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "8px",
+                        letterSpacing: ".08em",
+                        background: "transparent",
+                        border: "1px solid rgba(255,255,255,.12)",
+                        color: "var(--body-faint)",
+                        borderRadius: "3px",
                         cursor: "pointer",
                       },
                     },
-                    "collapse",
+                    "Cancel",
                   ),
-              ),
-
-            // ── Divider ──
-            h("div", {
-              style: {
-                borderTop: "1px solid rgba(201,168,76,.08)",
-                margin: "0 -2px",
-              },
-            }),
-
-            // ── Row 4: Phone ──
-            h(
-              "div",
-              { style: rowStyle },
-              h(
-                "span",
-                {
-                  style: {
-                    fontFamily: "JetBrains Mono,monospace",
-                    fontSize: "9px",
-                    color: iconColor,
-                    flexShrink: 0,
-                  },
-                },
-                "\uD83D\uDCDE",
-              ),
-              d.phone
-                ? h(
-                    "a",
+                !isEditing &&
+                  h(
+                    "button",
                     {
-                      href: "tel:" + d.phone.replace(/[^0-9]/g, ""),
+                      onClick: () => handleDelete(d.id),
+                      title: "Remove " + d.id,
                       style: {
+                        padding: "2px 7px",
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "11px",
-                        color: "var(--accent-green)",
-                        textDecoration: "none",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        fontSize: "10px",
+                        background: "rgba(231,76,60,.08)",
+                        border: "1px solid rgba(231,76,60,.25)",
+                        color: "rgba(231,76,60,.6)",
+                        borderRadius: "3px",
+                        cursor: "pointer",
                       },
                     },
-                    d.phone,
-                  )
-                : h(
+                    "\u00D7",
+                  ),
+              ),
+            ),
+
+            // ════ VIEW MODE ════════════════════════════════════════════════
+            !isEditing &&
+              h(
+                React.Fragment,
+                null,
+
+                // Tags
+                (d.tags || []).filter((t) => t !== "preferred-alt").length >
+                  0 &&
+                  h(
+                    "div",
+                    {
+                      style: { display: "flex", flexWrap: "wrap", gap: "4px" },
+                    },
+                    ...(d.tags || [])
+                      .filter((t) => t !== "preferred-alt")
+                      .map((t) =>
+                        h(
+                          "span",
+                          {
+                            key: t,
+                            style: {
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "9px",
+                              color: "var(--body-dim)",
+                              background: "rgba(255,255,255,.04)",
+                              border: "1px solid rgba(255,255,255,.08)",
+                              borderRadius: "3px",
+                              padding: "1px 5px",
+                            },
+                          },
+                          t,
+                        ),
+                      ),
+                  ),
+
+                // FSC chips + more toggle
+                allFsc.length > 0 &&
+                  h(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "4px",
+                        alignItems: "center",
+                      },
+                    },
+                    ...shownFsc.map((f) =>
+                      h("span", { key: f, style: chipStyle }, f),
+                    ),
+                    !expanded &&
+                      hiddenCount > 0 &&
+                      h(
+                        "button",
+                        {
+                          onClick: () => toggleCard(d.id),
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "9px",
+                            color: "var(--gold-dim)",
+                            background: "rgba(201,168,76,.06)",
+                            border: "1px solid rgba(201,168,76,.2)",
+                            borderRadius: "3px",
+                            padding: "1px 6px",
+                            cursor: "pointer",
+                          },
+                        },
+                        "+" + hiddenCount + " more",
+                      ),
+                    expanded &&
+                      allFsc.length > 6 &&
+                      h(
+                        "button",
+                        {
+                          onClick: () => toggleCard(d.id),
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "9px",
+                            color: "var(--body-faint)",
+                            background: "transparent",
+                            border: "1px solid rgba(201,168,76,.12)",
+                            borderRadius: "3px",
+                            padding: "1px 6px",
+                            cursor: "pointer",
+                          },
+                        },
+                        "collapse",
+                      ),
+                  ),
+
+                // Divider
+                h("div", {
+                  style: {
+                    borderTop: "1px solid rgba(201,168,76,.08)",
+                    margin: "0 -2px",
+                  },
+                }),
+
+                // Phone
+                h(
+                  "div",
+                  { style: rowStyle },
+                  h(
                     "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "10px",
-                        color: "var(--body-faint)",
-                        fontStyle: "italic",
+                        fontSize: "9px",
+                        color: iconColor,
+                        flexShrink: 0,
                       },
                     },
-                    "No phone",
+                    "\uD83D\uDCDE",
                   ),
-            ),
+                  d.phone
+                    ? h(
+                        "a",
+                        {
+                          href: "tel:" + d.phone.replace(/[^0-9]/g, ""),
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "11px",
+                            color: "var(--accent-green)",
+                            textDecoration: "none",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          },
+                        },
+                        d.phone,
+                      )
+                    : h(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "10px",
+                            color: "var(--body-faint)",
+                            fontStyle: "italic",
+                          },
+                        },
+                        "No phone",
+                      ),
+                ),
 
-            // ── Row 5: Email ──
-            h(
-              "div",
-              { style: rowStyle },
-              h(
-                "span",
-                {
-                  style: {
-                    fontFamily: "JetBrains Mono,monospace",
-                    fontSize: "9px",
-                    color: iconColor,
-                    flexShrink: 0,
-                  },
-                },
-                "\u2709",
-              ),
-              d.email
-                ? h(
-                    "a",
-                    {
-                      href: "mailto:" + d.email,
-                      title: d.email,
-                      style: {
-                        fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "11px",
-                        color: "#7eb8f7",
-                        textDecoration: "none",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        minWidth: 0,
-                      },
-                    },
-                    d.email,
-                  )
-                : h(
+                // Email
+                h(
+                  "div",
+                  { style: rowStyle },
+                  h(
                     "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "10px",
-                        color: "var(--body-faint)",
-                        fontStyle: "italic",
+                        fontSize: "9px",
+                        color: iconColor,
+                        flexShrink: 0,
                       },
                     },
-                    "No email",
+                    "\u2709",
                   ),
-            ),
+                  d.email
+                    ? h(
+                        "a",
+                        {
+                          href: "mailto:" + d.email,
+                          title: d.email,
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "11px",
+                            color: "#7eb8f7",
+                            textDecoration: "none",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            minWidth: 0,
+                          },
+                        },
+                        d.email,
+                      )
+                    : h(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "10px",
+                            color: "var(--body-faint)",
+                            fontStyle: "italic",
+                          },
+                        },
+                        "No email",
+                      ),
+                ),
 
-            // ── Row 6: Website ──
-            h(
-              "div",
-              { style: rowStyle },
-              h(
-                "span",
-                {
-                  style: {
-                    fontFamily: "JetBrains Mono,monospace",
-                    fontSize: "9px",
-                    color: iconColor,
-                    flexShrink: 0,
-                  },
-                },
-                "\uD83C\uDF10",
-              ),
-              d.website
-                ? h(
-                    "a",
-                    {
-                      href: d.website.startsWith("http")
-                        ? d.website
-                        : "https://" + d.website,
-                      target: "_blank",
-                      rel: "noopener noreferrer",
-                      title: d.website,
-                      style: {
-                        fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "11px",
-                        color: "rgba(201,168,76,.8)",
-                        textDecoration: "none",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        minWidth: 0,
-                      },
-                    },
-                    (d.website || "")
-                      .replace(/^https?:\/\//, "")
-                      .replace(/\/$/, ""),
-                  )
-                : h(
+                // Website
+                h(
+                  "div",
+                  { style: rowStyle },
+                  h(
                     "span",
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "10px",
-                        color: "var(--body-faint)",
-                        fontStyle: "italic",
+                        fontSize: "9px",
+                        color: iconColor,
+                        flexShrink: 0,
                       },
                     },
-                    "No website",
+                    "\uD83C\uDF10",
                   ),
-            ),
+                  d.website
+                    ? h(
+                        "a",
+                        {
+                          href: d.website.startsWith("http")
+                            ? d.website
+                            : "https://" + d.website,
+                          target: "_blank",
+                          rel: "noopener noreferrer",
+                          title: d.website,
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "11px",
+                            color: "rgba(201,168,76,.8)",
+                            textDecoration: "none",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            minWidth: 0,
+                          },
+                        },
+                        (d.website || "")
+                          .replace(/^https?:\/\//, "")
+                          .replace(/\/$/, ""),
+                      )
+                    : h(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "10px",
+                            color: "var(--body-faint)",
+                            fontStyle: "italic",
+                          },
+                        },
+                        "No website",
+                      ),
+                ),
 
-            // ── Row 7: Notes (if any) ──
-            d.notes &&
+                // Notes
+                d.notes &&
+                  h(
+                    "div",
+                    {
+                      style: {
+                        fontFamily: "Cormorant Garamond,serif",
+                        fontStyle: "italic",
+                        fontSize: "12px",
+                        color: "var(--body-dim)",
+                        lineHeight: 1.4,
+                        borderTop: "1px solid rgba(201,168,76,.06)",
+                        paddingTop: "6px",
+                        marginTop: "2px",
+                      },
+                    },
+                    d.notes,
+                  ),
+              ),
+
+            // ════ EDIT MODE ════════════════════════════════════════════════
+            isEditing &&
               h(
                 "div",
                 {
                   style: {
-                    fontFamily: "Cormorant Garamond,serif",
-                    fontStyle: "italic",
-                    fontSize: "12px",
-                    color: "var(--body-dim)",
-                    lineHeight: 1.4,
-                    borderTop: "1px solid rgba(201,168,76,.06)",
-                    paddingTop: "6px",
-                    marginTop: "2px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "7px",
                   },
                 },
-                d.notes,
+
+                // Phone
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("Phone"),
+                  h("input", {
+                    value: draft.phone,
+                    onChange: (e) => patchDraft(d.id, "phone", e.target.value),
+                    placeholder: "(xxx) xxx-xxxx",
+                    style: inputStyle,
+                  }),
+                ),
+
+                // Email
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("Email"),
+                  h("input", {
+                    value: draft.email,
+                    onChange: (e) => patchDraft(d.id, "email", e.target.value),
+                    placeholder: "rep@company.com",
+                    style: inputStyle,
+                  }),
+                ),
+
+                // Website
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("Website"),
+                  h("input", {
+                    value: draft.website,
+                    onChange: (e) =>
+                      patchDraft(d.id, "website", e.target.value),
+                    placeholder: "company.com",
+                    style: inputStyle,
+                  }),
+                ),
+
+                // FSC lanes
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("FSC"),
+                  h("input", {
+                    value: draft.fsc,
+                    onChange: (e) => patchDraft(d.id, "fsc", e.target.value),
+                    placeholder: "4730, 4820, 4330",
+                    title: "Comma-separated FSC codes",
+                    style: inputStyle,
+                  }),
+                ),
+
+                // Tags
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("Tags"),
+                  h("input", {
+                    value: draft.tags,
+                    onChange: (e) => patchDraft(d.id, "tags", e.target.value),
+                    placeholder: "master-distributor, texas, fleet-pricing",
+                    title: "Comma-separated tags",
+                    style: inputStyle,
+                  }),
+                ),
+
+                // Notes
+                h(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "6px",
+                    },
+                  },
+                  fieldLabel("Notes"),
+                  h("textarea", {
+                    value: draft.notes,
+                    onChange: (e) => patchDraft(d.id, "notes", e.target.value),
+                    placeholder:
+                      "Account rep, pricing tier, special instructions…",
+                    rows: 2,
+                    style: {
+                      ...inputStyle,
+                      resize: "vertical",
+                      lineHeight: 1.5,
+                      fontFamily: "Cormorant Garamond,serif",
+                      fontSize: "12px",
+                    },
+                  }),
+                ),
+
+                // Hint
+                h(
+                  "div",
+                  {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "9px",
+                      color: "var(--body-faint)",
+                      fontStyle: "italic",
+                    },
+                  },
+                  "FSC + Tags: comma-separated. Saves merge into existing record.",
+                ),
               ),
           );
         };
