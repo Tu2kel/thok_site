@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <!-- Outer ring gradient -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ffe88a"/>
+      <stop offset="40%"  stop-color="#ffd700"/>
+      <stop offset="70%"  stop-color="#b8932a"/>
+      <stop offset="100%" stop-color="#7a5a10"/>
+    </linearGradient>
+    <!-- Text gradient -->
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffe88a"/>
+      <stop offset="35%"  stop-color="#ffd700"/>
+      <stop offset="100%" stop-color="#9a7520"/>
+    </linearGradient>
+    <!-- Inner background -->
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="55%">
+      <stop offset="0%"   stop-color="#1a0a00"/>
+      <stop offset="100%" stop-color="#050200"/>
+    </radialGradient>
+    <!-- Glow filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer ring -->
+  <circle cx="50" cy="50" r="48" fill="none" stroke="url(#ringGrad)" stroke-width="2.5"/>
+
+  <!-- Inner fill -->
+  <circle cx="50" cy="50" r="45" fill="url(#bgGrad)"/>
+
+  <!-- Inner thin ring -->
+  <circle cx="50" cy="50" r="43" fill="none" stroke="#b8932a" stroke-width="0.6" opacity="0.5"/>
+
+  <!-- Top ornamental line -->
+  <line x1="28" y1="24" x2="72" y2="24" stroke="url(#ringGrad)" stroke-width="0.8" opacity="0.7"/>
+
+  <!-- IFL text -->
+  <text
+    x="50" y="60"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="28"
+    font-weight="bold"
+    letter-spacing="4"
+    text-anchor="middle"
+    fill="url(#textGrad)"
+    filter="url(#glow)"
+  >IFL</text>
+
+  <!-- Bottom star -->
+  <polygon
+    points="50,78 51.5,82.5 56,82.5 52.5,85 53.8,89.5 50,87 46.2,89.5 47.5,85 44,82.5 48.5,82.5"
+    fill="url(#ringGrad)"
+    opacity="0.85"
+  />
+
+  <!-- Bottom ornamental line -->
+  <line x1="30" y1="76" x2="44" y2="76" stroke="url(#ringGrad)" stroke-width="0.8" opacity="0.6"/>
+  <line x1="56" y1="76" x2="70" y2="76" stroke="url(#ringGrad)" stroke-width="0.8" opacity="0.6"/>
+</svg>
