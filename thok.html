@@ -103,7 +103,35 @@ Built on a foundation of military precision and strategic leadership, The House 
       <h2 class="section-heading">Our Ventures</h2>
 
       <div class="ventures">
-        <!-- 1: Imperio Talent Solutions -->
+        <!-- 1: Imperio Federal Logistics -->
+        <article class="venture-card">
+          <div class="v-icon-col">
+            <img
+              id="ifl-icon"
+              class="icon-wide"
+              src="./images/ifl_federal.png"
+              alt="Imperio Federal Logistics DLA DIBBS federal supply chain"
+            />
+          </div>
+          <div class="v-content">
+            <h3 class="v-title">Imperio Federal Logistics</h3>
+            <p class="v-tag">Federal Supply Chain · DLA DIBBS Procurement</p>
+            <p class="v-desc">
+              A veteran-owned federal logistics provider delivering precision
+              supply chain solutions to the Department of Defense and federal
+              agencies. Sourcing, fulfillment, and last-mile delivery at
+              government scale.
+            </p>
+            <div class="v-stats">
+              <span class="v-stat-pill">SDVOSB</span>
+              <span class="v-stat-pill">DLA DIBBS</span>
+              <span class="v-stat-pill">Federal Supply</span>
+            </div>
+          </div>
+          <div class="v-num">01</div>
+        </article>
+
+        <!-- 2: Imperio Talent Solutions -->
         <article class="venture-card">
           <div class="v-icon-col">
             <img src="./images/crown23.png" alt="Imperio Talent Solutions SDVOSB government contracting services" />
@@ -124,10 +152,10 @@ Built on a foundation of military precision and strategic leadership, The House 
               <span class="v-stat-pill">TVC Texas Veterans Commission</span>
             </div>
           </div>
-          <div class="v-num">01</div>
+          <div class="v-num">02</div>
         </article>
 
-        <!-- 2: Digital Content -->
+        <!-- 3: Digital Content -->
         <article class="venture-card">
           <div class="v-icon-col">
             <img
@@ -151,10 +179,10 @@ Built on a foundation of military precision and strategic leadership, The House 
               <span class="v-stat-pill">Scalable Apps</span>
             </div>
           </div>
-          <div class="v-num">02</div>
+          <div class="v-num">03</div>
         </article>
 
-        <!-- 3: Real Estate -->
+        <!-- 4: Real Estate -->
         <article class="venture-card">
           <div class="v-icon-col">
             <img src="./images/thokCastle.png" alt="The House of Kel real estate investment and property development division" />
@@ -173,10 +201,10 @@ Built on a foundation of military precision and strategic leadership, The House 
               <span class="v-stat-pill">Asset Management</span>
             </div>
           </div>
-          <div class="v-num">03</div>
+          <div class="v-num">04</div>
         </article>
 
-        <!-- 4: Legacy & Artistry — content left, video right -->
+        <!-- 5: Legacy & Artistry — content left, video right -->
         <article class="venture-card-video">
           <div class="v-icon-col">
             <img src="./images/shield1.png" alt="THOK legacy brand emblem gold crest logo" />
@@ -216,10 +244,10 @@ Built on a foundation of military precision and strategic leadership, The House 
               </iframe>
             </div>
           </div>
-          <div class="v-num">04</div>
+          <div class="v-num">05</div>
         </article>
 
-        <!-- 5: LEVRAM Studios -->
+        <!-- 6: LEVRAM Studios -->
         <article class="venture-card">
           <div class="v-icon-col">
             <img
@@ -244,7 +272,7 @@ Built on a foundation of military precision and strategic leadership, The House 
               <span class="v-stat-pill">Multi-Scene Production</span>
             </div>
           </div>
-          <div class="v-num">05</div>
+          <div class="v-num">06</div>
         </article>
       </div>
 
@@ -401,17 +429,15 @@ Built on a foundation of military precision and strategic leadership, The House 
 
 
       (function () {
-        let _t = 0,
-          _tm;
-        const crown = document.querySelector(
-          '.venture-card .v-icon-col img[src*="crown23"]',
-        );
-        if (!crown) return;
-        // crown.style.cursor = "pointer";
-        crown.addEventListener("click", function () {
+        let _t = 0, _tm;
+        const ifl = document.getElementById("ifl-icon");
+        if (!ifl) return;
+        ifl.style.cursor = "pointer";
+        ifl.addEventListener("click", function () {
           _t++;
           clearTimeout(_tm);
           if (_t >= 3) {
+            _t = 0;
             window.location.href = "https://thehouseofkel.com/scc/";
             return;
           }
