@@ -218,6 +218,34 @@ Built on a foundation of military precision and strategic leadership, The House 
           </div>
           <div class="v-num">04</div>
         </article>
+
+        <!-- 5: LEVRAM Studios -->
+        <article class="venture-card">
+          <div class="v-icon-col">
+            <img
+              id="levram-icon"
+              class="icon-wide"
+              src="./images/Imp_SoftwareMain.png"
+              alt="LEVRAM Studios AI film production platform by The House of Kel"
+            />
+          </div>
+          <div class="v-content">
+            <h3 class="v-title">LEVRAM Studios</h3>
+            <p class="v-tag">AI Film Production · Creative Intelligence</p>
+            <p class="v-desc">
+              A full-stack AI production suite built for storytellers.
+              Script to screen — character design, voice synthesis,
+              scene rendering, and cinematic video generation powered by
+              the world's leading AI models.
+            </p>
+            <div class="v-stats">
+              <span class="v-stat-pill">AI Generation</span>
+              <span class="v-stat-pill">Voice & Video</span>
+              <span class="v-stat-pill">Multi-Scene Production</span>
+            </div>
+          </div>
+          <div class="v-num">05</div>
+        </article>
       </div>
 
       <!-- ═══════════════ NAV SECTION ═══════════════ -->
@@ -385,6 +413,23 @@ Built on a foundation of military precision and strategic leadership, The House 
           clearTimeout(_tm);
           if (_t >= 3) {
             window.location.href = "https://thehouseofkel.com/scc/";
+            return;
+          }
+          _tm = setTimeout(() => (_t = 0), 1500);
+        });
+      })();
+
+      (function () {
+        let _t = 0, _tm;
+        const levram = document.getElementById("levram-icon");
+        if (!levram) return;
+        levram.style.cursor = "pointer";
+        levram.addEventListener("click", function () {
+          _t++;
+          clearTimeout(_tm);
+          if (_t >= 3) {
+            _t = 0;
+            window.open("https://web-production-de3cf.up.railway.app/frontend/launch.html", "_blank");
             return;
           }
           _tm = setTimeout(() => (_t = 0), 1500);
