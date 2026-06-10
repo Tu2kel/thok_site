@@ -29,9 +29,37 @@
   const CRON_KEY = "scc_dibbs_cron_v1";
 
   // ── PERSIST ──────────────────────────────────────────────────────────
+  function parseQuoteDue(s) {
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    const yr = parseInt(m[3]) < 100 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+    return new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]));
+  }
+
   function storeLoad() {
     try {
-      return JSON.parse(localStorage.getItem(STORE_KEY) || "null") || {};
+      const data = JSON.parse(localStorage.getItem(STORE_KEY) || "null") || {};
+
+      // Auto-prune expired sols and analysis records on every load
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isLive = (r) => { const d = parseQuoteDue(r.quote_due); return !d || d >= today; };
+
+      if (data.sols) data.sols = data.sols.filter(isLive);
+
+      if (data.analysis) {
+        data.analysis = {
+          go:     (data.analysis.go     || []).filter(isLive),
+          verify: (data.analysis.verify || []).filter(isLive),
+          reject: (data.analysis.reject || []).filter(isLive),
+        };
+        if (!data.analysis.go.length && !data.analysis.verify.length && !data.analysis.reject.length) {
+          data.analysis = null;
+        }
+      }
+
+      return data;
     } catch {
       return {};
     }
@@ -1555,7 +1583,7 @@
                 : resultTab === "VERIFY FIRST"
                   ? analysis.verify
                   : analysis.reject
-            ).filter((r) => !dismissed.has(r.sol_number));
+            );
             const bucketColor =
               resultTab === "GO"
                 ? "var(--accent-green)"
@@ -1762,9 +1790,14 @@
                       {
                         onClick: (e) => {
                           e.stopPropagation();
-                          setDismissed(
-                            (prev) => new Set([...prev, rec.sol_number]),
-                          );
+                          // Remove from analysis state directly — analysis is persisted,
+                          // so this survives reload (unlike the old in-memory dismissed Set)
+                          setAnalysis((prev) => ({
+                            ...prev,
+                            go:     prev.go.filter((r) => r.sol_number !== rec.sol_number),
+                            verify: prev.verify.filter((r) => r.sol_number !== rec.sol_number),
+                            reject: prev.reject.filter((r) => r.sol_number !== rec.sol_number),
+                          }));
                           setSelected((prev) => {
                             const n = new Set(prev);
                             n.delete(rec.sol_number);
