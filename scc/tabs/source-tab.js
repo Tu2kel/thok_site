@@ -639,6 +639,8 @@
 
           const hasAcct = !!d.has_account;
           const hasRep = !!d.has_rep;
+          const hasJcp = !!d.has_jcp;
+          const hasMilPack = !!d.has_mil_std_pack;
 
           // Border + card bg: rep (green) > account (gold) > pref tiers > default
           let borderColor, cardBg, cardBorder;
@@ -917,6 +919,40 @@
                     "NIIN",
                   ),
 
+                // JCP badge
+                !isEditing &&
+                  hasJcp &&
+                  h("span", {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "8px",
+                      color: "#a78bfa",
+                      background: "rgba(167,139,250,.14)",
+                      border: "1px solid rgba(167,139,250,.4)",
+                      padding: "2px 6px",
+                      borderRadius: "2px",
+                      letterSpacing: ".05em",
+                      whiteSpace: "nowrap",
+                    },
+                  }, "JCP"),
+
+                // MIL-STD-PACK badge
+                !isEditing &&
+                  hasMilPack &&
+                  h("span", {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "8px",
+                      color: "#60a5fa",
+                      background: "rgba(96,165,250,.14)",
+                      border: "1px solid rgba(96,165,250,.4)",
+                      padding: "2px 6px",
+                      borderRadius: "2px",
+                      letterSpacing: ".05em",
+                      whiteSpace: "nowrap",
+                    },
+                  }, "MIL-PACK"),
+
                 // ── Toggle buttons (always visible, not just edit mode) ──
                 !isEditing &&
                   toggleBtn(
@@ -939,6 +975,26 @@
                     "rgba(61,214,140,.18)",
                     "rgba(61,214,140,.55)",
                     "#3dd68c",
+                  ),
+                !isEditing &&
+                  toggleBtn(
+                    hasJcp,
+                    "JCP",
+                    hasJcp ? "Clear: JCP certified" : "Mark: JCP certified",
+                    "has_jcp",
+                    "rgba(167,139,250,.22)",
+                    "rgba(167,139,250,.65)",
+                    "#a78bfa",
+                  ),
+                !isEditing &&
+                  toggleBtn(
+                    hasMilPack,
+                    "MIL≡",
+                    hasMilPack ? "Clear: mil-std packing" : "Mark: mil-std packing capable",
+                    "has_mil_std_pack",
+                    "rgba(96,165,250,.22)",
+                    "rgba(96,165,250,.65)",
+                    "#60a5fa",
                   ),
 
                 // Edit / Save / Cancel
