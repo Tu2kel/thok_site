@@ -157,11 +157,10 @@
     };
   }
 
-  // ── AI ANALYSIS — via local agent /navigator/analyze (SSE) ─────────
-  // Runs on your machine — no Netlify timeout.
-  // Agent reads ANTHROPIC_API_KEY + OPENAI_API_KEY from .env.
-  // Handles chunking + Claude/GPT fallback internally.
-  async function analyzeWithClaude(sols, logFn, anthropicKey, openaiKey) {
+  // ── AI ANALYSIS — via Netlify function (server-side key, no local agent) ──
+  // Uses /.netlify/functions/analyze-sols which holds ANTHROPIC_API_KEY
+  // server-side. Claude → GPT-4o fallback handled in the function.
+  async function analyzeWithClaude(sols, logFn) {
     const log = logFn || (() => {});
 
     const payload = sols.map((s) => ({
@@ -184,62 +183,24 @@
       quote_due: s.quote_due,
     }));
 
-    return await new Promise((resolve, reject) => {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => {
-        ctrl.abort();
-        reject(new Error("Analyze timeout after 10 min"));
-      }, 600000);
+    log("Sending " + payload.length + " sols to analyzer…", "info");
 
-      fetch(AGENT_URL + "/navigator/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sols: payload,
-          _anthropic_key: anthropicKey,
-          _openai_key: openaiKey,
-        }),
-        signal: ctrl.signal,
-      })
-        .then(async (resp) => {
-          if (!resp.ok) {
-            clearTimeout(timer);
-            reject(new Error("Agent analyze returned " + resp.status));
-            return;
-          }
-
-          const reader = resp.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = "";
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const lines = buf.split("\n");
-            buf = lines.pop();
-            for (const line of lines) {
-              if (!line.startsWith("data:")) continue;
-              const raw = line.slice(5).trim();
-              if (!raw || raw === "[DONE]") continue;
-              try {
-                const evt = JSON.parse(raw);
-                if (evt.type === "log") log(evt.msg, evt.level || "info");
-                if (evt.type === "result") {
-                  clearTimeout(timer);
-                  if (evt.ok) resolve(evt.results);
-                  else reject(new Error(evt.error || "Analyze failed"));
-                }
-              } catch {}
-            }
-          }
-          clearTimeout(timer);
-        })
-        .catch((e) => {
-          clearTimeout(timer);
-          reject(e);
-        });
+    const resp = await fetch("/.netlify/functions/analyze-sols", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sols: payload }),
     });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error("analyze-sols " + resp.status + ": " + text.slice(0, 200));
+    }
+
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "Analysis failed");
+
+    log("✓ Analysis complete via " + data.provider + " — " + data.results.length + " results", "ok");
+    return data.results;
   }
 
   // ── RFQ EMAIL BUILDER ─────────────────────────────────────────────────
@@ -340,7 +301,6 @@
     const [analyzeErr, setAnalyzeErr] = useState("");
 
     const [selected, setSelected] = useState(new Set());
-    const [dismissed, setDismissed] = useState(new Set());
     const [pushing, setPushing] = useState(false);
     const [pushLog, setPushLog] = useState([]);
 
@@ -351,12 +311,6 @@
     const [resultTab, setResultTab] = useState("GO");
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
-    const [anthropicKey, setAnthropicKey] = useState(
-      () => localStorage.getItem("scc_anthropic_key") || "",
-    );
-    const [openaiKey, setOpenaiKey] = useState(
-      () => localStorage.getItem("scc_openai_key") || "",
-    );
 
     const cronRef = useRef(null);
     const abortRef = useRef(false);
@@ -523,7 +477,6 @@
       setAnalyzeErr("");
       setAnalysis(null);
       setSelected(new Set());
-      setDismissed(new Set());
       setPushLog([]);
 
       try {
@@ -623,12 +576,7 @@
 
         // ── STEP 2: AI analysis on enriched (non-rejected) sols ────────
         // Tries Claude first, falls back to GPT-4o on quota/rate-limit.
-        const results = await analyzeWithClaude(
-          enrichedSols,
-          addLog,
-          anthropicKey,
-          openaiKey,
-        );
+        const results = await analyzeWithClaude(enrichedSols, addLog);
 
         // ── STEP 3: Merge agent hard-rejects into reject bucket ────────
         const agentRejectResults = agentRejects.map((s) => ({
@@ -965,56 +913,6 @@
             ),
         ),
 
-        // \u2500\u2500 API Key inputs \u2500\u2500
-        h(
-          "div",
-          {
-            style: {
-              display: "flex",
-              gap: "10px",
-              marginTop: "10px",
-              flexWrap: "wrap",
-            },
-          },
-          h("input", {
-            type: "password",
-            placeholder: "Anthropic API Key (sk-ant-...)",
-            value: anthropicKey,
-            onChange: (e) => {
-              setAnthropicKey(e.target.value);
-              localStorage.setItem("scc_anthropic_key", e.target.value);
-            },
-            style: {
-              flex: 1,
-              minWidth: "220px",
-              background: "var(--inset-bg)",
-              border: "1px solid rgba(201,168,76,.2)",
-              color: "var(--alabaster)",
-              fontFamily: "JetBrains Mono,monospace",
-              fontSize: "10px",
-              padding: "6px 10px",
-            },
-          }),
-          h("input", {
-            type: "password",
-            placeholder: "OpenAI API Key (sk-...) \u2014 fallback only",
-            value: openaiKey,
-            onChange: (e) => {
-              setOpenaiKey(e.target.value);
-              localStorage.setItem("scc_openai_key", e.target.value);
-            },
-            style: {
-              flex: 1,
-              minWidth: "220px",
-              background: "var(--inset-bg)",
-              border: "1px solid rgba(201,168,76,.2)",
-              color: "var(--alabaster)",
-              fontFamily: "JetBrains Mono,monospace",
-              fontSize: "10px",
-              padding: "6px 10px",
-            },
-          }),
-        ),
       ),
 
       // ── LIVE LOG ──
