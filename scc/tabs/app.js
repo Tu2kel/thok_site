@@ -782,6 +782,7 @@
                 label: "Workflow",
                 tabs: [
                   { id: "dibbs", label: "DIBBS", icon: "⬇ " },
+                  { id: "screener", label: "Screener", icon: "◈ " },
                   { id: "dashboard", label: "Dashboard", icon: "" },
                   { id: "intake", label: "Intake", icon: "" },
                   { id: "pipeline", label: "Pipeline", icon: "" },
@@ -1040,6 +1041,11 @@
                 { style: { padding: "20px", color: "var(--body-dim)" } },
                 "DIBBS loading...",
               )),
+
+        tab === "screener" &&
+          (window.SCC_TABS && window.SCC_TABS.ScreenerTab
+            ? hA(window.SCC_TABS.ScreenerTab, { showToast, loadPipeline, setTab })
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Screener loading...")),
 
         tab === "intake" &&
           hA(IntakeTab, {

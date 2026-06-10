@@ -8,11 +8,8 @@
 //   ANTHROPIC_API_KEY
 //   OPENAI_API_KEY
 
-const ANALYSIS_SYSTEM_PROMPT = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
-
-For each solicitation, apply the full procurement protocol:
-
-HARD REJECT (output verdict: REJECT) if ANY of:
+const PROTOCOL = `
+HARD REJECT (verdict: REJECT) if ANY of:
 - Set-aside codes: AL (AbilityOne), FG, PO, FI, H (HUBZone), L, E — ineligible
 - AMSC: G, B, or A — government drawing / sole source lock
 - AIDC flag in item name
@@ -31,7 +28,13 @@ GO (verdict: GO) if:
 
 VERIFY FIRST (verdict: VERIFY FIRST) if:
 - Passes hard rejects but has one of: tight margin, spec-designator risk (MS-/MIL-/NAS-/AN- prefix), single approved source that may have dealer channel, short quote deadline, delivery risk
+`;
 
+// ── JSON mode: analyze pre-structured sol array ───────────────────────────
+const ANALYSIS_SYSTEM_PROMPT = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
+
+For each solicitation, apply the full procurement protocol:
+${PROTOCOL}
 For each sol output a JSON object with:
 {
   "sol_number": "...",
@@ -43,6 +46,41 @@ For each sol output a JSON object with:
 }
 
 Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
+
+// ── Image/text mode: extract + analyze in one pass ────────────────────────
+const EXTRACT_ANALYZE_SYSTEM_PROMPT = `You are a senior procurement analyst for Imperio Federal Logistics (CAGE 152U4), an SDVOSB federal supply contractor specializing in DLA DIBBS COTS resale.
+
+You will receive either a DIBBS solicitation table screenshot or raw pasted DIBBS table text.
+
+Step 1 — Extract each row into a structured record with these fields (use null if not visible):
+- sol_number: solicitation number (e.g. SPE4A626T84N8)
+- item_name: nomenclature/description
+- quantity: integer
+- unit_issue: EA, PG, etc.
+- unit_price: historical unit price as number (strip $, commas)
+- quote_due: MM/DD/YY
+- delivery_days: integer
+- nsn: NSN (digits only, no dashes, e.g. "5305013688779")
+- fsc: first 4 digits of NSN
+- ref_part_number: piece part number if shown
+- set_aside: set-aside code if shown
+- material: material code (ST, NI, etc.)
+- part_char: Char., Critical, etc.
+- supplier_restrictions: "Restricted" or "Unrestricted"
+- qa: QA code (N, C, QSL, etc.)
+- naics: NAICS code
+- supplier_list: supplier names from Supplier List column
+
+Step 2 — Apply the procurement protocol to each extracted record:
+${PROTOCOL}
+Output a single JSON array. Each element must include ALL extracted fields PLUS:
+  "verdict": "GO" | "VERIFY FIRST" | "REJECT",
+  "reason": "one-line plain English reason",
+  "sourcing_path": "brief sourcing note for GO/VERIFY (omit for REJECT)",
+  "margin_flag": "ok" | "tight" | "blocked",
+  "winProbabilityPct": 0-100
+
+Return ONLY the JSON array. No markdown, no preamble, no backticks.`;
 
 // ── Status codes that mean "quota/rate-limit — try the other provider" ──
 function isQuotaError(status) {
@@ -61,7 +99,7 @@ function parseJsonResponse(raw) {
   return JSON.parse(clean);
 }
 
-// ── Claude Sonnet ────────────────────────────────────────────────────────
+// ── Claude Sonnet (JSON mode) ─────────────────────────────────────────────
 async function callClaude(sols) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key)
@@ -98,6 +136,64 @@ async function callClaude(sols) {
     .map((b) => b.text)
     .join("");
   return { results: parseJsonResponse(raw), provider: "claude" };
+}
+
+// ── Claude Vision (image or raw text extract + analyze) ───────────────────
+async function callClaudeVision({ imageBase64, imageMediaType, rawText }) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key)
+    throw Object.assign(new Error("ANTHROPIC_API_KEY not set"), { status: 500 });
+
+  let userContent;
+  if (imageBase64) {
+    userContent = [
+      {
+        type: "image",
+        source: { type: "base64", media_type: imageMediaType || "image/png", data: imageBase64 },
+      },
+      {
+        type: "text",
+        text: "Extract and analyze every solicitation row visible in this DIBBS table screenshot. Return the JSON array as instructed.",
+      },
+    ];
+  } else {
+    userContent = [
+      {
+        type: "text",
+        text: "Extract and analyze every solicitation from this DIBBS table text:\n\n" + rawText,
+      },
+    ];
+  }
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 6000,
+      system: EXTRACT_ANALYZE_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }],
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw Object.assign(
+      new Error("Claude vision " + resp.status + ": " + text.slice(0, 200)),
+      { status: resp.status },
+    );
+  }
+
+  const data = await resp.json();
+  const raw = (data.content || [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  return { results: parseJsonResponse(raw), provider: "claude-vision" };
 }
 
 // ── GPT-4o fallback ──────────────────────────────────────────────────────
@@ -156,37 +252,40 @@ exports.handler = async (event) => {
     };
   }
 
-  let sols;
+  let body;
   try {
-    ({ sols } = JSON.parse(event.body || "{}"));
-    if (!Array.isArray(sols) || !sols.length)
-      throw new Error("sols array required");
+    body = JSON.parse(event.body || "{}");
   } catch (e) {
-    return {
-      statusCode: 400,
-      headers,
-      body: JSON.stringify({ ok: false, error: e.message }),
-    };
+    return { statusCode: 400, headers, body: JSON.stringify({ ok: false, error: "Invalid JSON" }) };
   }
 
-  // Try Claude → fall back to GPT-4o on quota/rate errors
+  const { sols, imageBase64, imageMediaType, rawText } = body;
+  const isVisionMode = !!(imageBase64 || rawText);
+
+  // ── Vision mode (screenshot or raw text paste) — Claude only ────────────
+  if (isVisionMode) {
+    try {
+      const { results, provider } = await callClaudeVision({ imageBase64, imageMediaType, rawText });
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true, results, provider }) };
+    } catch (err) {
+      return { statusCode: 502, headers, body: JSON.stringify({ ok: false, error: err.message }) };
+    }
+  }
+
+  // ── JSON mode (pre-structured sols array) — Claude → GPT fallback ───────
+  if (!Array.isArray(sols) || !sols.length) {
+    return { statusCode: 400, headers, body: JSON.stringify({ ok: false, error: "sols array, imageBase64, or rawText required" }) };
+  }
+
   try {
     const { results, provider } = await callClaude(sols);
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ ok: true, results, provider }),
-    };
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, results, provider }) };
   } catch (claudeErr) {
     if (!isQuotaError(claudeErr.status)) {
       return {
         statusCode: 502,
         headers,
-        body: JSON.stringify({
-          ok: false,
-          error: claudeErr.message,
-          provider: "claude",
-        }),
+        body: JSON.stringify({ ok: false, error: claudeErr.message, provider: "claude" }),
       };
     }
 
@@ -196,12 +295,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({
-          ok: true,
-          results,
-          provider,
-          claudeFallback: true,
-        }),
+        body: JSON.stringify({ ok: true, results, provider, claudeFallback: true }),
       };
     } catch (gptErr) {
       return {
@@ -209,11 +303,7 @@ exports.handler = async (event) => {
         headers,
         body: JSON.stringify({
           ok: false,
-          error:
-            "Both providers failed. Claude: " +
-            claudeErr.message +
-            " | GPT: " +
-            gptErr.message,
+          error: "Both providers failed. Claude: " + claudeErr.message + " | GPT: " + gptErr.message,
         }),
       };
     }
