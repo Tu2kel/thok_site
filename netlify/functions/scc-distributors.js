@@ -160,6 +160,36 @@ exports.handler = async (event) => {
         break;
       }
 
+      // ── Log vendor outreach response for a P/N ──────────────────────────
+      // entry = { pn, response: "bid"|"no_bid"|"pending", price?, qty?,
+      //           lead_time?, reason?, sol?, date? }
+      case "distLogOutreach": {
+        const { id, entry } = payload;
+        if (!id || !entry?.pn || !entry?.response) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: "id, entry.pn, and entry.response required" }),
+          };
+        }
+        const rec = await dist.findOne({ id });
+        if (!rec) {
+          return {
+            statusCode: 404,
+            headers,
+            body: JSON.stringify({ error: `Distributor not found: ${id}` }),
+          };
+        }
+        const dated = { ...entry, date: entry.date || new Date().toISOString().slice(0, 10) };
+        const updateOps = { $push: { outreach_log: dated } };
+        if (entry.response === "no_bid") {
+          updateOps.$addToSet = { passed_pns: entry.pn };
+        }
+        await dist.updateOne({ id }, updateOps);
+        result = { action: "outreach_logged", id, pn: entry.pn, response: entry.response };
+        break;
+      }
+
       // ── Add NSN to existing distributor by id ──
       case "distAddNSN": {
         const { id, nsn, part_numbers } = payload;

@@ -231,7 +231,15 @@
           if (d.friction === "high") score -= 10;
         }
 
-        return { ...d, score, relevanceHits };
+        // Flag if supplier already passed on this specific P/N
+        const pnUpper = (partNum || "").trim().toUpperCase();
+        const qUpper  = (query  || "").trim().toUpperCase();
+        const passed  = (d.passed_pns || []).some(
+          (p) => p.toUpperCase() === pnUpper || (qUpper && p.toUpperCase() === qUpper),
+        );
+        if (passed) score -= 500; // sink to bottom but keep visible
+
+        return { ...d, score, relevanceHits, passed };
       })
       .filter((d) => d.relevanceHits > 0)
       .sort((a, b) => b.score - a.score);
@@ -297,6 +305,19 @@
     return result;
   }
 
+  async function distLogOutreach(id, entry) {
+    const result = await _call("distLogOutreach", { id, entry });
+    const d = _cache.find((x) => x.id === id);
+    if (d) {
+      (d.outreach_log = d.outreach_log || []).push(entry);
+      if (entry.response === "no_bid") {
+        if (!(d.passed_pns || []).includes(entry.pn))
+          (d.passed_pns = d.passed_pns || []).push(entry.pn);
+      }
+    }
+    return result;
+  }
+
   async function distDelete(id) {
     const result = await _call("distDelete", { id });
     _cache = _cache.filter((d) => d.id !== id);
@@ -345,6 +366,7 @@
     distSave,
     distBatch,
     distAddNSN,
+    distLogOutreach,
     distDelete,
     distGetByNSN,
     distReloadCache,

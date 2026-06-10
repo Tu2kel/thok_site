@@ -20,6 +20,7 @@
     "New",
     "Researching",
     "Sourcing",
+    "Awaiting Quotes",
     "Bid Submitted",
     "Pending Award",
     "Awarded",
