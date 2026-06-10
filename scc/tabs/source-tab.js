@@ -922,49 +922,6 @@
                     "NIIN",
                   ),
 
-                // ── Toggle buttons (always visible, not just edit mode) ──
-                !isEditing &&
-                  toggleBtn(
-                    hasAcct,
-                    "\u2605",
-                    hasAcct
-                      ? "Clear: web account"
-                      : "Mark: have account — use web RFQ",
-                    "has_account",
-                    "rgba(201,168,76,.35)",
-                    "#C9A84C",
-                    "#ffe08a",
-                  ),
-                !isEditing &&
-                  toggleBtn(
-                    hasRep,
-                    "\uD83D\uDC64",
-                    hasRep ? "Clear: account rep" : "Mark: have account rep",
-                    "has_rep",
-                    "rgba(61,214,140,.30)",
-                    "#3dd68c",
-                    "#9effd4",
-                  ),
-                !isEditing &&
-                  toggleBtn(
-                    hasJcp,
-                    "JCP",
-                    hasJcp ? "Clear: JCP certified" : "Mark: JCP certified",
-                    "has_jcp",
-                    "rgba(167,139,250,.32)",
-                    "#a78bfa",
-                    "#ddd6fe",
-                  ),
-                !isEditing &&
-                  toggleBtn(
-                    hasMilPack,
-                    "MIL≡",
-                    hasMilPack ? "Clear: mil-std packing" : "Mark: mil-std packing capable",
-                    "has_mil_std_pack",
-                    "rgba(96,165,250,.28)",
-                    "#60a5fa",
-                    "#bae6fd",
-                  ),
 
                 // Edit / Save / Cancel
                 !isEditing &&
@@ -1052,6 +1009,57 @@
                   ),
               ),
             ),
+
+            // ── Toggle buttons (under card name) ──
+            !isEditing &&
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    gap: "5px",
+                    flexWrap: "wrap",
+                  },
+                },
+                toggleBtn(
+                  hasAcct,
+                  "\u2605",
+                  hasAcct
+                    ? "Clear: web account"
+                    : "Mark: have account — use web RFQ",
+                  "has_account",
+                  "rgba(201,168,76,.35)",
+                  "#C9A84C",
+                  "#ffe08a",
+                ),
+                toggleBtn(
+                  hasRep,
+                  "\uD83D\uDC64",
+                  hasRep ? "Clear: account rep" : "Mark: have account rep",
+                  "has_rep",
+                  "rgba(61,214,140,.30)",
+                  "#3dd68c",
+                  "#9effd4",
+                ),
+                toggleBtn(
+                  hasJcp,
+                  "JCP",
+                  hasJcp ? "Clear: JCP certified" : "Mark: JCP certified",
+                  "has_jcp",
+                  "rgba(167,139,250,.32)",
+                  "#a78bfa",
+                  "#ddd6fe",
+                ),
+                toggleBtn(
+                  hasMilPack,
+                  "MIL≡",
+                  hasMilPack ? "Clear: mil-std packing" : "Mark: mil-std packing capable",
+                  "has_mil_std_pack",
+                  "rgba(96,165,250,.28)",
+                  "#60a5fa",
+                  "#bae6fd",
+                ),
+              ),
 
             // ════ VIEW MODE ════════════════════════════════════════════════
             !isEditing &&
