@@ -16,10 +16,23 @@
     "REJECT":       { color: "#ef5350", bg: "rgba(239,83,80,.04)",   border: "rgba(239,83,80,.18)" },
   };
 
+  const DIBBS_STORE_KEY = "scc_dibbs_tab_v1";
+
+  // Normalize DIBBS batch sol fields → Screener field names
+  function normalizeDibbsSol(r) {
+    return {
+      ...r,
+      quantity:       r.quantity       ?? r.qty          ?? 0,
+      ref_part_number: r.ref_part_number ?? r.piece_part_no ?? "",
+      fsc:            r.fsc            || (r.nsn || "").replace(/\D/g, "").slice(0, 4),
+    };
+  }
+
   function ScreenerTab({ showToast, loadPipeline, setTab }) {
-    const [mode, setMode]         = useState("image");   // "image" | "text"
+    const [mode, setMode]         = useState("image");   // "image" | "text" | "dibbs"
     const [imageData, setImageData] = useState(null);    // { base64, mediaType, preview }
     const [textInput, setTextInput] = useState("");
+    const [dibbsBatch, setDibbsBatch] = useState(null);  // { date, goCount, verifyCount, rejectCount, flat[] }
     const [loading, setLoading]   = useState(false);
     const [results, setResults]   = useState(null);
     const [provider, setProvider] = useState(null);
@@ -27,6 +40,32 @@
     const [adding, setAdding]     = useState(false);
     const [dragOver, setDragOver] = useState(false);
     const fileRef = useRef(null);
+
+    // ── Load DIBBS batch summary whenever mode switches to "dibbs" ───────
+    useEffect(() => {
+      if (mode !== "dibbs") return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(DIBBS_STORE_KEY) || "null");
+        if (!saved || !saved.analysis) {
+          setDibbsBatch(null);
+          return;
+        }
+        const { go = [], verify = [], reject = [] } = saved.analysis;
+        setDibbsBatch({
+          date: saved.scrapeDate || "unknown date",
+          goCount: go.length,
+          verifyCount: verify.length,
+          rejectCount: reject.length,
+          flat: [
+            ...go.map(normalizeDibbsSol),
+            ...verify.map(normalizeDibbsSol),
+            ...reject.map(normalizeDibbsSol),
+          ],
+        });
+      } catch {
+        setDibbsBatch(null);
+      }
+    }, [mode]);
 
     // ── Clipboard paste (Ctrl+V image) ──────────────────────────────────
     useEffect(() => {
@@ -62,6 +101,20 @@
       const file = e.dataTransfer.files[0];
       if (file?.type.startsWith("image/")) readImageFile(file);
     };
+
+    // ── Load pre-analyzed DIBBS batch (no API call needed) ───────────────
+    function loadDibbsBatch() {
+      if (!dibbsBatch || !dibbsBatch.flat.length) {
+        showToast("No DIBBS batch data found — run a batch in the DIBBS tab first", true);
+        return;
+      }
+      setResults(dibbsBatch.flat);
+      setProvider("DIBBS batch · " + dibbsBatch.date);
+      const autoSel = new Set(
+        dibbsBatch.flat.filter((r) => r.verdict === "GO").map((r) => r.sol_number),
+      );
+      setSelected(autoSel);
+    }
 
     // ── Analyze ──────────────────────────────────────────────────────────
     async function analyze() {
@@ -209,9 +262,10 @@
 
       // ── Input zone ──
       h("div", { style: surface },
-        h("div", { style: { display: "flex", gap: "8px", marginBottom: "14px" } },
+        h("div", { style: { display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" } },
           modeBtn("image", "📋 Screenshot"),
           modeBtn("text",  "⌨  Text Paste"),
+          modeBtn("dibbs", "📊 DIBBS Batch"),
         ),
 
         // Image drop zone
@@ -260,7 +314,38 @@
           },
         }),
 
-        h("div", { style: { marginTop: "14px" } },
+        // DIBBS batch loader
+        mode === "dibbs" && h("div", null,
+          dibbsBatch
+            ? h("div", { style: { background: "var(--surface-card)", border: "1px solid rgba(201,168,76,.2)", borderRadius: "6px", padding: "16px" } },
+                h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--gold-solid)", marginBottom: "6px" } },
+                  "Last DIBBS Batch — " + dibbsBatch.date),
+                h("div", { style: { display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" } },
+                  [["GO", "#4caf50", dibbsBatch.goCount], ["VERIFY FIRST", "#ffc107", dibbsBatch.verifyCount], ["REJECT", "#ef5350", dibbsBatch.rejectCount]].map(([v, c, n]) =>
+                    h("div", { key: v, style: { background: c + "22", border: "1px solid " + c + "55", color: c, borderRadius: "12px", padding: "3px 10px", fontSize: "9px", fontFamily: "Cinzel,serif", letterSpacing: ".08em" } },
+                      n + "  " + v),
+                  ),
+                ),
+                h("div", { style: { fontSize: "11px", color: "var(--gold-dim)", marginBottom: "12px" } },
+                  "Already analyzed — load directly into Screener, no API call needed."),
+                h("button", {
+                  onClick: loadDibbsBatch,
+                  className: "btn btn-primary",
+                  style: { fontSize: "10px", padding: "10px 28px" },
+                },
+                  h("span", { className: "glint" }),
+                  "◆ Load " + dibbsBatch.flat.length + " Sols into Screener",
+                ),
+              )
+            : h("div", { style: { textAlign: "center", padding: "28px 16px", color: "var(--gold-dim)", fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".1em" } },
+                "No DIBBS batch found.",
+                h("div", { style: { marginTop: "6px", fontSize: "11px", fontFamily: "Cormorant Garamond,serif", fontStyle: "italic", fontWeight: 400, letterSpacing: 0 } },
+                  "Run a batch in the DIBBS tab first, then come back here."),
+              ),
+        ),
+
+        // Analyze button — only shown for image/text modes
+        mode !== "dibbs" && h("div", { style: { marginTop: "14px" } },
           h("button", {
             onClick: analyze,
             disabled: loading,
