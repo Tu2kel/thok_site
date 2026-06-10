@@ -5,10 +5,9 @@
 //  Requires: window.SCC_DB, window.SCC_DIST, localStorage keys from dibbs-tab
 // ═══════════════════════════════════════════════════════════════════════
 (function () {
-  const AGENT_URL = "http://localhost:3100";
+  const CHAT_API  = "/.netlify/functions/scc-chat";
   const STORE_KEY = "scc_dibbs_tab_v1";
-  const CHAT_KEY = "scc_chat_history_v1";
-  const KEY_STORE = "scc_anthropic_key";
+  const CHAT_KEY  = "scc_chat_history_v1";
 
   const style = document.createElement("style");
   style.textContent = `
@@ -234,7 +233,7 @@
     <div id="scc-chat-header">
       <div>
         <div class="title">SCC Assistant</div>
-        <div class="subtitle">Pipeline · Rolodex · Sols · Bid Math</div>
+        <div class="subtitle">Pipeline · Distributors · Outreach · Bid Math</div>
       </div>
       <button id="scc-chat-clear" title="Clear history">Clear</button>
     </div>
@@ -252,11 +251,12 @@
   let history = [];
 
   const CHIPS = [
-    "What are my top 5 open sols by value?",
+    "Pipeline status summary",
+    "Which sols are due this week?",
+    "Which distributors have active bids?",
+    "Show me all Awaiting Quotes sols",
     "Which FSC lanes have no distributors?",
-    "How many GOs from today's batch?",
-    "Show me sols due this week",
-    "What's my pipeline status summary?",
+    "What did AFI bid on?",
   ];
 
   const msgBox = document.getElementById("scc-chat-messages");
@@ -305,77 +305,112 @@
   async function buildContext() {
     const parts = [];
 
-    // Pipeline
+    // ── Full pipeline ──────────────────────────────────────────────────
     try {
       if (window.SCC_DB) {
         const recs = await window.SCC_DB.dbGetAll();
         if (recs && recs.length) {
-          const open = recs.filter(
-            (r) => !["Won", "Lost", "Cancelled"].includes(r.status),
-          );
+          const CLOSED = ["Won", "Lost", "Cancelled", "Archived", "No Source"];
+          const open = recs.filter((r) => !CLOSED.includes(r.status));
           const byStatus = {};
-          for (const r of recs)
-            byStatus[r.status] = (byStatus[r.status] || 0) + 1;
-          const topByValue = [...open]
-            .sort(
-              (a, b) =>
-                parseFloat(b.unit_price || 0) * parseFloat(b.quantity || 1) -
-                parseFloat(a.unit_price || 0) * parseFloat(a.quantity || 1),
-            )
-            .slice(0, 10)
-            .map(
-              (r) =>
-                `${r.sol_number} | ${r.item_name} | FSC ${r.fsc} | $${r.unit_price} x ${r.quantity} ${r.unit_issue} | Due: ${r.quote_due} | ${r.status}`,
-            );
+          for (const r of recs) byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+
+          const solLines = recs.map((r) =>
+            [
+              r.sol_number,
+              r.item_name,
+              "FSC " + (r.fsc || "?"),
+              r.nsn ? "NSN " + r.nsn : null,
+              r.ref_part_number ? "P/N " + r.ref_part_number : null,
+              r.quantity ? r.quantity + " " + (r.unit_issue || "EA") : null,
+              r.unit_price ? "$" + r.unit_price : null,
+              r.quote_due ? "Due " + r.quote_due : null,
+              r.delivery_days ? r.delivery_days + "d" : null,
+              r.status,
+              r.set_aside || null,
+              r.supplier_poc ? "Vendor: " + r.supplier_poc : null,
+              r.supplier_quote_price ? "Quote: $" + r.supplier_quote_price : null,
+              r.supplier_lead_time ? "Lead: " + r.supplier_lead_time : null,
+              r.screener_verdict ? "Screener: " + r.screener_verdict : null,
+              r.notes ? "Notes: " + r.notes.slice(0, 120) : null,
+            ].filter(Boolean).join(" | "),
+          );
+
           parts.push(
-            `PIPELINE (${recs.length} total, ${open.length} open):\nStatus breakdown: ${JSON.stringify(byStatus)}\nTop open sols by unit price:\n${topByValue.join("\n")}`,
+            "PIPELINE (" + recs.length + " total, " + open.length + " open):\n" +
+            "Status counts: " + JSON.stringify(byStatus) + "\n\n" +
+            solLines.join("\n"),
           );
         }
       }
     } catch (e) {
-      parts.push("Pipeline: unavailable (" + e.message + ")");
+      parts.push("Pipeline unavailable: " + e.message);
     }
 
-    // Last scrape / analysis
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-      if (saved.sols && saved.sols.length) {
-        parts.push(
-          `LAST SCRAPE: ${saved.sols.length} sols scraped on ${saved.scrapeDate || "unknown date"}`,
-        );
-      }
-      if (saved.analysis) {
-        const { go, verify, reject } = saved.analysis;
-        const topGO = (go || [])
-          .slice(0, 5)
-          .map(
-            (r) =>
-              `${r.sol_number} | ${r.item_name} | FSC ${r.fsc} | $${r.ext_price} | ${r.reason}`,
-          );
-        parts.push(
-          `LAST ANALYSIS: GO: ${(go || []).length} | VERIFY: ${(verify || []).length} | REJECT: ${(reject || []).length}\nTop GOs:\n${topGO.join("\n")}`,
-        );
-      }
-    } catch {}
-
-    // Rolodex — full records so Claude can read and answer any question
+    // ── Distributor DB with outreach logs ──────────────────────────────
     try {
       if (window.SCC_DIST) {
         const dists = window.SCC_DIST.DISTRIBUTORS || [];
         if (dists.length) {
+          const distLines = dists.map((d) => {
+            const base = [
+              d.name,
+              d.id,
+              d.phone || null,
+              d.email || null,
+              d.website || null,
+              d.tier ? "Tier " + d.tier : null,
+              d.fsc && d.fsc.length ? "FSC: " + d.fsc.join(",") : null,
+              d.tags && d.tags.length ? "Tags: " + d.tags.join(",") : null,
+              d.passed_pns && d.passed_pns.length ? "Passed P/Ns: " + d.passed_pns.join(",") : null,
+            ].filter(Boolean).join(" | ");
+
+            const logs = (d.outreach_log || []).map((e) =>
+              "  [" + e.date + "] " + e.pn + " → " + e.response.toUpperCase() +
+              (e.price != null ? " $" + e.price : "") +
+              (e.qty ? " " + e.qty + "EA" : "") +
+              (e.lead_time ? " " + e.lead_time : "") +
+              (e.notes ? " (" + e.notes + ")" : ""),
+            );
+
+            return logs.length ? base + "\n  Outreach log:\n" + logs.join("\n") : base;
+          });
           parts.push(
-            "ROLODEX (" +
-              dists.length +
-              " distributors — full records):\n" +
-              JSON.stringify(dists),
+            "DISTRIBUTOR DB (" + dists.length + " distributors):\n" + distLines.join("\n\n"),
           );
         }
       }
     } catch (e) {
-      parts.push("Rolodex error: " + e.message);
+      parts.push("Distributor DB unavailable: " + e.message);
     }
 
-    return parts.join("\n\n");
+    // ── FSC Lane map ───────────────────────────────────────────────────
+    try {
+      if (window.SCC_DIST && window.SCC_DIST.FSC_LANES_MAP) {
+        const lanes = window.SCC_DIST.FSC_LANES_MAP;
+        parts.push("FSC LANES: " + JSON.stringify(lanes));
+      }
+    } catch {}
+
+    // ── Last screener/DIBBS batch ──────────────────────────────────────
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+      if (saved.sols && saved.sols.length) {
+        parts.push("LAST DIBBS SCRAPE: " + saved.sols.length + " sols on " + (saved.scrapeDate || "unknown"));
+      }
+      if (saved.analysis) {
+        const { go, verify, reject } = saved.analysis;
+        const topGO = (go || []).slice(0, 8).map(
+          (r) => r.sol_number + " | " + r.item_name + " | " + r.reason,
+        );
+        parts.push(
+          "LAST ANALYSIS — GO: " + (go || []).length + " | VERIFY: " + (verify || []).length + " | REJECT: " + (reject || []).length +
+          "\nTop GOs:\n" + topGO.join("\n"),
+        );
+      }
+    } catch {}
+
+    return parts.join("\n\n---\n\n");
   }
 
   async function send() {
@@ -392,48 +427,36 @@
 
     try {
       const context = await buildContext();
-      const apiKey = localStorage.getItem(KEY_STORE) || "";
-      if (!apiKey) {
-        thinkingEl.remove();
-        addMsg(
-          "err",
-          "No Anthropic API key — paste it in the DIBBS tab key field first.",
-        );
-        thinking = false;
-        sendBtn.disabled = false;
-        return;
-      }
 
       const systemPrompt = `You are the SCC Assistant for Imperio Federal Logistics (CAGE 152U4), an SDVOSB DLA DIBBS contractor run by Anthony Kelley.
 
-CRITICAL RULES:
-- ONLY use data from the LIVE SYSTEM DATA below. Never invent, hallucinate, or supplement with outside knowledge.
-- If data is not in the system, say "Not in system" — do not guess.
-- When listing distributors or manufacturers, pull ONLY from the ROLODEX records provided.
-- Separate Manufacturers from Distributors when asked for both.
-- Include phone and email for every entry when available.
+You have access to the full live state of the SCC system below — every pipeline sol, every distributor, every outreach log entry.
+
+RULES:
+- Use ONLY the LIVE SYSTEM DATA below. Never invent or supplement with outside knowledge.
+- If data is absent, say so plainly — do not guess.
+- List distributors with phone/email when available.
+- For bid math questions: gross margin target 27.5%, floor 10%. FE fees: Day 20 = 1.67%, Day 30 = 2.50%, Day 60 = 5.00%; PO funding adds 2.50% of invoice. Net floor = $500 after worst-case fees.
+- For solicitation questions: quote the sol number, item name, status, and due date.
+- For sourcing questions: check distributor FSC codes, outreach logs, and passed_pns before recommending.
 - Be direct and concise. No fluff.
 
+TODAY: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+
 LIVE SYSTEM DATA:
-${context}
+${context}`;
 
-If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 = 1.67%, Day 30 = 2.50%, Day 60 = 5.00%. PO funding = 2.50% COGS. Net floor = $500 after worst-case fees.`;
-
-      const resp = await fetch(AGENT_URL + "/chat", {
+      const resp = await fetch(CHAT_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          key: apiKey,
-          system: systemPrompt,
-          messages: history,
-        }),
+        body: JSON.stringify({ system: systemPrompt, messages: history }),
       });
 
       thinkingEl.remove();
 
       if (!resp.ok) {
         const err = await resp.text();
-        addMsg("err", "API error " + resp.status + ": " + err.slice(0, 120));
+        addMsg("err", "API error " + resp.status + ": " + err.slice(0, 200));
         history.pop();
         thinking = false;
         sendBtn.disabled = false;
@@ -441,6 +464,14 @@ If asked about bid math: gross margin target 27.5%, floor 10%. FE fees: Day 20 =
       }
 
       const data = await resp.json();
+      if (!data.ok) {
+        addMsg("err", data.error || "Unknown error");
+        history.pop();
+        thinking = false;
+        sendBtn.disabled = false;
+        return;
+      }
+
       const reply = (data.content || [])
         .filter((b) => b.type === "text")
         .map((b) => b.text)
