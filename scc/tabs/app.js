@@ -1087,6 +1087,11 @@
           hA(SourceTab, {
             preload: sourcePreload,
             onPreloadConsumed: () => setSourcePreload(null),
+            rows,
+            setRows,
+            showToast,
+            setOpenDrawer,
+            goPipeline,
           }),
 
         tab === "rfq" && hA(RFQTab, null),

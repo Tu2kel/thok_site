@@ -1546,8 +1546,209 @@
     );
   }
 
+  // ── CONFIRMATION LANE ────────────────────────────────────────────────
+  // Shows distributor outreach responses for a selected sol.
+  // BID entries get a "Push to Pipeline" button that pre-fills the drawer.
+  function ConfirmationLane({ rows, setRows, showToast, setOpenDrawer, goPipeline }) {
+    const [search, setSearch] = useState("");
+    const [selectedSol, setSelectedSol] = useState(null);
+    const [bidEntries, setBidEntries] = useState([]);
+    const [pushing, setPushing] = useState(null);
+
+    const RESPONSE_STYLE = {
+      bid:     { color: "#4caf50", label: "BID" },
+      pending: { color: "#ffc107", label: "PENDING" },
+      no_bid:  { color: "#ef5350", label: "NO BID" },
+    };
+
+    const filteredSols = (rows || []).filter((r) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        (r.sol_number || "").toLowerCase().includes(q) ||
+        (r.nsn || "").includes(q) ||
+        (r.ref_part_number || "").toLowerCase().includes(q) ||
+        (r.item_name || "").toLowerCase().includes(q)
+      );
+    });
+
+    function selectSol(sol) {
+      setSelectedSol(sol);
+      const pns = [sol.ref_part_number, sol.nsn]
+        .filter(Boolean)
+        .map((s) => s.trim().toUpperCase());
+      const dists = window.SCC_DIST?.DISTRIBUTORS || [];
+      const results = [];
+      for (const d of dists) {
+        for (const entry of d.outreach_log || []) {
+          if (pns.includes((entry.pn || "").trim().toUpperCase())) {
+            results.push({ dist: d, entry });
+          }
+        }
+      }
+      // Sort: bid first, then pending, then no_bid
+      const order = { bid: 0, pending: 1, no_bid: 2 };
+      results.sort((a, b) => (order[a.entry.response] ?? 9) - (order[b.entry.response] ?? 9));
+      setBidEntries(results);
+    }
+
+    async function pushToPipeline(dist, entry) {
+      const key = dist.id + ":" + entry.pn + ":" + entry.date;
+      setPushing(key);
+      try {
+        const current = (rows || []).find((r) => r.sol_number === selectedSol.sol_number);
+        if (!current) { showToast("Sol not in pipeline", true); return; }
+
+        const ADVANCE_FROM = ["New", "Researching", "Sourcing"];
+        const newStatus = ADVANCE_FROM.includes(current.status) ? "Awaiting Quotes" : current.status;
+
+        const pocLine = [dist.name, dist.phone].filter(Boolean).join(" / ");
+        const bidNote = [
+          "Vendor: " + dist.name,
+          entry.pn + " @ $" + (entry.price ?? "?"),
+          entry.qty ? entry.qty + " EA" : null,
+          entry.lead_time || null,
+          entry.notes || null,
+          entry.date || null,
+        ].filter(Boolean).join(" · ");
+
+        const updated = {
+          ...current,
+          status: newStatus,
+          supplier_poc: pocLine,
+          supplier_quote_price: entry.price != null ? String(entry.price) : current.supplier_quote_price,
+          supplier_lead_time: entry.lead_time || current.supplier_lead_time,
+          supplier_quote_date: entry.date || new Date().toISOString().slice(0, 10),
+          notes: [current.notes, bidNote].filter(Boolean).join("\n"),
+        };
+
+        await window.SCC_DB.dbSave(updated);
+        setRows((prev) => prev.map((r) => r.sol_number === updated.sol_number ? updated : r));
+        showToast(updated.sol_number + " → " + newStatus + " · " + dist.name);
+        goPipeline(updated.sol_number);
+        setOpenDrawer(updated.sol_number);
+      } catch (e) {
+        showToast("Push failed: " + e.message, true);
+      } finally {
+        setPushing(null);
+      }
+    }
+
+    const surface = { background: "var(--surface-inset)", border: "1px solid rgba(201,168,76,.15)", borderRadius: "6px", padding: "14px", marginBottom: "12px" };
+    const gold8 = { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".12em", color: "var(--gold-dim)", textTransform: "uppercase", marginBottom: "6px" };
+    const mono = { fontFamily: "JetBrains Mono,monospace", fontSize: "12px" };
+
+    return h(
+      "div",
+      { style: { animation: "fadeUp .3s ease both" } },
+
+      // Header
+      h("div", { style: { marginBottom: "20px" } },
+        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "18px", letterSpacing: ".1em", color: "var(--gold-solid)" } }, "Confirmation Lane"),
+        h("div", { style: { fontFamily: "Cormorant Garamond,serif", fontStyle: "italic", fontSize: "13px", color: "var(--gold-dim)", marginTop: "3px" } },
+          "Surface vendor bid responses · advance sol to pipeline"),
+      ),
+
+      // Sol search
+      h("div", { style: surface },
+        h("div", { style: gold8 }, "Search solicitation"),
+        h("input", {
+          type: "text",
+          placeholder: "Sol #, NSN, Part Number, or Item Name...",
+          value: search,
+          onChange: (e) => { setSearch(e.target.value); setSelectedSol(null); setBidEntries([]); },
+          style: { width: "100%", background: "var(--surface-card)", border: "1px solid rgba(201,168,76,.2)", borderRadius: "4px", padding: "8px 12px", color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "12px", outline: "none", boxSizing: "border-box" },
+        }),
+        search.trim() && h(
+          "div",
+          { style: { marginTop: "10px", display: "flex", flexDirection: "column", gap: "4px", maxHeight: "200px", overflowY: "auto" } },
+          filteredSols.length === 0
+            ? h("div", { style: { color: "var(--gold-dim)", fontSize: "12px", fontStyle: "italic" } }, "No matching solicitations in pipeline.")
+            : filteredSols.map((r) =>
+                h("button", {
+                  key: r.sol_number,
+                  onClick: () => selectSol(r),
+                  style: {
+                    textAlign: "left", background: selectedSol?.sol_number === r.sol_number ? "rgba(201,168,76,.15)" : "transparent",
+                    border: "1px solid rgba(201,168,76,.12)", borderRadius: "4px", padding: "7px 10px", cursor: "pointer",
+                    color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "11px",
+                  },
+                },
+                  h("span", { style: { color: "var(--gold-solid)", marginRight: "8px" } }, r.sol_number),
+                  (r.item_name || "").slice(0, 50),
+                  h("span", { style: { marginLeft: "8px", color: "var(--gold-dim)", fontSize: "10px" } }, r.status),
+                ),
+              ),
+        ),
+      ),
+
+      // Selected sol + outreach results
+      selectedSol && h("div", null,
+        h("div", { style: { ...surface, borderColor: "rgba(201,168,76,.3)" } },
+          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" } },
+            h("div", null,
+              h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", color: "var(--gold-solid)", letterSpacing: ".08em" } }, selectedSol.sol_number),
+              h("div", { style: { fontSize: "12px", color: "var(--alabaster)", marginTop: "2px" } }, selectedSol.item_name || "—"),
+              h("div", { style: { fontSize: "11px", color: "var(--gold-dim)", marginTop: "2px" } },
+                ["NSN: " + (selectedSol.nsn || "—"), "P/N: " + (selectedSol.ref_part_number || "—"), "Status: " + (selectedSol.status || "—")].join("  ·  "),
+              ),
+            ),
+          ),
+
+          bidEntries.length === 0
+            ? h("div", { style: { color: "var(--gold-dim)", fontSize: "12px", fontStyle: "italic", padding: "10px 0" } },
+                "No outreach responses logged for this solicitation's P/Ns yet.")
+            : h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+                bidEntries.map(({ dist, entry }, i) => {
+                  const rs = RESPONSE_STYLE[entry.response] || { color: "var(--body-dim)", label: entry.response };
+                  const key = dist.id + ":" + entry.pn + ":" + entry.date;
+                  const isBid = entry.response === "bid";
+                  return h("div", {
+                    key: key + i,
+                    style: {
+                      background: isBid ? "rgba(76,175,80,.06)" : "var(--surface-card)",
+                      border: isBid ? "1px solid rgba(76,175,80,.3)" : "1px solid rgba(201,168,76,.1)",
+                      borderRadius: "5px", padding: "10px 12px",
+                      display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px",
+                    },
+                  },
+                    h("div", { style: { flex: 1 } },
+                      h("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" } },
+                        h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--gold-solid)" } }, dist.name),
+                        h("span", { style: { background: rs.color + "22", border: "1px solid " + rs.color + "66", color: rs.color, borderRadius: "3px", padding: "1px 6px", fontSize: "9px", fontFamily: "Cinzel,serif", letterSpacing: ".08em" } }, rs.label),
+                      ),
+                      h("div", { style: { ...mono, color: "var(--body-dim)", fontSize: "11px" } },
+                        [
+                          "P/N: " + entry.pn,
+                          entry.price != null ? "$" + entry.price : null,
+                          entry.qty ? entry.qty + " EA" : null,
+                          entry.lead_time || null,
+                          entry.notes || null,
+                        ].filter(Boolean).join("  ·  "),
+                      ),
+                      entry.date && h("div", { style: { fontSize: "10px", color: "var(--gold-dim)", marginTop: "2px" } }, entry.date),
+                    ),
+                    isBid && h("button", {
+                      onClick: () => pushToPipeline(dist, entry),
+                      disabled: !!pushing,
+                      style: {
+                        background: "linear-gradient(135deg,#1a5c1a,#2e7d32)",
+                        border: "1px solid #4caf50", borderRadius: "5px",
+                        color: "#fff", fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".08em",
+                        padding: "7px 14px", cursor: pushing ? "wait" : "pointer", whiteSpace: "nowrap",
+                        opacity: pushing === key ? .6 : 1,
+                      },
+                    }, pushing === key ? "Pushing..." : "→ Push to Pipeline"),
+                  );
+                }),
+              ),
+        ),
+      ),
+    );
+  }
+
   // ── SOURCE TAB ROOT ───────────────────────────────────────────────────
-  function SourceTab({ showToast }) {
+  function SourceTab({ showToast, rows, setRows, setOpenDrawer, goPipeline }) {
     const [subTab, setSubTab] = useState("rolodex");
 
     const { VendorRolodex } = window.SCC_TABS;
@@ -1585,9 +1786,11 @@
         { style: { display: "flex", gap: "8px", marginBottom: "20px" } },
         tabBtn("rolodex", "Vendor Rolodex"),
         tabBtn("distdb", "Distributor DB"),
+        tabBtn("confirm", "✓ Confirmation Lane"),
       ),
       subTab === "rolodex" && VendorRolodex && h(VendorRolodex, { showToast }),
       subTab === "distdb" && h(DistributorDB, null),
+      subTab === "confirm" && h(ConfirmationLane, { rows, setRows, showToast, setOpenDrawer, goPipeline }),
     );
   }
 
