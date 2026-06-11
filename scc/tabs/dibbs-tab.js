@@ -649,37 +649,68 @@
             "Navigator → Analyze → Pipeline → Blast",
           ),
         ),
-        // Agent status pill
+        // Agent status pill + restart button
         h(
           "div",
-          {
-            style: {
-              ...S.mono,
-              fontSize: "10px",
-              color:
-                agentAlive === true
-                  ? "var(--accent-green)"
-                  : agentAlive === false
-                    ? "#e74c3c"
-                    : "var(--body-faint)",
-              padding: "4px 12px",
-              border:
-                "1px solid " +
-                (agentAlive === true
-                  ? "rgba(61,214,140,.3)"
-                  : agentAlive === false
-                    ? "rgba(231,76,60,.3)"
-                    : "rgba(201,168,76,.12)"),
-              cursor: "pointer",
+          { style: { display: "flex", gap: "6px", alignItems: "center" } },
+          h(
+            "div",
+            {
+              style: {
+                ...S.mono,
+                fontSize: "10px",
+                color:
+                  agentAlive === true
+                    ? "var(--accent-green)"
+                    : agentAlive === false
+                      ? "#e74c3c"
+                      : "var(--body-faint)",
+                padding: "4px 12px",
+                border:
+                  "1px solid " +
+                  (agentAlive === true
+                    ? "rgba(61,214,140,.3)"
+                    : agentAlive === false
+                      ? "rgba(231,76,60,.3)"
+                      : "rgba(201,168,76,.12)"),
+                cursor: "pointer",
+              },
+              onClick: checkAgent,
+              title: "Click to recheck agent",
             },
-            onClick: checkAgent,
-            title: "Click to recheck agent",
-          },
-          agentAlive === true
-            ? "● Agent Online"
-            : agentAlive === false
-              ? "● Agent Offline"
-              : "● Checking…",
+            agentAlive === true
+              ? "● Agent Online"
+              : agentAlive === false
+                ? "● Agent Offline"
+                : "● Checking…",
+          ),
+          agentAlive === true &&
+            h(
+              "button",
+              {
+                title: "Restart agent (picks up .env changes)",
+                style: {
+                  ...S.mono,
+                  fontSize: "10px",
+                  background: "transparent",
+                  border: "1px solid rgba(61,214,140,.25)",
+                  color: "rgba(61,214,140,.6)",
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                },
+                onClick: async () => {
+                  try {
+                    await fetch(AGENT_URL + "/restart", { method: "POST" });
+                    setAgentAlive(null);
+                    toast_("Agent restarting…");
+                    setTimeout(checkAgent, 3000);
+                  } catch (e) {
+                    toast_("Restart failed: " + e.message, true);
+                  }
+                },
+              },
+              "↺ Restart",
+            ),
         ),
       ),
 

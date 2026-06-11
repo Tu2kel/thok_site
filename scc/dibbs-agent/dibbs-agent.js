@@ -1497,6 +1497,23 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
     return;
   }
 
+  // Restart agent — spawns fresh copy (re-reads .env) then exits self
+  if (req.method === "POST" && req.url === "/restart") {
+    res.writeHead(200, CORS);
+    res.end(JSON.stringify({ ok: true, message: "Restarting agent…" }));
+    setTimeout(() => {
+      const { spawn } = require("child_process");
+      const child = spawn(process.argv[0], process.argv.slice(1), {
+        detached: true,
+        stdio: "ignore",
+        cwd: process.cwd(),
+      });
+      child.unref();
+      process.exit(0);
+    }, 400);
+    return;
+  }
+
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });
