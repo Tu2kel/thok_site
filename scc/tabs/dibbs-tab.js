@@ -157,11 +157,12 @@
     };
   }
 
-  // ── AI ANALYSIS — via Netlify function (server-side key, no local agent) ──
-  // Uses /.netlify/functions/analyze-sols which holds ANTHROPIC_API_KEY
-  // server-side. Claude → GPT-4o fallback handled in the function.
+  // ── AI ANALYSIS — via Netlify function, batched 40 sols at a time ────────
+  // Netlify functions time out at ~10s; 451 sols in one shot kills it.
+  // We chunk, call sequentially, aggregate.
   async function analyzeWithClaude(sols, logFn) {
     const log = logFn || (() => {});
+    const CHUNK = 40;
 
     const payload = sols.map((s) => ({
       sol_number: s.sol_number,
@@ -183,24 +184,36 @@
       quote_due: s.quote_due,
     }));
 
-    log("Sending " + payload.length + " sols to analyzer…", "info");
-
-    const resp = await fetch("/.netlify/functions/analyze-sols", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sols: payload }),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error("analyze-sols " + resp.status + ": " + text.slice(0, 200));
+    const chunks = [];
+    for (let i = 0; i < payload.length; i += CHUNK) {
+      chunks.push(payload.slice(i, i + CHUNK));
     }
 
-    const data = await resp.json();
-    if (!data.ok) throw new Error(data.error || "Analysis failed");
+    log(`Analyzing ${payload.length} sols in ${chunks.length} batches…`, "info");
 
-    log("✓ Analysis complete via " + data.provider + " — " + data.results.length + " results", "ok");
-    return data.results;
+    const allResults = [];
+    for (let i = 0; i < chunks.length; i++) {
+      log(`Batch ${i + 1}/${chunks.length} (${chunks[i].length} sols)…`, "info");
+
+      const resp = await fetch("/.netlify/functions/analyze-sols", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sols: chunks[i] }),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Batch ${i + 1} failed ${resp.status}: ${text.slice(0, 200)}`);
+      }
+
+      const data = await resp.json();
+      if (!data.ok) throw new Error(`Batch ${i + 1}: ${data.error || "Analysis failed"}`);
+
+      allResults.push(...data.results);
+    }
+
+    log(`✓ All batches complete — ${allResults.length} results`, "ok");
+    return allResults;
   }
 
   // ── RFQ EMAIL BUILDER ─────────────────────────────────────────────────
@@ -481,7 +494,6 @@
       setPushLog([]);
 
       try {
-        addLog("Sending " + sols.length + " sols to analyzer…", "info");
         const results = await analyzeWithClaude(sols, addLog);
 
         const go = [];
