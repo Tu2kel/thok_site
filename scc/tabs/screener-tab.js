@@ -111,11 +111,16 @@
   }
 
   function ScreenerTab({ showToast, loadPipeline, setTab }) {
-    const [mode, setMode]         = useState("image");   // "image" | "text" | "dibbs"
-    const [imageData, setImageData] = useState(null);    // { base64, mediaType, preview }
+    // Default to dibbs mode if a batch exists in localStorage
+    const _hasBatch = (() => {
+      try { const s = JSON.parse(localStorage.getItem(DIBBS_STORE_KEY) || "null"); return !!(s?.sols?.length); } catch { return false; }
+    })();
+
+    const [mode, setMode]         = useState(_hasBatch ? "dibbs" : "image");
+    const [imageData, setImageData] = useState(null);
     const [textInput, setTextInput] = useState("");
-    const [dibbsBatch, setDibbsBatch] = useState(null);  // { date, sols[] }
-    const [dibbsProgress, setDibbsProgress] = useState(""); // batch progress label
+    const [dibbsBatch, setDibbsBatch] = useState(null);
+    const [dibbsProgress, setDibbsProgress] = useState("");
     const [loading, setLoading]   = useState(false);
     const [results, setResults]   = useState(null);
     const [provider, setProvider] = useState(null);
@@ -126,7 +131,7 @@
     const [blastView, setBlastView] = useState(false);
     const fileRef = useRef(null);
 
-    // ── Load DIBBS batch raw sols whenever mode switches to "dibbs" ──────
+    // ── Load DIBBS batch + persisted analysis whenever mode = "dibbs" ────
     useEffect(() => {
       if (mode !== "dibbs") return;
       try {
@@ -139,6 +144,20 @@
           date: saved.scrapeDate || "unknown date",
           sols: saved.sols.map(normalizeDibbsSol),
         });
+        // Restore previous analysis if present
+        if (saved.analysis) {
+          const all = [
+            ...(saved.analysis.go     || []),
+            ...(saved.analysis.verify || []),
+            ...(saved.analysis.reject || []),
+          ];
+          if (all.length) {
+            setResults(all);
+            setSelected(new Set(saved.analysis.go.map(r => r.sol_number)));
+            setProvider("claude · " + (saved.scrapeDate || ""));
+            return;
+          }
+        }
         setResults(null);
         setSelected(new Set());
         setDibbsProgress("");
@@ -287,6 +306,10 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`Server ${res.status}: ${txt.slice(0, 120)}`);
+        }
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "Analysis failed");
 
