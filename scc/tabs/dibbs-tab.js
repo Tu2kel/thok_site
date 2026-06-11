@@ -695,33 +695,47 @@
                 ? "● Agent Offline"
                 : "● Checking…",
           ),
-          agentAlive === true &&
-            h(
-              "button",
-              {
-                title: "Restart agent (picks up .env changes)",
-                style: {
-                  ...S.mono,
-                  fontSize: "10px",
-                  background: "transparent",
-                  border: "1px solid rgba(61,214,140,.25)",
-                  color: "rgba(61,214,140,.6)",
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                },
-                onClick: async () => {
-                  try {
-                    await fetch(AGENT_URL + "/restart", { method: "POST" });
-                    setAgentAlive(null);
-                    toast_("Agent restarting…");
-                    setTimeout(checkAgent, 3000);
-                  } catch (e) {
-                    toast_("Restart failed: " + e.message, true);
-                  }
-                },
+          agentAlive === false &&
+            h("button", {
+              title: "Start the DIBBS agent",
+              style: {
+                ...S.mono, fontSize: "10px",
+                background: "rgba(231,76,60,.1)",
+                border: "1px solid rgba(231,76,60,.35)",
+                color: "#e74c3c", padding: "4px 12px", cursor: "pointer",
               },
-              "↺ Restart",
-            ),
+              onClick: async () => {
+                try {
+                  const r = await fetch("http://127.0.0.1:3101/start", { method: "POST" });
+                  if (!r.ok) throw new Error("launcher returned " + r.status);
+                  toast_("Agent starting…");
+                  setTimeout(checkAgent, 3000);
+                } catch (e) {
+                  toast_("Could not reach launcher (port 3101). Run agent-launcher.js first.", true);
+                }
+              },
+            }, "▶ Start Agent"),
+          agentAlive === true &&
+            h("button", {
+              title: "Restart agent (picks up .env changes)",
+              style: {
+                ...S.mono, fontSize: "10px",
+                background: "transparent",
+                border: "1px solid rgba(61,214,140,.25)",
+                color: "rgba(61,214,140,.6)",
+                padding: "4px 10px", cursor: "pointer",
+              },
+              onClick: async () => {
+                try {
+                  await fetch(AGENT_URL + "/restart", { method: "POST" });
+                  setAgentAlive(null);
+                  toast_("Agent restarting…");
+                  setTimeout(checkAgent, 3000);
+                } catch (e) {
+                  toast_("Restart failed: " + e.message, true);
+                }
+              },
+            }, "↺ Restart"),
         ),
       ),
 
