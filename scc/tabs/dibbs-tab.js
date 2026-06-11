@@ -1282,6 +1282,28 @@
           "div",
           null,
 
+          // ── Result summary banner ──
+          h(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: "24px",
+                padding: "14px 20px",
+                marginBottom: "12px",
+                background: "rgba(61,214,140,.06)",
+                border: "1px solid rgba(61,214,140,.25)",
+                borderRadius: "4px",
+              },
+            },
+            h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".1em", color: "var(--accent-green)" } }, "✓ ANALYSIS COMPLETE"),
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "var(--accent-green)" } }, analysis.go.length + " GO"),
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "var(--accent-yellow)" } }, analysis.verify.length + " VERIFY"),
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "#e74c3c" } }, analysis.reject.length + " REJECT"),
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-faint)", marginLeft: "auto" } }, "Select sols below → Push to Pipeline → RFQ Blast"),
+          ),
+
           // Bucket tabs + action bar
           h(
             "div",
