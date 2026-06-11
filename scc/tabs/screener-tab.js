@@ -10,6 +10,88 @@
 
   const FUNC_URL = "/.netlify/functions/analyze-sols";
 
+  // ── Local pre-filter — instant rejects before Claude sees them ───────────
+  const BLOCKED_FSCS = new Set(
+    [1305,1310,1315,1320,1340,1350,1360,1376,2835,2840,1560,1720,1730,5860].map(String)
+  );
+  const BLOCKED_SET_ASIDES = new Set(["AL","FG","PO","FI","H","L","E"]);
+  const BLOCKED_KEYWORDS   = ["AIDC","SUREFIRE","STREAMLIGHT","FURUNO TZT9F"];
+
+  function localPreFilter(sols) {
+    const clean = [], preRejected = [];
+    for (const s of sols) {
+      const fsc        = String(s.fsc || "").slice(0, 4);
+      const setAside   = (s.set_aside || "").trim().toUpperCase();
+      const itemUpper  = (s.item_name || "").toUpperCase();
+      const kw         = BLOCKED_KEYWORDS.find(k => itemUpper.includes(k));
+
+      let reason = null;
+      if (BLOCKED_FSCS.has(fsc))                      reason = "Prime-dominated FSC " + fsc;
+      else if (setAside && BLOCKED_SET_ASIDES.has(setAside)) reason = "Ineligible set-aside: " + setAside;
+      else if (kw)                                     reason = "Blocked item: " + kw;
+
+      if (reason) preRejected.push({ ...s, verdict: "REJECT", reason, margin_flag: "blocked", winProbabilityPct: 0 });
+      else        clean.push(s);
+    }
+    return { clean, preRejected };
+  }
+
+  // ── FSC name map (for RFQ Blast) ─────────────────────────────────────────
+  const FSC_NAMES = {
+    2510:"Vehicular Cab/Body/Frame",2530:"Brake/Steering/Axle",2910:"Engine Fuel System",
+    2940:"Engine Filters",4110:"Refrigeration",4330:"Filters/Separators",
+    4730:"Hose/Pipe Fittings",4820:"Valves",5305:"Screws",5306:"Bolts",
+    5310:"Nuts/Washers",5315:"Pins",5320:"Rivets",5330:"Packing/Gaskets",
+    5331:"Seals/O-Rings",5340:"Hardware",5920:"Fuses",5925:"Circuit Breakers",
+    5935:"Connectors",6110:"Electrical Control",6145:"Wire/Cable",
+    6210:"Lighting Fixtures",6230:"Portable Lighting",7110:"Office Furniture",
+    7310:"Food Cooking Equipment",8415:"Individual Equipment",9510:"Bars/Rods/Wire",
+  };
+  const fscName = (fsc) => FSC_NAMES[parseInt(fsc)] || "FSC " + fsc;
+
+  function buildRFQEmail(dist, sols) {
+    const items = sols.map((s, i) => {
+      const lines = ["  " + (i+1) + ". " + (s.item_name || "Item")];
+      const pn = s.ref_part_number || s.piece_part_no || "";
+      if (pn)        lines.push("     Part #: " + pn);
+      if (s.quantity) lines.push("     Qty: " + s.quantity + (s.unit_issue ? " " + s.unit_issue : ""));
+      if (s.delivery_days) lines.push("     Required Delivery: " + s.delivery_days + " days ARO");
+      if (s.sol_number)    lines.push("     Ref #: " + s.sol_number);
+      return lines.join("\n");
+    }).join("\n\n");
+    return [
+      "Hi " + (dist.name || dist.Company || "Team") + ",",
+      "",
+      "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting active DLA requirements and have an immediate procurement need in your lane.",
+      "",
+      "I need pricing and availability on the following item" + (sols.length > 1 ? "s" : "") + ":",
+      "", items, "",
+      "Requirements:",
+      "- Destination: Government delivery address (continental US)",
+      "- Payment: Immediate PO upon award — Factoring Express for third-party PO funding. Supplier receives direct wire before shipment.",
+      "- Compliance: BAA/TAA required — please confirm country of origin",
+      "- Shipping: FOB Destination required",
+      "- Condition: New/unused only",
+      "",
+      "Please provide unit price, lead time, and country of origin confirmation. We issue POs same-day upon award.",
+      "",
+      "Thank you,",
+      "",
+      "Anthony K. Kelley | Founder & CEO",
+      "Imperio Federal Logistics | The House of Kel LLC · CAGE 152U4",
+      "SDVOSB | VetHUB",
+      "anthony@ifedlog.com | (254) 226-5216",
+    ].join("\n");
+  }
+
+  function openGmailCompose(to, subject, body) {
+    const url = "https://mail.google.com/mail/?view=cm&fs=1"
+      + "&to=" + encodeURIComponent(to)
+      + "&su=" + encodeURIComponent(subject)
+      + "&body=" + encodeURIComponent(body);
+    window.open(url, "_blank");
+  }
+
   const VERDICT_STYLE = {
     "GO":           { color: "#4caf50", bg: "rgba(76,175,80,.08)",   border: "rgba(76,175,80,.3)" },
     "VERIFY FIRST": { color: "#ffc107", bg: "rgba(255,193,7,.07)",   border: "rgba(255,193,7,.28)" },
@@ -40,6 +122,8 @@
     const [selected, setSelected] = useState(new Set());
     const [adding, setAdding]     = useState(false);
     const [dragOver, setDragOver] = useState(false);
+    const [blastPlan, setBlastPlan] = useState(null);
+    const [blastView, setBlastView] = useState(false);
     const fileRef = useRef(null);
 
     // ── Load DIBBS batch raw sols whenever mode switches to "dibbs" ──────
@@ -98,21 +182,26 @@
       if (file?.type.startsWith("image/")) readImageFile(file);
     };
 
-    // ── Analyze DIBBS batch — chunked 20 sols at a time ─────────────────
+    // ── Analyze DIBBS batch — pre-filter then chunk 20 at a time ────────
     async function analyzeDibbsBatch() {
       if (!dibbsBatch || !dibbsBatch.sols.length) {
         showToast("No DIBBS batch — run a scrape first", true);
         return;
       }
-      const sols = dibbsBatch.sols;
+
+      // Step 1: instant local pre-filter (no API call)
+      const { clean, preRejected } = localPreFilter(dibbsBatch.sols);
+      setDibbsProgress(`Pre-filtered: ${preRejected.length} instant rejects · sending ${clean.length} to Claude…`);
+
       const CHUNK = 20;
       const chunks = [];
-      for (let i = 0; i < sols.length; i += CHUNK) chunks.push(sols.slice(i, i + CHUNK));
+      for (let i = 0; i < clean.length; i += CHUNK) chunks.push(clean.slice(i, i + CHUNK));
 
       setLoading(true);
       setResults(null);
       setSelected(new Set());
-      setDibbsProgress(`Batch 1/${chunks.length}…`);
+      setBlastPlan(null);
+      setBlastView(false);
 
       const allResults = [];
       try {
@@ -142,13 +231,16 @@
           allResults.push(...data.results);
         }
 
-        // Merge results back with original sol data
-        const merged = allResults.map((r) => {
-          const orig = sols.find((s) => s.sol_number === r.sol_number) || {};
-          return { ...orig, ...r };
-        });
+        // Merge Claude results with original sol data + pre-rejected
+        const merged = [
+          ...allResults.map((r) => {
+            const orig = clean.find((s) => s.sol_number === r.sol_number) || {};
+            return { ...orig, ...r };
+          }),
+          ...preRejected,
+        ];
 
-        // Save analysis back to localStorage so DIBBS tab RFQ Blast still works
+        // Save analysis back to localStorage
         try {
           const saved = JSON.parse(localStorage.getItem(DIBBS_STORE_KEY) || "{}");
           saved.analysis = {
@@ -239,7 +331,7 @@
             quote_due:            r.quote_due || "",
             delivery_days:        r.delivery_days || "",
             set_aside:            r.set_aside || "",
-            status:               "Sourcing",
+            status:               mode === "dibbs" ? "New" : "Sourcing",
             supplier_restrictions: r.supplier_restrictions || "",
             qa:                   r.qa || "",
             naics:                r.naics || "",
@@ -520,6 +612,84 @@
           }),
         ),
 
+        // ── RFQ Blast modal ──
+        blastView && blastPlan && h("div", {
+          style: {
+            position: "fixed", inset: 0, zIndex: 400,
+            background: "rgba(0,0,0,.7)", display: "flex", alignItems: "flex-start",
+            justifyContent: "center", paddingTop: "60px",
+          },
+          onClick: (e) => { if (e.target === e.currentTarget) setBlastView(false); },
+        },
+          h("div", {
+            style: {
+              background: "var(--surface-card)", border: "1px solid rgba(201,168,76,.3)",
+              borderRadius: "10px", width: "680px", maxWidth: "95vw",
+              maxHeight: "75vh", overflowY: "auto", padding: "24px",
+            },
+          },
+            h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" } },
+              h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "14px", color: "var(--gold-solid)", letterSpacing: ".1em" } }, "🚀 RFQ BLAST PLAN"),
+              h("button", {
+                onClick: () => setBlastView(false),
+                style: { background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "18px" },
+              }, "✕"),
+            ),
+            Object.entries(blastPlan).map(([fsc, { sols: fscSols, dists }]) =>
+              h("div", {
+                key: fsc,
+                style: { marginBottom: "20px", border: "1px solid rgba(255,255,255,.07)", borderRadius: "6px", padding: "14px" },
+              },
+                h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--gold-solid)", marginBottom: "8px" } },
+                  "FSC " + fsc + " — " + fscName(fsc) + " (" + fscSols.length + " sol" + (fscSols.length !== 1 ? "s" : "") + ")",
+                ),
+                h("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginBottom: "10px" } },
+                  fscSols.map(s => s.sol_number).join("  ·  "),
+                ),
+                dists.length === 0
+                  ? h("div", { style: { fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic" } }, "No matched distributors for this FSC")
+                  : dists.map((dist, di) => {
+                    const subject = "RFQ — " + fscName(fsc) + " Parts (FSC " + fsc + ")";
+                    const body = buildRFQEmail(dist, fscSols);
+                    return h("div", {
+                      key: di,
+                      style: {
+                        display: "flex", alignItems: "center", gap: "10px",
+                        padding: "8px 0",
+                        borderTop: di > 0 ? "1px solid rgba(255,255,255,.05)" : "none",
+                      },
+                    },
+                      h("div", { style: { flex: 1, fontSize: "12px", color: "var(--text-primary)" } },
+                        dist.name,
+                        dist.email && h("span", { style: { fontSize: "10px", color: "var(--text-muted)", marginLeft: "6px" } }, "· " + dist.email),
+                      ),
+                      dist.email && h("button", {
+                        onClick: () => openGmailCompose(dist.email, subject, body),
+                        style: {
+                          fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".06em",
+                          padding: "6px 14px", background: "rgba(201,168,76,.12)",
+                          border: "1px solid rgba(201,168,76,.35)", color: "var(--gold-solid)",
+                          cursor: "pointer", whiteSpace: "nowrap",
+                        },
+                      }, "Gmail Compose"),
+                      h("button", {
+                        onClick: () => {
+                          navigator.clipboard.writeText(body).then(() => showToast("Email copied")).catch(() => showToast("Copy failed", true));
+                        },
+                        style: {
+                          fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".06em",
+                          padding: "6px 14px", background: "transparent",
+                          border: "1px solid rgba(255,255,255,.15)", color: "var(--text-muted)",
+                          cursor: "pointer",
+                        },
+                      }, "Copy"),
+                    );
+                  }),
+              ),
+            ),
+          ),
+        ),
+
         // ── Sticky CTA ──
         selected.size > 0 && h("div", {
           style: {
@@ -529,6 +699,32 @@
         },
           h("div", { style: { background: "var(--surface-card)", border: "1px solid rgba(201,168,76,.2)", borderRadius: "8px", padding: "8px 14px", fontSize: "11px", color: "var(--gold-dim)" } },
             selected.size + " selected"),
+          mode === "dibbs" && h("button", {
+            onClick: () => {
+              const goSols = (results || []).filter(r => selected.has(r.sol_number) && r.verdict === "GO");
+              if (!goSols.length) { showToast("Select GO sols first", true); return; }
+              const SCC_DIST = window.SCC_DIST;
+              if (!SCC_DIST) { showToast("Distributor DB not loaded", true); return; }
+              const byFSC = {};
+              for (const s of goSols) {
+                const fsc = s.fsc || "0000";
+                if (!byFSC[fsc]) byFSC[fsc] = [];
+                byFSC[fsc].push(s);
+              }
+              const plan = {};
+              for (const [fsc, fscSols] of Object.entries(byFSC)) {
+                plan[fsc] = { sols: fscSols, dists: SCC_DIST.getDistsByFSC(fsc).slice(0, 5) };
+              }
+              setBlastPlan(plan);
+              setBlastView(true);
+            },
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".08em",
+              padding: "11px 20px", background: "rgba(201,168,76,.12)",
+              border: "1px solid rgba(201,168,76,.4)", color: "var(--gold-solid)",
+              cursor: "pointer",
+            },
+          }, "🚀 RFQ Blast"),
           h("button", {
             onClick: addToPipeline,
             disabled: adding,
@@ -536,7 +732,7 @@
             style: { fontSize: "10px", padding: "11px 26px", opacity: adding ? .7 : 1, cursor: adding ? "wait" : "pointer" },
           },
             h("span", { className: "glint" }),
-            adding ? "Adding…" : "→ Add to Pipeline",
+            adding ? "Adding…" : "→ Pipeline",
           ),
         ),
       ),
