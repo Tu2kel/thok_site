@@ -40,6 +40,14 @@ GO (verdict: GO) if:
 - Historical unit price supports 27.5%+ gross margin at 90% cost ceiling
 - Net after worst-case FE fees (7.5%) exceeds $500
 - Delivery window achievable via standard commercial lead times
+
+MISSING DATA RULES (when amsc is blank or approved_sources is empty):
+- If amsc is blank: do NOT apply AMSC-specific reject rules; default to VERIFY FIRST
+  unless another hard-reject gate fires (FSC, set-aside, item name, QA, CAGE)
+- If approved_sources is empty: cannot confirm sole-source lock, so skip the
+  "AMSC B with 1 source = REJECT" rule; treat as VERIFY FIRST
+- A blank AMSC sol with clean FSC, no set-aside, good margin, and standard part
+  number may still be promoted to GO if all other gates pass
 `;
 
 // ── JSON mode: analyze pre-structured sol array ───────────────────────────
