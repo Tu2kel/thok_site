@@ -911,6 +911,34 @@
               },
               "Last: " + scrapeDate,
             ),
+
+          // Clear batch button — resets sols + analysis so a fresh run starts clean
+          (sols.length > 0 || analysis) &&
+            h(
+              "button",
+              {
+                onClick: () => {
+                  setSols([]);
+                  setAnalysis(null);
+                  setScrapeDate("");
+                  setSelected(new Set());
+                  setPushLog([]);
+                  setLog([]);
+                  storeSave({ mode, cronTime, sols: [], scrapeDate: "", analysis: null });
+                },
+                style: {
+                  ...S.mono,
+                  fontSize: "10px",
+                  background: "transparent",
+                  border: "1px solid rgba(231,76,60,.3)",
+                  color: "rgba(231,76,60,.7)",
+                  padding: "4px 10px",
+                  borderRadius: "3px",
+                  cursor: "pointer",
+                },
+              },
+              "✕ Clear Batch",
+            ),
         ),
 
       ),
