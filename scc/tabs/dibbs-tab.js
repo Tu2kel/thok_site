@@ -392,7 +392,8 @@
         addLog("Agent online ✓", "ok");
       } catch (e) {
         setAgentAlive(false);
-        addLog("Agent offline — start start-agent.bat first.", "err");
+        addLog("Agent offline — run start-agent.bat on your PC first, then try again.", "err");
+        addLog("Tip: drop start-agent.bat into your Windows Startup folder to auto-launch on boot.", "info");
         setRunning(false);
         return;
       }
@@ -480,142 +481,28 @@
       setPushLog([]);
 
       try {
-        // ── STEP 1: NSN enrichment via agent /navigator/enrich (SSE) ──
-        // Puppeteer spins up, navigates to DIBBS, clicks the DoD banner,
-        // then fetches each NSN page in the authenticated session.
-        // No cookie jar dependency — fresh auth every time.
-        addLog(
-          "Launching Puppeteer for DIBBS enrichment (" +
-            sols.length +
-            " sols)…",
-          "info",
-        );
-        let enrichedSols = sols;
-        let agentRejects = [];
-        try {
-          await new Promise((resolve, reject) => {
-            const ctrl = new AbortController();
-            const timer = setTimeout(() => {
-              ctrl.abort();
-              reject(new Error("Enrichment timeout"));
-            }, 600000); // 10 min
-
-            fetch(AGENT_URL + "/navigator/enrich", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sols }),
-              signal: ctrl.signal,
-            })
-              .then(async (resp) => {
-                if (!resp.ok) {
-                  clearTimeout(timer);
-                  reject(new Error("Enrich returned " + resp.status));
-                  return;
-                }
-
-                const reader = resp.body.getReader();
-                const decoder = new TextDecoder();
-                let buf = "";
-
-                while (true) {
-                  const { done, value } = await reader.read();
-                  if (done) break;
-                  buf += decoder.decode(value, { stream: true });
-                  const lines = buf.split("\n");
-                  buf = lines.pop();
-                  for (const line of lines) {
-                    if (!line.startsWith("data:")) continue;
-                    const payload = line.slice(5).trim();
-                    if (!payload || payload === "[DONE]") continue;
-                    try {
-                      const evt = JSON.parse(payload);
-                      if (evt.type === "log")
-                        addLog(evt.msg, evt.level || "info");
-                      if (evt.type === "result") {
-                        clearTimeout(timer);
-                        if (evt.ok && Array.isArray(evt.sols)) {
-                          agentRejects = evt.sols.filter((s) => s.reject);
-                          enrichedSols = evt.sols.filter((s) => !s.reject);
-                          addLog(
-                            "✓ Enrichment complete — " +
-                              enrichedSols.length +
-                              " clean · " +
-                              agentRejects.length +
-                              " rejected",
-                            "ok",
-                          );
-                        } else {
-                          addLog(
-                            "Enrichment error: " +
-                              (evt.error || "unknown") +
-                              " — proceeding with raw sols",
-                            "err",
-                          );
-                        }
-                        resolve();
-                      }
-                    } catch {}
-                  }
-                }
-                clearTimeout(timer);
-                resolve();
-              })
-              .catch((e) => {
-                clearTimeout(timer);
-                reject(e);
-              });
-          });
-        } catch (enrichErr) {
-          addLog(
-            "NSN enrichment failed (" +
-              enrichErr.message +
-              ") — proceeding with raw sols",
-            "err",
-          );
-        }
-
-        // ── STEP 2: AI analysis on enriched (non-rejected) sols ────────
-        // Tries Claude first, falls back to GPT-4o on quota/rate-limit.
-        const results = await analyzeWithClaude(enrichedSols, addLog);
-
-        // ── STEP 3: Merge agent hard-rejects into reject bucket ────────
-        const agentRejectResults = agentRejects.map((s) => ({
-          sol_number: s.sol_number,
-          verdict: "REJECT",
-          reason: s.reject,
-          sourcing_path: "",
-          margin_flag: "blocked",
-          winProbabilityPct: 0,
-        }));
-        const allResults = [...results, ...agentRejectResults];
+        addLog("Sending " + sols.length + " sols to analyzer…", "info");
+        const results = await analyzeWithClaude(sols, addLog);
 
         const go = [];
         const verify = [];
         const reject = [];
 
-        // Merge all verdicts back with enriched sol data (carries approved_sources + amsc)
-        for (const res of allResults) {
-          const enriched =
-            enrichedSols.find((s) => s.sol_number === res.sol_number) || {};
-          const original =
-            sols.find((s) => s.sol_number === res.sol_number) || {};
-          const merged = { ...original, ...enriched, ...res };
+        for (const res of results) {
+          const original = sols.find((s) => s.sol_number === res.sol_number) || {};
+          const merged = { ...original, ...res };
           if (res.verdict === "GO") go.push(merged);
           else if (res.verdict === "VERIFY FIRST") verify.push(merged);
           else reject.push(merged);
         }
 
-        // Sort GO by ext_price desc
         go.sort((a, b) => (b.ext_price || 0) - (a.ext_price || 0));
         verify.sort((a, b) => (b.ext_price || 0) - (a.ext_price || 0));
 
         setAnalysis({ go, verify, reject });
-        // Auto-select all GOs
         setSelected(new Set(go.map((r) => r.sol_number)));
         setResultTab("GO");
-        toast_(
-          `Analysis complete — ${go.length} GO · ${verify.length} VERIFY · ${reject.length} REJECT`,
-        );
+        toast_(`Analysis complete — ${go.length} GO · ${verify.length} VERIFY · ${reject.length} REJECT`);
       } catch (e) {
         setAnalyzeErr(e.message);
         toast_("Analysis failed: " + e.message, true);
@@ -959,7 +846,7 @@
           h(
             "div",
             { style: { ...S.cardTitle, marginBottom: "8px" } },
-            "Scrape Log",
+            analyzing ? "⟳ Analyzing…" : "Log",
           ),
           ...log.map((entry, i) =>
             h(
