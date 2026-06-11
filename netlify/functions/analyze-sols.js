@@ -9,25 +9,37 @@
 //   OPENAI_API_KEY
 
 const PROTOCOL = `
+COMPANY PROFILE: Imperio Federal Logistics (CAGE 152U4) is a JCP-certified SDVOSB DLA DIBBS reseller.
+JCP certification means we can access controlled technical data and source from approved manufacturers.
+We are NOT a manufacturer/OEM — we cannot produce, machine, or fabricate parts ourselves.
+
 HARD REJECT (verdict: REJECT) if ANY of:
-- Set-aside codes: AL (AbilityOne), FG, PO, FI, H (HUBZone), L, E — ineligible
-- AMSC: G, B, or A — government drawing / sole source lock
+- Set-aside codes: AL (AbilityOne), FG, PO, FI, H (HUBZone), L, E — ineligible for SDVOSB
+- AMSC: G — government-peculiar design, no commercial market, requires OEM manufacturing capability we lack
+- AMSC: B with approved_sources count = 1 — sole-source OEM lock, no resale path
 - AIDC flag in item name
 - Blocked CAGEs in supplier_restrictions: 81SA7, R9004, 07482, 062W0, 75Q65
 - Blocked OEMs in item name: SureFire, Streamlight, Furuno TZT9F
-- QA = QSL
-- Restricted drawings with no COTS path
+- QA = QSL — quality systems list required, not achievable as a reseller
 - Prime-dominated FSCs with no resale channel: 1305,1310,1315,1320,1340,1350,1360,1376,2835,2840,1560,1720,1730,5860
+
+VERIFY FIRST (verdict: VERIFY FIRST) if ANY of:
+- AMSC: A or B with multiple approved sources — JCP gives us drawing access; verify commercial sources exist
+- AMSC: Q (QPL item) — JCP-accessible; verify QPL-qualified distributor carries it
+- AMSC: M (mil-spec) — verify commercial mil-spec distributor channel
+- Tight margin (historical price supports 15–27% gross margin only)
+- MS-/MIL-/NAS-/AN- part number prefix — spec-designator risk, check approved sources
+- Single approved source that may have authorized dealer channel
+- Quote deadline ≤ 5 days
+- Delivery window > 120 days (risk of non-performance)
 
 GO (verdict: GO) if:
 - Passes all hard reject gates
-- Item is sourceable via commercial distributor channel (COTS path exists)
+- AMSC: C, or AMSC A/B/Q/M with confirmed commercial resale path
+- Sourceable via commercial distributor (COTS or approved-source resale path exists)
 - Historical unit price supports 27.5%+ gross margin at 90% cost ceiling
 - Net after worst-case FE fees (7.5%) exceeds $500
-- Delivery window is achievable (standard commercial lead times)
-
-VERIFY FIRST (verdict: VERIFY FIRST) if:
-- Passes hard rejects but has one of: tight margin, spec-designator risk (MS-/MIL-/NAS-/AN- prefix), single approved source that may have dealer channel, short quote deadline, delivery risk
+- Delivery window achievable via standard commercial lead times
 `;
 
 // ── JSON mode: analyze pre-structured sol array ───────────────────────────
