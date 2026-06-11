@@ -1035,7 +1035,7 @@
 
         tab === "dibbs" &&
           (window.SCC_TABS && window.SCC_TABS.DibbsTab
-            ? hA(window.SCC_TABS.DibbsTab, null)
+            ? hA(window.SCC_TABS.DibbsTab, { setTab })
             : hA(
                 "div",
                 { style: { padding: "20px", color: "var(--body-dim)" } },

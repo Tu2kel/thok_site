@@ -297,7 +297,7 @@
   // ─────────────────────────────────────────────────────────────────────
   // ── MAIN TAB COMPONENT ────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────
-  function DibbsTab() {
+  function DibbsTab({ setTab }) {
     const saved = storeLoad();
 
     // ── State ──
@@ -452,9 +452,10 @@
                     setSols(evt.sols);
                     setScrapeDate(new Date().toLocaleString());
                     addLog(
-                      "✓ Scraped " + evt.sols.length + " sols from first page",
+                      "✓ Scraped " + evt.sols.length + " sols — heading to Screener…",
                       "ok",
                     );
+                    setTimeout(() => setTab && setTab("screener"), 1200);
                   } else {
                     addLog("Scrape failed: " + (evt.error || "unknown"), "err");
                   }
@@ -469,10 +470,8 @@
             data.sols.forEach((msg) => addLog(msg, "info"));
             setSols(data.sols);
             setScrapeDate(new Date().toLocaleString());
-            addLog(
-              "✓ Scraped " + data.sols.length + " sols from first page",
-              "ok",
-            );
+            addLog("✓ Scraped " + data.sols.length + " sols — heading to Screener…", "ok");
+            setTimeout(() => setTab && setTab("screener"), 1200);
           } else {
             addLog("Scrape failed: " + (data.error || "unknown"), "err");
           }
@@ -992,20 +991,18 @@
                 },
                 rawExpanded ? "Collapse" : "Expand",
               ),
-              !analysis &&
-                h(
-                  "button",
-                  {
-                    onClick: runAnalysis,
-                    disabled: analyzing,
-                    style: {
-                      ...S.btn("var(--accent-yellow)", "rgba(255,200,0,.08)"),
-                      border: "1px solid rgba(255,200,0,.35)",
-                      opacity: analyzing ? 0.7 : 1,
-                    },
+              h(
+                "button",
+                {
+                  onClick: () => setTab && setTab("screener"),
+                  style: {
+                    ...S.btn("var(--accent-green)", "rgba(61,214,140,.08)"),
+                    border: "1px solid rgba(61,214,140,.3)",
+                    fontSize: "9px", padding: "4px 14px",
                   },
-                  analyzing ? "Analyzing…" : "⚡ Analyze",
-                ),
+                },
+                "→ Screener",
+              ),
             ),
           ),
 

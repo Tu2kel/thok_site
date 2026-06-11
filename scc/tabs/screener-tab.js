@@ -32,7 +32,8 @@
     const [mode, setMode]         = useState("image");   // "image" | "text" | "dibbs"
     const [imageData, setImageData] = useState(null);    // { base64, mediaType, preview }
     const [textInput, setTextInput] = useState("");
-    const [dibbsBatch, setDibbsBatch] = useState(null);  // { date, goCount, verifyCount, rejectCount, flat[] }
+    const [dibbsBatch, setDibbsBatch] = useState(null);  // { date, sols[] }
+    const [dibbsProgress, setDibbsProgress] = useState(""); // batch progress label
     const [loading, setLoading]   = useState(false);
     const [results, setResults]   = useState(null);
     const [provider, setProvider] = useState(null);
@@ -41,27 +42,22 @@
     const [dragOver, setDragOver] = useState(false);
     const fileRef = useRef(null);
 
-    // ── Load DIBBS batch summary whenever mode switches to "dibbs" ───────
+    // ── Load DIBBS batch raw sols whenever mode switches to "dibbs" ──────
     useEffect(() => {
       if (mode !== "dibbs") return;
       try {
         const saved = JSON.parse(localStorage.getItem(DIBBS_STORE_KEY) || "null");
-        if (!saved || !saved.analysis) {
+        if (!saved || !saved.sols || !saved.sols.length) {
           setDibbsBatch(null);
           return;
         }
-        const { go = [], verify = [], reject = [] } = saved.analysis;
         setDibbsBatch({
           date: saved.scrapeDate || "unknown date",
-          goCount: go.length,
-          verifyCount: verify.length,
-          rejectCount: reject.length,
-          flat: [
-            ...go.map(normalizeDibbsSol),
-            ...verify.map(normalizeDibbsSol),
-            ...reject.map(normalizeDibbsSol),
-          ],
+          sols: saved.sols.map(normalizeDibbsSol),
         });
+        setResults(null);
+        setSelected(new Set());
+        setDibbsProgress("");
       } catch {
         setDibbsBatch(null);
       }
@@ -102,18 +98,78 @@
       if (file?.type.startsWith("image/")) readImageFile(file);
     };
 
-    // ── Load pre-analyzed DIBBS batch (no API call needed) ───────────────
-    function loadDibbsBatch() {
-      if (!dibbsBatch || !dibbsBatch.flat.length) {
-        showToast("No DIBBS batch data found — run a batch in the DIBBS tab first", true);
+    // ── Analyze DIBBS batch — chunked 20 sols at a time ─────────────────
+    async function analyzeDibbsBatch() {
+      if (!dibbsBatch || !dibbsBatch.sols.length) {
+        showToast("No DIBBS batch — run a scrape first", true);
         return;
       }
-      setResults(dibbsBatch.flat);
-      setProvider("DIBBS batch · " + dibbsBatch.date);
-      const autoSel = new Set(
-        dibbsBatch.flat.filter((r) => r.verdict === "GO").map((r) => r.sol_number),
-      );
-      setSelected(autoSel);
+      const sols = dibbsBatch.sols;
+      const CHUNK = 20;
+      const chunks = [];
+      for (let i = 0; i < sols.length; i += CHUNK) chunks.push(sols.slice(i, i + CHUNK));
+
+      setLoading(true);
+      setResults(null);
+      setSelected(new Set());
+      setDibbsProgress(`Batch 1/${chunks.length}…`);
+
+      const allResults = [];
+      try {
+        for (let i = 0; i < chunks.length; i++) {
+          setDibbsProgress(`Batch ${i + 1}/${chunks.length} (${chunks[i].length} sols)…`);
+          const payload = chunks[i].map((s) => ({
+            sol_number: s.sol_number, item_name: s.item_name, fsc: s.fsc,
+            nsn: s.nsn, qty: s.quantity || s.qty, unit_issue: s.unit_issue,
+            unit_price: s.unit_price, ext_price: s.ext_price,
+            delivery_days: s.delivery_days, set_aside: s.set_aside,
+            supplier_restrictions: s.supplier_restrictions,
+            piece_part_no: s.ref_part_number || s.piece_part_no,
+            material: s.material, part_char: s.part_char, quote_due: s.quote_due,
+            amsc: s.amsc || "", approved_sources: s.approved_sources || [],
+          }));
+          const res = await fetch(FUNC_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sols: payload }),
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`Batch ${i + 1} failed ${res.status}: ${txt.slice(0, 120)}`);
+          }
+          const data = await res.json();
+          if (!data.ok) throw new Error(`Batch ${i + 1}: ` + (data.error || "failed"));
+          allResults.push(...data.results);
+        }
+
+        // Merge results back with original sol data
+        const merged = allResults.map((r) => {
+          const orig = sols.find((s) => s.sol_number === r.sol_number) || {};
+          return { ...orig, ...r };
+        });
+
+        // Save analysis back to localStorage so DIBBS tab RFQ Blast still works
+        try {
+          const saved = JSON.parse(localStorage.getItem(DIBBS_STORE_KEY) || "{}");
+          saved.analysis = {
+            go:     merged.filter((r) => r.verdict === "GO"),
+            verify: merged.filter((r) => r.verdict === "VERIFY FIRST"),
+            reject: merged.filter((r) => r.verdict === "REJECT"),
+          };
+          localStorage.setItem(DIBBS_STORE_KEY, JSON.stringify(saved));
+        } catch {}
+
+        setResults(merged);
+        setProvider(`claude · ${dibbsBatch.date}`);
+        const autoSel = new Set(merged.filter((r) => r.verdict === "GO").map((r) => r.sol_number));
+        setSelected(autoSel);
+        setDibbsProgress("");
+        showToast(`Analysis complete — ${autoSel.size} GO · ${merged.filter(r=>r.verdict==="VERIFY FIRST").length} VERIFY · ${merged.filter(r=>r.verdict==="REJECT").length} REJECT`);
+      } catch (e) {
+        showToast("Analysis failed: " + e.message, true);
+        setDibbsProgress("");
+      }
+      setLoading(false);
     }
 
     // ── Analyze ──────────────────────────────────────────────────────────
@@ -314,33 +370,31 @@
           },
         }),
 
-        // DIBBS batch loader
+        // DIBBS batch analyze
         mode === "dibbs" && h("div", null,
           dibbsBatch
             ? h("div", { style: { background: "var(--surface-card)", border: "1px solid rgba(201,168,76,.2)", borderRadius: "6px", padding: "16px" } },
-                h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--gold-solid)", marginBottom: "6px" } },
-                  "Last DIBBS Batch — " + dibbsBatch.date),
-                h("div", { style: { display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" } },
-                  [["GO", "#4caf50", dibbsBatch.goCount], ["VERIFY FIRST", "#ffc107", dibbsBatch.verifyCount], ["REJECT", "#ef5350", dibbsBatch.rejectCount]].map(([v, c, n]) =>
-                    h("div", { key: v, style: { background: c + "22", border: "1px solid " + c + "55", color: c, borderRadius: "12px", padding: "3px 10px", fontSize: "9px", fontFamily: "Cinzel,serif", letterSpacing: ".08em" } },
-                      n + "  " + v),
-                  ),
-                ),
-                h("div", { style: { fontSize: "11px", color: "var(--gold-dim)", marginBottom: "12px" } },
-                  "Already analyzed — load directly into Screener, no API call needed."),
-                h("button", {
-                  onClick: loadDibbsBatch,
-                  className: "btn btn-primary",
-                  style: { fontSize: "10px", padding: "10px 28px" },
-                },
-                  h("span", { className: "glint" }),
-                  "◆ Load " + dibbsBatch.flat.length + " Sols into Screener",
-                ),
+                h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--gold-solid)", marginBottom: "4px" } },
+                  "DIBBS Batch — " + dibbsBatch.date),
+                h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-dim)", marginBottom: "14px" } },
+                  dibbsBatch.sols.length + " solicitations ready to analyze"),
+                dibbsProgress
+                  ? h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--accent-green)", marginBottom: "12px" } },
+                      "⟳ " + dibbsProgress)
+                  : h("button", {
+                      onClick: analyzeDibbsBatch,
+                      disabled: loading,
+                      className: "btn btn-primary",
+                      style: { fontSize: "10px", padding: "10px 28px", opacity: loading ? .7 : 1 },
+                    },
+                      h("span", { className: "glint" }),
+                      "◆ Analyze " + dibbsBatch.sols.length + " Sols",
+                    ),
               )
             : h("div", { style: { textAlign: "center", padding: "28px 16px", color: "var(--gold-dim)", fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".1em" } },
                 "No DIBBS batch found.",
                 h("div", { style: { marginTop: "6px", fontSize: "11px", fontFamily: "Cormorant Garamond,serif", fontStyle: "italic", fontWeight: 400, letterSpacing: 0 } },
-                  "Run a batch in the DIBBS tab first, then come back here."),
+                  "Run a batch in the DIBBS tab first — you'll be sent here automatically."),
               ),
         ),
 
