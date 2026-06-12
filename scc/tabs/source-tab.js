@@ -120,6 +120,7 @@
           notes: d.notes || "",
           fsc: (d.fsc || []).join(", "),
           tags: (d.tags || []).filter((t) => t !== "preferred-alt").join(", "),
+          is_manufacturer: !!d.is_manufacturer,
         },
       }));
 
@@ -158,6 +159,7 @@
             ...parseCsv(draft.tags),
             ...(d.tags || []).filter((t) => t === "preferred-alt"),
           ],
+          is_manufacturer: !!draft.is_manufacturer,
         };
         await window.SCC_DIST.distSave(updated);
         await window.SCC_DIST.distReloadCache();
@@ -327,9 +329,15 @@
                 marginTop: "3px",
               },
             },
-            dists.length +
-              " distributors loaded" +
-              (needsSeed ? " — ⚠ Mongo empty, seed required" : ""),
+            (() => {
+              const mCount = dists.filter((d) => d.is_manufacturer).length;
+              const dCount = dists.length - mCount;
+              return (
+                (mCount ? mCount + " manufacturer" + (mCount !== 1 ? "s" : "") + " · " : "") +
+                dCount + " distributor" + (dCount !== 1 ? "s" : "") +
+                (needsSeed ? " — ⚠ Mongo empty, seed required" : "")
+              );
+            })(),
           ),
         ),
         h("input", {
@@ -586,8 +594,15 @@
       (() => {
         if (dists.length === 0) return null;
         const isPreferred = (d) => (d.tags || []).includes("preferred-alt");
-        const preferred = filtered.filter(isPreferred);
-        const others = filtered.filter((d) => !isPreferred(d));
+
+        // Manufacturers are always shown first regardless of preferred tag
+        const mfrs = filtered.filter((d) => d.is_manufacturer);
+        const mfrsJcp = mfrs.filter((d) => d.has_jcp);
+        const mfrsOther = mfrs.filter((d) => !d.has_jcp);
+
+        const nonMfrs = filtered.filter((d) => !d.is_manufacturer);
+        const preferred = nonMfrs.filter(isPreferred);
+        const others = nonMfrs.filter((d) => !isPreferred(d));
         const p1 = preferred.filter((d) => (d.priority || 9) === 1);
         const p2 = preferred.filter((d) => (d.priority || 9) === 2);
         const p3 = preferred.filter((d) => (d.priority || 9) >= 3);
@@ -641,10 +656,19 @@
           const hasRep = !!d.has_rep;
           const hasJcp = !!d.has_jcp;
           const hasMilPack = !!d.has_mil_std_pack;
+          const isMfr = !!d.is_manufacturer;
 
-          // Border + card bg: rep (green) > account (gold) > pref tiers > default
+          // Border + card bg: mfr+jcp > mfr > rep > account > pref tiers > default
           let borderColor, cardBg, cardBorder;
-          if (hasRep) {
+          if (isMfr && hasJcp) {
+            borderColor = "#a78bfa";
+            cardBg = "rgba(167,139,250,.07)";
+            cardBorder = "1px solid rgba(167,139,250,.35)";
+          } else if (isMfr) {
+            borderColor = "rgba(249,200,80,.9)";
+            cardBg = "rgba(249,200,80,.06)";
+            cardBorder = "1px solid rgba(249,200,80,.35)";
+          } else if (hasRep) {
             borderColor = "rgba(61,214,140,.75)";
             cardBg = "rgba(61,214,140,.05)";
             cardBorder = "1px solid rgba(61,214,140,.28)";
@@ -819,11 +843,15 @@
                         fontFamily: "Cinzel,serif",
                         fontSize: "12px",
                         letterSpacing: ".06em",
-                        color: hasRep
-                          ? "#3dd68c"
-                          : hasAcct
-                            ? "#d4a843"
-                            : "var(--gold-solid)",
+                        color: isMfr && hasJcp
+                          ? "#c4b5fd"
+                          : isMfr
+                            ? "#f9c850"
+                            : hasRep
+                              ? "#3dd68c"
+                              : hasAcct
+                                ? "#d4a843"
+                                : "var(--gold-solid)",
                         lineHeight: 1.35,
                         flex: 1,
                         minWidth: 0,
@@ -922,6 +950,33 @@
                     "NIIN",
                   ),
 
+                // Manufacturer badge
+                !isEditing &&
+                  isMfr &&
+                  h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "8px",
+                        color: hasJcp ? "#c4b5fd" : "#f9c850",
+                        background: hasJcp
+                          ? "rgba(167,139,250,.18)"
+                          : "rgba(249,200,80,.14)",
+                        border:
+                          "1px solid " +
+                          (hasJcp
+                            ? "rgba(167,139,250,.5)"
+                            : "rgba(249,200,80,.45)"),
+                        padding: "2px 6px",
+                        borderRadius: "2px",
+                        letterSpacing: ".06em",
+                        whiteSpace: "nowrap",
+                        fontWeight: "700",
+                      },
+                    },
+                    hasJcp ? "MFR · JCP" : "MFR",
+                  ),
 
                 // Edit / Save / Cancel
                 !isEditing &&
@@ -1040,6 +1095,15 @@
                   "rgba(61,214,140,.30)",
                   "#3dd68c",
                   "#9effd4",
+                ),
+                toggleBtn(
+                  isMfr,
+                  "MFR",
+                  isMfr ? "Clear: manufacturer" : "Mark as manufacturer (direct source)",
+                  "is_manufacturer",
+                  "rgba(249,200,80,.28)",
+                  "#f9c850",
+                  "#fef08a",
                 ),
                 toggleBtn(
                   hasJcp,
@@ -1473,11 +1537,45 @@
         return h(
           "div",
           null,
+
+          // \u2500\u2500 MANUFACTURERS (always first) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+          mfrs.length > 0 &&
+            h(
+              "div",
+              null,
+              tierLabel("Manufacturers \u2014 Direct Source", mfrs.length, "#f9c850"),
+              mfrsJcp.length > 0 &&
+                h(
+                  "div",
+                  null,
+                  tierLabel(
+                    "JCP Certified \u2014 Best Margin Path",
+                    mfrsJcp.length,
+                    "#c4b5fd",
+                    true,
+                  ),
+                  grid(mfrsJcp),
+                ),
+              mfrsOther.length > 0 &&
+                h(
+                  "div",
+                  null,
+                  tierLabel(
+                    "Direct \u2014 No JCP on file",
+                    mfrsOther.length,
+                    "#f9c850",
+                    true,
+                  ),
+                  grid(mfrsOther),
+                ),
+            ),
+
+          // \u2500\u2500 PREFERRED DISTRIBUTORS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
           preferred.length > 0 &&
             h(
               "div",
               null,
-              tierLabel("Preferred Sources", preferred.length, "#3dd68c"),
+              tierLabel("Preferred Distributors", preferred.length, "#3dd68c"),
               p1.length > 0 &&
                 h(
                   "div",
@@ -1515,6 +1613,8 @@
                   grid(p3),
                 ),
             ),
+
+          // \u2500\u2500 OTHER DISTRIBUTORS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
           others.length > 0 &&
             h(
               "div",
@@ -1541,7 +1641,7 @@
               fontSize: "15px",
             },
           },
-          "No distributors loaded. Paste dist-seed.json above and click Parse & Seed Mongo.",
+          "No manufacturers or distributors loaded. Paste dist-seed.json above and click Parse & Seed Mongo.",
         ),
     );
   }

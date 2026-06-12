@@ -146,10 +146,7 @@ const RFQSeedRouter = (() => {
       return { isLock: true, severity: "soft", reason: "Restricted drawings (no COTS path found)" };
     }
 
-    if (SOURCE_LOCK_PATTERNS.jcpRequired.test(itemName)) {
-      return { isLock: true, severity: "soft", reason: "JCP/cFolders required" };
-    }
-
+    // JCP cert is active (152U4) — JCP/cFolders items are now open bids
     if (SOURCE_LOCK_PATTERNS.proprietary.test(itemName)) {
       return { isLock: true, severity: "soft", reason: "Proprietary/sole-source indicator" };
     }

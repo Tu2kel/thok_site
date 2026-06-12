@@ -12,6 +12,8 @@
     Fragment: SFragment,
   } = React;
 
+  const LS_BLOCKED = "scc_blocked_mfrs";
+
   const VI_STATUS_STYLE = {
     confirmed: {
       bg: "rgba(61,214,140,.12)",

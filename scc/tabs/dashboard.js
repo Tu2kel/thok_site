@@ -8,7 +8,7 @@
 
   const { createElement: h, Fragment, useState, useEffect } = React;
 
-  function DashboardTab({ rows, goPipeline }) {
+  function DashboardTab({ rows, goPipeline, loadPipeline, showToast }) {
     const { fmt, TIER_MARGINS, calcBidMath, FE } = window.SCC_MATH;
 
     // ── DATE HELPERS ──────────────────────────────────────────────────────
@@ -39,6 +39,103 @@
         window.SCC_ESBD.esbdGetAll().then((b) => setEsbdBids(b || []));
       }
     }, []);
+
+    // ── QUICK-ADD STATE ───────────────────────────────────────────────────
+    const [qaInput, setQaInput] = useState("");
+    const [qaOpen, setQaOpen] = useState(false);
+    const [qaRunning, setQaRunning] = useState(false);
+    const [qaLog, setQaLog] = useState([]);
+
+    const qaFetch = async () => {
+      const nums = qaInput
+        .split(/[\n,\s]+/)
+        .map((s) => s.trim().toUpperCase())
+        .filter((s) => s.length > 0);
+      if (!nums.length) return;
+
+      setQaRunning(true);
+      setQaLog([]);
+
+      const existing = await window.SCC_DB.dbGetAll();
+      const existingSet = new Set(existing.map((r) => r.sol_number));
+
+      for (const solId of nums) {
+        if (existingSet.has(solId)) {
+          setQaLog((l) => [
+            ...l,
+            { sol: solId, ok: null, msg: "already in pipeline" },
+          ]);
+          continue;
+        }
+
+        setQaLog((l) => [...l, { sol: solId, ok: null, msg: "fetching…" }]);
+
+        try {
+          let sol = null;
+          if (window.SCC_AGENT) {
+            const r = await window.SCC_AGENT.fetchSol(solId);
+            if (r.ok) sol = r.sol;
+          }
+          if (!sol) {
+            const resp = await fetch("/.netlify/functions/dibbs-sol", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sol_number: solId }),
+              signal: AbortSignal.timeout(35000),
+            });
+            if (resp.ok) {
+              const d = await resp.json();
+              if (d.ok) sol = d.sol;
+            }
+          }
+          if (!sol) throw new Error("fetch failed");
+
+          const nsn = sol.nsn || "";
+          await window.SCC_DB.dbSave({
+            sol_number: solId,
+            nsn,
+            fsc: nsn.replace(/\D/g, "").slice(0, 4),
+            item_name: sol.item_description || "",
+            ref_part_number: (sol.part_numbers || []).join(", "),
+            quantity: sol.qty || "",
+            unit_issue: sol.unit_issue || "",
+            unit_price: sol.hist_unit_price || sol.unit_price || "",
+            quote_due: sol.due_date || "",
+            posted_date: sol.issue_date || "",
+            delivery_days: sol.delivery_days || "",
+            set_aside: sol.set_aside || "",
+            fob: sol.fob || "",
+            ref_supplier:
+              sol.suppliers && sol.suppliers[0] ? sol.suppliers[0].name : "",
+            ref_cage:
+              sol.suppliers && sol.suppliers[0] ? sol.suppliers[0].cage : "",
+            approved_sources: sol.suppliers || [],
+            status: "New",
+            date_added: new Date().toLocaleDateString(),
+            notes: "Quick-added from dashboard",
+          });
+
+          setQaLog((l) =>
+            l.map((x) =>
+              x.sol === solId
+                ? { sol: solId, ok: true, msg: sol.item_description || "saved" }
+                : x,
+            ),
+          );
+        } catch (e) {
+          setQaLog((l) =>
+            l.map((x) =>
+              x.sol === solId ? { sol: solId, ok: false, msg: e.message } : x,
+            ),
+          );
+        }
+        await new Promise((r) => setTimeout(r, 700));
+      }
+
+      setQaRunning(false);
+      if (loadPipeline) loadPipeline();
+      setQaInput("");
+    };
 
     const esbdActive = esbdBids.filter(
       (b) => !["Awarded", "Lost", "No Bid"].includes(b.status),
@@ -444,6 +541,252 @@
       },
 
       // watermark handled in index.html + app.js
+
+      // ── QUICK-ADD PANEL ───────────────────────────────────────────────
+      h(
+        "div",
+        {
+          style: {
+            marginBottom: "14px",
+            position: "relative",
+            zIndex: 1,
+            border: "1px solid rgba(201,168,76,.18)",
+            borderTop: "2px solid rgba(201,168,76,.35)",
+            background: "var(--card-bg, rgba(255,255,255,.55))",
+          },
+        },
+        // Header row
+        h(
+          "div",
+          {
+            onClick: () => setQaOpen((o) => !o),
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 16px",
+              cursor: "pointer",
+              userSelect: "none",
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              },
+            },
+            h(
+              "span",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "10px",
+                  letterSpacing: ".18em",
+                  textTransform: "uppercase",
+                  color: "var(--gold-solid, #C9A84C)",
+                },
+              },
+              "⚡ Quick-Add Sol Numbers",
+            ),
+            h(
+              "span",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: "var(--body-faint)",
+                  letterSpacing: ".04em",
+                },
+              },
+              "paste sol numbers → fetch → pipeline",
+            ),
+          ),
+          h(
+            "span",
+            {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: "10px",
+                color: "var(--gold-dim)",
+                transform: qaOpen ? "rotate(90deg)" : "rotate(0deg)",
+                transition: "transform .2s",
+                display: "inline-block",
+              },
+            },
+            "▶",
+          ),
+        ),
+
+        // Expandable body
+        qaOpen &&
+          h(
+            "div",
+            {
+              style: {
+                padding: "0 16px 14px",
+                borderTop: "1px solid rgba(201,168,76,.1)",
+              },
+            },
+            h("textarea", {
+              value: qaInput,
+              onChange: (e) => setQaInput(e.target.value),
+              placeholder:
+                "Paste sol numbers, one per line:\nSPE4A526T120D\nSPE7LX26U1234\n...",
+              disabled: qaRunning,
+              style: {
+                width: "100%",
+                height: "80px",
+                marginTop: "12px",
+                background: "var(--inset-bg, rgba(0,0,0,.3))",
+                border: "1px solid rgba(201,168,76,.2)",
+                color: "var(--alabaster, #F5F0E8)",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "11px",
+                padding: "10px 12px",
+                outline: "none",
+                resize: "vertical",
+                boxSizing: "border-box",
+                opacity: qaRunning ? 0.5 : 1,
+              },
+            }),
+            h(
+              "div",
+              {
+                style: {
+                  marginTop: "8px",
+                  display: "flex",
+                  gap: "8px",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                },
+              },
+              h(
+                "button",
+                {
+                  onClick: qaFetch,
+                  disabled: qaRunning || !qaInput.trim(),
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "9px",
+                    letterSpacing: ".12em",
+                    textTransform: "uppercase",
+                    padding: "7px 18px",
+                    background: qaRunning
+                      ? "rgba(201,168,76,.06)"
+                      : "rgba(201,168,76,.14)",
+                    border: "1px solid rgba(201,168,76,.4)",
+                    color: qaRunning
+                      ? "var(--gold-dim)"
+                      : "var(--gold-solid, #C9A84C)",
+                    cursor: qaRunning ? "wait" : "pointer",
+                    transition: "all .2s",
+                  },
+                },
+                qaRunning ? "⟳ Fetching…" : "▶ Fetch & Add",
+              ),
+              qaLog.length > 0 &&
+                !qaRunning &&
+                h(
+                  "button",
+                  {
+                    onClick: () => setQaLog([]),
+                    style: {
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "9px",
+                      letterSpacing: ".1em",
+                      padding: "7px 14px",
+                      background: "transparent",
+                      border: "1px solid rgba(245,240,232,.1)",
+                      color: "var(--body-faint)",
+                      cursor: "pointer",
+                    },
+                  },
+                  "✕ Clear log",
+                ),
+            ),
+
+            // Log output
+            qaLog.length > 0 &&
+              h(
+                "div",
+                {
+                  style: {
+                    marginTop: "10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "3px",
+                  },
+                },
+                ...qaLog.map((entry) =>
+                  h(
+                    "div",
+                    {
+                      key: entry.sol,
+                      style: {
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "baseline",
+                        padding: "4px 10px",
+                        background:
+                          entry.ok === true
+                            ? "rgba(61,214,140,.04)"
+                            : entry.ok === false
+                              ? "rgba(231,76,60,.04)"
+                              : "rgba(201,168,76,.03)",
+                        borderLeft:
+                          "2px solid " +
+                          (entry.ok === true
+                            ? "#3dd68c"
+                            : entry.ok === false
+                              ? "#e74c3c"
+                              : "rgba(201,168,76,.4)"),
+                      },
+                    },
+                    h(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "11px",
+                          color: "#C9A84C",
+                          minWidth: "130px",
+                          flexShrink: 0,
+                        },
+                      },
+                      entry.sol,
+                    ),
+                    h(
+                      "span",
+                      {
+                        style: {
+                          fontFamily: "Cormorant Garamond,serif",
+                          fontSize: "12px",
+                          color:
+                            entry.ok === true
+                              ? "#3dd68c"
+                              : entry.ok === false
+                                ? "#e74c3c"
+                                : "var(--body-faint)",
+                          fontStyle: entry.ok === null ? "italic" : "normal",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        },
+                      },
+                      entry.ok === true
+                        ? "✓ " + entry.msg
+                        : entry.ok === false
+                          ? "✕ " + entry.msg
+                          : entry.msg,
+                    ),
+                  ),
+                ),
+              ),
+          ),
+      ),
 
       // ── PAGE HEADER ───────────────────────────────────────────────────
       h(

@@ -783,6 +783,7 @@
                 tabs: [
                   { id: "dibbs", label: "DIBBS", icon: "⬇ " },
                   { id: "screener", label: "Screener", icon: "◈ " },
+                  { id: "ingest", label: "Email Ingest", icon: "📨 " },
                   { id: "dashboard", label: "Dashboard", icon: "" },
                   { id: "intake", label: "Intake", icon: "" },
                   { id: "pipeline", label: "Pipeline", icon: "" },
@@ -1031,7 +1032,12 @@
       hA(
         "main",
         null,
-        tab === "dashboard" && hA(DashboardTab, { rows, goPipeline }),
+        tab === "dashboard" && hA(DashboardTab, { rows, goPipeline, loadPipeline, showToast }),
+
+        tab === "ingest" &&
+          (window.SCC_TABS && window.SCC_TABS.DibbsIngestTab
+            ? hA(window.SCC_TABS.DibbsIngestTab, null)
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Email Ingestor loading...")),
 
         tab === "dibbs" &&
           (window.SCC_TABS && window.SCC_TABS.DibbsTab
