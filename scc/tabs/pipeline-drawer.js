@@ -13,6 +13,177 @@
     Fragment: PFrag,
   } = React;
 
+  // ── WIN LEDGER PANEL ─────────────────────────────────────────────────
+  function WinLedgerPanel({ record }) {
+    const WL = window.SCC_WIN_LEDGER;
+    const dists = (window.SCC_DIST && window.SCC_DIST.DISTRIBUTORS) || [];
+    const [wins, setWins] = usePState(() => WL ? WL.lookup(record.nsn, record.ref_part_number) : []);
+    const [open, setOpen] = usePState(false);
+    const [vName, setVName] = usePState("");
+    const [price, setPrice] = usePState("");
+    const [bidPx, setBidPx] = usePState("");
+    const [qty, setQty] = usePState(record.quantity || "");
+    const [wNotes, setWNotes] = usePState("");
+    const [saving, setSaving] = usePState(false);
+
+    if (!WL) return null;
+
+    const refresh = () => setWins(WL.lookup(record.nsn, record.ref_part_number));
+
+    const doLog = () => {
+      if (!vName.trim()) return;
+      setSaving(true);
+      WL.logWin({
+        nsn: record.nsn || "",
+        pn: record.ref_part_number || "",
+        item_name: record.item_name || record.item_name_ai || "",
+        vendor_name: vName.trim(),
+        price: parseFloat(price) || null,
+        bid_price: parseFloat(bidPx) || null,
+        qty: qty || record.quantity || "",
+        sol_number: record.sol_number || "",
+        date: new Date().toISOString().slice(0, 10),
+        notes: wNotes.trim(),
+      });
+      setVName(""); setPrice(""); setBidPx(""); setWNotes(""); setOpen(false);
+      setSaving(false);
+      refresh();
+    };
+
+    const doRemove = (id) => { WL.removeWin(id); refresh(); };
+
+    const gold = { color: "var(--gold-solid)" };
+    const dim = { color: "var(--body-dim)", fontFamily: "JetBrains Mono,monospace", fontSize: "11px" };
+    const tag = (txt, col) => hP("span", {
+      style: { fontSize: "9px", fontFamily: "Cinzel,serif", letterSpacing: ".1em", padding: "1px 7px",
+        background: col + "18", border: "1px solid " + col + "44", color: col, borderRadius: "2px" }
+    }, txt);
+
+    return hP("div", {
+      style: { marginTop: "20px", borderTop: "1px solid rgba(201,168,76,.15)", paddingTop: "16px" }
+    },
+      // Header
+      hP("div", { style: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" } },
+        hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".14em",
+          textTransform: "uppercase", color: "var(--gold-solid)" } }, "↩ Win Ledger"),
+        wins.length > 0 && tag(wins.length + " win" + (wins.length > 1 ? "s" : ""), "#4caf50"),
+        hP("button", {
+          onClick: () => setOpen(o => !o),
+          style: { marginLeft: "auto", background: "transparent", border: "1px solid rgba(201,168,76,.3)",
+            color: "var(--gold-dim)", fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em",
+            padding: "3px 10px", cursor: "pointer" }
+        }, open ? "Cancel" : "+ Log Win"),
+      ),
+
+      // Log win form
+      open && hP("div", {
+        style: { background: "rgba(61,214,140,.04)", border: "1px solid rgba(61,214,140,.2)",
+          borderLeft: "3px solid rgba(61,214,140,.5)", padding: "12px 14px", marginBottom: "12px" }
+      },
+        hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".14em",
+          color: "var(--accent-green)", textTransform: "uppercase", marginBottom: "10px" } }, "Log Winning Vendor"),
+        // Vendor name — datalist from distributor DB
+        hP("div", { style: { marginBottom: "8px" } },
+          hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em",
+            color: "var(--body-faint)", textTransform: "uppercase", marginBottom: "4px" } }, "Vendor / Supplier *"),
+          hP("input", {
+            list: "wl-dist-list",
+            value: vName,
+            onChange: e => setVName(e.target.value),
+            placeholder: "Type or pick from distributor DB…",
+            style: { width: "100%", background: "var(--inset-bg)", border: "1px solid rgba(61,214,140,.25)",
+              color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "12px",
+              padding: "7px 10px", boxSizing: "border-box", outline: "none" }
+          }),
+          hP("datalist", { id: "wl-dist-list" },
+            ...dists.map(d => hP("option", { key: d.id, value: d.name }))
+          ),
+        ),
+        // Price row
+        hP("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "8px" } },
+          hP("div", null,
+            hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em",
+              color: "var(--body-faint)", textTransform: "uppercase", marginBottom: "4px" } }, "Cost / Unit ($)"),
+            hP("input", { type: "number", value: price, onChange: e => setPrice(e.target.value),
+              placeholder: "0.00",
+              style: { width: "100%", background: "var(--inset-bg)", border: "1px solid rgba(61,214,140,.2)",
+                color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "12px",
+                padding: "7px 10px", boxSizing: "border-box", outline: "none" } }),
+          ),
+          hP("div", null,
+            hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em",
+              color: "var(--body-faint)", textTransform: "uppercase", marginBottom: "4px" } }, "Bid Price / Unit ($)"),
+            hP("input", { type: "number", value: bidPx, onChange: e => setBidPx(e.target.value),
+              placeholder: "0.00",
+              style: { width: "100%", background: "var(--inset-bg)", border: "1px solid rgba(61,214,140,.2)",
+                color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "12px",
+                padding: "7px 10px", boxSizing: "border-box", outline: "none" } }),
+          ),
+          hP("div", null,
+            hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em",
+              color: "var(--body-faint)", textTransform: "uppercase", marginBottom: "4px" } }, "Qty"),
+            hP("input", { value: qty, onChange: e => setQty(e.target.value),
+              placeholder: record.quantity || "",
+              style: { width: "100%", background: "var(--inset-bg)", border: "1px solid rgba(61,214,140,.2)",
+                color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "12px",
+                padding: "7px 10px", boxSizing: "border-box", outline: "none" } }),
+          ),
+        ),
+        // Notes
+        hP("div", { style: { marginBottom: "10px" } },
+          hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em",
+            color: "var(--body-faint)", textTransform: "uppercase", marginBottom: "4px" } }, "Notes (optional)"),
+          hP("input", { value: wNotes, onChange: e => setWNotes(e.target.value),
+            placeholder: "Lead time, lot dates, contact name…",
+            style: { width: "100%", background: "var(--inset-bg)", border: "1px solid rgba(61,214,140,.2)",
+              color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "12px",
+              padding: "7px 10px", boxSizing: "border-box", outline: "none" } }),
+        ),
+        hP("button", {
+          onClick: doLog, disabled: saving || !vName.trim(),
+          style: { background: "rgba(61,214,140,.12)", border: "1px solid rgba(61,214,140,.4)",
+            color: "var(--accent-green)", fontFamily: "Cinzel,serif", fontSize: "10px",
+            letterSpacing: ".1em", padding: "7px 18px", cursor: "pointer" }
+        }, saving ? "Saving…" : "◆ Save Win"),
+      ),
+
+      // Existing wins
+      wins.length === 0
+        ? hP("div", { style: { ...dim, fontStyle: "italic", color: "var(--body-faint)", padding: "8px 0" } },
+            "No wins logged for this NSN yet.")
+        : hP("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+            ...wins.map(w => hP("div", { key: w.id,
+              style: { background: "rgba(61,214,140,.04)", border: "1px solid rgba(61,214,140,.15)",
+                borderLeft: "3px solid rgba(61,214,140,.5)", padding: "9px 12px",
+                display: "flex", alignItems: "flex-start", gap: "10px" }
+            },
+              hP("div", { style: { flex: 1 } },
+                hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", ...gold, marginBottom: "2px" } },
+                  w.vendor_name),
+                hP("div", { style: { ...dim, display: "flex", gap: "10px", flexWrap: "wrap" } },
+                  w.price ? "Cost $" + Number(w.price).toFixed(2) + "/ea" : null,
+                  w.bid_price ? "· Bid $" + Number(w.bid_price).toFixed(2) + "/ea" : null,
+                  w.qty ? "· Qty " + w.qty : null,
+                  w.sol_number ? "· " + w.sol_number : null,
+                  "· " + (w.date || w.logged),
+                ).filter(Boolean),
+                w.notes && hP("div", { style: { ...dim, fontStyle: "italic", marginTop: "2px",
+                  color: "var(--body-faint)" } }, w.notes),
+              ),
+              hP("button", {
+                onClick: () => doRemove(w.id),
+                title: "Remove this win entry",
+                style: { background: "transparent", border: "1px solid rgba(231,76,60,.2)",
+                  color: "rgba(231,76,60,.5)", fontFamily: "Cinzel,serif", fontSize: "9px",
+                  letterSpacing: ".08em", padding: "2px 8px", cursor: "pointer", whiteSpace: "nowrap" },
+                onMouseEnter: e => { e.target.style.color = "#e74c3c"; e.target.style.borderColor = "rgba(231,76,60,.5)"; },
+                onMouseLeave: e => { e.target.style.color = "rgba(231,76,60,.5)"; e.target.style.borderColor = "rgba(231,76,60,.2)"; },
+              }, "Remove"),
+            ))
+          ),
+    );
+  }
+
   // ── DRAWER ───────────────────────────────────────────────────────────
   function Drawer({ record, onSave, showToast }) {
     // Components resolved at render time to avoid load-order undefined errors
@@ -648,65 +819,32 @@ Imperio Talent Solutions | CAGE 152U4<br>
           ),
 
         dtab === "nsn" &&
-          hP(
-            PFrag,
-            null,
-            hP(
-              "div",
-              {
-                className: "drawer-section-title",
-                style: {
-                  color: "var(--accent-pink)",
-                  borderColor: "rgba(232,143,203,.25)",
-                  fontSize: "13px",
-                },
-              },
-              "NSN Intel — " +
-                (record.nsn || "—") +
-                " · FSC " +
-                (record.fsc || "—"),
-            ),
-            hP(
-              "div",
-              { className: "drawer-grid" },
+          hP(PFrag, null,
+            hP("div", {
+              className: "drawer-section-title",
+              style: { color: "var(--accent-pink)", borderColor: "rgba(232,143,203,.25)", fontSize: "13px" },
+            }, "NSN Intel — " + (record.nsn || "—") + " · FSC " + (record.fsc || "—")),
+            hP("div", { className: "drawer-grid" },
               inp("nsn_win_count", "Times Won This NSN"),
               inp("nsn_loss_count", "Times Lost This NSN"),
               inp("nsn_avg_win_margin", "Avg Winning Margin % on This NSN"),
             ),
-            hP(
-              "div",
-              { className: "drawer-field", style: { marginTop: "8px" } },
-              hP(
-                "label",
-                {
-                  style: { fontSize: "11.5px", color: "var(--body-mono)" },
-                },
-                "NSN Notes — pricing patterns, supplier behavior, shelf life flags",
-              ),
+            hP("div", { className: "drawer-field", style: { marginTop: "8px" } },
+              hP("label", { style: { fontSize: "11.5px", color: "var(--body-mono)" } },
+                "NSN Notes — pricing patterns, supplier behavior, shelf life flags"),
               hP("textarea", {
                 className: "drawer-input",
                 value: form.nsn_notes || "",
-                placeholder:
-                  "Cardinal Health always wins at ~22% margin on this NSN\nShelf life: 60 months, watch lot dates",
+                placeholder: "Cardinal Health always wins at ~22% margin on this NSN\nShelf life: 60 months, watch lot dates",
                 onChange: (e) => set("nsn_notes", e.target.value),
-                style: {
-                  minHeight: "120px",
-                  resize: "vertical",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "13.5px",
-                },
+                style: { minHeight: "120px", resize: "vertical", fontFamily: "JetBrains Mono,monospace", fontSize: "13.5px" },
               }),
             ),
-            hP(
-              "button",
-              {
-                className: "btn btn-primary",
-                onClick: () => onSave(form),
-                style: { marginTop: "12px" },
-              },
-              hP("span", { className: "glint" }),
-              "Save Details",
-            ),
+            hP("button", { className: "btn btn-primary", onClick: () => onSave(form), style: { marginTop: "12px" } },
+              hP("span", { className: "glint" }), "Save Details"),
+
+            // ── WIN LEDGER ──────────────────────────────────────────────
+            hP(WinLedgerPanel, { record }),
           ),
 
         dtab === "source" &&

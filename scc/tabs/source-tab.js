@@ -1784,6 +1784,35 @@
 
       // Selected sol + outreach results
       selectedSol && h("div", null,
+
+        // ── Prior Win callout ──────────────────────────────────────────
+        (() => {
+          const WL = window.SCC_WIN_LEDGER;
+          if (!WL) return null;
+          const priorWins = WL.lookup(selectedSol.nsn, selectedSol.ref_part_number);
+          if (priorWins.length === 0) return null;
+          return h("div", {
+            style: { background: "rgba(61,214,140,.06)", border: "1px solid rgba(61,214,140,.35)",
+              borderLeft: "4px solid rgba(61,214,140,.7)", padding: "12px 16px", marginBottom: "12px" }
+          },
+            h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".14em",
+              textTransform: "uppercase", color: "var(--accent-green)", marginBottom: "8px" } },
+              "↩ Won Before — " + priorWins.length + " record" + (priorWins.length > 1 ? "s" : "")),
+            h("div", { style: { display: "flex", flexDirection: "column", gap: "5px" } },
+              ...priorWins.map(w => h("div", { key: w.id,
+                style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-dim)", display: "flex", gap: "12px", flexWrap: "wrap" }
+              },
+                h("span", { style: { color: "var(--gold-solid)", fontFamily: "Cinzel,serif" } }, w.vendor_name),
+                w.price ? h("span", null, "Cost $" + Number(w.price).toFixed(2) + "/ea") : null,
+                w.bid_price ? h("span", null, "Bid $" + Number(w.bid_price).toFixed(2) + "/ea") : null,
+                w.qty ? h("span", null, "Qty " + w.qty) : null,
+                w.sol_number ? h("span", { style: { color: "var(--body-faint)" } }, w.sol_number) : null,
+                h("span", { style: { color: "var(--body-faint)" } }, w.date || w.logged),
+              ))
+            ),
+          );
+        })(),
+
         h("div", { style: { ...surface, borderColor: "rgba(201,168,76,.3)" } },
           h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" } },
             h("div", null,

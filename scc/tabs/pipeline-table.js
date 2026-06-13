@@ -1883,7 +1883,22 @@ Rules:
                         { className: "iname" },
                         r.item_name || r.item_name_ai || "—",
                       ),
-                      hP("td", null, r.nsn || "—"),
+                      hP("td", null,
+                        r.nsn || "—",
+                        (() => {
+                          const WL = window.SCC_WIN_LEDGER;
+                          if (!WL || !WL.hasWin(r.nsn, r.ref_part_number)) return null;
+                          const w = WL.bestWin(r.nsn, r.ref_part_number);
+                          return hP("span", {
+                            title: "Prior Win → " + w.vendor_name + (w.price ? " · $" + Number(w.price).toFixed(2) + "/ea" : "") + " · " + (w.date || w.logged),
+                            style: { marginLeft: "6px", fontSize: "9px", fontFamily: "Cinzel,serif",
+                              letterSpacing: ".08em", padding: "1px 6px",
+                              background: "rgba(61,214,140,.12)", border: "1px solid rgba(61,214,140,.35)",
+                              color: "var(--accent-green)", borderRadius: "2px", cursor: "default",
+                              verticalAlign: "middle" }
+                          }, "↩ Won");
+                        })(),
+                      ),
                       hP(
                         "td",
                         null,
