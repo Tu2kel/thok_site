@@ -1772,7 +1772,7 @@
 
       // Header
       h("div", { style: { marginBottom: "20px" } },
-        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "18px", letterSpacing: ".1em", color: "var(--gold-solid)" } }, "Confirmation Lane"),
+        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "18px", letterSpacing: ".1em", color: "var(--gold-solid)" } }, "Confirm Quote"),
         h("div", { style: { fontFamily: "Cormorant Garamond,serif", fontStyle: "italic", fontSize: "13px", color: "var(--gold-dim)", marginTop: "3px" } },
           "Surface vendor bid responses · advance sol to pipeline"),
       ),
@@ -1956,7 +1956,7 @@
         { style: { display: "flex", gap: "8px", marginBottom: "20px" } },
         tabBtn("rolodex", "Vendor Rolodex"),
         tabBtn("distdb", "Distributor DB"),
-        tabBtn("confirm", "✓ Confirmation Lane"),
+        tabBtn("confirm", "✓ Confirm Quote"),
       ),
       subTab === "rolodex" && VendorRolodex && h(VendorRolodex, { showToast }),
       subTab === "distdb" && h(DistributorDB, null),

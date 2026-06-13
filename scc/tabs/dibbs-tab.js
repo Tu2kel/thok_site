@@ -82,35 +82,7 @@
   const fmtPct = (n) => (n == null ? "—" : Math.round(n * 100) + "%");
 
   // ── FSC NAME MAP (subset — same as blast.js) ──────────────────────────
-  const FSC_NAMES = {
-    2510: "Vehicular Cab/Body/Frame",
-    2530: "Brake/Steering/Axle",
-    2910: "Engine Fuel System",
-    2940: "Engine Filters",
-    4110: "Refrigeration",
-    4330: "Filters/Separators",
-    4730: "Hose/Pipe Fittings/Valves",
-    4820: "Valves",
-    5305: "Screws",
-    5306: "Bolts",
-    5310: "Nuts/Washers",
-    5315: "Pins",
-    5320: "Rivets",
-    5330: "Packing/Gaskets",
-    5331: "Seals/O-Rings",
-    5340: "Commercial Hardware",
-    5920: "Fuses",
-    5925: "Circuit Breakers",
-    5935: "Connectors",
-    6110: "Electrical Control",
-    6145: "Wire/Cable",
-    6210: "Lighting Fixtures",
-    6230: "Portable Lighting",
-    7110: "Office Furniture",
-    7310: "Food Cooking Equipment",
-    8415: "Individual Equipment",
-    9510: "Bars/Rods/Wire",
-  };
+  const FSC_NAMES = window.SCC_CONSTANTS.FSC_NAMES;
   const fscName = (fsc) => FSC_NAMES[parseInt(fsc)] || "FSC " + fsc;
 
   // ── BUILD PIPELINE RECORD ─────────────────────────────────────────────

@@ -14,49 +14,8 @@
   } = React;
 
   // ── BAA COO QUICK REFERENCE ──────────────────────────────────────────
-  const _BAA_NQ = [
-    "China",
-    "Taiwan",
-    "India",
-    "Vietnam",
-    "South Korea",
-    "Mexico",
-    "Bangladesh",
-    "Indonesia",
-    "Thailand",
-    "Malaysia",
-  ];
-  const _BAA_Q = [
-    "United States",
-    "Australia",
-    "Austria",
-    "Belgium",
-    "Canada",
-    "Czech Republic",
-    "Denmark",
-    "Egypt",
-    "Estonia",
-    "Finland",
-    "France",
-    "Germany",
-    "Greece",
-    "Israel",
-    "Italy",
-    "Japan",
-    "Latvia",
-    "Lithuania",
-    "Luxembourg",
-    "Netherlands",
-    "Norway",
-    "Poland",
-    "Portugal",
-    "Slovenia",
-    "Spain",
-    "Sweden",
-    "Switzerland",
-    "Turkey",
-    "United Kingdom",
-  ];
+  const _BAA_NQ = window.SCC_CONSTANTS.BAA_NON_QUAL;
+  const _BAA_Q  = window.SCC_CONSTANTS.BAA_QUAL;
 
   function BAARef() {
     const [pinned, setPinned] = usePState(false);
@@ -1186,7 +1145,29 @@ Rules:
         r.sol_number === sol_number ? { ...r, status } : r,
       );
       setRows(updated);
-      await dbSave(updated.find((r) => r.sol_number === sol_number));
+      const updatedRow = updated.find((r) => r.sol_number === sol_number);
+      await dbSave(updatedRow);
+
+      if (status === "Awarded" && window.SCC_WIN_LEDGER && updatedRow) {
+        const WL = window.SCC_WIN_LEDGER;
+        const vendorName = updatedRow.ref_supplier || updatedRow.supplier_poc || updatedRow.supplier_email;
+        if (vendorName) {
+          WL.logWin({
+            nsn:          updatedRow.nsn,
+            pn:           updatedRow.ref_part_number,
+            item_name:    updatedRow.item_name,
+            vendor_name:  vendorName,
+            vendor_email: updatedRow.supplier_email || "",
+            price:        parseFloat(updatedRow.supplier_quote_price) || null,
+            bid_price:    parseFloat(updatedRow.unit_price) || null,
+            qty:          updatedRow.quantity,
+            sol_number:   updatedRow.sol_number,
+            fsc:          updatedRow.fsc || (updatedRow.nsn || "").slice(0, 4),
+            date:         new Date().toISOString().slice(0, 10),
+          });
+        }
+      }
+
       showToast(sol_number + " → " + status);
     };
 

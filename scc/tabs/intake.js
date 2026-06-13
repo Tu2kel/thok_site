@@ -7,49 +7,8 @@
   const { createElement: h, useState: useIntakeState, Fragment } = React;
 
   // ── BAA COO REFERENCE MODAL ──────────────────────────────────────────
-  const BAA_NON_QUAL = [
-    "China",
-    "Taiwan",
-    "India",
-    "Vietnam",
-    "South Korea",
-    "Mexico",
-    "Bangladesh",
-    "Indonesia",
-    "Thailand",
-    "Malaysia",
-  ];
-  const BAA_QUAL = [
-    "United States",
-    "Australia",
-    "Austria",
-    "Belgium",
-    "Canada",
-    "Czech Republic",
-    "Denmark",
-    "Egypt",
-    "Estonia",
-    "Finland",
-    "France",
-    "Germany",
-    "Greece",
-    "Israel",
-    "Italy",
-    "Japan",
-    "Latvia",
-    "Lithuania",
-    "Luxembourg",
-    "Netherlands",
-    "Norway",
-    "Poland",
-    "Portugal",
-    "Slovenia",
-    "Spain",
-    "Sweden",
-    "Switzerland",
-    "Turkey",
-    "United Kingdom",
-  ];
+  const BAA_NON_QUAL = window.SCC_CONSTANTS.BAA_NON_QUAL;
+  const BAA_QUAL     = window.SCC_CONSTANTS.BAA_QUAL;
 
   function BAAModal() {
     const [open, setOpen] = useIntakeState(false);
