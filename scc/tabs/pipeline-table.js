@@ -2239,6 +2239,56 @@ Rules:
                             ),
                             enteredLine,
                             addedLine,
+                            // Overdue FU button — Awaiting Quotes past quote_due with a supplier email
+                            (() => {
+                              if (r.status !== "Awaiting Quotes") return null;
+                              if (diff >= 0) return null;
+                              if (!r.supplier_email) return null;
+                              return hP("button", {
+                                title: "Send follow-up to " + r.supplier_email,
+                                onClick: async (e) => {
+                                  e.stopPropagation();
+                                  const item = r.item_name || r.item_name_ai || "your item";
+                                  const body = [
+                                    "Hi " + (r.supplier_poc || r.supplier_website || "team") + ",",
+                                    "",
+                                    "Following up on our RFQ for " + item + " (Sol " + r.sol_number + (r.nsn ? " · NSN " + r.nsn : "") + ").",
+                                    "",
+                                    "We are still actively pursuing this requirement and would like your pricing and availability if you can support. The government due date has passed but we want to get a quote on file for any reposted requirement or follow-on.",
+                                    "",
+                                    "Please reply with unit price, lead time, and country of origin at your earliest convenience.",
+                                    "",
+                                    "Thank you,",
+                                    "Anthony K Kelley | Imperio Federal Logistics",
+                                    "anthony@ifedlog.com | (254) 226-5216",
+                                  ].join("\n");
+                                  try {
+                                    const res = await fetch("/.netlify/functions/send-rfq", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        to: r.supplier_email,
+                                        subject: "Follow-up: RFQ " + r.sol_number + " · " + item,
+                                        emailBody: body,
+                                        attachCert: false,
+                                      }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.ok) showToast("FU sent → " + r.supplier_email);
+                                    else showToast("FU failed: " + (data.error || "error"), true);
+                                  } catch (err) {
+                                    showToast("FU error: " + err.message, true);
+                                  }
+                                },
+                                style: {
+                                  marginTop: "4px", display: "block",
+                                  background: "rgba(201,168,76,.1)", border: "1px solid rgba(201,168,76,.35)",
+                                  color: "var(--gold-dim)", fontFamily: "Cinzel,serif", fontSize: "8px",
+                                  letterSpacing: ".1em", padding: "2px 7px", cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                },
+                              }, "↩ Send FU");
+                            })(),
                           );
                         })(),
                       ),

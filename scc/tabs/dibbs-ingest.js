@@ -258,9 +258,9 @@
                 delivery_days: fetched.delivery_days || "",
                 notes: "",
               };
-              window.SCC_AUTO_RFQ.run(savedRecord, {
-                onLog: (msg) => console.log("[AutoRFQ]", msg),
-              });
+              // Collect for batch summary — fire individually but track
+              if (!window._autoRFQBatch) window._autoRFQBatch = [];
+              window._autoRFQBatch.push(savedRecord);
             }
           }
         } catch (err) {
@@ -278,6 +278,15 @@
 
         // 800ms between fetches — don't hammer DIBBS
         if (!abortRef.current) await new Promise((r) => setTimeout(r, 800));
+      }
+
+      // Fire auto-RFQ batch + send summary notification
+      if (window.SCC_AUTO_RFQ && window._autoRFQBatch && window._autoRFQBatch.length > 0) {
+        const batch = window._autoRFQBatch;
+        window._autoRFQBatch = [];
+        window.SCC_AUTO_RFQ.runBatch(batch, {
+          onLog: (msg) => console.log("[AutoRFQ]", msg),
+        });
       }
 
       setRunning(false);

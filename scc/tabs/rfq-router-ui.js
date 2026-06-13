@@ -142,14 +142,98 @@ const RFQRouterUI = (() => {
     currentAnalysis = null;
   }
 
+  // ── BLAST ALL RFQs ─────────────────────────────────────────────────
+  async function blastAllRFQs() {
+    if (!currentAnalysis) return;
+    const { byDistributor } = currentAnalysis;
+    const btn = document.getElementById("rfq-blast-all-btn");
+    const log = document.getElementById("rfq-blast-log");
+    if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+    if (log) log.innerHTML = "";
+
+    const addLog = (msg, color) => {
+      if (!log) return;
+      const line = document.createElement("div");
+      line.style.cssText = "font-family:monospace;font-size:11px;padding:2px 0;color:" + (color || "#c9a84c");
+      line.textContent = msg;
+      log.appendChild(line);
+    };
+
+    let sent = 0, failed = 0;
+    for (const [distName, plan] of Object.entries(byDistributor)) {
+      const dist = plan.distributor;
+      const email = dist.email || dist.Email;
+      if (!email) { addLog("SKIP " + distName + " — no email", "#ef5350"); failed++; continue; }
+
+      const items = plan.sols.map((s, i) => {
+        const lines = ["  " + (i + 1) + ". " + s.item_name];
+        if (s.nsn)           lines.push("     NSN: " + s.nsn);
+        if (s.part_number)   lines.push("     P/N: " + s.part_number);
+        if (s.qty)           lines.push("     Qty: " + s.qty + (s.unit_of_issue ? " " + s.unit_of_issue : ""));
+        if (s.delivery_days) lines.push("     Del: " + s.delivery_days + " days ARO");
+        return lines.join("\n");
+      }).join("\n\n");
+
+      const fscList = [...new Set(plan.sols.map(s => s.fsc))].filter(Boolean).join(", ");
+      const subject = "RFQ – " + plan.sols.length + " Requirements | FSC " + fscList + " | Imperio Federal Logistics";
+      const body = [
+        "Hi " + distName + ",",
+        "",
+        "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have active government procurement needs in your lane.",
+        "",
+        "I need pricing and availability on the following " + plan.sols.length + " item" + (plan.sols.length > 1 ? "s" : "") + ":",
+        "",
+        items,
+        "",
+        "Requirements:",
+        "- Destination: Government delivery address (continental US)",
+        "- Payment: Immediate PO upon award — we use third-party PO funding (Factoring Express). Supplier receives direct wire payment before shipment.",
+        "- Compliance: BAA/TAA required — please confirm country of origin on all items",
+        "- Shipping: FOB Destination required",
+        "- Condition: New/unused only. No substitutions without prior approval.",
+        "",
+        "Please provide unit price, lead time, and confirm country of origin per item. We issue POs immediately upon award.",
+        "",
+        "Thank you,",
+        "Anthony K Kelley | Founder & CEO",
+        "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
+        "SDVOSB | VetHUB",
+        "anthony@ifedlog.com | ifedlog.com | (254) 226-5216",
+      ].join("\n");
+
+      try {
+        const res = await fetch("/.netlify/functions/send-rfq", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: email, subject, emailBody: body, attachCert: false }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          addLog("✓ " + distName + " <" + email + "> — " + plan.sols.length + " sol(s)", "#4caf50");
+          sent++;
+        } else {
+          addLog("✗ " + distName + ": " + (data.error || "send failed"), "#ef5350");
+          failed++;
+        }
+      } catch (e) {
+        addLog("✗ " + distName + ": " + e.message, "#ef5350");
+        failed++;
+      }
+    }
+
+    addLog("─── Done: " + sent + " sent · " + failed + " failed ───", "#c9a84c");
+    if (btn) { btn.disabled = false; btn.textContent = "⚡ Blast All RFQs (" + Object.keys(byDistributor).length + " vendors)"; }
+  }
+
   // ── RENDER RESULTS ──────────────────────────────────────────────────
   function renderResults() {
     const { go, locked, unmatched, byDistributor, summary } = currentAnalysis;
+    const distCount = Object.keys(byDistributor).length;
 
     let html = `
       <div style="margin-top: 20px;">
         <h3 style="color: #1a0a12; margin-bottom: 15px;">Analysis Summary</h3>
-        
+
         <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 20px;">
           <div style="background: #fff; padding: 15px; border-radius: 4px; border-left: 4px solid #c9a84c;">
             <div style="font-size: 12px; color: #7a5000;">Total</div>
@@ -170,9 +254,22 @@ const RFQRouterUI = (() => {
           </div>
           <div style="background: #fff; padding: 15px; border-radius: 4px; border-left: 4px solid #c9a84c;">
             <div style="font-size: 12px; color: #c9a84c;">Distributors</div>
-            <div style="font-size: 24px; font-weight: bold; color: #1a0a12;">${summary.distributorCount}</div>
+            <div style="font-size: 24px; font-weight: bold; color: #1a0a12;">${distCount}</div>
           </div>
         </div>
+
+        ${distCount > 0 ? `
+        <div style="margin-bottom: 24px; padding: 16px; background: rgba(61,214,140,.06); border: 1px solid rgba(61,214,140,.35); border-left: 4px solid rgba(61,214,140,.7);">
+          <button id="rfq-blast-all-btn"
+            style="padding: 10px 24px; background: rgba(61,214,140,.15); border: 1px solid rgba(61,214,140,.5); color: #3dd68c; font-family: Cinzel,serif; font-size: 12px; letter-spacing: .1em; cursor: pointer; font-weight: bold;">
+            ⚡ Blast All RFQs (${distCount} vendor${distCount > 1 ? "s" : ""})
+          </button>
+          <div style="font-family: monospace; font-size: 10px; color: rgba(61,214,140,.6); margin-top: 6px;">
+            Sends one multi-sol RFQ email per vendor via Zoho · ${go.length} solicitations · ${distCount} vendors
+          </div>
+          <div id="rfq-blast-log" style="margin-top: 10px; max-height: 160px; overflow-y: auto;"></div>
+        </div>
+        ` : ""}
 
         ${renderGOSection(go, byDistributor)}
         ${renderLockedSection(locked)}
@@ -181,6 +278,9 @@ const RFQRouterUI = (() => {
     `;
 
     document.getElementById("rfq-results-container").innerHTML = html;
+
+    const blastBtn = document.getElementById("rfq-blast-all-btn");
+    if (blastBtn) blastBtn.addEventListener("click", blastAllRFQs);
   }
 
   // ── RENDER GO SECTION ──────────────────────────────────────────────

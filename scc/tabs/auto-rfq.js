@@ -285,5 +285,81 @@
     return { verdict: "GO", sent, total: vendors.length, log };
   }
 
-  window.SCC_AUTO_RFQ = { run };
+  // ── BATCH RUNNER + SUMMARY NOTIFICATION ──────────────────────────────
+  // Call this after ingesting multiple sols to get one summary email.
+  async function runBatch(records, opts) {
+    opts = opts || {};
+    const results = { go: [], verifyFirst: [], rejected: [], errors: [] };
+
+    for (const record of records) {
+      try {
+        const r = await run(record, opts);
+        if (r.verdict === "GO")           results.go.push({ sol: record.sol_number, sent: r.sent, total: r.total });
+        else if (r.verdict === "VERIFY FIRST") results.verifyFirst.push({ sol: record.sol_number, reason: r.reason });
+        else                              results.rejected.push({ sol: record.sol_number, reason: r.reason });
+      } catch (e) {
+        results.errors.push({ sol: record.sol_number, error: e.message });
+      }
+    }
+
+    // Send summary email to owner
+    await sendBatchSummary(results);
+    return results;
+  }
+
+  async function sendBatchSummary(results) {
+    const total = results.go.length + results.verifyFirst.length + results.rejected.length + results.errors.length;
+    if (total === 0) return;
+
+    const lines = [
+      "SCC Auto-RFQ Batch Summary",
+      "Processed: " + new Date().toLocaleString(),
+      "─".repeat(40),
+      "",
+      "✅ GO — RFQs Sent (" + results.go.length + ")",
+    ];
+
+    for (const r of results.go) {
+      lines.push("  • " + r.sol + " → " + r.sent + "/" + (r.total || "?") + " vendor(s)");
+    }
+    if (results.go.length === 0) lines.push("  (none)");
+
+    lines.push("", "⚠ VERIFY FIRST — Held for Review (" + results.verifyFirst.length + ")");
+    for (const r of results.verifyFirst) {
+      lines.push("  • " + r.sol + " — " + r.reason);
+    }
+    if (results.verifyFirst.length === 0) lines.push("  (none)");
+
+    lines.push("", "🔒 REJECTED — Marked No Source (" + results.rejected.length + ")");
+    for (const r of results.rejected) {
+      lines.push("  • " + r.sol + " — " + r.reason);
+    }
+    if (results.rejected.length === 0) lines.push("  (none)");
+
+    if (results.errors.length > 0) {
+      lines.push("", "✗ ERRORS (" + results.errors.length + ")");
+      for (const r of results.errors) {
+        lines.push("  • " + r.sol + " — " + r.error);
+      }
+    }
+
+    lines.push("", "─".repeat(40), "View Pipeline → https://thehouseofkel.com/scc/");
+
+    try {
+      await fetch(SEND_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: "anthony@ifedlog.com",
+          subject: "SCC Auto-RFQ: " + results.go.length + " sent · " + results.verifyFirst.length + " review · " + results.rejected.length + " rejected",
+          emailBody: lines.join("\n"),
+          attachCert: false,
+        }),
+      });
+    } catch (e) {
+      console.warn("[AutoRFQ] Summary notification failed:", e.message);
+    }
+  }
+
+  window.SCC_AUTO_RFQ = { run, runBatch, sendBatchSummary };
 })();
