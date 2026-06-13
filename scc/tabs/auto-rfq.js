@@ -63,6 +63,15 @@
     return data.results[0]; // single sol → first result
   }
 
+  // ── P/N PREFIX DETECTION ─────────────────────────────────────────────
+  function detectPNPrefix(pn) {
+    const p = (pn || "").trim().toUpperCase();
+    if (/^AN[\d-]/.test(p)) return "AN";
+    if (/^MS[\d-]/.test(p)) return "MS";
+    if (/^NAS[\d-]/.test(p)) return "NAS";
+    return null;
+  }
+
   // ── VENDOR SELECTION ─────────────────────────────────────────────────
   function selectVendors(record) {
     const WL   = window.SCC_WIN_LEDGER;
@@ -71,18 +80,19 @@
 
     const dists    = (DIST && DIST.DISTRIBUTORS) || [];
     const fsc      = (record.fsc || record.nsn || "").slice(0, 4);
+    const pnPrefix = detectPNPrefix(record.ref_part_number);
     const selected = [];
     const seenIds  = new Set();
 
     const addDist = (d, reason) => {
       if (!d || seenIds.has(d.id)) return;
-      if (!d.email)                return; // need email to send
-      if (BLK && BLK(d.name))     return; // skip blocked
+      if (!d.email)                return;
+      if (BLK && BLK(d.name))     return;
       seenIds.add(d.id);
       selected.push({ dist: d, reason });
     };
 
-    // 1. Prior wins on this NSN — skip the routing step entirely
+    // 1. Prior wins on this NSN
     if (WL && (record.nsn || record.ref_part_number)) {
       for (const w of WL.lookup(record.nsn, record.ref_part_number)) {
         const match = dists.find(d => d.name.toLowerCase() === w.vendor_name.toLowerCase());
@@ -90,7 +100,13 @@
       }
     }
 
-    // 2. Manufacturers — JCP first, then others
+    // 2. AN/MS prefix → G-Fast Distribution (Steve) before standard chain
+    if (pnPrefix === "AN" || pnPrefix === "MS") {
+      const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name));
+      if (gfast) addDist(gfast, "P/N prefix " + pnPrefix + " → G-Fast (Steve)");
+    }
+
+    // 3. Manufacturers — JCP first, then others
     for (const d of dists) {
       if (d.is_manufacturer && d.has_jcp)  addDist(d, "MFR · JCP");
     }
@@ -98,14 +114,14 @@
       if (d.is_manufacturer && !d.has_jcp) addDist(d, "MFR");
     }
 
-    // 3. FSC-matched distributors
+    // 4. FSC-matched distributors
     for (const d of dists) {
       const tags = (d.tags || []).map(t => t.toLowerCase());
       if (tags.includes("fsc-" + fsc) || (d.fsc_specialties || []).includes(fsc))
         addDist(d, "FSC " + fsc);
     }
 
-    // 4. Preferred distributors
+    // 5. Preferred distributors
     for (const d of dists) {
       if (d.is_starred || (d.tags || []).includes("preferred"))
         addDist(d, "Preferred");

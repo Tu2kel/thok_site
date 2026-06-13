@@ -533,6 +533,7 @@
       const log_ = [];
       const allRecs = [...analysis.go, ...analysis.verify];
 
+      const savedRecords = [];
       for (const rec of allRecs) {
         if (!selected.has(rec.sol_number)) continue;
         if (existingSet.has(rec.sol_number)) {
@@ -544,7 +545,9 @@
           continue;
         }
         try {
-          await dbSave(buildRecord(rec));
+          const built = buildRecord(rec);
+          await dbSave(built);
+          savedRecords.push(built);
           log_.push({
             sol: rec.sol_number,
             status: "saved",
@@ -563,6 +566,12 @@
         `Pushed ${saved} sols to pipeline${skips ? " · " + skips + " skipped (duplicate)" : ""}`,
       );
       window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
+
+      if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
+        window.SCC_AUTO_RFQ.runBatch(savedRecords).catch((e) =>
+          console.warn("[AutoRFQ] DIBBS batch error:", e.message),
+        );
+      }
     }, [selected, analysis, toast_]);
 
     // ── BUILD BLAST PLAN ──────────────────────────────────────────────

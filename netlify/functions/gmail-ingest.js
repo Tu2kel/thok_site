@@ -123,9 +123,19 @@ async function getDistributors(db) {
   return db.collection("distributors").find({}).toArray();
 }
 
+// ── P/N PREFIX DETECTION ──────────────────────────────────────────────────
+function detectPNPrefix(pn) {
+  const p = (pn || "").trim().toUpperCase();
+  if (/^AN[\d-]/.test(p)) return "AN";
+  if (/^MS[\d-]/.test(p)) return "MS";
+  if (/^NAS[\d-]/.test(p)) return "NAS";
+  return null;
+}
+
 // ── VENDOR SELECTION (server-side mirror of auto-rfq.js) ─────────────────
 function selectVendors(record, dists) {
   const fsc      = (record.fsc || "").slice(0, 4);
+  const pnPrefix = detectPNPrefix(record.ref_part_number);
   const selected = [];
   const seenIds  = new Set();
 
@@ -135,6 +145,12 @@ function selectVendors(record, dists) {
     seenIds.add(d._id?.toString() || d.name);
     selected.push({ dist: d, reason });
   };
+
+  // AN/MS prefix → G-Fast Distribution (Steve) before standard chain
+  if (pnPrefix === "AN" || pnPrefix === "MS") {
+    const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name));
+    if (gfast) add(gfast, "P/N prefix " + pnPrefix + " → G-Fast (Steve)");
+  }
 
   // Priority: MFR+JCP → MFR → FSC-matched → preferred/starred
   for (const d of dists) if (d.is_manufacturer && d.has_jcp)  add(d, "MFR · JCP");
