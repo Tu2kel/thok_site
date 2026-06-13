@@ -1656,9 +1656,10 @@
     const [pushing, setPushing] = useState(null);
 
     const RESPONSE_STYLE = {
-      bid:     { color: "#4caf50", label: "BID" },
-      pending: { color: "#ffc107", label: "PENDING" },
-      no_bid:  { color: "#ef5350", label: "NO BID" },
+      bid:        { color: "#4caf50", label: "BID" },
+      pending:    { color: "#ffc107", label: "PENDING" },
+      no_bid:     { color: "#ef5350", label: "NO BID" },
+      prior_win:  { color: "#a78bfa", label: "↩ PRIOR WIN" },
     };
 
     const filteredSols = (rows || []).filter((r) => {
@@ -1679,6 +1680,33 @@
         .map((s) => s.trim().toUpperCase());
       const dists = window.SCC_DIST?.DISTRIBUTORS || [];
       const results = [];
+
+      // Inject win-ledger vendors at top (auto-populate)
+      const WL = window.SCC_WIN_LEDGER;
+      if (WL) {
+        const priorWins = WL.lookup(sol.nsn, sol.ref_part_number);
+        const seenVendors = new Set();
+        for (const w of priorWins) {
+          if (seenVendors.has(w.vendor_name)) continue;
+          seenVendors.add(w.vendor_name);
+          const matchedDist = dists.find(d => d.name.toLowerCase() === w.vendor_name.toLowerCase())
+            || { id: "wl_" + w.id, name: w.vendor_name, email: "" };
+          results.push({
+            dist: matchedDist,
+            entry: {
+              pn: w.pn || w.nsn || sol.ref_part_number,
+              response: "prior_win",
+              price: w.price,
+              bid_price: w.bid_price,
+              qty: w.qty,
+              date: w.date || w.logged,
+              notes: "Win ledger · Sol " + (w.sol_number || "—"),
+            },
+            _win: w,
+          });
+        }
+      }
+
       for (const d of dists) {
         for (const entry of d.outreach_log || []) {
           if (pns.includes((entry.pn || "").trim().toUpperCase())) {
@@ -1686,8 +1714,8 @@
           }
         }
       }
-      // Sort: bid first, then pending, then no_bid
-      const order = { bid: 0, pending: 1, no_bid: 2 };
+      // Sort: prior_win first, then bid, then pending, then no_bid
+      const order = { prior_win: 0, bid: 1, pending: 2, no_bid: 3 };
       results.sort((a, b) => (order[a.entry.response] ?? 9) - (order[b.entry.response] ?? 9));
       setBidEntries(results);
     }
@@ -1797,18 +1825,29 @@
           },
             h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".14em",
               textTransform: "uppercase", color: "var(--accent-green)", marginBottom: "8px" } },
-              "↩ Won Before — " + priorWins.length + " record" + (priorWins.length > 1 ? "s" : "")),
-            h("div", { style: { display: "flex", flexDirection: "column", gap: "5px" } },
-              ...priorWins.map(w => h("div", { key: w.id,
-                style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-dim)", display: "flex", gap: "12px", flexWrap: "wrap" }
-              },
-                h("span", { style: { color: "var(--gold-solid)", fontFamily: "Cinzel,serif" } }, w.vendor_name),
-                w.price ? h("span", null, "Cost $" + Number(w.price).toFixed(2) + "/ea") : null,
-                w.bid_price ? h("span", null, "Bid $" + Number(w.bid_price).toFixed(2) + "/ea") : null,
-                w.qty ? h("span", null, "Qty " + w.qty) : null,
-                w.sol_number ? h("span", { style: { color: "var(--body-faint)" } }, w.sol_number) : null,
-                h("span", { style: { color: "var(--body-faint)" } }, w.date || w.logged),
-              ))
+              "↩ Won Before — " + priorWins.length + " vendor" + (priorWins.length > 1 ? "s" : "") + " · go here first"),
+            h("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+              ...priorWins.map(w => {
+                const age = WL.winAge(w);
+                const net = WL.netAfterFE(w.bid_price, w.price);
+                return h("div", { key: w.id,
+                  style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-dim)",
+                    display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center",
+                    borderBottom: "1px solid rgba(61,214,140,.1)", paddingBottom: "4px" }
+                },
+                  h("span", { style: { color: "var(--gold-solid)", fontFamily: "Cinzel,serif", fontSize: "12px" } }, w.vendor_name),
+                  age && h("span", { title: age.days + " days ago",
+                    style: { fontSize: "9px", padding: "1px 5px", background: age.color + "18",
+                      border: "1px solid " + age.color + "44", color: age.color, borderRadius: "2px" }
+                  }, age.label),
+                  w.price     ? h("span", null, "Cost $" + Number(w.price).toFixed(2))     : null,
+                  w.bid_price ? h("span", null, "Bid $"  + Number(w.bid_price).toFixed(2)) : null,
+                  net != null ? h("span", { style: { color: net >= 0 ? "#4caf50" : "#ef5350", fontWeight: "600" } },
+                    "Net $" + net.toFixed(2)) : null,
+                  w.qty       ? h("span", null, "Qty " + w.qty) : null,
+                  w.sol_number? h("span", { style: { color: "var(--body-faint)" } }, w.sol_number) : null,
+                );
+              })
             ),
           );
         })(),
@@ -1828,15 +1867,17 @@
             ? h("div", { style: { color: "var(--gold-dim)", fontSize: "12px", fontStyle: "italic", padding: "10px 0" } },
                 "No outreach responses logged for this solicitation's P/Ns yet.")
             : h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
-                bidEntries.map(({ dist, entry }, i) => {
+                bidEntries.map(({ dist, entry, _win }, i) => {
                   const rs = RESPONSE_STYLE[entry.response] || { color: "var(--body-dim)", label: entry.response };
-                  const key = dist.id + ":" + entry.pn + ":" + entry.date;
+                  const key = dist.id + ":" + entry.pn + ":" + (entry.date || i);
                   const isBid = entry.response === "bid";
+                  const isPriorWin = entry.response === "prior_win";
                   return h("div", {
                     key: key + i,
                     style: {
-                      background: isBid ? "rgba(76,175,80,.06)" : "var(--surface-card)",
-                      border: isBid ? "1px solid rgba(76,175,80,.3)" : "1px solid rgba(201,168,76,.1)",
+                      background: isPriorWin ? "rgba(167,139,250,.06)" : isBid ? "rgba(76,175,80,.06)" : "var(--surface-card)",
+                      border: isPriorWin ? "1px solid rgba(167,139,250,.35)" : isBid ? "1px solid rgba(76,175,80,.3)" : "1px solid rgba(201,168,76,.1)",
+                      borderLeft: isPriorWin ? "3px solid #a78bfa" : undefined,
                       borderRadius: "5px", padding: "10px 12px",
                       display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px",
                     },

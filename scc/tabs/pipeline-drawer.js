@@ -152,34 +152,54 @@
         ? hP("div", { style: { ...dim, fontStyle: "italic", color: "var(--body-faint)", padding: "8px 0" } },
             "No wins logged for this NSN yet.")
         : hP("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
-            ...wins.map(w => hP("div", { key: w.id,
-              style: { background: "rgba(61,214,140,.04)", border: "1px solid rgba(61,214,140,.15)",
-                borderLeft: "3px solid rgba(61,214,140,.5)", padding: "9px 12px",
-                display: "flex", alignItems: "flex-start", gap: "10px" }
-            },
-              hP("div", { style: { flex: 1 } },
-                hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", ...gold, marginBottom: "2px" } },
-                  w.vendor_name),
-                hP("div", { style: { ...dim, display: "flex", gap: "10px", flexWrap: "wrap" } },
-                  w.price ? "Cost $" + Number(w.price).toFixed(2) + "/ea" : null,
-                  w.bid_price ? "· Bid $" + Number(w.bid_price).toFixed(2) + "/ea" : null,
-                  w.qty ? "· Qty " + w.qty : null,
-                  w.sol_number ? "· " + w.sol_number : null,
-                  "· " + (w.date || w.logged),
-                ).filter(Boolean),
-                w.notes && hP("div", { style: { ...dim, fontStyle: "italic", marginTop: "2px",
-                  color: "var(--body-faint)" } }, w.notes),
-              ),
-              hP("button", {
-                onClick: () => doRemove(w.id),
-                title: "Remove this win entry",
-                style: { background: "transparent", border: "1px solid rgba(231,76,60,.2)",
-                  color: "rgba(231,76,60,.5)", fontFamily: "Cinzel,serif", fontSize: "9px",
-                  letterSpacing: ".08em", padding: "2px 8px", cursor: "pointer", whiteSpace: "nowrap" },
-                onMouseEnter: e => { e.target.style.color = "#e74c3c"; e.target.style.borderColor = "rgba(231,76,60,.5)"; },
-                onMouseLeave: e => { e.target.style.color = "rgba(231,76,60,.5)"; e.target.style.borderColor = "rgba(231,76,60,.2)"; },
-              }, "Remove"),
-            ))
+            ...wins.map(w => {
+              const age = WL.winAge(w);
+              const net = WL.netAfterFE(w.bid_price, w.price);
+              const borderColor = age ? age.color + "55" : "rgba(61,214,140,.15)";
+              const leftColor  = age ? age.color       : "rgba(61,214,140,.5)";
+              return hP("div", { key: w.id,
+                style: { background: "rgba(61,214,140,.04)", border: "1px solid " + borderColor,
+                  borderLeft: "3px solid " + leftColor, padding: "9px 12px",
+                  display: "flex", alignItems: "flex-start", gap: "10px" }
+              },
+                hP("div", { style: { flex: 1 } },
+                  // Vendor + age badge
+                  hP("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" } },
+                    hP("span", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", ...gold } }, w.vendor_name),
+                    age && hP("span", {
+                      title: age.days + " days ago",
+                      style: { fontSize: "9px", fontFamily: "JetBrains Mono,monospace", padding: "1px 6px",
+                        background: age.color + "18", border: "1px solid " + age.color + "55",
+                        color: age.color, borderRadius: "2px" }
+                    }, age.label),
+                  ),
+                  // Cost · Bid · Net-after-FE
+                  hP("div", { style: { ...dim, display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "2px" } },
+                    w.price    ? hP("span", null, "Cost $" + Number(w.price).toFixed(2))    : null,
+                    w.bid_price? hP("span", null, "Bid $"  + Number(w.bid_price).toFixed(2)): null,
+                    net != null? hP("span", {
+                      title: "Net after est. 5% FE (30-day)",
+                      style: { color: net >= 0 ? "var(--accent-green)" : "var(--accent-red-soft)",
+                        fontWeight: "600" }
+                    }, "Net $" + net.toFixed(2)) : null,
+                    w.qty       ? hP("span", null, "Qty " + w.qty)           : null,
+                    w.sol_number? hP("span", { style: { color: "var(--body-faint)" } }, w.sol_number) : null,
+                    hP("span", { style: { color: "var(--body-faint)" } }, w.date || w.logged),
+                  ),
+                  w.notes && hP("div", { style: { ...dim, fontStyle: "italic", marginTop: "2px",
+                    color: "var(--body-faint)" } }, w.notes),
+                ),
+                hP("button", {
+                  onClick: () => doRemove(w.id),
+                  title: "Remove — use when quote elapsed, vendor changed, or lost",
+                  style: { background: "transparent", border: "1px solid rgba(231,76,60,.2)",
+                    color: "rgba(231,76,60,.5)", fontFamily: "Cinzel,serif", fontSize: "9px",
+                    letterSpacing: ".08em", padding: "2px 8px", cursor: "pointer", whiteSpace: "nowrap" },
+                  onMouseEnter: e => { e.target.style.color = "#e74c3c"; e.target.style.borderColor = "rgba(231,76,60,.5)"; },
+                  onMouseLeave: e => { e.target.style.color = "rgba(231,76,60,.5)"; e.target.style.borderColor = "rgba(231,76,60,.2)"; },
+                }, "Remove"),
+              );
+            })
           ),
     );
   }
@@ -300,6 +320,7 @@ Imperio Talent Solutions | CAGE 152U4<br>
       ["mfg_ref", "◆ MFG Quotes"],
       ["source", "◆ Source"],
       ["email", "Email"],
+      ["records", "📁 Records"],
     ];
 
     return hP(
@@ -1011,7 +1032,179 @@ Imperio Talent Solutions | CAGE 152U4<br>
                   "MFG Ref Table loading...",
                 ),
           ),
+
+        dtab === "records" && hP(SolRecordsPanel, { record, showToast }),
       ),
+    );
+  }
+
+  // ── SOL RECORDS PANEL ────────────────────────────────────────────────
+  function SolRecordsPanel({ record, showToast }) {
+    const SR = window.SCC_RECORDS;
+    const [recs, setRecs] = usePState([]);
+    const [noteText, setNoteText] = usePState("");
+    const [editingId, setEditingId] = usePState(null);
+    const [editVal, setEditVal] = usePState("");
+    const [loading, setLoading] = usePState(true);
+
+    const refresh = async () => {
+      if (!SR) return;
+      const all = await SR.getRecords(record.sol_number);
+      setRecs(all);
+      setLoading(false);
+    };
+
+    usePEffect(() => { refresh(); }, [record.sol_number]);
+
+    const addNote = async () => {
+      if (!noteText.trim() || !SR) return;
+      await SR.addRecord(record.sol_number, { type: "note", name: "Note", notes: noteText.trim() });
+      setNoteText("");
+      refresh();
+    };
+
+    const handleFile = async (e) => {
+      if (!SR) return;
+      const file = e.target.files[0];
+      if (!file) return;
+      const data = await file.arrayBuffer();
+      await SR.addRecord(record.sol_number, {
+        type: file.type.includes("pdf") ? "pdf" : file.type.startsWith("image") ? "image" : "doc",
+        name: file.name,
+        data,
+        notes: "",
+      });
+      e.target.value = "";
+      refresh();
+    };
+
+    const doRemove = async (id) => {
+      await SR.removeRecord(id);
+      refresh();
+    };
+
+    const saveEditNote = async (id) => {
+      await SR.updateNotes(id, editVal);
+      setEditingId(null);
+      refresh();
+    };
+
+    const downloadRec = (r) => {
+      if (!r.data) return;
+      const blob = new Blob([r.data], { type: r.type === "pdf" ? "application/pdf" : r.type === "image" ? "image/*" : "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = r.name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    };
+
+    const mono11 = { fontFamily: "JetBrains Mono,monospace", fontSize: "11px" };
+    const labelStyle = { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em",
+      textTransform: "uppercase", color: "var(--body-faint)", marginBottom: "5px" };
+    const iconFor = (type) => type === "pdf" ? "📄" : type === "image" ? "🖼" : type === "note" ? "📝" : "📎";
+
+    if (!SR) return hP("div", { style: { padding: "20px", color: "var(--body-dim)", ...mono11 } },
+      "Sol Records module not loaded.");
+
+    return hP("div", null,
+      hP("div", { className: "drawer-section-title",
+        style: { color: "var(--gold-solid)", borderColor: "rgba(201,168,76,.3)", fontSize: "13px" } },
+        "📁 Sol Records · " + record.sol_number),
+      hP("div", { style: { fontFamily: "Cormorant Garamond,serif", fontStyle: "italic", fontSize: "12px",
+        color: "var(--body-faint)", marginBottom: "16px" } },
+        "Permanent record file · 4-year retention · store anything related to this solicitation"),
+
+      // File upload
+      hP("div", { style: { marginBottom: "12px" } },
+        hP("div", { style: labelStyle }, "Attach File (PDF, image, doc)"),
+        hP("input", { type: "file", accept: ".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.txt",
+          onChange: handleFile,
+          style: { color: "var(--alabaster)", ...mono11, cursor: "pointer" } }),
+      ),
+
+      // Add note
+      hP("div", { style: { marginBottom: "16px", background: "var(--inset-bg)",
+        border: "1px solid rgba(201,168,76,.15)", borderTop: "2px solid rgba(201,168,76,.3)", padding: "12px 14px" } },
+        hP("div", { style: labelStyle }, "+ Add Note"),
+        hP("textarea", {
+          value: noteText, onChange: e => setNoteText(e.target.value),
+          placeholder: "Quote details, vendor conversation, discrepancy notes, delivery updates…",
+          style: { width: "100%", minHeight: "80px", background: "var(--inset-bg)", resize: "vertical",
+            border: "1px solid rgba(201,168,76,.2)", color: "var(--alabaster)", ...mono11,
+            padding: "8px 10px", outline: "none", boxSizing: "border-box" },
+        }),
+        hP("button", {
+          onClick: addNote, disabled: !noteText.trim(),
+          style: { marginTop: "8px", background: "rgba(201,168,76,.1)", border: "1px solid rgba(201,168,76,.35)",
+            color: "var(--gold-solid)", fontFamily: "Cinzel,serif", fontSize: "9px",
+            letterSpacing: ".1em", padding: "5px 14px", cursor: "pointer" }
+        }, "Add Note"),
+      ),
+
+      // Records list
+      loading
+        ? hP("div", { style: { ...mono11, color: "var(--body-faint)" } }, "Loading…")
+        : recs.length === 0
+        ? hP("div", { style: { ...mono11, fontStyle: "italic", color: "var(--body-faint)", padding: "8px 0" } },
+            "No records yet. Attach the solicitation PDF and any correspondence here.")
+        : hP("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+            ...recs.map(r => hP("div", { key: r.id,
+              style: { background: "var(--inset-bg)", border: "1px solid rgba(201,168,76,.12)",
+                borderLeft: r.type === "note" ? "3px solid rgba(201,168,76,.4)" : "3px solid rgba(90,120,200,.5)",
+                padding: "10px 12px" }
+            },
+              hP("div", { style: { display: "flex", alignItems: "flex-start", gap: "8px" } },
+                hP("span", null, iconFor(r.type)),
+                hP("div", { style: { flex: 1 } },
+                  hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--alabaster)", marginBottom: "2px" } }, r.name),
+                  hP("div", { style: { ...mono11, fontSize: "9px", color: "var(--body-faint)" } },
+                    new Date(r.added).toLocaleDateString() + " " + new Date(r.added).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+                  r.type === "note" && editingId !== r.id
+                    ? hP("div", { style: { ...mono11, color: "var(--body-dim)", marginTop: "5px", whiteSpace: "pre-wrap" } }, r.notes)
+                    : r.type === "note" && editingId === r.id
+                    ? hP("div", null,
+                        hP("textarea", {
+                          value: editVal, onChange: e => setEditVal(e.target.value),
+                          style: { width: "100%", minHeight: "70px", background: "var(--surface-card)",
+                            border: "1px solid rgba(201,168,76,.3)", color: "var(--alabaster)", ...mono11,
+                            padding: "6px 8px", outline: "none", boxSizing: "border-box", resize: "vertical" }
+                        }),
+                        hP("button", { onClick: () => saveEditNote(r.id),
+                          style: { marginTop: "4px", marginRight: "6px", background: "rgba(201,168,76,.1)",
+                            border: "1px solid rgba(201,168,76,.3)", color: "var(--gold-dim)",
+                            fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".08em",
+                            padding: "3px 10px", cursor: "pointer" } }, "Save"),
+                        hP("button", { onClick: () => setEditingId(null),
+                          style: { background: "transparent", border: "none", color: "var(--body-faint)",
+                            fontFamily: "Cinzel,serif", fontSize: "9px", cursor: "pointer" } }, "Cancel"),
+                      )
+                    : r.notes
+                    ? hP("div", { style: { ...mono11, fontSize: "10px", color: "var(--body-faint)", marginTop: "4px", fontStyle: "italic" } }, r.notes)
+                    : null,
+                ),
+                hP("div", { style: { display: "flex", flexDirection: "column", gap: "4px" } },
+                  r.data && hP("button", { onClick: () => downloadRec(r),
+                    style: { background: "transparent", border: "1px solid rgba(90,120,200,.3)",
+                      color: "var(--accent-blue-bright)", fontFamily: "Cinzel,serif", fontSize: "9px",
+                      letterSpacing: ".06em", padding: "2px 8px", cursor: "pointer", whiteSpace: "nowrap" }
+                  }, "Download"),
+                  r.type === "note" && hP("button", {
+                    onClick: () => { setEditingId(r.id); setEditVal(r.notes || ""); },
+                    style: { background: "transparent", border: "1px solid rgba(201,168,76,.2)",
+                      color: "var(--gold-dim)", fontFamily: "Cinzel,serif", fontSize: "9px",
+                      letterSpacing: ".06em", padding: "2px 8px", cursor: "pointer" }
+                  }, "Edit"),
+                  hP("button", { onClick: () => doRemove(r.id),
+                    style: { background: "transparent", border: "1px solid rgba(231,76,60,.2)",
+                      color: "rgba(231,76,60,.5)", fontFamily: "Cinzel,serif", fontSize: "9px",
+                      letterSpacing: ".06em", padding: "2px 8px", cursor: "pointer" },
+                    onMouseEnter: e => { e.target.style.color = "#e74c3c"; },
+                    onMouseLeave: e => { e.target.style.color = "rgba(231,76,60,.5)"; },
+                  }, "Remove"),
+                ),
+              ),
+            ))
+          ),
     );
   }
 

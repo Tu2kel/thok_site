@@ -244,6 +244,24 @@
                   : e,
               ),
             );
+            // Auto-RFQ: fire vendor emails without manual routing step
+            if (window.SCC_AUTO_RFQ) {
+              const savedRecord = {
+                sol_number: entry.sol_number,
+                nsn: fetched.nsn || entry.nsn || "",
+                fsc: entry.fsc || (fetched.nsn || "").slice(0, 4),
+                item_name: fetched.item_description || "",
+                ref_part_number: (fetched.part_numbers || []).join(", "),
+                quantity: fetched.qty || "",
+                unit_of_issue: fetched.unit_issue || "",
+                unit_price: fetched.hist_unit_price || fetched.unit_price || "",
+                delivery_days: fetched.delivery_days || "",
+                notes: "",
+              };
+              window.SCC_AUTO_RFQ.run(savedRecord, {
+                onLog: (msg) => console.log("[AutoRFQ]", msg),
+              });
+            }
           }
         } catch (err) {
           setEntries((prev) =>

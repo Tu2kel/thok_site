@@ -49,5 +49,22 @@
     return lookup(nsn, pn)[0] || null;
   }
 
-  window.SCC_WIN_LEDGER = { logWin, removeWin, lookup, hasWin, bestWin, load };
+  // Returns { days, color, label } for display
+  function winAge(w) {
+    const d = new Date(w.date || w.logged);
+    if (isNaN(d)) return null;
+    const days = Math.floor((Date.now() - d) / 86400000);
+    if (days < 90)  return { days, color: "#4caf50", label: days + "d" };
+    if (days < 180) return { days, color: "#ffc107", label: days + "d" };
+    return { days, color: "#ef5350", label: days + "d ⚠" };
+  }
+
+  // Net per unit after estimated FE (default 5% = 30-day standard)
+  function netAfterFE(bid_price, cost, fe_pct) {
+    const fe = (fe_pct != null ? fe_pct : 5) / 100;
+    if (bid_price == null || cost == null) return null;
+    return +((bid_price * (1 - fe)) - cost).toFixed(4);
+  }
+
+  window.SCC_WIN_LEDGER = { logWin, removeWin, lookup, hasWin, bestWin, load, winAge, netAfterFE };
 })();
