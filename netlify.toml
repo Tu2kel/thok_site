@@ -8,3 +8,10 @@
 
 [functions."analyze-sols"]
   timeout = 26
+
+[functions."gmail-ingest"]
+  timeout = 120
+  schedule = "0 14 * * *"
+
+[functions."send-rfq"]
+  timeout = 30
