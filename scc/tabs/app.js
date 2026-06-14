@@ -444,7 +444,7 @@
     const [tab, setTab] = useState(
       () => localStorage.getItem("scc-active-tab") || "dashboard",
     );
-    const [openGroup, setOpenGroup] = useState("workflow");
+    const [openGroups, setOpenGroups] = useState(["workflow", "tools"]);
     const [boxA, setBoxA] = useState("");
     const [boxB, setBoxB] = useState("");
     const [parsed, setParsed] = useState(null);
@@ -825,7 +825,11 @@
             const nodes = [];
 
             GROUPS.forEach((group, gi) => {
-              const isOpen = openGroup === group.id;
+              const isOpen = openGroups.includes(group.id);
+              const toggleGroup = () =>
+                setOpenGroups((prev) =>
+                  isOpen ? prev.filter((g) => g !== group.id) : [...prev, group.id],
+                );
 
               // ── GROUP HEADER ──
               nodes.push(
@@ -833,7 +837,7 @@
                   "button",
                   {
                     key: "grp-" + group.id,
-                    onClick: () => setOpenGroup(isOpen ? null : group.id),
+                    onClick: toggleGroup,
                     style: {
                       ...chevronBase,
                       padding: "0 18px 0 14px",
