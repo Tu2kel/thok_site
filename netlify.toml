@@ -15,3 +15,7 @@
 
 [functions."send-rfq"]
   timeout = 30
+
+[functions."navigator-ingest"]
+  timeout = 900
+  schedule = "0 9 * * *"
