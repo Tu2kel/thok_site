@@ -372,6 +372,33 @@
       if (r.status === "Awarded") saWon[sa]++;
     });
 
+    // ── P/N PREFIX BREAKDOWN ──────────────────────────────────────────────
+    function getPNPrefix(pn) {
+      const p = (pn || "").trim().toUpperCase();
+      if (/^AN[\d-]/.test(p)) return "AN";
+      if (/^MS[\d-]/.test(p)) return "MS";
+      if (/^NAS[\d-]/.test(p)) return "NAS";
+      return "REG";
+    }
+    const pnBreakdown = { AN: 0, MS: 0, NAS: 0, REG: 0 };
+    rows.forEach((r) => { pnBreakdown[getPNPrefix(r.ref_part_number)]++; });
+
+    // ── JCP SOURCED COUNT ─────────────────────────────────────────────────
+    const allDists = (window.SCC_DIST && window.SCC_DIST.DISTRIBUTORS) || [];
+    const jcpNames = new Set(
+      allDists.filter((d) => d.has_jcp).map((d) => (d.name || "").toLowerCase().trim()),
+    );
+    const jcpSourced = rows.filter((r) => {
+      const sup = (r.ref_supplier || r.supplier_poc || "").toLowerCase().trim();
+      return sup.length > 0 && jcpNames.has(sup);
+    }).length;
+
+    // ── WIN LEDGER SIZE ───────────────────────────────────────────────────
+    const winLedgerCount = window.SCC_WIN_LEDGER ? window.SCC_WIN_LEDGER.load().length : 0;
+
+    // ── VERIFY FIRST (Researching) PENDING ───────────────────────────────
+    const verifyFirst = rows.filter((r) => r.status === "Researching").length;
+
     // ── WIN / LOSS BREAKDOWN ─────────────────────────────────────────────
     // By tier
     const tierOutcomes = {};
@@ -1239,6 +1266,80 @@
                   },
                   val,
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      // ── ROW 1b: INTAKE INTELLIGENCE ───────────────────────────────────
+      h(
+        "div",
+        {
+          style: {
+            ...card,
+            marginBottom: "16px",
+            position: "relative",
+            zIndex: 1,
+          },
+        },
+        h("div", { style: sectionTitle }, "Intake Intelligence"),
+        h(
+          "div",
+          {
+            style: {
+              display: "grid",
+              gridTemplateColumns: "repeat(7, 1fr)",
+              gap: "12px",
+            },
+          },
+          ...[
+            ["Total Sols",     rows.length,                              "var(--alabaster)"],
+            ["Active",         active.length,                            "#7eb8f7"],
+            ["Verify First",   verifyFirst,                              "#a78bfa"],
+            ["AN / MS Parts",  pnBreakdown.AN + pnBreakdown.MS,         "#f97316"],
+            ["NAS Parts",      pnBreakdown.NAS,                         "#fbbf24"],
+            ["Regular P/Ns",   pnBreakdown.REG,                         "var(--body-faint)"],
+            ["JCP Sourced",    jcpSourced,                               "#3dd68c"],
+            ["Win Ledger",     winLedgerCount,                           "#C9A84C"],
+          ].map(([label, val, color]) =>
+            h(
+              "div",
+              {
+                key: label,
+                style: {
+                  background: "rgba(0,0,0,.2)",
+                  border: "1px solid rgba(201,168,76,.08)",
+                  borderRadius: "3px",
+                  padding: "12px 14px",
+                  textAlign: "center",
+                },
+              },
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cormorant Garamond,serif",
+                    fontSize: "11px",
+                    color: "var(--body-faint)",
+                    letterSpacing: ".06em",
+                    marginBottom: "6px",
+                    textTransform: "uppercase",
+                  },
+                },
+                label,
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "22px",
+                    fontWeight: 700,
+                    color,
+                  },
+                },
+                val,
               ),
             ),
           ),
