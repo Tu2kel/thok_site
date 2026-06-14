@@ -444,7 +444,12 @@
     const [tab, setTab] = useState(
       () => localStorage.getItem("scc-active-tab") || "dashboard",
     );
-    const [openGroups, setOpenGroups] = useState(["workflow", "tools"]);
+    const [openGroups, setOpenGroups] = useState(() => {
+      try {
+        const saved = localStorage.getItem("scc-open-groups");
+        return saved ? JSON.parse(saved) : ["workflow", "tools"];
+      } catch { return ["workflow", "tools"]; }
+    });
     const [boxA, setBoxA] = useState("");
     const [boxB, setBoxB] = useState("");
     const [parsed, setParsed] = useState(null);
@@ -827,9 +832,11 @@
             GROUPS.forEach((group, gi) => {
               const isOpen = openGroups.includes(group.id);
               const toggleGroup = () =>
-                setOpenGroups((prev) =>
-                  isOpen ? prev.filter((g) => g !== group.id) : [...prev, group.id],
-                );
+                setOpenGroups((prev) => {
+                  const next = isOpen ? prev.filter((g) => g !== group.id) : [...prev, group.id];
+                  try { localStorage.setItem("scc-open-groups", JSON.stringify(next)); } catch {}
+                  return next;
+                });
 
               // ── GROUP HEADER ──
               nodes.push(
@@ -1146,7 +1153,14 @@
             showToast,
           }),
 
-        tab === "manual" && window.SCCManualTab && hA(window.SCCManualTab, null),
+        tab === "manual" &&
+          (window.SCCManualTab
+            ? hA(window.SCCManualTab, null)
+            : hA(
+                "div",
+                { style: { padding: "40px 20px", color: "var(--body-dim)", fontFamily: "JetBrains Mono,monospace", fontSize: "13px" } },
+                "Manual loading — try Ctrl+Shift+R (hard refresh) if this persists.",
+              )),
       ),
 
       // ── TOAST ──
