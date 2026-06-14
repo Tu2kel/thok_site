@@ -513,24 +513,16 @@ exports.handler = async () => {
         continue;
       }
 
-      if (analysis.verdict === "VERIFY FIRST") {
-        results.verifyFirst.push({ sol, reason: analysis.reason, path: analysis.sourcing_path });
-        record.status = "Researching";
-        record.notes  = "Claude: VERIFY FIRST — " + analysis.reason +
-          (analysis.sourcing_path ? "\nPath: " + analysis.sourcing_path : "") +
-          (analysis.winProbabilityPct != null ? "\nWin prob: " + analysis.winProbabilityPct + "%" : "");
-        await saveSolToMongo(db, record);
-        continue;
-      }
-
-      // GO — select vendors + fire RFQs
+      // GO or VERIFY FIRST — fire RFQs either way.
+      // Requesting a quote commits nothing. You decide at bid time.
+      const isFlag  = analysis.verdict === "VERIFY FIRST";
       const vendors = selectVendors(record, dists);
       let sent = 0;
       for (const { dist, reason } of vendors) {
         try {
           const { subject, body: emailBody } = buildRFQEmail(dist, record);
           await gmailSend(token, dist.email, subject, emailBody);
-          addLog("✓ RFQ → " + (dist.name || dist.company_name) + " [" + reason + "]");
+          addLog((isFlag ? "⚠ " : "✓ ") + "RFQ → " + (dist.name || dist.company_name) + " [" + reason + "]");
           sent++;
         } catch (e) {
           addLog("✗ RFQ failed → " + (dist.name || dist.company_name) + ": " + e.message);
@@ -540,12 +532,18 @@ exports.handler = async () => {
       record.status = sent > 0 ? "Awaiting Quotes" : "Sourcing";
       record.notes  = [
         record.notes,
-        "Claude: " + analysis.reason,
+        isFlag ? "⚠ VERIFY FIRST — review before bidding: " + analysis.reason : "Claude: " + analysis.reason,
         analysis.sourcing_path ? "Path: " + analysis.sourcing_path : null,
+        analysis.winProbabilityPct != null ? "Win prob: " + analysis.winProbabilityPct + "%" : null,
         "Auto-RFQ: " + sent + "/" + vendors.length + " sent",
       ].filter(Boolean).join("\n");
       await saveSolToMongo(db, record);
-      results.go.push({ sol, sent, total: vendors.length, reason: analysis.reason });
+
+      if (isFlag) {
+        results.verifyFirst.push({ sol, sent, total: vendors.length, reason: analysis.reason, path: analysis.sourcing_path });
+      } else {
+        results.go.push({ sol, sent, total: vendors.length, reason: analysis.reason });
+      }
 
     } catch (e) {
       addLog("Error on " + sol + ": " + e.message);
@@ -565,8 +563,8 @@ exports.handler = async () => {
     ...results.go.map((r) => "  • " + r.sol + " → " + r.sent + "/" + r.total + " vendor(s)  " + r.reason),
     results.go.length === 0 ? "  (none)" : "",
     "",
-    "⚠ VERIFY FIRST — Needs Review (" + results.verifyFirst.length + ")",
-    ...results.verifyFirst.map((r) => "  • " + r.sol + " — " + r.reason + (r.path ? "\n    Path: " + r.path : "")),
+    "⚠ FLAGGED — RFQ Sent, Review Before Bidding (" + results.verifyFirst.length + ")",
+    ...results.verifyFirst.map((r) => "  • " + r.sol + " → " + r.sent + "/" + r.total + " vendor(s)  " + r.reason + (r.path ? "\n    " + r.path : "")),
     results.verifyFirst.length === 0 ? "  (none)" : "",
     "",
     "🔒 REJECTED — No Source (" + results.rejected.length + ")",
@@ -582,7 +580,7 @@ exports.handler = async () => {
 
   const summarySubject = total === 0
     ? "SCC Navigator Ingest: Nothing new today"
-    : "SCC Nav: " + results.go.length + " RFQs · " + results.verifyFirst.length + " review · " + results.rejected.length + " rejected";
+    : "SCC Nav: " + (results.go.length + results.verifyFirst.length) + " RFQs fired · " + results.verifyFirst.length + " flagged · " + results.rejected.length + " rejected";
 
   try {
     await gmailSend(token, FROM_ADDRESS, summarySubject, summaryLines);
