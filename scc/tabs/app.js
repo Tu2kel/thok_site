@@ -797,6 +797,7 @@
                   { id: "esbd", label: "State/Fed", icon: "🏛 " },
                   { id: "archive", label: "Archive", icon: "⬇ " },
                   { id: "backup", label: "Backup", icon: "↓ " },
+                  { id: "manual", label: "Manual", icon: "📋 " },
                 ],
               },
             ];
@@ -1140,6 +1141,8 @@
             onPrefillConsumed: () => setFuPrefill(null),
             showToast,
           }),
+
+        tab === "manual" && window.SCCManualTab && hA(window.SCCManualTab, null),
       ),
 
       // ── TOAST ──
