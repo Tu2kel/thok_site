@@ -11,9 +11,9 @@
         style: {
           fontFamily: "JetBrains Mono,monospace",
           background: "rgba(0,0,0,.3)",
-          padding: "1px 5px",
+          padding: "2px 7px",
           borderRadius: "2px",
-          fontSize: "11px",
+          fontSize: "13px",
           color: "#a8d8a8",
         },
       }, txt);
@@ -22,8 +22,8 @@
       h("span", {
         style: {
           display: "inline-block",
-          padding: "2px 7px",
-          fontSize: "10px",
+          padding: "3px 10px",
+          fontSize: "12px",
           fontFamily: "Cinzel,serif",
           letterSpacing: ".06em",
           borderRadius: "2px",
@@ -40,12 +40,12 @@
         style: {
           background: "rgba(201,168,76,.07)",
           borderBottom: "1px solid rgba(201,168,76,.15)",
-          padding: "10px 16px",
+          padding: "14px 20px",
           display: "flex",
           alignItems: "center",
-          gap: "8px",
+          gap: "10px",
           fontFamily: "Cinzel,serif",
-          fontSize: "11px",
+          fontSize: "13px",
           letterSpacing: ".1em",
           color: "var(--gold-solid)",
         },
@@ -54,37 +54,38 @@
     const step = (n, label, body) =>
       h("div", {
         key: n,
-        style: { display: "flex", gap: "12px", marginBottom: "14px", alignItems: "flex-start" },
+        style: { display: "flex", gap: "14px", marginBottom: "18px", alignItems: "flex-start" },
       },
         h("div", {
           style: {
-            minWidth: "22px", height: "22px", borderRadius: "2px",
+            minWidth: "28px", height: "28px", borderRadius: "2px",
             background: "rgba(201,168,76,.12)", border: "1px solid rgba(201,168,76,.3)",
-            color: "var(--gold-solid)", fontFamily: "Cinzel,serif", fontSize: "10px",
+            color: "var(--gold-solid)", fontFamily: "Cinzel,serif", fontSize: "12px",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           },
         }, String(n)),
-        h("div", { style: { flex: 1, fontSize: "11px", color: "var(--body-faint)", lineHeight: "1.65" } },
-          h("div", { style: { color: "var(--alabaster)", fontWeight: "600", marginBottom: "3px", fontSize: "11px" } }, label),
+        h("div", { style: { flex: 1, fontSize: "14px", color: "var(--body-faint)", lineHeight: "1.7" } },
+          h("div", { style: { color: "var(--alabaster)", fontWeight: "600", marginBottom: "5px", fontSize: "14px" } }, label),
           body,
         ),
       );
 
-    const divider = h("div", { style: { borderTop: "1px solid rgba(201,168,76,.1)", margin: "14px 0" } });
+    const divider = h("div", { style: { borderTop: "1px solid rgba(201,168,76,.1)", margin: "18px 0" } });
 
     const panel = h("div", {
       style: {
         position: "absolute",
-        top: "calc(100% + 8px)",
-        right: 0,
-        width: "560px",
-        maxHeight: "70vh",
+        top: "calc(100% + 10px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "min(860px, 90vw)",
+        maxHeight: "80vh",
         overflowY: "auto",
         background: "#1a181b",
         border: "1px solid rgba(201,168,76,.25)",
         borderRadius: "6px",
         zIndex: 9999,
-        boxShadow: "0 8px 40px rgba(0,0,0,.8)",
+        boxShadow: "0 8px 48px rgba(0,0,0,.85)",
       },
       onMouseEnter: () => setHovered(true),
       onMouseLeave: () => setHovered(false),
@@ -92,12 +93,12 @@
 
       // ── SECTION 1: ONE-TIME SETUP ──
       secHead("⚡", "ONE-TIME SETUP — START THE AUTONOMOUS FLOW"),
-      h("div", { style: { padding: "14px 16px" } },
+      h("div", { style: { padding: "18px 20px" } },
         h("div", {
           style: {
             background: "rgba(76,175,80,.06)", border: "1px solid rgba(76,175,80,.2)",
-            borderLeft: "3px solid #4caf50", borderRadius: "2px", padding: "10px 12px",
-            fontSize: "11px", color: "var(--alabaster)", lineHeight: "1.6", marginBottom: "16px",
+            borderLeft: "3px solid #4caf50", borderRadius: "2px", padding: "12px 16px",
+            fontSize: "14px", color: "var(--alabaster)", lineHeight: "1.65", marginBottom: "20px",
           },
         }, "Once these three things are in place the system runs on its own every day."),
 
@@ -119,13 +120,13 @@
 
         divider,
 
-        h("div", { style: { fontSize: "10px", color: "var(--gold-solid)", fontFamily: "Cinzel,serif", letterSpacing: ".06em", marginBottom: "10px" } }, "WHAT FIRES AUTOMATICALLY"),
-        h("div", { style: { background: "rgba(167,139,250,.06)", border: "1px solid rgba(167,139,250,.2)", borderLeft: "3px solid #a78bfa", borderRadius: "2px", padding: "10px 12px", fontSize: "11px", color: "var(--alabaster)", lineHeight: "1.6", marginBottom: "8px" } },
+        h("div", { style: { fontSize: "12px", color: "var(--gold-solid)", fontFamily: "Cinzel,serif", letterSpacing: ".06em", marginBottom: "12px" } }, "WHAT FIRES AUTOMATICALLY"),
+        h("div", { style: { background: "rgba(167,139,250,.06)", border: "1px solid rgba(167,139,250,.2)", borderLeft: "3px solid #a78bfa", borderRadius: "2px", padding: "12px 16px", fontSize: "14px", color: "var(--alabaster)", lineHeight: "1.65", marginBottom: "10px" } },
           tag("#a78bfa", "9 AM CT · DAILY"),
           " Server reads inbox for ", mono("solmlbsm@dla.mil"), " emails. Parses sols → fetches DIBBS → Claude screens → GO sols get RFQs fired to vendors → saved to pipeline → summary sent to you. ",
           h("strong", null, "No browser required."),
         ),
-        h("div", { style: { background: "rgba(96,165,250,.06)", border: "1px solid rgba(96,165,250,.2)", borderLeft: "3px solid #60a5fa", borderRadius: "2px", padding: "10px 12px", fontSize: "11px", color: "var(--alabaster)", lineHeight: "1.6" } },
+        h("div", { style: { background: "rgba(96,165,250,.06)", border: "1px solid rgba(96,165,250,.2)", borderLeft: "3px solid #60a5fa", borderRadius: "2px", padding: "12px 16px", fontSize: "14px", color: "var(--alabaster)", lineHeight: "1.65" } },
           tag("#60a5fa", "2 AM · BROWSER OPEN"),
           " DIBBS tab cron scrapes Navigator for new sols. Same analysis + auto-RFQ path. Can also trigger manually from the DIBBS tab.",
         ),
@@ -133,7 +134,7 @@
 
       // ── SECTION 2: MANUAL ACTIONS ──
       secHead("✋", "MANUAL ACTIONS — YOUR PART IN THE FLOW"),
-      h("div", { style: { padding: "14px 16px" } },
+      h("div", { style: { padding: "18px 20px" } },
         step(1, "Check your batch summary email each morning", "The gmail-ingest run sends you a summary: GO (RFQ sent), VERIFY FIRST (held), REJECTED (no source)."),
         step(2, "Handle VERIFY FIRST sols",
           "Pipeline → find the sol (status: Researching) → read Claude's notes → decide go or no-go. If go: Source tab → Confirm Quote → pick vendor → send RFQ manually."),
@@ -154,7 +155,7 @@
 
       // ── SECTION 3: VENDOR ROUTING ──
       secHead("◆", "VENDOR ROUTING LOGIC (AUTO)"),
-      h("div", { style: { padding: "14px 16px", fontSize: "11px", color: "var(--body-faint)", lineHeight: "1.9" } },
+      h("div", { style: { padding: "18px 20px", fontSize: "14px", color: "var(--body-faint)", lineHeight: "2.1" } },
         tag("#a78bfa", "1"), " Prior Win on NSN/P/N → routes back to that vendor", h("br"),
         tag("#60a5fa", "2"), " AN- or MS- prefix → G-Fast Distribution (Steve) first", h("br"),
         tag("#ffd700", "3"), " JCP manufacturers → best margins", h("br"),
@@ -165,7 +166,7 @@
 
       // ── SECTION 4: STATUS REFERENCE ──
       secHead("⬡", "STATUS MEANINGS"),
-      h("div", { style: { padding: "14px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" } },
+      h("div", { style: { padding: "18px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" } },
         ...[
           ["New",             "#94a3b8", "Sol just landed. Auto-RFQ may still be running."],
           ["Researching",     "#a78bfa", "VERIFY FIRST — flagged by Claude. Awaiting your review."],
@@ -179,10 +180,10 @@
         ].map(([status, color, desc]) =>
           h("div", {
             key: status,
-            style: { background: "rgba(0,0,0,.2)", border: "1px solid rgba(201,168,76,.08)", borderRadius: "3px", padding: "8px 10px" },
+            style: { background: "rgba(0,0,0,.2)", border: "1px solid rgba(201,168,76,.08)", borderRadius: "3px", padding: "12px 14px" },
           },
-            h("div", { style: { color, fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".06em", marginBottom: "3px" } }, status),
-            h("div", { style: { fontSize: "10px", color: "var(--body-faint)", lineHeight: "1.5" } }, desc),
+            h("div", { style: { color, fontFamily: "Cinzel,serif", fontSize: "12px", letterSpacing: ".06em", marginBottom: "5px" } }, status),
+            h("div", { style: { fontSize: "13px", color: "var(--body-faint)", lineHeight: "1.55" } }, desc),
           ),
         ),
       ),
@@ -198,9 +199,9 @@
       h("div", { style: { position: "relative", display: "inline-block" } },
         h("button", {
           style: {
-            padding: "10px 22px",
+            padding: "13px 28px",
             fontFamily: "Cinzel,serif",
-            fontSize: "11px",
+            fontSize: "14px",
             letterSpacing: ".14em",
             background: pinned ? "rgba(201,168,76,.15)" : "transparent",
             border: pinned ? "1px solid rgba(201,168,76,.5)" : "1px solid rgba(201,168,76,.25)",
@@ -209,7 +210,7 @@
             cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "10px",
             transition: "all .15s",
           },
           onMouseEnter: () => setHovered(true),
@@ -220,12 +221,12 @@
             style: {
               border: "1px solid rgba(201,168,76,.4)",
               borderRadius: "50%",
-              width: "16px",
-              height: "16px",
+              width: "20px",
+              height: "20px",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "10px",
+              fontSize: "12px",
               color: "var(--gold-solid)",
             },
           }, "?"),
