@@ -195,7 +195,7 @@
         h(Step, {
           n: "1",
           label: "Add G-Fast Distribution to the Distributor DB",
-          note: "Source tab → Distributor DB → Add New. Name must contain "G-Fast" exactly. Add Steve's email. This is the vendor that receives AN/MS mil-spec part RFQs automatically.",
+          note: "Source tab → Distributor DB → Add New. Name must contain 'G-Fast' exactly. Add Steve's email. This is the vendor that receives AN/MS mil-spec part RFQs automatically.",
         }),
 
         h(Step, {
