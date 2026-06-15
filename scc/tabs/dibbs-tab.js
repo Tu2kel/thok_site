@@ -274,7 +274,6 @@
 
     // ── State ──
     const [mode, setMode] = useState(saved.mode || "manual");
-    const [cronTime, setCronTime] = useState(saved.cronTime || "02:00");
     const [agentAlive, setAgentAlive] = useState(null); // null=unknown true/false
     const [running, setRunning] = useState(false);
     const [log, setLog] = useState([]);
@@ -298,12 +297,11 @@
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
 
-    const cronRef = useRef(null);
     const abortRef = useRef(false);
 
     // ── Persist ──
     useEffect(() => {
-      storeSave({ mode, cronTime, sols, scrapeDate, analysis });
+      storeSave({ mode, sols, scrapeDate, analysis });
     }, [mode, cronTime, sols, scrapeDate, analysis]);
 
     // ── Toast ──
@@ -344,25 +342,6 @@
       return () => clearTimeout(t);
     }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── CRON scheduler (fallback — fires at set time if browser stays open) ──
-    useEffect(() => {
-      if (cronRef.current) clearInterval(cronRef.current);
-      if (mode !== "auto") return;
-      cronRef.current = setInterval(() => {
-        const now = new Date();
-        const hhmm =
-          now.getHours().toString().padStart(2, "0") +
-          ":" +
-          now.getMinutes().toString().padStart(2, "0");
-        const today = now.toLocaleDateString();
-        const lastDate = scrapeDate ? new Date(scrapeDate).toLocaleDateString() : "";
-        if (hhmm === cronTime && lastDate !== today && !running) {
-          setLog([]);
-          runScrape();
-        }
-      }, 60000);
-      return () => clearInterval(cronRef.current);
-    }, [mode, cronTime, running, scrapeDate]);
 
     // ── SCRAPE ────────────────────────────────────────────────────────
     const addLog = useCallback((line, type = "info") => {
@@ -786,39 +765,6 @@
             ),
           ),
 
-          // Cron time (auto mode only)
-          mode === "auto" &&
-            h(
-              "div",
-              {
-                style: { display: "flex", alignItems: "center", gap: "8px" },
-              },
-              h(
-                "span",
-                {
-                  style: {
-                    ...S.mono,
-                    fontSize: "10px",
-                    color: "var(--body-dim)",
-                  },
-                },
-                "Daily at",
-              ),
-              h("input", {
-                type: "time",
-                value: cronTime,
-                onChange: (e) => setCronTime(e.target.value),
-                style: {
-                  background: "var(--inset-bg)",
-                  border: "1px solid rgba(201,168,76,.25)",
-                  color: "var(--alabaster)",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "11px",
-                  padding: "4px 8px",
-                },
-              }),
-            ),
-
           // Run button
           h(
             "button",
@@ -887,7 +833,7 @@
                   setSelected(new Set());
                   setPushLog([]);
                   setLog([]);
-                  storeSave({ mode, cronTime, sols: [], scrapeDate: "", analysis: null });
+                  storeSave({ mode, sols: [], scrapeDate: "", analysis: null });
                 },
                 style: {
                   ...S.mono,
