@@ -379,7 +379,20 @@
           return;
         }
 
-        // Push GO sols to pipeline
+        // TEST MODE — skip DB, blast first 5 GO sols directly to test address
+        if (testModeRef.current) {
+          const testRecs = go.slice(0, 5).map(buildRecord);
+          addLog("AUTO ▶ TEST — blasting " + testRecs.length + " GO sols to test address…", "info");
+          if (window.SCC_AUTO_RFQ) {
+            window.SCC_AUTO_RFQ.runBatch(testRecs, { testMode: true })
+              .then(() => addLog("AUTO ▶ TEST blast complete — check tu2kel.lg@gmail.com", "ok"))
+              .catch((e) => addLog("AUTO ▶ TEST blast error — " + e.message, "err"));
+          }
+          setAnalyzing(false);
+          return;
+        }
+
+        // Push GO sols to pipeline (skip existing)
         const { dbSave, dbGetAll } = window.SCC_DB;
         const existing = await dbGetAll();
         const existingSet = new Set(existing.map((r) => r.sol_number));
@@ -400,8 +413,7 @@
         // RFQ blast
         if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
           addLog("AUTO ▶ Firing RFQ blast…", "info");
-          const opts = testModeRef.current ? { testMode: true } : {};
-          window.SCC_AUTO_RFQ.runBatch(savedRecords, opts)
+          window.SCC_AUTO_RFQ.runBatch(savedRecords, {})
             .then(() => addLog("AUTO ▶ RFQ blast complete.", "ok"))
             .catch((e) => addLog("AUTO ▶ RFQ error — " + e.message, "err"));
         }
@@ -463,8 +475,8 @@
                   if (evt.ok && Array.isArray(evt.sols)) {
                     setSols(evt.sols);
                     setScrapeDate(new Date().toLocaleString());
-                    addLog("✓ AN/MS sweep: " + evt.an + " AN · " + evt.ms + " MS · " + evt.count + " total — heading to Screener…", "ok");
-                    setTimeout(() => setTab && setTab("screener"), 1200);
+                    addLog("✓ AN/MS sweep: " + evt.an + " AN · " + evt.ms + " MS · " + evt.count + " total — analyzing…", "ok");
+                    await autoChain(evt.sols);
                   } else {
                     addLog("Sweep failed: " + (evt.error || "unknown"), "err");
                   }
@@ -477,8 +489,8 @@
           if (data.ok && Array.isArray(data.sols)) {
             setSols(data.sols);
             setScrapeDate(new Date().toLocaleString());
-            addLog("✓ AN/MS sweep: " + data.an + " AN · " + data.ms + " MS · " + data.count + " total", "ok");
-            setTimeout(() => setTab && setTab("screener"), 1200);
+            addLog("✓ AN/MS sweep: " + data.an + " AN · " + data.ms + " MS · " + data.count + " total — analyzing…", "ok");
+            await autoChain(data.sols);
           } else {
             addLog("Sweep failed: " + (data.error || "unknown"), "err");
           }
