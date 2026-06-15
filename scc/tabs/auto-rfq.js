@@ -11,6 +11,12 @@
   const TEST_EMAIL       = "tu2kel.lg@gmail.com";
   const TEST_LIMIT       = 10;
   const BLAST_LOG_KEY    = "scc_blast_log_v1";
+  const PN_QUEUE_KEY     = "scc_pn_queue_v1";
+
+  // ── PN QUEUE STORAGE ──────────────────────────────────────────────────
+  function loadPNQueue()  { try { return JSON.parse(localStorage.getItem(PN_QUEUE_KEY) || "null"); } catch { return null; } }
+  function savePNQueue(q) { try { localStorage.setItem(PN_QUEUE_KEY, JSON.stringify(q)); } catch {} }
+  function clearPNQueue() { try { localStorage.removeItem(PN_QUEUE_KEY); } catch {} }
 
   // ── BLAST LOG ─────────────────────────────────────────────────────────
   function loadBlastLog() {
@@ -279,6 +285,24 @@
       testMode:    !!opts.testMode,
     };
 
+    // ── PN Gate: hold entire batch if any GO record has no part number ──
+    // Records explicitly marked N/A by the user carry _pn_na: true — they pass.
+    const missingPN = batch.filter(function (r) {
+      return r.verdict === "GO" && !r.ref_part_number && !r._pn_na;
+    });
+    if (missingPN.length > 0) {
+      var qEntry = {
+        batch_id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        ts:       new Date().toISOString(),
+        opts:     { testMode: !!opts.testMode },
+        records:  batch,
+      };
+      savePNQueue(qEntry);
+      addLog("⏸ " + missingPN.length + " sol(s) missing part numbers — full batch held. Open PN Queue to resolve, then release.");
+      if (opts.onQueue) opts.onQueue(qEntry);
+      return { queued: true, batchId: qEntry.batch_id, pendingCount: missingPN.length };
+    }
+
     // ── Phase 1: categorize + map vendors ──
     const vendorMap = new Map(); // dist key → { dist, reasons: Set, records: [] }
 
@@ -461,5 +485,5 @@
     }
   }
 
-  window.SCC_AUTO_RFQ = { run, runBatch, sendBatchSummary, getBlastLog: loadBlastLog };
+  window.SCC_AUTO_RFQ = { run, runBatch, sendBatchSummary, getBlastLog: loadBlastLog, loadPNQueue, savePNQueue, clearPNQueue };
 })();

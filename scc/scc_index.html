@@ -239,6 +239,10 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <!-- ── PDF.JS (for PN Queue PDF parsing) ── -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
+
     <!-- ── REACT (production — no Babel, no JSX transformer) ── -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -454,6 +458,7 @@
     <script src="tabs/lane-lookup.js"></script>
     <script src="tabs/blast.js"></script>
     <script src="tabs/navigator-analyzer.js"></script>
+    <script src="tabs/pn-queue.js"></script>
     <script src="tabs/dibbs-tab.js"></script>
     <script src="tabs/auto-rfq.js"></script>
     <script src="tabs/dibbs-ingest.js"></script>

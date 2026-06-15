@@ -300,6 +300,7 @@
     const [blasting, setBlasting] = useState(false);
     const [blastLog, setBlastLog] = useState([]);
     const [showBlastLog, setShowBlastLog] = useState(false);
+    const [pnQueue, setPNQueue] = useState(null); // loaded from localStorage on mount
 
     const abortRef   = useRef(false);
     const modeRef     = useRef(mode);
@@ -324,6 +325,26 @@
       }
     }, []);
 
+    // ── PN QUEUE RELEASE — fires the held batch after all P/Ns resolved ──
+    const handleQueueRelease = useCallback(async (resolvedRecords, _savedOpts) => {
+      if (!window.SCC_AUTO_RFQ) return;
+      window.SCC_AUTO_RFQ.clearPNQueue();
+      setPNQueue(null);
+      const isLive = liveModeRef.current;
+      addLog("PN Queue ▶ Releasing batch — " + resolvedRecords.length + " sols with part numbers resolved…", "info");
+      try {
+        await window.SCC_AUTO_RFQ.runBatch(
+          resolvedRecords,
+          isLive ? { onLog: (m) => addLog(m, "info") } : { testMode: true, onLog: (m) => addLog(m, "info") }
+        );
+        addLog("PN Queue ▶ Blast complete.", "ok");
+        refreshBlastLog();
+        setShowBlastLog(true);
+      } catch (e) {
+        addLog("PN Queue ▶ Blast error: " + e.message, "err");
+      }
+    }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // ── Agent health check ──
     const checkAgent = useCallback(async () => {
       try {
@@ -340,6 +361,10 @@
     useEffect(() => {
       checkAgent();
       refreshBlastLog();
+      if (window.SCC_AUTO_RFQ && window.SCC_AUTO_RFQ.loadPNQueue) {
+        const q = window.SCC_AUTO_RFQ.loadPNQueue();
+        if (q) setPNQueue(q);
+      }
     }, [checkAgent, refreshBlastLog]);
 
     // ── Auto-run on open if not run today ──
@@ -394,10 +419,14 @@
         if (window.SCC_AUTO_RFQ) {
           const isLive = liveModeRef.current;
           addLog("AUTO ▶ Firing RFQ blast to " + blastRecs.length + " GO sols" + (isLive ? " [LIVE]" : " [TEST → tu2kel.lg@gmail.com]") + "…", "info");
-          window.SCC_AUTO_RFQ.runBatch(blastRecs, isLive ? {} : { testMode: true })
-            .then(() => {
-              addLog("AUTO ▶ RFQ blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com.") + " Pipeline stays clean until quotes arrive.", "ok");
-              refreshBlastLog();
+          window.SCC_AUTO_RFQ.runBatch(blastRecs, isLive
+            ? { onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } }
+            : { testMode: true, onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } })
+            .then((r) => {
+              if (!r.queued) {
+                addLog("AUTO ▶ RFQ blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com.") + " Pipeline stays clean until quotes arrive.", "ok");
+                refreshBlastLog();
+              }
             })
             .catch((e) => addLog("AUTO ▶ RFQ error — " + e.message, "err"));
         }
@@ -689,11 +718,16 @@
       const isLive = liveModeRef.current;
       setBlasting(true);
       addLog("BLAST ▶ " + recs.length + " GO sols → " + (isLive ? "real vendors [LIVE]" : "test inbox [TEST]") + "…", "info");
+      const queueHandler = (q) => { setPNQueue(q); addLog("BLAST ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); };
       try {
-        await window.SCC_AUTO_RFQ.runBatch(recs, isLive ? { onLog: (m) => addLog(m, "info") } : { testMode: true, onLog: (m) => addLog(m, "info") });
-        addLog("BLAST ▶ Done. Check blast log for details.", "ok");
-        refreshBlastLog();
-        setShowBlastLog(true);
+        const r = await window.SCC_AUTO_RFQ.runBatch(recs, isLive
+          ? { onLog: (m) => addLog(m, "info"), onQueue: queueHandler }
+          : { testMode: true, onLog: (m) => addLog(m, "info"), onQueue: queueHandler });
+        if (!r.queued) {
+          addLog("BLAST ▶ Done. Check blast log for details.", "ok");
+          refreshBlastLog();
+          setShowBlastLog(true);
+        }
       } catch (e) {
         addLog("BLAST ▶ Error: " + e.message, "err");
       }
@@ -984,8 +1018,12 @@
                 const testRecs = analysis.go.slice(0, 10).map(buildRecord);
                 addLog("TEST ▶ Blasting " + testRecs.length + " GO sols → tu2kel.lg@gmail.com…", "info");
                 if (window.SCC_AUTO_RFQ) {
-                  window.SCC_AUTO_RFQ.runBatch(testRecs, { testMode: true, onLog: (m) => addLog(m, "info") })
-                    .then(() => { addLog("TEST ▶ Done — check tu2kel.lg@gmail.com", "ok"); refreshBlastLog(); setShowBlastLog(true); })
+                  window.SCC_AUTO_RFQ.runBatch(testRecs, {
+                    testMode: true,
+                    onLog: (m) => addLog(m, "info"),
+                    onQueue: (q) => { setPNQueue(q); addLog("TEST ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); },
+                  })
+                    .then((r) => { if (!r.queued) { addLog("TEST ▶ Done — check tu2kel.lg@gmail.com", "ok"); refreshBlastLog(); setShowBlastLog(true); } })
                     .catch((e) => addLog("TEST ▶ Error — " + e.message, "err"));
                 }
               },
@@ -1068,6 +1106,18 @@
         ),
 
       ),
+
+      // ── PN QUEUE PANEL ──
+      pnQueue && window.SCC_TABS && window.SCC_TABS.PNQueuePanel &&
+        h(window.SCC_TABS.PNQueuePanel, {
+          queue:     pnQueue,
+          onRelease: handleQueueRelease,
+          onDismiss: () => {
+            if (window.SCC_AUTO_RFQ) window.SCC_AUTO_RFQ.clearPNQueue();
+            setPNQueue(null);
+            toast_("PN Queue discarded.");
+          },
+        }),
 
       // ── LIVE LOG ──
       log.length > 0 &&
