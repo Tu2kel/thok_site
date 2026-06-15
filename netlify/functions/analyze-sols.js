@@ -135,7 +135,7 @@ async function callClaude(sols) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 4000,
       system: ANALYSIS_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMsg(sols) }],
@@ -193,7 +193,7 @@ async function callClaudeVision({ imageBase64, imageMediaType, rawText }) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 6000,
       system: EXTRACT_ANALYZE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
