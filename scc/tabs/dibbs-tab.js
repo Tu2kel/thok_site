@@ -296,15 +296,18 @@
     const [resultTab, setResultTab] = useState("GO");
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
+    const [liveMode, setLiveMode] = useState(saved.liveMode === true ? true : false);
 
     const abortRef   = useRef(false);
     const modeRef     = useRef(mode);
     useEffect(() => { modeRef.current = mode; }, [mode]);
+    const liveModeRef = useRef(liveMode);
+    useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
 
     // ── Persist ──
     useEffect(() => {
-      storeSave({ mode, sols, scrapeDate, analysis });
-    }, [mode, sols, scrapeDate, analysis]);
+      storeSave({ mode, sols, scrapeDate, analysis, liveMode });
+    }, [mode, sols, scrapeDate, analysis, liveMode]);
 
     // ── Toast ──
     const toast_ = useCallback((msg, err = false) => {
@@ -379,9 +382,10 @@
         // Blast GO sols — pipeline NOT updated yet (vendor quote required first)
         const blastRecs = go.map(buildRecord);
         if (window.SCC_AUTO_RFQ) {
-          addLog("AUTO ▶ Firing RFQ blast to " + blastRecs.length + " GO sols…", "info");
-          window.SCC_AUTO_RFQ.runBatch(blastRecs, {})
-            .then(() => addLog("AUTO ▶ RFQ blast complete. Pipeline stays clean until quotes arrive.", "ok"))
+          const isLive = liveModeRef.current;
+          addLog("AUTO ▶ Firing RFQ blast to " + blastRecs.length + " GO sols" + (isLive ? " [LIVE]" : " [TEST → tu2kel.lg@gmail.com]") + "…", "info");
+          window.SCC_AUTO_RFQ.runBatch(blastRecs, isLive ? {} : { testMode: true })
+            .then(() => addLog("AUTO ▶ RFQ blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com.") + " Pipeline stays clean until quotes arrive.", "ok"))
             .catch((e) => addLog("AUTO ▶ RFQ error — " + e.message, "err"));
         }
       } catch (e) {
@@ -663,7 +667,7 @@
       window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
 
       if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
-        window.SCC_AUTO_RFQ.runBatch(savedRecords, {}).catch((e) =>
+        window.SCC_AUTO_RFQ.runBatch(savedRecords, liveModeRef.current ? {} : { testMode: true }).catch((e) =>
           console.warn("[AutoRFQ] DIBBS batch error:", e.message),
         );
       }
@@ -889,6 +893,35 @@
                 m.toUpperCase(),
               ),
             ),
+          ),
+
+          // LIVE toggle — OFF = test emails only, ON = real vendor blast
+          h(
+            "button",
+            {
+              onClick: () => {
+                if (!liveMode) {
+                  if (!window.confirm("Enable LIVE mode?\n\nAUTO and MANUAL blasts will send real emails to real vendors. Make sure your distributor list and email templates are verified first.")) return;
+                  setLiveMode(true);
+                } else {
+                  setLiveMode(false);
+                }
+              },
+              title: liveMode ? "LIVE — real vendor emails. Click to switch to test-only." : "TEST ONLY — emails go to tu2kel.lg@gmail.com. Click to go live.",
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: "9px",
+                letterSpacing: ".12em",
+                textTransform: "uppercase",
+                padding: "7px 16px",
+                border: liveMode ? "1px solid rgba(231,76,60,.7)" : "1px solid rgba(245,158,11,.5)",
+                background: liveMode ? "rgba(231,76,60,.12)" : "rgba(245,158,11,.08)",
+                color: liveMode ? "#e74c3c" : "rgba(245,158,11,.9)",
+                cursor: "pointer",
+                transition: "all .15s",
+              },
+            },
+            liveMode ? "● LIVE" : "○ TEST ONLY",
           ),
 
           // Run button
@@ -1436,7 +1469,9 @@
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "var(--accent-yellow)" } }, analysis.verify.length + " VERIFY"),
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "#e74c3c" } }, analysis.reject.length + " REJECT"),
             mode === "auto"
-              ? h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--accent-green)", marginLeft: "auto" } }, "✓ AUTO complete — RFQs blasted · pipeline clear until quotes arrive")
+              ? h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: liveMode ? "var(--accent-green)" : "rgba(245,158,11,.9)", marginLeft: "auto" } },
+                  liveMode ? "✓ AUTO complete — RFQs blasted to vendors · pipeline clear until quotes arrive"
+                            : "✓ AUTO complete — TEST only · emails → tu2kel.lg@gmail.com · flip to LIVE when ready")
               : h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-faint)", marginLeft: "auto" } }, "Select sols below → Push to Pipeline → RFQ Blast"),
           ),
 
