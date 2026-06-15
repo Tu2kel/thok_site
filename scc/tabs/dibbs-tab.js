@@ -134,7 +134,7 @@
   // We chunk, call sequentially, aggregate.
   async function analyzeWithClaude(sols, logFn) {
     const log = logFn || (() => {});
-    const CHUNK = 40;
+    const CHUNK = 15;
 
     const payload = sols.map((s) => ({
       sol_number: s.sol_number,
