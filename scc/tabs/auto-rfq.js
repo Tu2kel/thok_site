@@ -384,9 +384,9 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: opts.testMode ? TEST_EMAIL : "anthony@ifedlog.com",
+          to: "anthony@ifedlog.com",
           subject: (opts.testMode ? "[TEST] " : "") + "SCC Auto-RFQ: " + results.go.length + " sent · " + results.verifyFirst.length + " review · " + results.rejected.length + " rejected",
-          emailBody: (opts.testMode ? "⚠ TEST MODE — emails redirected to " + TEST_EMAIL + "\n\n" : "") + lines.join("\n"),
+          emailBody: (opts.testMode ? "⚠ TEST MODE — RFQ emails redirected to " + TEST_EMAIL + "\n\n" : "") + lines.join("\n"),
           attachCert: false,
         }),
       });
