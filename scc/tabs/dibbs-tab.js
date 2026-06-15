@@ -325,26 +325,6 @@
       }
     }, []);
 
-    // ── PN QUEUE RELEASE — fires the held batch after all P/Ns resolved ──
-    const handleQueueRelease = useCallback(async (resolvedRecords, _savedOpts) => {
-      if (!window.SCC_AUTO_RFQ) return;
-      window.SCC_AUTO_RFQ.clearPNQueue();
-      setPNQueue(null);
-      const isLive = liveModeRef.current;
-      addLog("PN Queue ▶ Releasing batch — " + resolvedRecords.length + " sols with part numbers resolved…", "info");
-      try {
-        await window.SCC_AUTO_RFQ.runBatch(
-          resolvedRecords,
-          isLive ? { onLog: (m) => addLog(m, "info") } : { testMode: true, onLog: (m) => addLog(m, "info") }
-        );
-        addLog("PN Queue ▶ Blast complete.", "ok");
-        refreshBlastLog();
-        setShowBlastLog(true);
-      } catch (e) {
-        addLog("PN Queue ▶ Blast error: " + e.message, "err");
-      }
-    }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
-
     // ── Agent health check ──
     const checkAgent = useCallback(async () => {
       try {
@@ -387,6 +367,26 @@
     const addLog = useCallback((line, type = "info") => {
       setLog((prev) => [...prev, { line, type, ts: Date.now() }]);
     }, []);
+
+    // ── PN QUEUE RELEASE — fires the held batch after all P/Ns resolved ──
+    const handleQueueRelease = useCallback(async (resolvedRecords, _savedOpts) => {
+      if (!window.SCC_AUTO_RFQ) return;
+      window.SCC_AUTO_RFQ.clearPNQueue();
+      setPNQueue(null);
+      const isLive = liveModeRef.current;
+      addLog("PN Queue ▶ Releasing batch — " + resolvedRecords.length + " sols with part numbers resolved…", "info");
+      try {
+        await window.SCC_AUTO_RFQ.runBatch(
+          resolvedRecords,
+          isLive ? { onLog: (m) => addLog(m, "info") } : { testMode: true, onLog: (m) => addLog(m, "info") }
+        );
+        addLog("PN Queue ▶ Blast complete.", "ok");
+        refreshBlastLog();
+        setShowBlastLog(true);
+      } catch (e) {
+        addLog("PN Queue ▶ Blast error: " + e.message, "err");
+      }
+    }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── AUTO CHAIN — analyze → push GO → RFQ blast (no user interaction) ──
     const autoChain = useCallback(async (scrapedSols) => {
