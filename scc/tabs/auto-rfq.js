@@ -205,29 +205,42 @@
     const log    = [];
     const addLog = (msg) => { log.push(msg); if (opts.onLog) opts.onLog(msg); };
 
-    // 1. Fast pre-screen — unambiguous hard rejects, no API cost
-    const preReject = preScreen(record);
-    if (preReject) {
-      addLog("PRE-REJECT " + record.sol_number + " — " + preReject);
-      await updatePipeline(record, {
-        status: "No Source",
-        notes: [record.notes, "Auto-rejected: " + preReject].filter(Boolean).join("\n"),
-      });
-      return { verdict: "REJECT", reason: preReject, sent: 0, log };
-    }
-
-    // 2. Claude analysis — full procurement protocol
-    addLog("Analyzing " + record.sol_number + " with Claude…");
+    // 1. If already screened GO by batch analyzer — trust it, skip re-analysis
     let analysis = null;
-    try {
-      analysis = await claudeAnalyze(record);
-      addLog("Claude verdict: " + analysis.verdict + " — " + analysis.reason);
-    } catch (e) {
-      addLog("Claude unavailable (" + e.message + ") — falling back to vendor selection only");
+    let verdict;
+    if (record.verdict === "GO") {
+      addLog("Batch pre-screened GO — skipping re-analysis for " + record.sol_number);
+      analysis = {
+        verdict: "GO",
+        reason: record.reason || "Pre-screened GO",
+        sourcing_path: record.sourcing_path || null,
+        winProbabilityPct: record.winProbabilityPct || null,
+      };
+      verdict = "GO";
+    } else {
+      // Fast pre-screen — unambiguous hard rejects, no API cost
+      const preReject = preScreen(record);
+      if (preReject) {
+        addLog("PRE-REJECT " + record.sol_number + " — " + preReject);
+        await updatePipeline(record, {
+          status: "No Source",
+          notes: [record.notes, "Auto-rejected: " + preReject].filter(Boolean).join("\n"),
+        });
+        return { verdict: "REJECT", reason: preReject, sent: 0, log };
+      }
+
+      // Claude analysis — full procurement protocol
+      addLog("Analyzing " + record.sol_number + " with Claude…");
+      try {
+        analysis = await claudeAnalyze(record);
+        addLog("Claude verdict: " + analysis.verdict + " — " + analysis.reason);
+      } catch (e) {
+        addLog("Claude unavailable (" + e.message + ") — falling back to vendor selection only");
+      }
+      verdict = analysis ? analysis.verdict : "GO";
     }
 
-    // 3. Branch on verdict
-    const verdict = analysis ? analysis.verdict : "GO"; // degrade gracefully if Claude down
+    // Branch on verdict
 
     if (verdict === "REJECT") {
       await updatePipeline(record, {
