@@ -151,25 +151,17 @@
       "",
       "I need pricing and availability on the following item:",
       "",
-      "  Item:            " + item,
-      record.nsn             ? "  NSN:             " + record.nsn             : null,
-      record.ref_part_number ? "  Part Number:     " + record.ref_part_number : null,
-      "  Quantity:        " + qty,
-      "  Required Del.:   " + del,
-      "  Est. Gov. Value: " + gov,
-      "  Solicitation:    " + record.sol_number,
+      "  Item:         " + item,
+      record.ref_part_number ? "  Part Number:  " + record.ref_part_number : null,
+      "  Quantity:     " + qty,
+      "  Required Del.:" + del,
+      "  Ref #:        " + record.sol_number,
     ].filter(l => l !== null);
-
-    // Add sourcing path hint from Claude if it came back
-    if (analysis && analysis.sourcing_path) {
-      lines.push("", "  Sourcing note: " + analysis.sourcing_path);
-    }
 
     lines.push(
       "",
       "Requirements:",
       "- Destination: Government delivery address (continental US)",
-      "- Payment: Immediate PO upon award — we use third-party PO funding (Factoring Express). Supplier receives direct wire payment before shipment.",
       "- Compliance: BAA/TAA required — please confirm country of origin",
       "- Shipping: FOB Destination required",
       "- Condition: New/unused only. No substitutions without prior approval.",
