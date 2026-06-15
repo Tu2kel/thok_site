@@ -553,8 +553,114 @@ async function scrapeNavigatorBatch() {
   }
 }
 
+// ── AN/MS 30-DAY SWEEP ────────────────────────────────────────────────────
+// One-time pass: searches Piece Part No = "AN" then "MS", last 30 days.
+// Triggered manually from the UI — not part of the daily batch.
+async function runPnPass(page, { pnPrefix, seen }) {
+  info(`\n── AN/MS SWEEP: Piece Part No "${pnPrefix}" — Last 30 days ──`);
+
+  await goToSearchPage(page);
+  await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
+
+  // Clear Piece Part No field, type prefix
+  const pnInput = await page.$("#Main_PiecePartNo_Search");
+  if (pnInput) {
+    await pnInput.click({ clickCount: 3 });
+    await page.keyboard.press("Backspace");
+    await page.type("#Main_PiecePartNo_Search", pnPrefix, { delay: 50 });
+  }
+  info(`✅ Piece Part No set: ${pnPrefix}`);
+
+  // Last 30 days
+  await clickRadio(page, "#Main_rbDateRange_3");
+  info("✅ Date: Last 30 days");
+
+  await setCommonFilters(page);
+  info("✅ Common filters set");
+
+  info("Clicking Apply Selections...");
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
+    page.click("#Main_btnApplySelections"),
+  ]);
+  info("✅ Results loaded");
+
+  await sortDescByExtPrice(page);
+
+  const allOnPage = await scrapePage(page, {
+    passNum: 4,
+    passLabel: `AN/MS ${pnPrefix}`,
+    fscHint: "",
+  });
+
+  const newSols = seen ? allOnPage.filter((s) => !seen.has(s.sol_number)) : allOnPage;
+  if (seen) newSols.forEach((s) => seen.add(s.sol_number));
+
+  info(`   P/N "${pnPrefix}": ${allOnPage.length} on page, ${newSols.length} unique`);
+  return newSols;
+}
+
+async function scrapeAnMsSweep() {
+  let browser;
+  try {
+    if (!CONFIG.username || !CONFIG.password) {
+      throw new Error("NAVIGATOR_USERNAME or NAVIGATOR_PASSWORD not set in .env");
+    }
+
+    info("AN/MS Sweep — launching browser...");
+    browser = await puppeteer.launch({
+      headless: CONFIG.headless,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
+    });
+
+    const page = await browser.newPage();
+    page.setDefaultTimeout(60000);
+
+    // ── LOGIN ──────────────────────────────────────────────────────────
+    await page.goto("https://navigator.dla.mil/dn.aspx", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector("#Main_Input_UserName", { timeout: 15000 });
+    await page.type("#Main_Input_UserName", CONFIG.username, { delay: 60 });
+    await page.type("#Main_Input_Password", CONFIG.password, { delay: 60 });
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 }),
+      page.click("#Main_Input_LoginButton"),
+    ]);
+    if (page.url().includes("login") || page.url().includes("Login")) {
+      throw new Error("Login failed — check credentials in .env");
+    }
+    info("✅ Login successful");
+
+    const seen = new Set();
+
+    // Pass AN
+    const anSols = await runPnPass(page, { pnPrefix: "AN", seen });
+    // Pass MS
+    const msSols = await runPnPass(page, { pnPrefix: "MS", seen });
+
+    await browser.close();
+
+    const allSols = [...anSols, ...msSols];
+    info(`\n✅ AN/MS SWEEP COMPLETE — AN: ${anSols.length} | MS: ${msSols.length} | Total: ${allSols.length}`);
+
+    const timestamp = new Date().toISOString().split("T")[0];
+    const backupPath = path.join(CONFIG.backupDir, `navigator-anms-${timestamp}.json`);
+    fs.writeFileSync(backupPath, JSON.stringify(allSols, null, 2));
+
+    return { ok: true, sols: allSols, count: allSols.length, an: anSols.length, ms: msSols.length, backupPath };
+  } catch (e) {
+    fail("AN/MS sweep failed:", e.message);
+    if (browser) { try { await browser.close(); } catch (_) {} }
+    return { ok: false, error: e.message };
+  }
+}
+
 // ── EXPORTS ───────────────────────────────────────────────────────────────
-module.exports = { scrapeNavigatorBatch, CONFIG };
+module.exports = { scrapeNavigatorBatch, scrapeAnMsSweep, CONFIG };
 
 // ── CLI ───────────────────────────────────────────────────────────────────
 if (require.main === module) {

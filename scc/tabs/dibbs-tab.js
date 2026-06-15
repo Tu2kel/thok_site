@@ -292,6 +292,7 @@
     const [blastPlan, setBlastPlan] = useState(null); // { [fsc]: { sols, dists } }
 
     const [testMode, setTestMode] = useState(false);
+    const [anmsSweeping, setAnmsSweeping] = useState(false);
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
     const [rawExpanded, setRawExpanded] = useState(false);
@@ -409,6 +410,85 @@
       }
       setAnalyzing(false);
     }, [addLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── AN/MS 30-DAY SWEEP ────────────────────────────────────────────────
+    const runAnMsSweep = useCallback(async () => {
+      if (anmsSweeping || running) return;
+      setAnmsSweeping(true);
+      setLog([]);
+      setSols([]);
+      setAnalysis(null);
+      setSelected(new Set());
+
+      addLog("AN/MS Sweep — checking agent…", "info");
+      try {
+        const hRes = await fetch(AGENT_URL + "/health", { signal: AbortSignal.timeout(4000) });
+        const hData = await hRes.json();
+        if (!hData.ok) throw new Error("Agent not ready");
+        addLog("Agent online ✓", "ok");
+      } catch {
+        addLog("Agent offline — start the agent first.", "err");
+        setAnmsSweeping(false);
+        return;
+      }
+
+      addLog("Launching 30-day AN + MS sweep…", "info");
+      try {
+        const resp = await fetch(AGENT_URL + "/navigator/anms-sweep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+          signal: AbortSignal.timeout(900000),
+        });
+
+        const contentType = resp.headers.get("content-type") || "";
+        if (contentType.includes("event-stream")) {
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith("data:")) continue;
+              const payload = line.slice(5).trim();
+              if (!payload || payload === "[DONE]") continue;
+              try {
+                const evt = JSON.parse(payload);
+                if (evt.type === "log") addLog(evt.msg, evt.level || "info");
+                if (evt.type === "result") {
+                  if (evt.ok && Array.isArray(evt.sols)) {
+                    setSols(evt.sols);
+                    setScrapeDate(new Date().toLocaleString());
+                    addLog("✓ AN/MS sweep: " + evt.an + " AN · " + evt.ms + " MS · " + evt.count + " total — heading to Screener…", "ok");
+                    setTimeout(() => setTab && setTab("screener"), 1200);
+                  } else {
+                    addLog("Sweep failed: " + (evt.error || "unknown"), "err");
+                  }
+                }
+              } catch {}
+            }
+          }
+        } else {
+          const data = await resp.json();
+          if (data.ok && Array.isArray(data.sols)) {
+            setSols(data.sols);
+            setScrapeDate(new Date().toLocaleString());
+            addLog("✓ AN/MS sweep: " + data.an + " AN · " + data.ms + " MS · " + data.count + " total", "ok");
+            setTimeout(() => setTab && setTab("screener"), 1200);
+          } else {
+            addLog("Sweep failed: " + (data.error || "unknown"), "err");
+          }
+        }
+      } catch (e) {
+        addLog("Sweep error: " + e.message, "err");
+      }
+
+      setAnmsSweeping(false);
+    }, [anmsSweeping, running, addLog, setTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const runScrape = useCallback(async () => {
       if (running) return;
@@ -872,6 +952,26 @@
               },
             },
             testMode ? "⚠ TEST ON" : "TEST",
+          ),
+
+          // AN/MS 30-day sweep button
+          h(
+            "button",
+            {
+              onClick: runAnMsSweep,
+              disabled: anmsSweeping || running,
+              title: "30-day sweep for Piece Part No AN and MS — runs once, routes to Screener for manual review",
+              style: {
+                ...S.btn("var(--gold-dim)", "transparent"),
+                border: "1px solid rgba(201,168,76,.25)",
+                fontSize: "9px",
+                fontFamily: "Cinzel,serif",
+                letterSpacing: ".1em",
+                padding: "7px 14px",
+                opacity: (anmsSweeping || running) ? 0.5 : 1,
+              },
+            },
+            anmsSweeping ? "⟳ AN/MS…" : "AN/MS SWEEP",
           ),
 
           // Last scrape timestamp
@@ -1345,7 +1445,9 @@
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "var(--accent-green)" } }, analysis.go.length + " GO"),
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "var(--accent-yellow)" } }, analysis.verify.length + " VERIFY"),
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "#e74c3c" } }, analysis.reject.length + " REJECT"),
-            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-faint)", marginLeft: "auto" } }, "Select sols below → Push to Pipeline → RFQ Blast"),
+            mode === "auto"
+              ? h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--accent-green)", marginLeft: "auto" } }, "✓ AUTO complete — GO sols pushed + blasted")
+              : h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-faint)", marginLeft: "auto" } }, "Select sols below → Push to Pipeline → RFQ Blast"),
           ),
 
           // Bucket tabs + action bar
@@ -1397,8 +1499,8 @@
 
             h("div", { style: { flex: 1 } }),
 
-            // Select all / clear
-            resultTab !== "REJECT" &&
+            // Select all / clear / push / blast — hidden in AUTO (already done)
+            mode !== "auto" && resultTab !== "REJECT" &&
               h(
                 "button",
                 {
@@ -1412,7 +1514,7 @@
                 "Select All",
               ),
 
-            selected.size > 0 &&
+            mode !== "auto" && selected.size > 0 &&
               resultTab !== "REJECT" &&
               h(
                 "button",
@@ -1424,7 +1526,7 @@
               ),
 
             // Push to pipeline
-            selected.size > 0 &&
+            mode !== "auto" && selected.size > 0 &&
               h(
                 "button",
                 {
@@ -1440,7 +1542,7 @@
               ),
 
             // RFQ Blast
-            analysis.go.length > 0 &&
+            mode !== "auto" && analysis.go.length > 0 &&
               h(
                 "button",
                 {

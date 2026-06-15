@@ -1514,6 +1514,55 @@ Return ONLY a JSON array. No markdown, no preamble, no backticks.`;
     return;
   }
 
+  // ── /navigator/anms-sweep ─────────────────────────────────────────────
+  // One-time 30-day sweep for Piece Part No "AN" and "MS".
+  // Manual trigger only — not part of the daily batch.
+  if (req.method === "POST" && req.url === "/navigator/anms-sweep") {
+    res.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    const send = (payload) => { try { res.write("data: " + JSON.stringify(payload) + "\n\n"); } catch {} };
+    send({ type: "log", msg: "AN/MS 30-day sweep initiated", level: "info" });
+    const origLog = console.log;
+    const origError = console.error;
+    const patchLog = (...args) => {
+      origLog(...args);
+      const msg = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+      const level = msg.includes("❌") ? "err" : msg.includes("✅") ? "ok" : "info";
+      send({ type: "log", msg: msg.replace("[navigator-scraper] ", ""), level });
+    };
+    console.log = patchLog;
+    console.error = (...args) => { origError(...args); send({ type: "log", msg: args.join(" "), level: "err" }); };
+    let scraper;
+    try {
+      delete require.cache[require.resolve("./navigator-scraper")];
+      scraper = require("./navigator-scraper");
+    } catch (e) {
+      send({ type: "result", ok: false, error: "navigator-scraper.js not found: " + e.message });
+      res.write("data: [DONE]\n\n"); res.end(); return;
+    }
+    scraper.scrapeAnMsSweep()
+      .then((result) => {
+        console.log = origLog; console.error = origError;
+        send({ type: "result", ok: result.ok, sols: result.sols, count: result.count, an: result.an, ms: result.ms, error: result.error });
+        res.write("data: [DONE]\n\n"); res.end();
+      })
+      .catch((e) => {
+        console.log = origLog; console.error = origError;
+        send({ type: "log", msg: "Fatal: " + e.message, level: "err" });
+        send({ type: "result", ok: false, error: e.message });
+        res.write("data: [DONE]\n\n"); res.end();
+      });
+    const keepAlive = setInterval(() => { try { res.write(": keep-alive\n\n"); } catch { clearInterval(keepAlive); } }, 20000);
+    req.on("close", () => { clearInterval(keepAlive); console.log = origLog; });
+    return;
+  }
+
   res.writeHead(404, CORS);
   res.end(JSON.stringify({ ok: false, error: "Unknown endpoint" }));
 });
