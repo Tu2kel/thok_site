@@ -156,8 +156,7 @@ function selectVendors(record, dists) {
   for (const d of dists) if (d.is_manufacturer && d.has_jcp)  add(d, "MFR · JCP");
   for (const d of dists) if (d.is_manufacturer && !d.has_jcp) add(d, "MFR");
   for (const d of dists) {
-    const tags = (d.tags || []).map(t => t.toLowerCase());
-    if (tags.includes("fsc-" + fsc) || (d.fsc_specialties || []).includes(fsc)) add(d, "FSC " + fsc);
+    if ((d.fsc || []).includes(fsc)) add(d, "FSC " + fsc);
   }
   for (const d of dists) {
     if (d.is_starred || (d.tags || []).includes("preferred")) add(d, "Preferred");

@@ -118,8 +118,7 @@
 
     // 4. FSC-matched distributors
     for (const d of dists) {
-      const tags = (d.tags || []).map(t => t.toLowerCase());
-      if (tags.includes("fsc-" + fsc) || (d.fsc_specialties || []).includes(fsc))
+      if ((d.fsc || []).includes(fsc))
         addDist(d, "FSC " + fsc);
     }
 
