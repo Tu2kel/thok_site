@@ -142,7 +142,7 @@
       ? "$" + Number(record.unit_price).toLocaleString() + " est."
       : "—";
 
-    const subject = "RFQ – " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
+    const subject = "RFQ - " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
 
     const lines = [
       "Hi " + dist.name + ",",

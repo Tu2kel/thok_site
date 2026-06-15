@@ -171,7 +171,7 @@ function buildRFQEmail(dist, record) {
   const del  = record.delivery_days ? record.delivery_days + " days ARO" : "—";
   const gov  = record.unit_price ? "$" + Number(record.unit_price).toLocaleString() + " est." : "—";
 
-  const subject = "RFQ – " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
+  const subject = "RFQ - " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
 
   const body = [
     "Hi " + (dist.name || dist.company_name) + ",",
