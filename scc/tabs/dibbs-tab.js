@@ -297,6 +297,9 @@
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
     const [liveMode, setLiveMode] = useState(saved.liveMode === true ? true : false);
+    const [blasting, setBlasting] = useState(false);
+    const [blastLog, setBlastLog] = useState([]);
+    const [showBlastLog, setShowBlastLog] = useState(false);
 
     const abortRef   = useRef(false);
     const modeRef     = useRef(mode);
@@ -315,6 +318,12 @@
       setTimeout(() => setToast(null), 4000);
     }, []);
 
+    const refreshBlastLog = useCallback(() => {
+      if (window.SCC_AUTO_RFQ && window.SCC_AUTO_RFQ.getBlastLog) {
+        setBlastLog(window.SCC_AUTO_RFQ.getBlastLog());
+      }
+    }, []);
+
     // ── Agent health check ──
     const checkAgent = useCallback(async () => {
       try {
@@ -330,7 +339,8 @@
 
     useEffect(() => {
       checkAgent();
-    }, [checkAgent]);
+      refreshBlastLog();
+    }, [checkAgent, refreshBlastLog]);
 
     // ── Auto-run on open if not run today ──
     const autoRunRef = useRef(false);
@@ -385,7 +395,10 @@
           const isLive = liveModeRef.current;
           addLog("AUTO ▶ Firing RFQ blast to " + blastRecs.length + " GO sols" + (isLive ? " [LIVE]" : " [TEST → tu2kel.lg@gmail.com]") + "…", "info");
           window.SCC_AUTO_RFQ.runBatch(blastRecs, isLive ? {} : { testMode: true })
-            .then(() => addLog("AUTO ▶ RFQ blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com.") + " Pipeline stays clean until quotes arrive.", "ok"))
+            .then(() => {
+              addLog("AUTO ▶ RFQ blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com.") + " Pipeline stays clean until quotes arrive.", "ok");
+              refreshBlastLog();
+            })
             .catch((e) => addLog("AUTO ▶ RFQ error — " + e.message, "err"));
         }
       } catch (e) {
@@ -659,19 +672,33 @@
 
       setPushLog(log_);
       setPushing(false);
-      const saved = log_.filter((l) => l.status === "saved").length;
+      const saved_ = log_.filter((l) => l.status === "saved").length;
       const skips = log_.filter((l) => l.status === "skip").length;
       toast_(
-        `Pushed ${saved} sols to pipeline${skips ? " · " + skips + " skipped (duplicate)" : ""}`,
+        "Pushed " + saved_ + " sols to pipeline" + (skips ? " · " + skips + " skipped (duplicate)" : "") + " — use BLAST GO to send RFQs",
       );
       window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
-
-      if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
-        window.SCC_AUTO_RFQ.runBatch(savedRecords, liveModeRef.current ? {} : { testMode: true }).catch((e) =>
-          console.warn("[AutoRFQ] DIBBS batch error:", e.message),
-        );
-      }
     }, [selected, analysis, toast_]);
+
+    // ── MANUAL BLAST GO ───────────────────────────────────────────────
+    // Fires RFQ blast from current GO analysis without pushing to pipeline.
+    // Pipeline stays clean until vendor quote arrives — same hygiene as AUTO mode.
+    const blastGO = useCallback(async () => {
+      if (!analysis || !analysis.go.length || blasting) return;
+      const recs = analysis.go.map(buildRecord);
+      const isLive = liveModeRef.current;
+      setBlasting(true);
+      addLog("BLAST ▶ " + recs.length + " GO sols → " + (isLive ? "real vendors [LIVE]" : "test inbox [TEST]") + "…", "info");
+      try {
+        await window.SCC_AUTO_RFQ.runBatch(recs, isLive ? { onLog: (m) => addLog(m, "info") } : { testMode: true, onLog: (m) => addLog(m, "info") });
+        addLog("BLAST ▶ Done. Check blast log for details.", "ok");
+        refreshBlastLog();
+        setShowBlastLog(true);
+      } catch (e) {
+        addLog("BLAST ▶ Error: " + e.message, "err");
+      }
+      setBlasting(false);
+    }, [analysis, blasting, addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── BUILD BLAST PLAN ──────────────────────────────────────────────
     const buildBlast = useCallback(() => {
@@ -957,8 +984,8 @@
                 const testRecs = analysis.go.slice(0, 10).map(buildRecord);
                 addLog("TEST ▶ Blasting " + testRecs.length + " GO sols → tu2kel.lg@gmail.com…", "info");
                 if (window.SCC_AUTO_RFQ) {
-                  window.SCC_AUTO_RFQ.runBatch(testRecs, { testMode: true })
-                    .then(() => addLog("TEST ▶ Done — check tu2kel.lg@gmail.com", "ok"))
+                  window.SCC_AUTO_RFQ.runBatch(testRecs, { testMode: true, onLog: (m) => addLog(m, "info") })
+                    .then(() => { addLog("TEST ▶ Done — check tu2kel.lg@gmail.com", "ok"); refreshBlastLog(); setShowBlastLog(true); })
                     .catch((e) => addLog("TEST ▶ Error — " + e.message, "err"));
                 }
               },
@@ -1566,20 +1593,107 @@
                 pushing ? "Pushing…" : "→ Pipeline (" + selected.size + ")",
               ),
 
-            // RFQ Blast
+            // BLAST GO — sends vendor-grouped RFQs without pipeline push
             mode !== "auto" && analysis.go.length > 0 &&
               h(
                 "button",
                 {
-                  onClick: buildBlast,
+                  onClick: blastGO,
+                  disabled: blasting,
+                  title: "Send batched RFQ emails to matched vendors — one email per vendor with all their matched items",
                   style: {
-                    ...S.btn("var(--gold-solid)", "rgba(201,168,76,.08)"),
-                    border: "1px solid rgba(201,168,76,.3)",
+                    ...S.btn(
+                      liveModeRef.current ? "#e74c3c" : "rgba(245,158,11,.9)",
+                      liveModeRef.current ? "rgba(231,76,60,.1)" : "rgba(245,158,11,.08)",
+                    ),
+                    border: "1px solid " + (liveModeRef.current ? "rgba(231,76,60,.5)" : "rgba(245,158,11,.4)"),
+                    opacity: blasting ? 0.6 : 1,
                   },
                 },
-                "🚀 RFQ Blast",
+                blasting ? "⟳ Blasting…" : (liveModeRef.current ? "BLAST GO [LIVE]" : "BLAST GO [TEST]") + " (" + analysis.go.length + ")",
+              ),
+
+            // Blast log toggle
+            mode !== "auto" && blastLog.length > 0 &&
+              h(
+                "button",
+                {
+                  onClick: () => setShowBlastLog((v) => !v),
+                  title: "View blast history",
+                  style: {
+                    ...S.btn("var(--body-faint)"),
+                    padding: "6px 12px",
+                    fontSize: "9px",
+                  },
+                },
+                (showBlastLog ? "▲" : "▼") + " Blast Log (" + blastLog.length + ")",
               ),
           ),
+
+          // Blast log panel
+          showBlastLog && blastLog.length > 0 &&
+            h(
+              "div",
+              {
+                style: {
+                  ...S.card,
+                  padding: "12px 16px",
+                  marginBottom: "10px",
+                  maxHeight: "260px",
+                  overflowY: "auto",
+                  background: "rgba(0,0,0,.4)",
+                  border: "1px solid rgba(201,168,76,.15)",
+                },
+              },
+              h("div", { style: { ...S.cardTitle, marginBottom: "10px" } }, "Blast Log — " + blastLog.length + " entries"),
+              ...blastLog.map((entry, i) =>
+                h(
+                  "div",
+                  {
+                    key: i,
+                    style: {
+                      borderBottom: "1px solid rgba(201,168,76,.07)",
+                      padding: "6px 0",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    },
+                  },
+                  h(
+                    "div",
+                    { style: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" } },
+                    h("span", {
+                      style: {
+                        ...S.mono, fontSize: "9px",
+                        color: entry.sent ? "var(--accent-green)" : "#e74c3c",
+                        padding: "1px 6px",
+                        border: "1px solid " + (entry.sent ? "rgba(61,214,140,.3)" : "rgba(231,76,60,.3)"),
+                      },
+                    }, entry.sent ? "✓ SENT" : "✗ FAIL"),
+                    h("span", { style: { ...S.mono, fontSize: "9px", color: entry.live ? "#e74c3c" : "rgba(245,158,11,.7)" } },
+                      entry.live ? "LIVE" : "TEST"),
+                    h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "10px", color: "var(--alabaster)" } },
+                      entry.vendor),
+                    h("span", { style: { ...S.mono, fontSize: "10px", color: "var(--gold-dim)" } },
+                      entry.email),
+                    h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)", marginLeft: "auto" } },
+                      new Date(entry.ts).toLocaleString()),
+                  ),
+                  h(
+                    "div",
+                    { style: { ...S.mono, fontSize: "10px", color: "var(--body-dim)", paddingLeft: "4px" } },
+                    entry.item_count + " item(s): " + (entry.items || entry.sol_numbers || []).slice(0, 4).join(", ") +
+                    (entry.item_count > 4 ? " +" + (entry.item_count - 4) + " more" : ""),
+                  ),
+                  entry.match_reason &&
+                    h("div", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)", paddingLeft: "4px" } },
+                      "Match: " + entry.match_reason),
+                  entry.error &&
+                    h("div", { style: { ...S.mono, fontSize: "9px", color: "#e74c3c", paddingLeft: "4px" } },
+                      "Error: " + entry.error),
+                ),
+              ),
+            ),
 
           // Push log
           pushLog.length > 0 &&

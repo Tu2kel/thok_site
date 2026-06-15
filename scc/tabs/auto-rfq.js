@@ -1,19 +1,31 @@
 (function () {
   // ═══════════════════════════════════════════════════════════════════════
   //  IMPERIO SCC — AUTO RFQ ENGINE
-  //  Flow: fast pre-screen → Claude analysis → vendor selection → RFQ emails
-  //  Claude uses the full procurement protocol from analyze-sols.js.
-  //  GO → fire emails. VERIFY FIRST → flag pipeline, no send. REJECT → mark closed.
-  //  Exports: window.SCC_AUTO_RFQ.run(record)
+  //  Batch flow: collect all GO records → group by vendor → one email per vendor
+  //  Single flow: run(record) for individual use
+  //  Blast log: persisted to localStorage scc_blast_log_v1
   // ═══════════════════════════════════════════════════════════════════════
 
   const ANALYZE_ENDPOINT = "/.netlify/functions/analyze-sols";
   const SEND_ENDPOINT    = "/.netlify/functions/send-rfq";
   const TEST_EMAIL       = "tu2kel.lg@gmail.com";
   const TEST_LIMIT       = 10;
+  const BLAST_LOG_KEY    = "scc_blast_log_v1";
+
+  // ── BLAST LOG ─────────────────────────────────────────────────────────
+  function loadBlastLog() {
+    try { return JSON.parse(localStorage.getItem(BLAST_LOG_KEY) || "[]"); } catch { return []; }
+  }
+  function appendBlastEntry(entry) {
+    try {
+      const log = loadBlastLog();
+      log.unshift(entry);
+      if (log.length > 300) log.length = 300;
+      localStorage.setItem(BLAST_LOG_KEY, JSON.stringify(log));
+    } catch {}
+  }
 
   // ── FAST PRE-SCREEN ───────────────────────────────────────────────────
-  // Catches unambiguous hard-rejects before spending an API call.
   function preScreen(record) {
     const name = (record.item_name || "").toLowerCase();
     const days = parseInt(record.delivery_days) || 0;
@@ -27,12 +39,10 @@
     const hardSetAsides = ["AL", "FG", "PO", "FI"];
     if (hardSetAsides.includes(setAside))           return "Set-aside " + setAside;
 
-    return null; // passes pre-screen
+    return null;
   }
 
   // ── CLAUDE ANALYSIS ───────────────────────────────────────────────────
-  // Calls analyze-sols.js with the full procurement protocol.
-  // Returns { verdict, reason, sourcing_path, margin_flag, winProbabilityPct }
   async function claudeAnalyze(record) {
     const solPayload = {
       sol_number:       record.sol_number,
@@ -62,7 +72,7 @@
     if (!res.ok) throw new Error("analyze-sols HTTP " + res.status);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "analyze-sols error");
-    return data.results[0]; // single sol → first result
+    return data.results[0];
   }
 
   // ── P/N PREFIX DETECTION ─────────────────────────────────────────────
@@ -94,7 +104,6 @@
       selected.push({ dist: d, reason });
     };
 
-    // 1. Prior wins on this NSN
     if (WL && (record.nsn || record.ref_part_number)) {
       for (const w of WL.lookup(record.nsn, record.ref_part_number)) {
         const match = dists.find(d => d.name.toLowerCase() === w.vendor_name.toLowerCase());
@@ -102,13 +111,11 @@
       }
     }
 
-    // 2. AN/MS prefix → G-Fast Distribution (Steve) before standard chain
     if (pnPrefix === "AN" || pnPrefix === "MS") {
       const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name));
       if (gfast) addDist(gfast, "P/N prefix " + pnPrefix + " → G-Fast (Steve)");
     }
 
-    // 3. Manufacturers — JCP first, then others
     for (const d of dists) {
       if (d.is_manufacturer && d.has_jcp)  addDist(d, "MFR · JCP");
     }
@@ -116,13 +123,11 @@
       if (d.is_manufacturer && !d.has_jcp) addDist(d, "MFR");
     }
 
-    // 4. FSC-matched distributors
     for (const d of dists) {
       if ((d.fsc || []).includes(fsc))
         addDist(d, "FSC " + fsc);
     }
 
-    // 5. Preferred distributors
     for (const d of dists) {
       if (d.is_starred || (d.tags || []).includes("preferred"))
         addDist(d, "Preferred");
@@ -131,34 +136,41 @@
     return selected;
   }
 
-  // ── EMAIL BUILDER ─────────────────────────────────────────────────────
-  function buildEmail(dist, record, analysis) {
-    const item = record.item_name || "—";
-    const qty  = record.quantity
-      ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "")
-      : "—";
-    const del  = record.delivery_days ? record.delivery_days + " days ARO" : "—";
-    const gov  = record.unit_price
-      ? "$" + Number(record.unit_price).toLocaleString() + " est."
-      : "—";
+  // ── BATCHED EMAIL BUILDER ─────────────────────────────────────────────
+  // One email per vendor listing all their matched solicitations.
+  function buildBatchEmail(dist, records) {
+    const count = records.length;
 
-    const subject = "RFQ - " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
+    const subject = count === 1
+      ? "RFQ - " + (records[0].item_name || "Item") + " | " + records[0].sol_number + " | Imperio Federal Logistics"
+      : "RFQ - " + count + " Items Needed | Imperio Federal Logistics";
 
-    const lines = [
+    const itemBlocks = records.map(function (record, i) {
+      const item = record.item_name || "—";
+      const qty  = record.quantity
+        ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "")
+        : "—";
+      const del  = record.delivery_days ? record.delivery_days + " days ARO" : "—";
+      const lines = [
+        "  " + (i + 1) + ".  Item:          " + item,
+      ];
+      if (record.ref_part_number) lines.push("       Part Number:   " + record.ref_part_number);
+      lines.push("       Quantity:      " + qty);
+      lines.push("       Required Del.: " + del);
+      lines.push("       Ref #:         " + record.sol_number);
+      return lines.join("\n");
+    });
+
+    const body = [
       "Hi " + dist.name + ",",
       "",
-      "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have an active government procurement need in your lane.",
+      "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have " +
+        (count === 1 ? "an active government procurement need" : count + " active government procurement needs") +
+        " in your lane.",
       "",
-      "I need pricing and availability on the following item:",
+      "I need pricing and availability on the following item" + (count > 1 ? "s" : "") + ":",
       "",
-      "  Item:         " + item,
-      record.ref_part_number ? "  Part Number:  " + record.ref_part_number : null,
-      "  Quantity:     " + qty,
-      "  Required Del.:" + del,
-      "  Ref #:        " + record.sol_number,
-    ].filter(l => l !== null);
-
-    lines.push(
+      itemBlocks.join("\n\n"),
       "",
       "Requirements:",
       "- Destination: Government delivery address (continental US)",
@@ -166,7 +178,7 @@
       "- Shipping: FOB Destination required",
       "- Condition: New/unused only. No substitutions without prior approval.",
       "",
-      "Please provide unit price, lead time, and confirm country of origin. We issue POs immediately upon award.",
+      "Please provide unit price, lead time, and confirm country of origin" + (count > 1 ? " for each item" : "") + ". We issue POs immediately upon award.",
       "",
       "Thank you,",
       "",
@@ -176,9 +188,9 @@
       "SDVOSB | VetHUB",
       "anthony@ifedlog.com | ifedlog.com",
       "(254) 226-5216",
-    );
+    ].join("\n");
 
-    return { subject, body: lines.join("\n") };
+    return { subject, body };
   }
 
   // ── PIPELINE UPDATE ───────────────────────────────────────────────────
@@ -190,200 +202,233 @@
     await window.SCC_DB.dbSave({ ...current, ...patch });
   }
 
-  // ── MAIN ENTRY POINT ─────────────────────────────────────────────────
+  // ── SINGLE RECORD (kept for gmail-ingest compatibility) ───────────────
   async function run(record, opts) {
     opts = opts || {};
     const log    = [];
     const addLog = (msg) => { log.push(msg); if (opts.onLog) opts.onLog(msg); };
 
-    // 1. If already screened GO by batch analyzer — trust it, skip re-analysis
-    let analysis = null;
     let verdict;
     if (record.verdict === "GO") {
-      addLog("Batch pre-screened GO — skipping re-analysis for " + record.sol_number);
-      analysis = {
-        verdict: "GO",
-        reason: record.reason || "Pre-screened GO",
-        sourcing_path: record.sourcing_path || null,
-        winProbabilityPct: record.winProbabilityPct || null,
-      };
       verdict = "GO";
     } else {
-      // Fast pre-screen — unambiguous hard rejects, no API cost
       const preReject = preScreen(record);
       if (preReject) {
         addLog("PRE-REJECT " + record.sol_number + " — " + preReject);
-        await updatePipeline(record, {
-          status: "No Source",
-          notes: [record.notes, "Auto-rejected: " + preReject].filter(Boolean).join("\n"),
-        });
         return { verdict: "REJECT", reason: preReject, sent: 0, log };
       }
-
-      // Claude analysis — full procurement protocol
       addLog("Analyzing " + record.sol_number + " with Claude…");
       try {
-        analysis = await claudeAnalyze(record);
+        const analysis = await claudeAnalyze(record);
         addLog("Claude verdict: " + analysis.verdict + " — " + analysis.reason);
+        verdict = analysis.verdict;
+        record = { ...record, ...analysis };
       } catch (e) {
-        addLog("Claude unavailable (" + e.message + ") — falling back to vendor selection only");
-      }
-      verdict = analysis ? analysis.verdict : "GO";
-    }
-
-    // Branch on verdict
-
-    if (verdict === "REJECT") {
-      await updatePipeline(record, {
-        status: "No Source",
-        notes: [record.notes, "Auto-rejected by Claude: " + analysis.reason].filter(Boolean).join("\n"),
-      });
-      addLog("REJECT — pipeline marked No Source. Done.");
-      return { verdict: "REJECT", reason: analysis.reason, sent: 0, log };
-    }
-
-    if (verdict === "VERIFY FIRST") {
-      const noteLines = [
-        record.notes,
-        "Claude: VERIFY FIRST — " + analysis.reason,
-        analysis.sourcing_path ? "Sourcing path: " + analysis.sourcing_path : null,
-        analysis.winProbabilityPct != null ? "Win probability: " + analysis.winProbabilityPct + "%" : null,
-      ].filter(Boolean).join("\n");
-      await updatePipeline(record, {
-        status: "Researching",
-        notes: noteLines,
-      });
-      addLog("VERIFY FIRST — pipeline moved to Researching. RFQs held pending manual review.");
-      return { verdict: "VERIFY FIRST", reason: analysis.reason, sent: 0, log };
-    }
-
-    // 4. GO — select vendors and fire emails
-    addLog("GO — selecting vendors…");
-    let vendors = selectVendors(record);
-    if (vendors.length === 0) {
-      if (opts.testMode) {
-        // In test mode send anyway so you can review the email format
-        vendors = [{ dist: { name: "[No vendor matched — test preview]", email: TEST_EMAIL }, reason: "test fallback" }];
-        addLog("No vendors matched — sending test preview to " + TEST_EMAIL);
-      } else {
-        addLog("No vendors matched for " + record.sol_number + " — manual sourcing needed.");
-        await updatePipeline(record, { status: "Sourcing" });
-        return { verdict: "GO", sent: 0, log };
+        addLog("Claude unavailable (" + e.message + ") — defaulting GO");
+        verdict = "GO";
       }
     }
 
-    addLog("Matched " + vendors.length + " vendor(s): " + vendors.map(v => v.dist.name).join(", "));
-
-    let sent = 0;
-    for (const { dist, reason } of vendors) {
-      const { subject, body } = buildEmail(dist, record, analysis);
-      const toAddr  = opts.testMode ? TEST_EMAIL : dist.email;
-      const subj    = opts.testMode ? "[TEST] " + subject : subject;
-      try {
-        const res = await fetch(SEND_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: toAddr, subject: subj, emailBody: body, attachCert: false }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          addLog("✓ RFQ sent → " + (opts.testMode ? "[TEST→" + TEST_EMAIL + "]" : dist.name + " <" + dist.email + ">") + " [" + reason + "]");
-          sent++;
-        } else {
-          addLog("✗ Failed → " + dist.name + ": " + (data.error || "unknown"));
-        }
-      } catch (e) {
-        addLog("✗ Network → " + dist.name + ": " + e.message);
-      }
+    if (verdict === "REJECT" || verdict === "VERIFY FIRST") {
+      return { verdict, reason: record.reason || "", sent: 0, log };
     }
 
-    // Update pipeline to Awaiting Quotes with analysis notes
-    const winNote = analysis
-      ? ["Auto-RFQ sent to " + sent + " vendor(s).",
-          "Claude: " + analysis.reason,
-          analysis.sourcing_path ? "Path: " + analysis.sourcing_path : null,
-          analysis.winProbabilityPct != null ? "Win probability: " + analysis.winProbabilityPct + "%" : null,
-        ].filter(Boolean).join("\n")
-      : "Auto-RFQ sent to " + sent + " vendor(s).";
-
-    await updatePipeline(record, {
-      status: sent > 0 ? "Awaiting Quotes" : "Sourcing",
-      notes: [record.notes, winNote].filter(Boolean).join("\n"),
-    });
-
-    addLog("Done — " + sent + "/" + vendors.length + " RFQs sent · " + record.sol_number);
-    return { verdict: "GO", sent, total: vendors.length, log };
+    const r = await runBatch([record], opts);
+    return { verdict: "GO", sent: r.vendorsSent.reduce((n, v) => n + 1, 0), log };
   }
 
-  // ── BATCH RUNNER + SUMMARY NOTIFICATION ──────────────────────────────
-  // Call this after ingesting multiple sols to get one summary email.
+  // ── BATCH RUNNER — VENDOR-GROUPED ─────────────────────────────────────
+  // Phase 1: screen all records, build vendor → [records] map
+  // Phase 2: one batched email per vendor covering all their matched sols
+  // Phase 3: persist blast log + send summary to anthony@ifedlog.com
   async function runBatch(records, opts) {
     opts = opts || {};
-    const batch = opts.testMode ? records.slice(0, TEST_LIMIT) : records;
-    const results = { go: [], verifyFirst: [], rejected: [], errors: [], testMode: !!opts.testMode };
+    const addLog = opts.onLog || function () {};
+    const batch  = opts.testMode ? records.slice(0, TEST_LIMIT) : records;
+
+    const results = {
+      go:          [],
+      verifyFirst: [],
+      rejected:    [],
+      errors:      [],
+      vendorsSent: [],
+      testMode:    !!opts.testMode,
+    };
+
+    // ── Phase 1: categorize + map vendors ──
+    const vendorMap = new Map(); // dist key → { dist, reasons: Set, records: [] }
 
     for (const record of batch) {
-      try {
-        const r = await run(record, opts);
-        if (r.verdict === "GO")                results.go.push({ sol: record.sol_number, sent: r.sent, total: r.total });
-        else if (r.verdict === "VERIFY FIRST") results.verifyFirst.push({ sol: record.sol_number, reason: r.reason });
-        else                                   results.rejected.push({ sol: record.sol_number, reason: r.reason });
-      } catch (e) {
-        results.errors.push({ sol: record.sol_number, error: e.message });
+      if (record.verdict !== "GO") {
+        const preReject = preScreen(record);
+        if (preReject) {
+          results.rejected.push({ sol: record.sol_number, reason: preReject });
+          continue;
+        }
+        results.verifyFirst.push({ sol: record.sol_number, reason: "VERIFY FIRST" });
+        continue;
       }
+
+      const vendors = selectVendors(record);
+
+      if (vendors.length === 0) {
+        if (opts.testMode) {
+          const key = "__test_fallback__";
+          if (!vendorMap.has(key)) {
+            vendorMap.set(key, {
+              dist: { name: "[No vendor matched — test preview]", email: TEST_EMAIL },
+              reasons: new Set(["test fallback"]),
+              records: [],
+            });
+          }
+          vendorMap.get(key).records.push(record);
+        } else {
+          addLog("No vendors matched for " + record.sol_number + " — skipped");
+        }
+        results.go.push({ sol: record.sol_number, vendorCount: 0 });
+        continue;
+      }
+
+      results.go.push({ sol: record.sol_number, vendorCount: vendors.length });
+
+      for (const v of vendors) {
+        const key = v.dist.id || v.dist.email;
+        if (!vendorMap.has(key)) {
+          vendorMap.set(key, { dist: v.dist, reasons: new Set(), records: [] });
+        }
+        const entry = vendorMap.get(key);
+        entry.reasons.add(v.reason);
+        // dedupe — a vendor can match a sol via multiple paths (FSC + preferred)
+        if (!entry.records.find(function (r) { return r.sol_number === record.sol_number; })) {
+          entry.records.push(record);
+        }
+      }
+    }
+
+    addLog(
+      vendorMap.size + " vendor(s) to contact · " +
+      results.go.length + " GO · " +
+      results.verifyFirst.length + " VERIFY · " +
+      results.rejected.length + " REJECT"
+    );
+
+    // ── Phase 2: one email per vendor ──
+    for (const entry of vendorMap.values()) {
+      var dist       = entry.dist;
+      var reasons    = entry.reasons;
+      var vendorRecs = entry.records;
+      var reasonStr  = Array.from(reasons).join(" · ");
+
+      var emailData = buildBatchEmail(dist, vendorRecs);
+      var subject   = emailData.subject;
+      var body      = emailData.body;
+      var toAddr    = opts.testMode ? TEST_EMAIL : dist.email;
+      var subj      = opts.testMode ? "[TEST] " + subject : subject;
+
+      var logEntry = {
+        ts:           new Date().toISOString(),
+        live:         !opts.testMode,
+        vendor:       dist.name,
+        email:        opts.testMode ? TEST_EMAIL : dist.email,
+        item_count:   vendorRecs.length,
+        sol_numbers:  vendorRecs.map(function (r) { return r.sol_number; }),
+        items:        vendorRecs.map(function (r) { return r.item_name || r.sol_number; }),
+        subject:      subj,
+        match_reason: reasonStr,
+        sent:         false,
+        error:        null,
+      };
+
+      try {
+        var res  = await fetch(SEND_ENDPOINT, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ to: toAddr, subject: subj, emailBody: body, attachCert: false }),
+        });
+        var data = await res.json();
+        if (data.ok) {
+          logEntry.sent = true;
+          results.vendorsSent.push({
+            vendor:    dist.name,
+            email:     opts.testMode ? TEST_EMAIL : dist.email,
+            itemCount: vendorRecs.length,
+            reason:    reasonStr,
+          });
+          addLog(
+            "✓ " + dist.name +
+            (opts.testMode ? " [TEST → " + TEST_EMAIL + "]" : " <" + dist.email + ">") +
+            " · " + vendorRecs.length + " item(s) [" + reasonStr + "]"
+          );
+        } else {
+          logEntry.error = data.error || "unknown";
+          results.errors.push({ vendor: dist.name, error: logEntry.error });
+          addLog("✗ " + dist.name + ": " + logEntry.error);
+        }
+      } catch (e) {
+        logEntry.error = e.message;
+        results.errors.push({ vendor: dist.name, error: e.message });
+        addLog("✗ " + dist.name + ": " + e.message);
+      }
+
+      appendBlastEntry(logEntry);
     }
 
     await sendBatchSummary(results, opts);
     return results;
   }
 
+  // ── SUMMARY EMAIL ─────────────────────────────────────────────────────
   async function sendBatchSummary(results, opts) {
     opts = opts || {};
-    const total = results.go.length + results.verifyFirst.length + results.rejected.length + results.errors.length;
+    const total = results.go.length + results.verifyFirst.length + results.rejected.length;
     if (total === 0) return;
+
+    const sent      = results.vendorsSent || [];
+    const totalItems = sent.reduce(function (n, v) { return n + v.itemCount; }, 0);
 
     const lines = [
       "SCC Auto-RFQ Batch Summary",
       "Processed: " + new Date().toLocaleString(),
       "─".repeat(40),
       "",
-      "✅ GO — RFQs Sent (" + results.go.length + ")",
+      "✅ VENDORS CONTACTED (" + sent.length + " vendors · " + totalItems + " item-requests sent)",
     ];
 
-    for (const r of results.go) {
-      lines.push("  • " + r.sol + " → " + r.sent + "/" + (r.total || "?") + " vendor(s)");
+    for (const v of sent) {
+      lines.push("  • " + v.vendor + " → " + v.itemCount + " item(s) [" + v.reason + "]");
     }
-    if (results.go.length === 0) lines.push("  (none)");
+    if (sent.length === 0) lines.push("  (none)");
 
-    lines.push("", "⚠ VERIFY FIRST — Held for Review (" + results.verifyFirst.length + ")");
-    for (const r of results.verifyFirst) {
-      lines.push("  • " + r.sol + " — " + r.reason);
+    lines.push("", "Sol breakdown:");
+    lines.push("  GO: " + results.go.length + "   VERIFY: " + results.verifyFirst.length + "   REJECT: " + results.rejected.length);
+
+    if (results.verifyFirst.length > 0) {
+      lines.push("", "⚠ VERIFY FIRST — Held (" + results.verifyFirst.length + ")");
+      for (const r of results.verifyFirst) lines.push("  • " + r.sol + " — " + r.reason);
     }
-    if (results.verifyFirst.length === 0) lines.push("  (none)");
 
-    lines.push("", "🔒 REJECTED — Marked No Source (" + results.rejected.length + ")");
-    for (const r of results.rejected) {
-      lines.push("  • " + r.sol + " — " + r.reason);
+    if (results.rejected.length > 0) {
+      lines.push("", "🔒 REJECTED (" + results.rejected.length + ")");
+      for (const r of results.rejected) lines.push("  • " + r.sol + " — " + r.reason);
     }
-    if (results.rejected.length === 0) lines.push("  (none)");
 
-    if (results.errors.length > 0) {
+    if (results.errors && results.errors.length > 0) {
       lines.push("", "✗ ERRORS (" + results.errors.length + ")");
-      for (const r of results.errors) {
-        lines.push("  • " + r.sol + " — " + r.error);
-      }
+      for (const r of results.errors) lines.push("  • " + (r.vendor || r.sol) + " — " + r.error);
     }
 
     lines.push("", "─".repeat(40), "View Pipeline → https://thehouseofkel.com/scc/");
 
     try {
       await fetch(SEND_ENDPOINT, {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: "anthony@ifedlog.com",
-          subject: (opts.testMode ? "[TEST] " : "") + "SCC Auto-RFQ: " + results.go.length + " sent · " + results.verifyFirst.length + " review · " + results.rejected.length + " rejected",
-          emailBody: (opts.testMode ? "⚠ TEST MODE — RFQ emails redirected to " + TEST_EMAIL + "\n\n" : "") + lines.join("\n"),
+        body:    JSON.stringify({
+          to:        "anthony@ifedlog.com",
+          subject:   (opts.testMode ? "[TEST] " : "") +
+                     "SCC Auto-RFQ: " + sent.length + " vendor(s) · " + totalItems + " items · " +
+                     results.go.length + " GO · " + results.verifyFirst.length + " review · " + results.rejected.length + " rejected",
+          emailBody: (opts.testMode ? "TEST MODE — RFQ emails redirected to " + TEST_EMAIL + "\n\n" : "") + lines.join("\n"),
           attachCert: false,
         }),
       });
@@ -392,5 +437,5 @@
     }
   }
 
-  window.SCC_AUTO_RFQ = { run, runBatch, sendBatchSummary };
+  window.SCC_AUTO_RFQ = { run, runBatch, sendBatchSummary, getBlastLog: loadBlastLog };
 })();
