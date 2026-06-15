@@ -921,7 +921,7 @@
                   toast_("Run a batch first — no GO sols loaded yet.", true);
                   return;
                 }
-                const testRecs = analysis.go.slice(0, 5).map(buildRecord);
+                const testRecs = analysis.go.slice(0, 10).map(buildRecord);
                 addLog("TEST ▶ Blasting " + testRecs.length + " GO sols → tu2kel.lg@gmail.com…", "info");
                 if (window.SCC_AUTO_RFQ) {
                   window.SCC_AUTO_RFQ.runBatch(testRecs, { testMode: true })

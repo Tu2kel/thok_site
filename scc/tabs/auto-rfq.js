@@ -10,7 +10,7 @@
   const ANALYZE_ENDPOINT = "/.netlify/functions/analyze-sols";
   const SEND_ENDPOINT    = "/.netlify/functions/send-rfq";
   const TEST_EMAIL       = "tu2kel.lg@gmail.com";
-  const TEST_LIMIT       = 5;
+  const TEST_LIMIT       = 10;
 
   // ── FAST PRE-SCREEN ───────────────────────────────────────────────────
   // Catches unambiguous hard-rejects before spending an API call.
@@ -268,11 +268,17 @@
 
     // 4. GO — select vendors and fire emails
     addLog("GO — selecting vendors…");
-    const vendors = selectVendors(record);
+    let vendors = selectVendors(record);
     if (vendors.length === 0) {
-      addLog("No vendors matched for " + record.sol_number + " — manual sourcing needed.");
-      await updatePipeline(record, { status: "Sourcing" });
-      return { verdict: "GO", sent: 0, log };
+      if (opts.testMode) {
+        // In test mode send anyway so you can review the email format
+        vendors = [{ dist: { name: "[No vendor matched — test preview]", email: TEST_EMAIL }, reason: "test fallback" }];
+        addLog("No vendors matched — sending test preview to " + TEST_EMAIL);
+      } else {
+        addLog("No vendors matched for " + record.sol_number + " — manual sourcing needed.");
+        await updatePipeline(record, { status: "Sourcing" });
+        return { verdict: "GO", sent: 0, log };
+      }
     }
 
     addLog("Matched " + vendors.length + " vendor(s): " + vendors.map(v => v.dist.name).join(", "));
