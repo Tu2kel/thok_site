@@ -297,12 +297,16 @@
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
 
-    const abortRef = useRef(false);
+    const abortRef   = useRef(false);
+    const modeRef     = useRef(mode);
+    const testModeRef = useRef(testMode);
+    useEffect(() => { modeRef.current = mode; }, [mode]);
+    useEffect(() => { testModeRef.current = testMode; }, [testMode]);
 
     // ── Persist ──
     useEffect(() => {
       storeSave({ mode, sols, scrapeDate, analysis });
-    }, [mode, cronTime, sols, scrapeDate, analysis]);
+    }, [mode, sols, scrapeDate, analysis]);
 
     // ── Toast ──
     const toast_ = useCallback((msg, err = false) => {
@@ -347,6 +351,64 @@
     const addLog = useCallback((line, type = "info") => {
       setLog((prev) => [...prev, { line, type, ts: Date.now() }]);
     }, []);
+
+    // ── AUTO CHAIN — analyze → push GO → RFQ blast (no user interaction) ──
+    const autoChain = useCallback(async (scrapedSols) => {
+      addLog("AUTO ▶ Analyzing " + scrapedSols.length + " sols…", "info");
+      setAnalyzing(true);
+      try {
+        const results = await analyzeWithClaude(scrapedSols, addLog);
+        const go = [], verify = [], reject = [];
+        for (const res of results) {
+          const orig = scrapedSols.find((s) => s.sol_number === res.sol_number) || {};
+          const merged = { ...orig, ...res };
+          if (res.verdict === "GO")           go.push(merged);
+          else if (res.verdict === "VERIFY FIRST") verify.push(merged);
+          else                                reject.push(merged);
+        }
+        go.sort((a, b) => (b.ext_price || 0) - (a.ext_price || 0));
+        verify.sort((a, b) => (b.ext_price || 0) - (a.ext_price || 0));
+        setAnalysis({ go, verify, reject });
+        setSelected(new Set(go.map((r) => r.sol_number)));
+        addLog("AUTO ▶ " + go.length + " GO · " + verify.length + " VERIFY · " + reject.length + " REJECT", "ok");
+
+        if (go.length === 0) {
+          addLog("AUTO ▶ No GO sols today.", "info");
+          setAnalyzing(false);
+          return;
+        }
+
+        // Push GO sols to pipeline
+        const { dbSave, dbGetAll } = window.SCC_DB;
+        const existing = await dbGetAll();
+        const existingSet = new Set(existing.map((r) => r.sol_number));
+        const savedRecords = [];
+        for (const rec of go) {
+          if (existingSet.has(rec.sol_number)) continue;
+          try {
+            const built = buildRecord(rec);
+            await dbSave(built);
+            savedRecords.push(built);
+          } catch (e) {
+            addLog("AUTO push error: " + rec.sol_number + " — " + e.message, "err");
+          }
+        }
+        addLog("AUTO ▶ Pushed " + savedRecords.length + " GO sols to pipeline.", "ok");
+        window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
+
+        // RFQ blast
+        if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
+          addLog("AUTO ▶ Firing RFQ blast…", "info");
+          const opts = testModeRef.current ? { testMode: true } : {};
+          window.SCC_AUTO_RFQ.runBatch(savedRecords, opts)
+            .then(() => addLog("AUTO ▶ RFQ blast complete.", "ok"))
+            .catch((e) => addLog("AUTO ▶ RFQ error — " + e.message, "err"));
+        }
+      } catch (e) {
+        addLog("AUTO ▶ Analysis failed: " + e.message, "err");
+      }
+      setAnalyzing(false);
+    }, [addLog]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const runScrape = useCallback(async () => {
       if (running) return;
@@ -420,11 +482,12 @@
                   if (evt.ok && Array.isArray(evt.sols)) {
                     setSols(evt.sols);
                     setScrapeDate(new Date().toLocaleString());
-                    addLog(
-                      "✓ Scraped " + evt.sols.length + " sols — heading to Screener…",
-                      "ok",
-                    );
-                    setTimeout(() => setTab && setTab("screener"), 1200);
+                    if (modeRef.current === "auto") {
+                      await autoChain(evt.sols);
+                    } else {
+                      addLog("✓ Scraped " + evt.sols.length + " sols — heading to Screener…", "ok");
+                      setTimeout(() => setTab && setTab("screener"), 1200);
+                    }
                   } else {
                     addLog("Scrape failed: " + (evt.error || "unknown"), "err");
                   }
@@ -439,8 +502,12 @@
             data.sols.forEach((msg) => addLog(msg, "info"));
             setSols(data.sols);
             setScrapeDate(new Date().toLocaleString());
-            addLog("✓ Scraped " + data.sols.length + " sols — heading to Screener…", "ok");
-            setTimeout(() => setTab && setTab("screener"), 1200);
+            if (modeRef.current === "auto") {
+              await autoChain(data.sols);
+            } else {
+              addLog("✓ Scraped " + data.sols.length + " sols — heading to Screener…", "ok");
+              setTimeout(() => setTab && setTab("screener"), 1200);
+            }
           } else {
             addLog("Scrape failed: " + (data.error || "unknown"), "err");
           }
