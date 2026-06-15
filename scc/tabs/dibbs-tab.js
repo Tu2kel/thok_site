@@ -296,7 +296,7 @@
     const [resultTab, setResultTab] = useState("GO");
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
-    const [liveMode, setLiveMode] = useState(saved.liveMode === true ? true : false);
+    const [liveMode, setLiveMode] = useState(false); // always starts OFF — must be explicitly enabled each session
     const [blasting, setBlasting] = useState(false);
     const [blastLog, setBlastLog] = useState([]);
     const [showBlastLog, setShowBlastLog] = useState(false);
@@ -309,8 +309,8 @@
 
     // ── Persist ──
     useEffect(() => {
-      storeSave({ mode, sols, scrapeDate, analysis, liveMode });
-    }, [mode, sols, scrapeDate, analysis, liveMode]);
+      storeSave({ mode, sols, scrapeDate, analysis });
+    }, [mode, sols, scrapeDate, analysis]);
 
     // ── Toast ──
     const toast_ = useCallback((msg, err = false) => {

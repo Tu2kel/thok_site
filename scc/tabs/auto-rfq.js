@@ -136,6 +136,19 @@
     return selected;
   }
 
+  // ── QUOTE DUE HELPER — one day before DLA deadline ───────────────────
+  function quoteDueDisplay(dateStr) {
+    if (!dateStr) return null;
+    // Handle MM/DD/YY or MM/DD/YYYY formats from DIBBS
+    const m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    const yr = parseInt(m[3]) < 100 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+    const d  = new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]));
+    if (isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() - 1);
+    return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+  }
+
   // ── BATCHED EMAIL BUILDER ─────────────────────────────────────────────
   // One email per vendor listing all their matched solicitations.
   function buildBatchEmail(dist, records) {
@@ -146,18 +159,27 @@
       : "RFQ - " + count + " Items Needed | Imperio Federal Logistics";
 
     const itemBlocks = records.map(function (record, i) {
-      const item = record.item_name || "—";
-      const qty  = record.quantity
+      const item    = record.item_name || "—";
+      const qty     = record.quantity
         ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "")
         : "—";
-      const del  = record.delivery_days ? record.delivery_days + " days ARO" : "—";
-      const lines = [
-        "  " + (i + 1) + ".  Item:          " + item,
-      ];
-      if (record.ref_part_number) lines.push("       Part Number:   " + record.ref_part_number);
+      const del     = record.delivery_days ? record.delivery_days + " days ARO" : "—";
+      const dueDate = quoteDueDisplay(record.quote_due);
+
+      const lines = ["  " + (i + 1) + ".  Item:          " + item];
+
+      // Part number — show P/N if available, NSN as fallback so vendor can ID the item
+      if (record.ref_part_number) {
+        lines.push("       Part Number:   " + record.ref_part_number);
+      } else if (record.nsn) {
+        lines.push("       NSN:           " + record.nsn);
+      }
+
       lines.push("       Quantity:      " + qty);
       lines.push("       Required Del.: " + del);
+      if (dueDate) lines.push("       Quote Due:    " + dueDate);
       lines.push("       Ref #:         " + record.sol_number);
+
       return lines.join("\n");
     });
 
@@ -180,14 +202,16 @@
       "",
       "Please provide unit price, lead time, and confirm country of origin" + (count > 1 ? " for each item" : "") + ". We issue POs immediately upon award.",
       "",
-      "Thank you,",
+      "V/R,",
       "",
-      "Anthony K Kelley | Founder & CEO",
-      "Imperio Federal Logistics",
-      "The House of Kel LLC · CAGE 152U4",
-      "SDVOSB | VetHUB",
-      "anthony@ifedlog.com | ifedlog.com",
+      "Anthony K. Kelley",
+      "Founder | Imperio Federal Logistics",
+      "A Division of The House of Kel LLC",
+      "CAGE Code: 152U4",
+      "anthony@ifedlog.com | www.ifedlog.com",
       "(254) 226-5216",
+      "",
+      "SDVOSB | VetHUB",
     ].join("\n");
 
     return { subject, body };
