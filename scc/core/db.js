@@ -72,6 +72,11 @@
     return true;
   }
 
+  async function dbClearAll() {
+    lsSaveSols([]);
+    return true;
+  }
+
   // ── Vendor Intel CRUD ──
   async function viSave(rec) {
     const arr = lsGetVI();
@@ -581,6 +586,7 @@
     dbSave,
     dbGetAll,
     dbDelete,
+    dbClearAll,
     dbArchive,
     dbGetArchive,
     dbRestoreFromArchive,

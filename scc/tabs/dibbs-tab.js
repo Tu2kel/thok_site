@@ -392,29 +392,12 @@
           return;
         }
 
-        // Push GO sols to pipeline (skip existing)
-        const { dbSave, dbGetAll } = window.SCC_DB;
-        const existing = await dbGetAll();
-        const existingSet = new Set(existing.map((r) => r.sol_number));
-        const savedRecords = [];
-        for (const rec of go) {
-          if (existingSet.has(rec.sol_number)) continue;
-          try {
-            const built = buildRecord(rec);
-            await dbSave(built);
-            savedRecords.push(built);
-          } catch (e) {
-            addLog("AUTO push error: " + rec.sol_number + " — " + e.message, "err");
-          }
-        }
-        addLog("AUTO ▶ Pushed " + savedRecords.length + " GO sols to pipeline.", "ok");
-        window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
-
-        // RFQ blast
-        if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
-          addLog("AUTO ▶ Firing RFQ blast…", "info");
-          window.SCC_AUTO_RFQ.runBatch(savedRecords, {})
-            .then(() => addLog("AUTO ▶ RFQ blast complete.", "ok"))
+        // Blast GO sols — pipeline NOT updated yet (vendor quote required first)
+        const blastRecs = go.map(buildRecord);
+        if (window.SCC_AUTO_RFQ) {
+          addLog("AUTO ▶ Firing RFQ blast to " + blastRecs.length + " GO sols…", "info");
+          window.SCC_AUTO_RFQ.runBatch(blastRecs, {})
+            .then(() => addLog("AUTO ▶ RFQ blast complete. Pipeline stays clean until quotes arrive.", "ok"))
             .catch((e) => addLog("AUTO ▶ RFQ error — " + e.message, "err"));
         }
       } catch (e) {

@@ -972,9 +972,10 @@ Rules:
   }) {
     const { fmt, TIER_MARGINS, STATUSES, tierClass, calcBidMath } =
       window.SCC_MATH;
-    const { dbSave, dbDelete, dbArchive } = window.SCC_DB;
+    const { dbSave, dbDelete, dbArchive, dbClearAll } = window.SCC_DB;
     const { Drawer } = window.SCC_TABS;
 
+    const [clearConfirm, setClearConfirm] = usePState(false);
     const [bidBand, setBidBand] = usePState("All");
     const [search, setSearch] = usePState("");
     const [showIngest, setShowIngest] = usePState(false);
@@ -1446,6 +1447,61 @@ Rules:
           hP(
             "div",
             { style: { display: "flex", alignItems: "center", gap: "8px" } },
+
+            // Clear Pipeline button
+            clearConfirm
+              ? hP(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                  hP("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "#ef5350" } }, "Delete all " + rows.length + " records?"),
+                  hP(
+                    "button",
+                    {
+                      onClick: async () => {
+                        await dbClearAll();
+                        setRows([]);
+                        setClearConfirm(false);
+                        showToast("Pipeline cleared.");
+                        window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
+                      },
+                      style: {
+                        padding: "5px 14px", fontFamily: "Cinzel,serif", fontSize: "9px",
+                        letterSpacing: ".1em", background: "rgba(239,83,80,.15)",
+                        border: "1px solid rgba(239,83,80,.5)", color: "#ef5350",
+                        cursor: "pointer", borderRadius: "2px",
+                      },
+                    },
+                    "CONFIRM DELETE",
+                  ),
+                  hP(
+                    "button",
+                    {
+                      onClick: () => setClearConfirm(false),
+                      style: {
+                        padding: "5px 10px", fontFamily: "Cinzel,serif", fontSize: "9px",
+                        letterSpacing: ".1em", background: "transparent",
+                        border: "1px solid rgba(201,168,76,.2)", color: "var(--body-dim)",
+                        cursor: "pointer", borderRadius: "2px",
+                      },
+                    },
+                    "CANCEL",
+                  ),
+                )
+              : hP(
+                  "button",
+                  {
+                    onClick: () => setClearConfirm(true),
+                    title: "Clear all pipeline records",
+                    style: {
+                      padding: "5px 12px", fontFamily: "Cinzel,serif", fontSize: "9px",
+                      letterSpacing: ".1em", background: "transparent",
+                      border: "1px solid rgba(239,83,80,.25)", color: "rgba(239,83,80,.6)",
+                      cursor: "pointer", borderRadius: "2px",
+                    },
+                  },
+                  "✕ Clear Pipeline",
+                ),
+
             hP("input", {
               value: search,
               onChange: (e) => setSearch(e.target.value),
