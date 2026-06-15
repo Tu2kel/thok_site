@@ -328,7 +328,22 @@
       checkAgent();
     }, [checkAgent]);
 
-    // ── CRON scheduler ──
+    // ── Auto-run on open if not run today ──
+    const autoRunRef = useRef(false);
+    useEffect(() => {
+      if (mode !== "auto" || autoRunRef.current) return;
+      const today = new Date().toLocaleDateString();
+      const lastDate = scrapeDate ? new Date(scrapeDate).toLocaleDateString() : "";
+      if (lastDate === today) return;
+      autoRunRef.current = true;
+      const t = setTimeout(() => {
+        setLog([]);
+        runScrape();
+      }, 4000); // 4s delay — lets agent finish startup
+      return () => clearTimeout(t);
+    }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── CRON scheduler (fallback — fires at set time if browser stays open) ──
     useEffect(() => {
       if (cronRef.current) clearInterval(cronRef.current);
       if (mode !== "auto") return;
@@ -338,13 +353,15 @@
           now.getHours().toString().padStart(2, "0") +
           ":" +
           now.getMinutes().toString().padStart(2, "0");
-        if (hhmm === cronTime && !running) {
+        const today = now.toLocaleDateString();
+        const lastDate = scrapeDate ? new Date(scrapeDate).toLocaleDateString() : "";
+        if (hhmm === cronTime && lastDate !== today && !running) {
           setLog([]);
           runScrape();
         }
       }, 60000);
       return () => clearInterval(cronRef.current);
-    }, [mode, cronTime, running]);
+    }, [mode, cronTime, running, scrapeDate]);
 
     // ── SCRAPE ────────────────────────────────────────────────────────
     const addLog = useCallback((line, type = "info") => {
