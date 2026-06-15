@@ -291,7 +291,6 @@
     const [blastView, setBlastView] = useState(false);
     const [blastPlan, setBlastPlan] = useState(null); // { [fsc]: { sols, dists } }
 
-    const [testMode, setTestMode] = useState(false);
     const [anmsSweeping, setAnmsSweeping] = useState(false);
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
@@ -300,9 +299,7 @@
 
     const abortRef   = useRef(false);
     const modeRef     = useRef(mode);
-    const testModeRef = useRef(testMode);
     useEffect(() => { modeRef.current = mode; }, [mode]);
-    useEffect(() => { testModeRef.current = testMode; }, [testMode]);
 
     // ── Persist ──
     useEffect(() => {
@@ -375,19 +372,6 @@
 
         if (go.length === 0) {
           addLog("AUTO ▶ No GO sols today.", "info");
-          setAnalyzing(false);
-          return;
-        }
-
-        // TEST MODE — skip DB, blast first 5 GO sols directly to test address
-        if (testModeRef.current) {
-          const testRecs = go.slice(0, 5).map(buildRecord);
-          addLog("AUTO ▶ TEST — blasting " + testRecs.length + " GO sols to test address…", "info");
-          if (window.SCC_AUTO_RFQ) {
-            window.SCC_AUTO_RFQ.runBatch(testRecs, { testMode: true })
-              .then(() => addLog("AUTO ▶ TEST blast complete — check tu2kel.lg@gmail.com", "ok"))
-              .catch((e) => addLog("AUTO ▶ TEST blast error — " + e.message, "err"));
-          }
           setAnalyzing(false);
           return;
         }
@@ -679,11 +663,11 @@
       window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
 
       if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
-        window.SCC_AUTO_RFQ.runBatch(savedRecords, testMode ? { testMode: true } : {}).catch((e) =>
+        window.SCC_AUTO_RFQ.runBatch(savedRecords, {}).catch((e) =>
           console.warn("[AutoRFQ] DIBBS batch error:", e.message),
         );
       }
-    }, [selected, analysis, toast_, testMode]);
+    }, [selected, analysis, toast_]);
 
     // ── BUILD BLAST PLAN ──────────────────────────────────────────────
     const buildBlast = useCallback(() => {
@@ -928,25 +912,36 @@
             running ? "⟳ Running…" : "▶ Run Batch",
           ),
 
-          // Test mode toggle
+          // Test blast — fires immediately from existing GO sols, no re-scrape
           h(
             "button",
             {
-              onClick: () => setTestMode((t) => !t),
-              title: testMode ? "Test mode ON — emails → tu2kel.lg@gmail.com · 5 sol cap" : "Enable test mode",
+              onClick: () => {
+                if (!analysis || !analysis.go || !analysis.go.length) {
+                  toast_("Run a batch first — no GO sols loaded yet.", true);
+                  return;
+                }
+                const testRecs = analysis.go.slice(0, 5).map(buildRecord);
+                addLog("TEST ▶ Blasting " + testRecs.length + " GO sols → tu2kel.lg@gmail.com…", "info");
+                if (window.SCC_AUTO_RFQ) {
+                  window.SCC_AUTO_RFQ.runBatch(testRecs, { testMode: true })
+                    .then(() => addLog("TEST ▶ Done — check tu2kel.lg@gmail.com", "ok"))
+                    .catch((e) => addLog("TEST ▶ Error — " + e.message, "err"));
+                }
+              },
+              disabled: !analysis || !analysis.go || !analysis.go.length,
+              title: "Fire test blast from current GO sols → tu2kel.lg@gmail.com (no re-scrape)",
               style: {
-                ...S.btn(
-                  testMode ? "#f59e0b" : "rgba(245,158,11,.4)",
-                  testMode ? "rgba(245,158,11,.15)" : "transparent",
-                ),
-                border: "1px solid " + (testMode ? "rgba(245,158,11,.6)" : "rgba(245,158,11,.2)"),
+                ...S.btn("rgba(245,158,11,.6)", "transparent"),
+                border: "1px solid rgba(245,158,11,.25)",
                 fontSize: "9px",
                 fontFamily: "Cinzel,serif",
                 letterSpacing: ".1em",
                 padding: "7px 14px",
+                opacity: (!analysis || !analysis.go || !analysis.go.length) ? 0.4 : 1,
               },
             },
-            testMode ? "⚠ TEST ON" : "TEST",
+            "TEST",
           ),
 
           // AN/MS 30-day sweep button
@@ -1441,7 +1436,7 @@
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "var(--accent-yellow)" } }, analysis.verify.length + " VERIFY"),
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "#e74c3c" } }, analysis.reject.length + " REJECT"),
             mode === "auto"
-              ? h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--accent-green)", marginLeft: "auto" } }, "✓ AUTO complete — GO sols pushed + blasted")
+              ? h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--accent-green)", marginLeft: "auto" } }, "✓ AUTO complete — RFQs blasted · pipeline clear until quotes arrive")
               : h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "var(--body-faint)", marginLeft: "auto" } }, "Select sols below → Push to Pipeline → RFQ Blast"),
           ),
 
