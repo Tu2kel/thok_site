@@ -292,6 +292,7 @@
     const [blastView, setBlastView] = useState(false);
     const [blastPlan, setBlastPlan] = useState(null); // { [fsc]: { sols, dists } }
 
+    const [testMode, setTestMode] = useState(false);
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
     const [rawExpanded, setRawExpanded] = useState(false);
@@ -557,11 +558,11 @@
       window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
 
       if (savedRecords.length > 0 && window.SCC_AUTO_RFQ) {
-        window.SCC_AUTO_RFQ.runBatch(savedRecords).catch((e) =>
+        window.SCC_AUTO_RFQ.runBatch(savedRecords, testMode ? { testMode: true } : {}).catch((e) =>
           console.warn("[AutoRFQ] DIBBS batch error:", e.message),
         );
       }
-    }, [selected, analysis, toast_]);
+    }, [selected, analysis, toast_, testMode]);
 
     // ── BUILD BLAST PLAN ──────────────────────────────────────────────
     const buildBlast = useCallback(() => {
@@ -837,6 +838,27 @@
               },
             },
             running ? "⟳ Running…" : "▶ Run Batch",
+          ),
+
+          // Test mode toggle
+          h(
+            "button",
+            {
+              onClick: () => setTestMode((t) => !t),
+              title: testMode ? "Test mode ON — emails → tu2kel.lg@gmail.com · 5 sol cap" : "Enable test mode",
+              style: {
+                ...S.btn(
+                  testMode ? "#f59e0b" : "rgba(245,158,11,.4)",
+                  testMode ? "rgba(245,158,11,.15)" : "transparent",
+                ),
+                border: "1px solid " + (testMode ? "rgba(245,158,11,.6)" : "rgba(245,158,11,.2)"),
+                fontSize: "9px",
+                fontFamily: "Cinzel,serif",
+                letterSpacing: ".1em",
+                padding: "7px 14px",
+              },
+            },
+            testMode ? "⚠ TEST ON" : "TEST",
           ),
 
           // Last scrape timestamp

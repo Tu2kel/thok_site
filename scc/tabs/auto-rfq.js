@@ -9,6 +9,8 @@
 
   const ANALYZE_ENDPOINT = "/.netlify/functions/analyze-sols";
   const SEND_ENDPOINT    = "/.netlify/functions/send-rfq";
+  const TEST_EMAIL       = "tu2kel.lg@gmail.com";
+  const TEST_LIMIT       = 5;
 
   // ── FAST PRE-SCREEN ───────────────────────────────────────────────────
   // Catches unambiguous hard-rejects before spending an API call.
@@ -265,15 +267,17 @@
     let sent = 0;
     for (const { dist, reason } of vendors) {
       const { subject, body } = buildEmail(dist, record, analysis);
+      const toAddr  = opts.testMode ? TEST_EMAIL : dist.email;
+      const subj    = opts.testMode ? "[TEST] " + subject : subject;
       try {
         const res = await fetch(SEND_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: dist.email, subject, emailBody: body, attachCert: false }),
+          body: JSON.stringify({ to: toAddr, subject: subj, emailBody: body, attachCert: false }),
         });
         const data = await res.json();
         if (data.ok) {
-          addLog("✓ RFQ sent → " + dist.name + " <" + dist.email + "> [" + reason + "]");
+          addLog("✓ RFQ sent → " + (opts.testMode ? "[TEST→" + TEST_EMAIL + "]" : dist.name + " <" + dist.email + ">") + " [" + reason + "]");
           sent++;
         } else {
           addLog("✗ Failed → " + dist.name + ": " + (data.error || "unknown"));
@@ -305,25 +309,26 @@
   // Call this after ingesting multiple sols to get one summary email.
   async function runBatch(records, opts) {
     opts = opts || {};
-    const results = { go: [], verifyFirst: [], rejected: [], errors: [] };
+    const batch = opts.testMode ? records.slice(0, TEST_LIMIT) : records;
+    const results = { go: [], verifyFirst: [], rejected: [], errors: [], testMode: !!opts.testMode };
 
-    for (const record of records) {
+    for (const record of batch) {
       try {
         const r = await run(record, opts);
-        if (r.verdict === "GO")           results.go.push({ sol: record.sol_number, sent: r.sent, total: r.total });
+        if (r.verdict === "GO")                results.go.push({ sol: record.sol_number, sent: r.sent, total: r.total });
         else if (r.verdict === "VERIFY FIRST") results.verifyFirst.push({ sol: record.sol_number, reason: r.reason });
-        else                              results.rejected.push({ sol: record.sol_number, reason: r.reason });
+        else                                   results.rejected.push({ sol: record.sol_number, reason: r.reason });
       } catch (e) {
         results.errors.push({ sol: record.sol_number, error: e.message });
       }
     }
 
-    // Send summary email to owner
-    await sendBatchSummary(results);
+    await sendBatchSummary(results, opts);
     return results;
   }
 
-  async function sendBatchSummary(results) {
+  async function sendBatchSummary(results, opts) {
+    opts = opts || {};
     const total = results.go.length + results.verifyFirst.length + results.rejected.length + results.errors.length;
     if (total === 0) return;
 
@@ -366,9 +371,9 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: "anthony@ifedlog.com",
-          subject: "SCC Auto-RFQ: " + results.go.length + " sent · " + results.verifyFirst.length + " review · " + results.rejected.length + " rejected",
-          emailBody: lines.join("\n"),
+          to: opts.testMode ? TEST_EMAIL : "anthony@ifedlog.com",
+          subject: (opts.testMode ? "[TEST] " : "") + "SCC Auto-RFQ: " + results.go.length + " sent · " + results.verifyFirst.length + " review · " + results.rejected.length + " rejected",
+          emailBody: (opts.testMode ? "⚠ TEST MODE — emails redirected to " + TEST_EMAIL + "\n\n" : "") + lines.join("\n"),
           attachCert: false,
         }),
       });
