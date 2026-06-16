@@ -71,13 +71,13 @@ function buildMimeMessage({ to, subject, body, pdfBytes, pdfFilename }) {
   const CRLF     = "\r\n";
 
   if (!pdfBytes) {
-    // Plain text message
+    // HTML message
     const msg = [
       "From: " + FROM_NAME + " <" + FROM_ADDRESS + ">",
       "To: " + to,
       "Subject: " + subject,
       "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
+      "Content-Type: text/html; charset=utf-8",
       "",
       body,
     ].join(CRLF);
@@ -87,7 +87,7 @@ function buildMimeMessage({ to, subject, body, pdfBytes, pdfFilename }) {
   // Multipart with PDF attachment
   const parts = [
     "--" + boundary,
-    "Content-Type: text/plain; charset=utf-8",
+    "Content-Type: text/html; charset=utf-8",
     "",
     body,
     "",
