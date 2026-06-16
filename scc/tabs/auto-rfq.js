@@ -121,6 +121,7 @@
       const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name));
       if (gfast) addDist(gfast, "P/N prefix " + pnPrefix + " → G-Fast (Steve)");
     }
+    // NAS prefix detected but intentionally unrouted — falls through to FSC chain
 
     for (const d of dists) {
       if (d.is_manufacturer && d.has_jcp)  addDist(d, "MFR · JCP");
@@ -145,11 +146,20 @@
   // ── QUOTE DUE HELPER — one day before DLA deadline ───────────────────
   function quoteDueDisplay(dateStr) {
     if (!dateStr) return null;
-    // Handle MM/DD/YY or MM/DD/YYYY formats from DIBBS
-    const m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    let m, d;
+    // ISO-8601: YYYY-MM-DD
+    m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+      if (isNaN(d.getTime())) return null;
+      d.setDate(d.getDate() - 1);
+      return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+    }
+    // MM/DD/YY[YY] (DIBBS slash format)
+    m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (!m) return null;
     const yr = parseInt(m[3]) < 100 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
-    const d  = new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]));
+    d = new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]));
     if (isNaN(d.getTime())) return null;
     d.setDate(d.getDate() - 1);
     return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
@@ -264,7 +274,8 @@
     }
 
     const r = await runBatch([record], opts);
-    return { verdict: "GO", sent: r.vendorsSent.reduce((n, v) => n + 1, 0), log };
+    if (r.queued) return { verdict: "GO", sent: 0, queued: true, log };
+    return { verdict: "GO", sent: r.vendorsSent.length, log };
   }
 
   // ── BATCH RUNNER — VENDOR-GROUPED ─────────────────────────────────────
@@ -308,12 +319,7 @@
 
     for (const record of batch) {
       if (record.verdict !== "GO") {
-        const preReject = preScreen(record);
-        if (preReject) {
-          results.rejected.push({ sol: record.sol_number, reason: preReject });
-          continue;
-        }
-        results.verifyFirst.push({ sol: record.sol_number, reason: "VERIFY FIRST" });
+        results.verifyFirst.push({ sol: record.sol_number, reason: record.reason || "VERIFY FIRST" });
         continue;
       }
 
@@ -361,6 +367,7 @@
     );
 
     // ── Phase 2: one email per vendor ──
+    const batchLogEntries = [];
     for (const entry of vendorMap.values()) {
       var dist       = entry.dist;
       var reasons    = entry.reasons;
@@ -418,7 +425,16 @@
         addLog("✗ " + dist.name + ": " + e.message);
       }
 
-      appendBlastEntry(logEntry);
+      batchLogEntries.push(logEntry);
+    }
+
+    if (batchLogEntries.length > 0) {
+      try {
+        const bl = loadBlastLog();
+        for (const e of batchLogEntries) bl.unshift(e);
+        if (bl.length > 300) bl.length = 300;
+        localStorage.setItem(BLAST_LOG_KEY, JSON.stringify(bl));
+      } catch {}
     }
 
     await sendBatchSummary(results, opts);

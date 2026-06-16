@@ -151,6 +151,7 @@ function selectVendors(record, dists) {
     const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name));
     if (gfast) add(gfast, "P/N prefix " + pnPrefix + " → G-Fast (Steve)");
   }
+  // NAS prefix detected but intentionally unrouted — falls through to FSC chain
 
   // Priority: MFR+JCP → MFR → FSC-matched → preferred/starred
   for (const d of dists) if (d.is_manufacturer && d.has_jcp)  add(d, "MFR · JCP");
@@ -164,12 +165,35 @@ function selectVendors(record, dists) {
   return selected;
 }
 
+// ── QUOTE DUE HELPER ─────────────────────────────────────────────────────
+function quoteDueDisplay(dateStr) {
+  if (!dateStr) return null;
+  let m, d;
+  // ISO-8601: YYYY-MM-DD
+  m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    if (isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() - 1);
+    return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+  }
+  // MM/DD/YY[YY] (DIBBS slash format)
+  m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  const yr = parseInt(m[3]) < 100 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+  d = new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]));
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() - 1);
+  return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+}
+
 // ── BUILD RFQ EMAIL ───────────────────────────────────────────────────────
 function buildRFQEmail(dist, record) {
-  const item = record.item_name || record.item_description || "—";
-  const qty  = record.quantity   || record.qty || "—";
-  const del  = record.delivery_days ? record.delivery_days + " days ARO" : "—";
-  const gov  = record.unit_price ? "$" + Number(record.unit_price).toLocaleString() + " est." : "—";
+  const item    = record.item_name || record.item_description || "—";
+  const qtyNum  = record.quantity || record.qty;
+  const qty     = qtyNum ? qtyNum + (record.unit_of_issue ? " " + record.unit_of_issue : "") : "—";
+  const del     = record.delivery_days ? record.delivery_days + " days ARO" : "—";
+  const dueDate = quoteDueDisplay(record.quote_due);
 
   const subject = "RFQ - " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
 
@@ -184,6 +208,7 @@ function buildRFQEmail(dist, record) {
     record.ref_part_number ? "  Part Number:  " + record.ref_part_number : null,
     "  Quantity:     " + qty,
     "  Required Del.:" + del,
+    dueDate ? "  Quote Due:   " + dueDate : null,
     "  Ref #:        " + record.sol_number,
     "",
     "Requirements:",
@@ -194,11 +219,15 @@ function buildRFQEmail(dist, record) {
     "",
     "Please provide unit price, lead time, and confirm country of origin. We issue POs immediately upon award.",
     "",
-    "Thank you,",
-    "Anthony K Kelley | Founder & CEO",
-    "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
+    "V/R,",
+    "",
+    "Anthony K. Kelley",
+    "Founder | Imperio Federal Logistics",
+    "A Division of The House of Kel LLC",
+    "CAGE Code: 152U4",
+    FROM_ADDRESS + " | www.ifedlog.com | (254) 226-5216",
+    "",
     "SDVOSB | VetHUB",
-    FROM_ADDRESS + " | ifedlog.com | (254) 226-5216",
   ].filter(l => l !== null).join("\n");
 
   return { subject, body };

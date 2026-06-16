@@ -31,7 +31,11 @@
   // ── PERSIST ──────────────────────────────────────────────────────────
   function parseQuoteDue(s) {
     if (!s) return null;
-    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    // ISO-8601: YYYY-MM-DD
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    // MM/DD/YY[YY] (DIBBS slash format)
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (!m) return null;
     const yr = parseInt(m[3]) < 100 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
     return new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]));
@@ -369,20 +373,24 @@
     }, []);
 
     // ── PN QUEUE RELEASE — fires the held batch after all P/Ns resolved ──
-    const handleQueueRelease = useCallback(async (resolvedRecords, _savedOpts) => {
+    const handleQueueRelease = useCallback(async (resolvedRecords, savedOpts) => {
       if (!window.SCC_AUTO_RFQ) return;
       window.SCC_AUTO_RFQ.clearPNQueue();
       setPNQueue(null);
-      const isLive = liveModeRef.current;
+      const testMode = savedOpts && savedOpts.testMode; // honor mode captured at blast-time, not current toggle
       addLog("PN Queue ▶ Releasing batch — " + resolvedRecords.length + " sols with part numbers resolved…", "info");
       try {
-        await window.SCC_AUTO_RFQ.runBatch(
+        const r = await window.SCC_AUTO_RFQ.runBatch(
           resolvedRecords,
-          isLive ? { onLog: (m) => addLog(m, "info") } : { testMode: true, onLog: (m) => addLog(m, "info") }
+          testMode ? { testMode: true, onLog: (m) => addLog(m, "info") } : { onLog: (m) => addLog(m, "info") }
         );
-        addLog("PN Queue ▶ Blast complete.", "ok");
-        refreshBlastLog();
-        setShowBlastLog(true);
+        if (!r.queued) {
+          addLog("PN Queue ▶ Blast complete.", "ok");
+          refreshBlastLog();
+          setShowBlastLog(true);
+        } else {
+          addLog("PN Queue ▶ Batch re-queued — resolve remaining part numbers.", "info");
+        }
       } catch (e) {
         addLog("PN Queue ▶ Blast error: " + e.message, "err");
       }
