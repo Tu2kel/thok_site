@@ -103,8 +103,8 @@
 
     const [purgeLoading, setPurgeLoading] = useState(false);
     const [expandedCards, setExpandedCards] = useState({});
-    const [hiDollarFscs, setHiDollarFscs] = useState(() => {
-      try { return new Set(JSON.parse(localStorage.getItem("scc_hi_fsc") || "[]")); }
+    const [hiDollarDists, setHiDollarDists] = useState(() => {
+      try { return new Set(JSON.parse(localStorage.getItem("scc_hi_dist") || "[]")); }
       catch { return new Set(); }
     });
     const toggleCard = (id) =>
@@ -248,11 +248,11 @@
     );
 
     // ── Account / Rep toggle ──────────────────────────────────────────
-    const toggleHiFsc = useCallback((fsc) => {
-      setHiDollarFscs((prev) => {
+    const toggleHiDist = useCallback((distId) => {
+      setHiDollarDists((prev) => {
         const next = new Set(prev);
-        next.has(fsc) ? next.delete(fsc) : next.add(fsc);
-        try { localStorage.setItem("scc_hi_fsc", JSON.stringify([...next])); } catch {}
+        next.has(distId) ? next.delete(distId) : next.add(distId);
+        try { localStorage.setItem("scc_hi_dist", JSON.stringify([...next])); } catch {}
         return next;
       });
     }, []);
@@ -1201,11 +1201,11 @@
                       },
                     },
                     ...shownFsc.map((f) => {
-                      const isHi = hiDollarFscs.has(f);
+                      const isHi = hiDollarDists.has(d.id);
                       return h("span", {
                         key: f,
-                        title: isHi ? "High-dollar FSC — click to unmark" : "Click to flag as high-dollar",
-                        onClick: () => toggleHiFsc(f),
+                        title: isHi ? "High-dollar company — click to unmark" : "Click to flag as high-dollar",
+                        onClick: () => toggleHiDist(d.id),
                         style: isHi ? {
                           ...chipStyle,
                           color: "#22c55e",
