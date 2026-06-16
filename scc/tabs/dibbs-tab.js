@@ -270,6 +270,58 @@
     window.open(url, "_blank");
   }
 
+  // ── PENDING BLAST PANEL ───────────────────────────────────────────────
+  // Shows after AUTO dry-run — lists vendors + items, requires manual approval.
+  function PendingBlastPanel({ plan, isLive, onApprove, onCancel }) {
+    const Sm = { fontFamily: "JetBrains Mono,monospace", fontSize: "10px" };
+    const btnBase = {
+      fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em",
+      textTransform: "uppercase", padding: "6px 16px", cursor: "pointer", transition: "all .15s",
+    };
+    return h("div", {
+      style: {
+        background: "var(--card-bg)",
+        border: "1px solid rgba(245,158,11,.4)",
+        padding: "18px 20px",
+        marginBottom: "14px",
+      },
+    },
+      h("div", { style: { display: "flex", alignItems: "center", gap: "14px", marginBottom: "14px", flexWrap: "wrap" } },
+        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".14em", color: "rgba(245,158,11,.9)", textTransform: "uppercase" } },
+          "⏸ Blast Ready — " + plan.length + " vendor" + (plan.length !== 1 ? "s" : "")),
+        h("div", { style: { ...Sm, color: isLive ? "#e74c3c" : "rgba(245,158,11,.75)" } },
+          isLive ? "LIVE" : "TEST → tu2kel.lg@gmail.com"),
+        h("div", { style: { flex: 1 } }),
+        h("button", {
+          onClick: onCancel,
+          style: { ...btnBase, border: "1px solid rgba(231,76,60,.5)", background: "transparent", color: "rgba(231,76,60,.8)" },
+        }, "✕ Cancel"),
+        h("button", {
+          onClick: onApprove,
+          style: { ...btnBase, border: "1px solid rgba(61,214,140,.6)", background: "rgba(61,214,140,.1)", color: "var(--accent-green)" },
+        }, "✓ Approve & Send"),
+      ),
+      h("div", null,
+        plan.map(function (entry) {
+          return h("div", {
+            key: entry.dist.id || entry.dist.name,
+            style: { borderTop: "1px solid rgba(201,168,76,.08)", padding: "10px 0" },
+          },
+            h("div", { style: { display: "flex", gap: "10px", alignItems: "baseline", flexWrap: "wrap", marginBottom: "4px" } },
+              h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--alabaster)" } }, entry.dist.name),
+              h("span", { style: { ...Sm, color: "var(--gold-dim)" } }, entry.to),
+              h("span", { style: { ...Sm, fontSize: "9px", color: "var(--body-faint)" } }, entry.records.length + " item(s)"),
+              h("span", { style: { ...Sm, fontSize: "9px", color: "rgba(201,168,76,.5)" } }, entry.reasons.join(" · ")),
+            ),
+            h("div", { style: { ...Sm, fontSize: "9px", color: "var(--body-dim)", paddingLeft: "4px" } },
+              entry.records.map(function (r) { return r.item_name || r.sol_number; }).join(" · ")
+            ),
+          );
+        })
+      ),
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────────────
   // ── MAIN TAB COMPONENT ────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────
@@ -305,6 +357,7 @@
     const [blastLog, setBlastLog] = useState([]);
     const [showBlastLog, setShowBlastLog] = useState(false);
     const [pnQueue, setPNQueue] = useState(null); // loaded from localStorage on mount
+    const [pendingBlast, setPendingBlast] = useState(null); // { plan, records, isLive } — AUTO dry-run awaiting approval
 
     const abortRef   = useRef(false);
     const modeRef     = useRef(mode);
@@ -396,6 +449,27 @@
       }
     }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // ── APPROVE BLAST — fires the AUTO dry-run after user approves ──
+    const handleApproveBlast = useCallback(async (records, isLive) => {
+      if (!window.SCC_AUTO_RFQ) return;
+      setPendingBlast(null);
+      setBlasting(true);
+      addLog("AUTO ▶ Approved — sending to " + (isLive ? "real vendors [LIVE]" : "test inbox [TEST]") + "…", "info");
+      const queueHandler = (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); };
+      window.SCC_AUTO_RFQ.runBatch(records, isLive
+        ? { onLog: (m) => addLog(m, "info"), onQueue: queueHandler }
+        : { testMode: true, onLog: (m) => addLog(m, "info"), onQueue: queueHandler })
+        .then((r) => {
+          if (!r.queued) {
+            addLog("AUTO ▶ Blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com."), "ok");
+            refreshBlastLog();
+            setShowBlastLog(true);
+          }
+          setBlasting(false);
+        })
+        .catch((e) => { addLog("AUTO ▶ Blast error: " + e.message, "err"); setBlasting(false); });
+    }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // ── AUTO CHAIN — analyze → push GO → RFQ blast (no user interaction) ──
     const autoChain = useCallback(async (scrapedSols) => {
       addLog("AUTO ▶ Analyzing " + scrapedSols.length + " sols…", "info");
@@ -422,18 +496,22 @@
           return;
         }
 
-        // Blast GO sols — pipeline NOT updated yet (vendor quote required first)
+        // Dry-run first — build vendor plan and surface for approval before any email fires
         const blastRecs = go.map(buildRecord);
         if (window.SCC_AUTO_RFQ) {
           const isLive = liveModeRef.current;
-          addLog("AUTO ▶ Firing RFQ blast to " + blastRecs.length + " GO sols" + (isLive ? " [LIVE]" : " [TEST → tu2kel.lg@gmail.com]") + "…", "info");
+          addLog("AUTO ▶ Building blast plan for " + blastRecs.length + " GO sol(s)…", "info");
           window.SCC_AUTO_RFQ.runBatch(blastRecs, isLive
-            ? { onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } }
-            : { testMode: true, onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } })
+            ? { dryRun: true, onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } }
+            : { dryRun: true, testMode: true, onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } })
             .then((r) => {
-              if (!r.queued) {
-                addLog("AUTO ▶ RFQ blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com.") + " Pipeline stays clean until quotes arrive.", "ok");
-                refreshBlastLog();
+              if (r.dryRun && r.plan && r.plan.length > 0) {
+                setPendingBlast({ plan: r.plan, records: blastRecs, isLive });
+                addLog("AUTO ▶ " + r.plan.length + " vendor email(s) staged — review below and approve to send.", "info");
+              } else if (r.dryRun && (!r.plan || r.plan.length === 0)) {
+                addLog("AUTO ▶ No vendors matched any GO sols — check rolodex FSC coverage.", "info");
+              } else if (!r.queued) {
+                addLog("AUTO ▶ Done.", "ok");
               }
             })
             .catch((e) => addLog("AUTO ▶ RFQ error — " + e.message, "err"));
@@ -1125,6 +1203,15 @@
             setPNQueue(null);
             toast_("PN Queue discarded.");
           },
+        }),
+
+      // ── PENDING BLAST PANEL — AUTO dry-run awaiting approval ──
+      pendingBlast &&
+        h(PendingBlastPanel, {
+          plan:      pendingBlast.plan,
+          isLive:    pendingBlast.isLive,
+          onApprove: () => handleApproveBlast(pendingBlast.records, pendingBlast.isLive),
+          onCancel:  () => { setPendingBlast(null); addLog("AUTO ▶ Blast cancelled.", "info"); },
         }),
 
       // ── LIVE LOG ──

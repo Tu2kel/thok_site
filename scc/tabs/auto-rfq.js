@@ -370,6 +370,22 @@
       results.rejected.length + " REJECT"
     );
 
+    // ── Dry run: return vendor plan without sending (used by AUTO approval gate) ──
+    if (opts.dryRun) {
+      var plan = [];
+      for (var dre of vendorMap.values()) {
+        var dreEmail = buildBatchEmail(dre.dist, dre.records);
+        plan.push({
+          dist:    dre.dist,
+          records: dre.records,
+          reasons: Array.from(dre.reasons),
+          to:      opts.testMode ? TEST_EMAIL : dre.dist.email,
+          subject: opts.testMode ? "[TEST] " + dreEmail.subject : dreEmail.subject,
+        });
+      }
+      return { dryRun: true, plan, goCount: results.go.length };
+    }
+
     // ── Phase 2: one email per vendor ──
     const batchLogEntries = [];
     for (const entry of vendorMap.values()) {
