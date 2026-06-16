@@ -472,13 +472,18 @@
 
     // ── AUTO CHAIN — analyze → push GO → RFQ blast (no user interaction) ──
     const autoChain = useCallback(async (scrapedSols) => {
-      addLog("AUTO ▶ Analyzing " + scrapedSols.length + " sols…", "info");
+      const isLive       = liveModeRef.current; // capture once so analyze + blast share the same mode
+      const TEST_SOL_CAP = 30; // max sols to analyze in test mode — keeps Claude calls fast
+      const TEST_GO_CAP  = 3;  // max GOs to stage in test dry-run — no need to wait for 5+
+
+      const solsToAnalyze = isLive ? scrapedSols : scrapedSols.slice(0, TEST_SOL_CAP);
+      addLog("AUTO ▶ Analyzing " + solsToAnalyze.length + " sol(s)" + (isLive ? "" : " [TEST — capped at " + TEST_SOL_CAP + "]") + "…", "info");
       setAnalyzing(true);
       try {
-        const results = await analyzeWithClaude(scrapedSols, addLog);
+        const results = await analyzeWithClaude(solsToAnalyze, addLog);
         const go = [], verify = [], reject = [];
         for (const res of results) {
-          const orig = scrapedSols.find((s) => s.sol_number === res.sol_number) || {};
+          const orig = solsToAnalyze.find((s) => s.sol_number === res.sol_number) || {};
           const merged = { ...orig, ...res };
           if (res.verdict === "GO")           go.push(merged);
           else if (res.verdict === "VERIFY FIRST") verify.push(merged);
@@ -496,10 +501,15 @@
           return;
         }
 
+        // In test mode cap GO list — don't make them wait for a live-size batch
+        const cappedGo = isLive ? go : go.slice(0, TEST_GO_CAP);
+        if (!isLive && go.length > TEST_GO_CAP) {
+          addLog("AUTO ▶ TEST — staging " + TEST_GO_CAP + " of " + go.length + " GO sols.", "info");
+        }
+
         // Dry-run first — build vendor plan and surface for approval before any email fires
-        const blastRecs = go.map(buildRecord);
+        const blastRecs = cappedGo.map(buildRecord);
         if (window.SCC_AUTO_RFQ) {
-          const isLive = liveModeRef.current;
           addLog("AUTO ▶ Building blast plan for " + blastRecs.length + " GO sol(s)…", "info");
           window.SCC_AUTO_RFQ.runBatch(blastRecs, isLive
             ? { dryRun: true, onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } }
@@ -640,7 +650,7 @@
         const resp = await fetch(AGENT_URL + "/navigator/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stream: true }),
+          body: JSON.stringify({ stream: true, ...(modeRef.current === "auto" && !liveModeRef.current ? { testMode: true, maxSols: 40 } : {}) }),
           signal: AbortSignal.timeout(300000), // 5 min max
         });
 
