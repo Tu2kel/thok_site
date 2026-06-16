@@ -657,6 +657,7 @@
           const hasJcp = !!d.has_jcp;
           const hasMilPack = !!d.has_mil_std_pack;
           const isMfr = !!d.is_manufacturer;
+          const isWholesaler = !!d.is_wholesaler;
 
           // Border + card bg: mfr+jcp > mfr > rep > account > pref tiers > default
           let borderColor, cardBg, cardBorder;
@@ -668,6 +669,10 @@
             borderColor = "rgba(249,200,80,.9)";
             cardBg = "rgba(249,200,80,.06)";
             cardBorder = "1px solid rgba(249,200,80,.35)";
+          } else if (isWholesaler) {
+            borderColor = "rgba(251,146,60,.85)";
+            cardBg = "rgba(251,146,60,.05)";
+            cardBorder = "1px solid rgba(251,146,60,.32)";
           } else if (hasRep) {
             borderColor = "rgba(61,214,140,.75)";
             cardBg = "rgba(61,214,140,.05)";
@@ -1122,6 +1127,15 @@
                   "rgba(96,165,250,.28)",
                   "#60a5fa",
                   "#bae6fd",
+                ),
+                toggleBtn(
+                  isWholesaler,
+                  "WHL",
+                  isWholesaler ? "Clear: wholesaler" : "Mark: wholesaler (bulk distributor)",
+                  "is_wholesaler",
+                  "rgba(251,146,60,.28)",
+                  "#fb923c",
+                  "#fed7aa",
                 ),
               ),
 

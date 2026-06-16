@@ -240,7 +240,7 @@ function buildRFQEmail(dist, record) {
       "</p>",
       "<hr style='border:none;border-top:1px solid #ccc;margin:0 0 12px 0;'>",
       "<p style='margin:0 0 12px 0;font-size:13px;'>SDVOSB | &#11088; | VetHUB</p>",
-      "<img src='https://thehouseofkel.com/images/ifl_Glam.png' alt='Imperio Federal Logistics' style='max-width:420px;display:block;'>",
+      "<img src='https://thehouseofkel.com/ifl_banner.png' alt='Imperio Federal Logistics' style='max-width:420px;display:block;'>",
     "</div>",
     "</body></html>",
   ].join("");
