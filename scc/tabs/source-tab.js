@@ -103,6 +103,10 @@
 
     const [purgeLoading, setPurgeLoading] = useState(false);
     const [expandedCards, setExpandedCards] = useState({});
+    const [hiDollarFscs, setHiDollarFscs] = useState(() => {
+      try { return new Set(JSON.parse(localStorage.getItem("scc_hi_fsc") || "[]")); }
+      catch { return new Set(); }
+    });
     const toggleCard = (id) =>
       setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }));
 
@@ -244,6 +248,15 @@
     );
 
     // ── Account / Rep toggle ──────────────────────────────────────────
+    const toggleHiFsc = useCallback((fsc) => {
+      setHiDollarFscs((prev) => {
+        const next = new Set(prev);
+        next.has(fsc) ? next.delete(fsc) : next.add(fsc);
+        try { localStorage.setItem("scc_hi_fsc", JSON.stringify([...next])); } catch {}
+        return next;
+      });
+    }, []);
+
     const handleToggle = useCallback(
       async (d, field) => {
         const updated = { ...d, [field]: !d[field] };
@@ -1187,9 +1200,23 @@
                         alignItems: "center",
                       },
                     },
-                    ...shownFsc.map((f) =>
-                      h("span", { key: f, style: chipStyle }, f),
-                    ),
+                    ...shownFsc.map((f) => {
+                      const isHi = hiDollarFscs.has(f);
+                      return h("span", {
+                        key: f,
+                        title: isHi ? "High-dollar FSC — click to unmark" : "Click to flag as high-dollar",
+                        onClick: () => toggleHiFsc(f),
+                        style: isHi ? {
+                          ...chipStyle,
+                          color: "#22c55e",
+                          background: "rgba(34,197,94,.12)",
+                          border: "1px solid rgba(34,197,94,.45)",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          textShadow: "0 0 6px rgba(34,197,94,.5)",
+                        } : { ...chipStyle, cursor: "pointer" },
+                      }, f);
+                    }),
                     !expanded &&
                       hiddenCount > 0 &&
                       h(
