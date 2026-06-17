@@ -671,6 +671,7 @@
           const hasMilPack = !!d.has_mil_std_pack;
           const isMfr = !!d.is_manufacturer;
           const isWholesaler = !!d.is_wholesaler;
+          const isDistributor = !!d.is_distributor;
 
           // Border + card bg: mfr+jcp > mfr > rep > account > pref tiers > default
           let borderColor, cardBg, cardBorder;
@@ -686,6 +687,10 @@
             borderColor = "rgba(251,146,60,.85)";
             cardBg = "rgba(251,146,60,.05)";
             cardBorder = "1px solid rgba(251,146,60,.32)";
+          } else if (isDistributor) {
+            borderColor = "rgba(56,189,248,.8)";
+            cardBg = "rgba(56,189,248,.04)";
+            cardBorder = "1px solid rgba(56,189,248,.28)";
           } else if (hasRep) {
             borderColor = "rgba(61,214,140,.75)";
             cardBg = "rgba(61,214,140,.05)";
@@ -1149,6 +1154,15 @@
                   "rgba(251,146,60,.28)",
                   "#fb923c",
                   "#fed7aa",
+                ),
+                toggleBtn(
+                  isDistributor,
+                  "DIST",
+                  isDistributor ? "Clear: distributor" : "Mark: distributor (broad P/N sourcing)",
+                  "is_distributor",
+                  "rgba(56,189,248,.22)",
+                  "#38bdf8",
+                  "#bae6fd",
                 ),
               ),
 
