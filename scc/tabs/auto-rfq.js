@@ -521,5 +521,55 @@
     }
   }
 
-  window.SCC_AUTO_RFQ = { run, runBatch, sendBatchSummary, getBlastLog: loadBlastLog, loadPNQueue, savePNQueue, clearPNQueue };
+  async function sendOneVendorBatch(entry, opts) {
+    opts = opts || {};
+    var testMode  = !!opts.testMode;
+    var emailData = buildBatchEmail(entry.dist, entry.records);
+    var toAddr    = testMode ? TEST_EMAIL : (entry.dist.email || entry.to);
+    var subj      = testMode ? "[TEST] " + emailData.subject : emailData.subject;
+    var reasonStr = Array.isArray(entry.reasons) ? entry.reasons.join(" · ") : (entry.reasons || "");
+
+    var logEntry = {
+      ts:          new Date().toISOString(),
+      live:        !testMode,
+      vendor:      entry.dist.name,
+      email:       toAddr,
+      item_count:  entry.records.length,
+      sol_numbers: entry.records.map(function (r) { return r.sol_number; }),
+      items:       entry.records.map(function (r) { return r.item_name || r.sol_number; }),
+      subject:     subj,
+      match_reason: reasonStr,
+      sent:        false,
+      error:       null,
+    };
+
+    try {
+      var res  = await fetch(SEND_ENDPOINT, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ to: toAddr, subject: subj, emailBody: emailData.body, attachCert: false }),
+      });
+      var data = await res.json();
+      if (!data.ok) throw new Error(data.error || "send failed");
+      logEntry.sent = true;
+    } catch (e) {
+      logEntry.error = e.message;
+      try {
+        var bl2 = loadBlastLog(); bl2.unshift(logEntry);
+        if (bl2.length > 300) bl2.length = 300;
+        localStorage.setItem(BLAST_LOG_KEY, JSON.stringify(bl2));
+      } catch {}
+      throw e;
+    }
+
+    try {
+      var bl = loadBlastLog(); bl.unshift(logEntry);
+      if (bl.length > 300) bl.length = 300;
+      localStorage.setItem(BLAST_LOG_KEY, JSON.stringify(bl));
+    } catch {}
+
+    return logEntry;
+  }
+
+  window.SCC_AUTO_RFQ = { run, runBatch, sendOneVendorBatch, sendBatchSummary, getBlastLog: loadBlastLog, loadPNQueue, savePNQueue, clearPNQueue };
 })();

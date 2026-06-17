@@ -272,52 +272,58 @@
 
   // ── PENDING BLAST PANEL ───────────────────────────────────────────────
   // Shows after AUTO dry-run — lists vendors + items, requires manual approval.
-  function PendingBlastPanel({ plan, isLive, onApprove, onCancel }) {
+  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, sending }) {
     const Sm = { fontFamily: "JetBrains Mono,monospace", fontSize: "10px" };
     const btnBase = {
       fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em",
-      textTransform: "uppercase", padding: "6px 16px", cursor: "pointer", transition: "all .15s",
+      textTransform: "uppercase", padding: "7px 18px", cursor: sending ? "not-allowed" : "pointer",
+      opacity: sending ? 0.5 : 1, transition: "all .15s", border: "none",
     };
     return h("div", {
       style: {
         background: "var(--card-bg)",
-        border: "1px solid rgba(245,158,11,.4)",
+        border: "2px solid rgba(245,158,11,.55)",
+        borderLeft: "4px solid rgba(245,158,11,.9)",
         padding: "18px 20px",
         marginBottom: "14px",
       },
     },
-      h("div", { style: { display: "flex", alignItems: "center", gap: "14px", marginBottom: "14px", flexWrap: "wrap" } },
-        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".14em", color: "rgba(245,158,11,.9)", textTransform: "uppercase" } },
-          "⏸ Blast Ready — " + plan.length + " vendor" + (plan.length !== 1 ? "s" : "")),
-        h("div", { style: { ...Sm, color: isLive ? "#e74c3c" : "rgba(245,158,11,.75)" } },
-          isLive ? "LIVE" : "TEST → tu2kel.lg@gmail.com"),
+      // ── Header row ──
+      h("div", { style: { display: "flex", alignItems: "center", gap: "14px", marginBottom: "12px", flexWrap: "wrap" } },
+        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", letterSpacing: ".16em", color: "rgba(245,158,11,.95)", textTransform: "uppercase" } },
+          "⏸ Email " + (idx + 1) + " of " + total),
+        h("div", { style: { ...Sm, fontSize: "9px", background: isLive ? "rgba(231,76,60,.15)" : "rgba(245,158,11,.12)", color: isLive ? "#e74c3c" : "rgba(245,158,11,.85)", border: "1px solid " + (isLive ? "rgba(231,76,60,.4)" : "rgba(245,158,11,.3)"), borderRadius: "3px", padding: "2px 8px" } },
+          isLive ? "LIVE" : "TEST"),
         h("div", { style: { flex: 1 } }),
         h("button", {
-          onClick: onCancel,
-          style: { ...btnBase, border: "1px solid rgba(231,76,60,.5)", background: "transparent", color: "rgba(231,76,60,.8)" },
-        }, "✕ Cancel"),
+          onClick: onCancel, disabled: sending,
+          style: { ...btnBase, background: "transparent", color: "rgba(231,76,60,.75)", border: "1px solid rgba(231,76,60,.4)" },
+        }, "✕ Cancel All"),
         h("button", {
-          onClick: onApprove,
-          style: { ...btnBase, border: "1px solid rgba(61,214,140,.6)", background: "rgba(61,214,140,.1)", color: "var(--accent-green)" },
-        }, "✓ Approve & Send"),
+          onClick: onSkip, disabled: sending,
+          style: { ...btnBase, background: "transparent", color: "var(--body-dim)", border: "1px solid rgba(255,255,255,.12)" },
+        }, "→ Skip"),
+        h("button", {
+          onClick: onSend, disabled: sending,
+          style: { ...btnBase, background: "rgba(61,214,140,.12)", color: "var(--accent-green)", border: "1px solid rgba(61,214,140,.5)" },
+        }, sending ? "Sending…" : "✓ Send This Email"),
       ),
-      h("div", null,
-        plan.map(function (entry) {
-          return h("div", {
-            key: entry.dist.id || entry.dist.name,
-            style: { borderTop: "1px solid rgba(201,168,76,.08)", padding: "10px 0" },
-          },
-            h("div", { style: { display: "flex", gap: "10px", alignItems: "baseline", flexWrap: "wrap", marginBottom: "4px" } },
-              h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--alabaster)" } }, entry.dist.name),
-              h("span", { style: { ...Sm, color: "var(--gold-dim)" } }, entry.to),
-              h("span", { style: { ...Sm, fontSize: "9px", color: "var(--body-faint)" } }, entry.records.length + " item(s)"),
-              h("span", { style: { ...Sm, fontSize: "9px", color: "rgba(201,168,76,.5)" } }, entry.reasons.join(" · ")),
-            ),
-            h("div", { style: { ...Sm, fontSize: "9px", color: "var(--body-dim)", paddingLeft: "4px" } },
-              entry.records.map(function (r) { return r.item_name || r.sol_number; }).join(" · ")
-            ),
+
+      // ── Vendor + items ──
+      h("div", { style: { display: "flex", gap: "10px", alignItems: "baseline", flexWrap: "wrap", marginBottom: "6px" } },
+        h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", color: "var(--alabaster)", letterSpacing: ".06em" } }, entry.dist.name),
+        h("span", { style: { ...Sm, color: "var(--gold-dim)" } }, isLive ? entry.dist.email : "→ tu2kel.lg@gmail.com"),
+        h("span", { style: { ...Sm, fontSize: "9px", color: "var(--body-faint)" } }, entry.records.length + " item(s)"),
+        h("span", { style: { ...Sm, fontSize: "9px", color: "rgba(201,168,76,.5)" } }, entry.reasons.join(" · ")),
+      ),
+      h("div", { style: { ...Sm, fontSize: "9px", color: "var(--body-dim)", paddingLeft: "2px", lineHeight: "1.6" } },
+        entry.records.map(function (r) {
+          return h("div", { key: r.sol_number },
+            h("span", { style: { color: "rgba(201,168,76,.6)", marginRight: "6px" } }, r.sol_number),
+            r.item_name || "—",
+            r.ref_part_number ? h("span", { style: { color: "rgba(61,214,140,.6)", marginLeft: "8px" } }, "P/N: " + r.ref_part_number) : null,
           );
-        })
+        }),
       ),
     );
   }
@@ -430,45 +436,66 @@
       if (!window.SCC_AUTO_RFQ) return;
       window.SCC_AUTO_RFQ.clearPNQueue();
       setPNQueue(null);
-      const testMode = savedOpts && savedOpts.testMode; // honor mode captured at blast-time, not current toggle
-      addLog("PN Queue ▶ Releasing batch — " + resolvedRecords.length + " sols with part numbers resolved…", "info");
+      const testMode = !!(savedOpts && savedOpts.testMode);
+      const isLive   = !testMode;
+      addLog("PN Queue ▶ Building email plan for approval…", "info");
       try {
         const r = await window.SCC_AUTO_RFQ.runBatch(
           resolvedRecords,
-          testMode ? { testMode: true, onLog: (m) => addLog(m, "info") } : { onLog: (m) => addLog(m, "info") }
+          testMode
+            ? { dryRun: true, testMode: true, onLog: (m) => addLog(m, "info") }
+            : { dryRun: true, onLog: (m) => addLog(m, "info") }
         );
-        if (!r.queued) {
-          addLog("PN Queue ▶ Blast complete.", "ok");
-          refreshBlastLog();
-          setShowBlastLog(true);
-        } else {
+        if (r.queued) {
           addLog("PN Queue ▶ Batch re-queued — resolve remaining part numbers.", "info");
+        } else if (r.dryRun && r.plan && r.plan.length > 0) {
+          setPendingBlast({ plan: r.plan, isLive, idx: 0 });
+          addLog("PN Queue ▶ " + r.plan.length + " vendor email(s) ready — approve each one below.", "info");
+        } else {
+          addLog("PN Queue ▶ No vendors matched any GO sols.", "info");
         }
       } catch (e) {
-        addLog("PN Queue ▶ Blast error: " + e.message, "err");
+        addLog("PN Queue ▶ Error: " + e.message, "err");
       }
-    }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [addLog]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── APPROVE BLAST — fires the AUTO dry-run after user approves ──
-    const handleApproveBlast = useCallback(async (records, isLive) => {
-      if (!window.SCC_AUTO_RFQ) return;
-      setPendingBlast(null);
+    // ── SEND ONE BATCH — fires a single vendor email from the step-through panel ──
+    const handleSendOneBatch = useCallback(async () => {
+      if (!pendingBlast || !window.SCC_AUTO_RFQ) return;
+      const { plan, isLive, idx } = pendingBlast;
+      const entry = plan[idx];
       setBlasting(true);
-      addLog("AUTO ▶ Approved — sending to " + (isLive ? "real vendors [LIVE]" : "test inbox [TEST]") + "…", "info");
-      const queueHandler = (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); };
-      window.SCC_AUTO_RFQ.runBatch(records, isLive
-        ? { onLog: (m) => addLog(m, "info"), onQueue: queueHandler }
-        : { testMode: true, onLog: (m) => addLog(m, "info"), onQueue: queueHandler })
-        .then((r) => {
-          if (!r.queued) {
-            addLog("AUTO ▶ Blast complete" + (isLive ? " — real vendor emails sent." : " — test emails sent to tu2kel.lg@gmail.com."), "ok");
-            refreshBlastLog();
-            setShowBlastLog(true);
-          }
-          setBlasting(false);
-        })
-        .catch((e) => { addLog("AUTO ▶ Blast error: " + e.message, "err"); setBlasting(false); });
-    }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+      addLog("AUTO ▶ Sending to " + entry.dist.name + "…", "info");
+      try {
+        await window.SCC_AUTO_RFQ.sendOneVendorBatch(entry, isLive ? {} : { testMode: true });
+        addLog("✓ " + entry.dist.name + (isLive ? " <" + entry.dist.email + ">" : " [TEST → tu2kel.lg@gmail.com]") + " · " + entry.records.length + " item(s) sent.", "ok");
+        refreshBlastLog();
+      } catch (e) {
+        addLog("✗ " + entry.dist.name + ": " + e.message, "err");
+      }
+      const nextIdx = idx + 1;
+      if (nextIdx < plan.length) {
+        setPendingBlast({ plan, isLive, idx: nextIdx });
+      } else {
+        setPendingBlast(null);
+        setShowBlastLog(true);
+        addLog("AUTO ▶ All batches processed.", "ok");
+      }
+      setBlasting(false);
+    }, [pendingBlast, addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleSkipBatch = useCallback(() => {
+      if (!pendingBlast) return;
+      const { plan, isLive, idx } = pendingBlast;
+      addLog("AUTO ▶ Skipped " + plan[idx].dist.name + ".", "info");
+      const nextIdx = idx + 1;
+      if (nextIdx < plan.length) {
+        setPendingBlast({ plan, isLive, idx: nextIdx });
+      } else {
+        setPendingBlast(null);
+        addLog("AUTO ▶ All batches reviewed.", "info");
+      }
+    }, [pendingBlast, addLog]);
 
     // ── AUTO CHAIN — analyze → push GO → RFQ blast (no user interaction) ──
     const autoChain = useCallback(async (scrapedSols) => {
@@ -516,7 +543,7 @@
             : { dryRun: true, testMode: true, onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } })
             .then((r) => {
               if (r.dryRun && r.plan && r.plan.length > 0) {
-                setPendingBlast({ plan: r.plan, records: blastRecs, isLive });
+                setPendingBlast({ plan: r.plan, isLive, idx: 0 });
                 addLog("AUTO ▶ " + r.plan.length + " vendor email(s) staged — review below and approve to send.", "info");
               } else if (r.dryRun && (!r.plan || r.plan.length === 0)) {
                 addLog("AUTO ▶ No vendors matched any GO sols — check rolodex FSC coverage.", "info");
@@ -1215,13 +1242,17 @@
           },
         }),
 
-      // ── PENDING BLAST PANEL — AUTO dry-run awaiting approval ──
+      // ── STEP-THROUGH APPROVAL PANEL — one vendor batch at a time ──
       pendingBlast &&
         h(PendingBlastPanel, {
-          plan:      pendingBlast.plan,
-          isLive:    pendingBlast.isLive,
-          onApprove: () => handleApproveBlast(pendingBlast.records, pendingBlast.isLive),
-          onCancel:  () => { setPendingBlast(null); addLog("AUTO ▶ Blast cancelled.", "info"); },
+          entry:   pendingBlast.plan[pendingBlast.idx],
+          idx:     pendingBlast.idx,
+          total:   pendingBlast.plan.length,
+          isLive:  pendingBlast.isLive,
+          sending: blasting,
+          onSend:  handleSendOneBatch,
+          onSkip:  handleSkipBatch,
+          onCancel: () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
         }),
 
       // ── LIVE LOG ──
