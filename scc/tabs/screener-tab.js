@@ -223,6 +223,7 @@
       setBlastView(false);
 
       const allResults = [];
+      let skipped = 0;
       try {
         for (let i = 0; i < chunks.length; i++) {
           setDibbsProgress(`Batch ${i + 1}/${chunks.length} (${chunks[i].length} sols)…`);
@@ -236,18 +237,17 @@
             material: s.material, part_char: s.part_char, quote_due: s.quote_due,
             amsc: s.amsc || "", approved_sources: s.approved_sources || [],
           }));
-          const res = await fetch(FUNC_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sols: payload }),
-          });
-          if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(`Batch ${i + 1} failed ${res.status}: ${txt.slice(0, 120)}`);
-          }
-          const data = await res.json();
-          if (!data.ok) throw new Error(`Batch ${i + 1}: ` + (data.error || "failed"));
-          allResults.push(...data.results);
+          try {
+            const res = await fetch(FUNC_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sols: payload }),
+            });
+            if (!res.ok) { skipped += chunks[i].length; continue; }
+            const data = await res.json();
+            if (!data.ok) { skipped += chunks[i].length; continue; }
+            allResults.push(...data.results);
+          } catch { skipped += chunks[i].length; }
         }
 
         // Merge Claude results with original sol data + pre-rejected
@@ -275,7 +275,7 @@
         const autoSel = new Set(merged.filter((r) => r.verdict === "GO").map((r) => r.sol_number));
         setSelected(autoSel);
         setDibbsProgress("");
-        showToast(`Analysis complete — ${autoSel.size} GO · ${merged.filter(r=>r.verdict==="VERIFY FIRST").length} VERIFY · ${merged.filter(r=>r.verdict==="REJECT").length} REJECT`);
+        showToast(`Analysis complete — ${autoSel.size} GO · ${merged.filter(r=>r.verdict==="VERIFY FIRST").length} VERIFY · ${merged.filter(r=>r.verdict==="REJECT").length} REJECT` + (skipped > 0 ? ` · ${skipped} skipped (API error)` : ""));
       } catch (e) {
         showToast("Analysis failed: " + e.message, true);
         setDibbsProgress("");
