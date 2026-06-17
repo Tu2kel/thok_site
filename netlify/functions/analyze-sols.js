@@ -104,7 +104,7 @@ Return ONLY the JSON array. No markdown, no preamble, no backticks.`;
 
 // ── Status codes that mean "quota/rate-limit — try the other provider" ──
 function isQuotaError(status) {
-  return status === 429 || status === 529 || status === 503 || status === 402;
+  return status === 400 || status === 429 || status === 529 || status === 503 || status === 402;
 }
 
 function buildUserMsg(sols) {
