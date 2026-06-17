@@ -224,6 +224,24 @@
 
       const allResults = [];
       let skipped = 0;
+      const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+      const fetchChunk = async (payload) => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) await delay(2500);
+          try {
+            const res = await fetch(FUNC_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sols: payload }),
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (!data.ok) continue;
+            return data.results;
+          } catch { /* retry */ }
+        }
+        return null;
+      };
       try {
         for (let i = 0; i < chunks.length; i++) {
           setDibbsProgress(`Batch ${i + 1}/${chunks.length} (${chunks[i].length} sols)…`);
@@ -237,17 +255,9 @@
             material: s.material, part_char: s.part_char, quote_due: s.quote_due,
             amsc: s.amsc || "", approved_sources: s.approved_sources || [],
           }));
-          try {
-            const res = await fetch(FUNC_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sols: payload }),
-            });
-            if (!res.ok) { skipped += chunks[i].length; continue; }
-            const data = await res.json();
-            if (!data.ok) { skipped += chunks[i].length; continue; }
-            allResults.push(...data.results);
-          } catch { skipped += chunks[i].length; }
+          const results = await fetchChunk(payload);
+          if (results) { allResults.push(...results); } else { skipped += chunks[i].length; }
+          if (i < chunks.length - 1) await delay(1200); // stay under Anthropic RPM cap
         }
 
         // Merge Claude results with original sol data + pre-rejected
