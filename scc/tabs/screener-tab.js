@@ -212,7 +212,7 @@
       const { clean, preRejected } = localPreFilter(dibbsBatch.sols);
       setDibbsProgress(`Pre-filtered: ${preRejected.length} instant rejects · sending ${clean.length} to Claude…`);
 
-      const CHUNK = 20;
+      const CHUNK = 10;
       const chunks = [];
       for (let i = 0; i < clean.length; i += CHUNK) chunks.push(clean.slice(i, i + CHUNK));
 
