@@ -13,41 +13,39 @@ COMPANY PROFILE: Imperio Federal Logistics (CAGE 152U4) is a JCP-certified SDVOS
 JCP certification means we can access controlled technical data and source from approved manufacturers.
 We are NOT a manufacturer/OEM — we cannot produce, machine, or fabricate parts ourselves.
 
-HARD REJECT (verdict: REJECT) if ANY of:
+DEFAULT BIAS: When in doubt, lean GO or VERIFY FIRST. REJECT only on hard gates below.
+VERIFY FIRST is a holding pattern — it means "bid if we can source it." GO means "bid now."
+Do NOT stack soft concerns to push a sol from GO to VERIFY FIRST. One clear path to supply = GO.
+
+HARD REJECT (verdict: REJECT) — these are absolute stops, no exceptions:
 - Set-aside codes: AL (AbilityOne), FG, PO, FI, H (HUBZone), L, E — ineligible for SDVOSB
-- AMSC: G — government-peculiar design, no commercial market, requires OEM manufacturing capability we lack
-- AMSC: B with approved_sources count = 1 — sole-source OEM lock, no resale path
+- AMSC: G — government-peculiar design, no commercial market
+- AMSC: B with approved_sources count = 1 — sole-source OEM lock
 - AIDC flag in item name
 - Blocked CAGEs in supplier_restrictions: 81SA7, R9004, 07482, 062W0, 75Q65
 - Blocked OEMs in item name: SureFire, Streamlight, Furuno TZT9F
-- QA = QSL — quality systems list required, not achievable as a reseller
-- Prime-dominated FSCs with no resale channel: 1305,1310,1315,1320,1340,1350,1360,1376,2835,2840,1560,1720,1730,5860
+- QA = QSL — quality systems list, not achievable as reseller
+- Prime-dominated FSCs (no resale channel): 1305,1310,1315,1320,1340,1350,1360,1376,2835,2840,1560,1720,1730,5860
 
-VERIFY FIRST (verdict: VERIFY FIRST) if ANY of:
-- AMSC: A or B with multiple approved sources — JCP gives us drawing access; verify commercial sources exist
-- AMSC: Q (QPL item) — JCP-accessible; verify QPL-qualified distributor carries it
-- AMSC: M (mil-spec) — verify commercial mil-spec distributor channel
-- Tight margin (historical price supports 15–27% gross margin only)
-- MS-/MIL-/NAS-/AN- part number prefix — spec-designator risk, check approved sources
-- Single approved source that may have authorized dealer channel
-- Quote deadline ≤ 5 days
-- Delivery window > 120 days (risk of non-performance)
+GO (verdict: GO) — passes all hard rejects AND any of:
+- AMSC: C (commercial item) — always GO if hard rejects clear and ext_price > $0
+- AMSC: blank/null — GO if FSC is clean, no spec set-aside, standard P/N (no MS/MIL/AN/NAS prefix), ext_price > $0
+- AMSC: A or B with 2+ approved sources — JCP gives drawing access, sourceable through authorized distributors
+- AMSC: Q or M — QPL/mil-spec items are regularly stocked by JCP-certified distributors we use; GO unless sole-sourced
+- Any AMSC where ext_price supports ≥27.5% gross margin at 90% cost ceiling and net > $500 after 7.5% FE fees
+- Delivery window 30–120 days and quote deadline ≥ 3 days out
 
-GO (verdict: GO) if:
-- Passes all hard reject gates
-- AMSC: C, or AMSC A/B/Q/M with confirmed commercial resale path
-- Sourceable via commercial distributor (COTS or approved-source resale path exists)
-- Historical unit price supports 27.5%+ gross margin at 90% cost ceiling
-- Net after worst-case FE fees (7.5%) exceeds $500
-- Delivery window achievable via standard commercial lead times
+VERIFY FIRST (verdict: VERIFY FIRST) — passes hard rejects but has ONE specific concern to resolve:
+- MS-/MIL-/NAS-/AN- P/N prefix AND AMSC A/B/Q/M AND single approved source — check authorized dealer
+- Quote deadline ≤ 2 days — too tight to source and bid
+- Delivery window > 150 days — non-performance risk for a small business
+- Margin clearly tight (ext_price math shows < 15% gross at any realistic cost)
+- Blocked CAGE in supplier_restrictions but item may have alternate source path
 
-MISSING DATA RULES (when amsc is blank or approved_sources is empty):
-- If amsc is blank: do NOT apply AMSC-specific reject rules; default to VERIFY FIRST
-  unless another hard-reject gate fires (FSC, set-aside, item name, QA, CAGE)
-- If approved_sources is empty: cannot confirm sole-source lock, so skip the
-  "AMSC B with 1 source = REJECT" rule; treat as VERIFY FIRST
-- A blank AMSC sol with clean FSC, no set-aside, good margin, and standard part
-  number may still be promoted to GO if all other gates pass
+MISSING DATA RULES:
+- blank amsc + clean FSC + no set-aside + ext_price > 0 → GO (do not default to VERIFY FIRST)
+- blank approved_sources → skip sole-source reject rule; treat as GO if other criteria pass
+- missing ext_price or unit_price → VERIFY FIRST (cannot confirm margin)
 `;
 
 // ── JSON mode: analyze pre-structured sol array ───────────────────────────
