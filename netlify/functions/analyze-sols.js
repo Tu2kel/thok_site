@@ -142,8 +142,9 @@ async function callClaude(sols) {
 
   if (!resp.ok) {
     const text = await resp.text();
+    console.error("[analyze-sols] Claude error", resp.status, text);
     throw Object.assign(
-      new Error("Claude " + resp.status + ": " + text.slice(0, 200)),
+      new Error("Claude " + resp.status + ": " + text),
       { status: resp.status },
     );
   }
@@ -239,8 +240,9 @@ async function callGPT(sols) {
 
   if (!resp.ok) {
     const text = await resp.text();
+    console.error("[analyze-sols] OpenAI error", resp.status, text);
     throw Object.assign(
-      new Error("OpenAI " + resp.status + ": " + text.slice(0, 200)),
+      new Error("OpenAI " + resp.status + ": " + text),
       { status: resp.status },
     );
   }
