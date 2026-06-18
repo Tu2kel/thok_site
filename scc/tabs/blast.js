@@ -1372,23 +1372,44 @@
                 "Step 4 \u2014 Review & Fire RFQs",
               ),
 
-              Object.keys(fscGroups)
-                .sort()
-                .map((fsc) => {
-                  const { sols, dists, error } = fscGroups[fsc];
-                  const isOpen = expandedFsc[fsc] !== false;
+              (() => {
+                // Pivot fscGroups → distMap: one entry per company, all FSCs + sols combined
+                const distMap = new Map();
+                for (const fsc of Object.keys(fscGroups)) {
+                  const { sols, dists } = fscGroups[fsc];
+                  for (const d of (dists || [])) {
+                    const key = d.id || d.name;
+                    if (!distMap.has(key)) distMap.set(key, { dist: d, sols: [], fscs: [] });
+                    const entry = distMap.get(key);
+                    if (!entry.fscs.includes(fsc)) entry.fscs.push(fsc);
+                    for (const sol of sols) {
+                      const sid = sol.id || sol.sol_number;
+                      if (!entry.sols.find(function(s){ return (s.id || s.sol_number) === sid; }))
+                        entry.sols.push(sol);
+                    }
+                  }
+                }
+                return Array.from(distMap.values())
+                  .sort(function(a,b){ return (a.dist.name||"").localeCompare(b.dist.name||""); })
+                  .map(function(entry) {
+                  const dist = entry.dist;
+                  const sols = entry.sols;
+                  const fscs = entry.fscs.slice().sort();
+                  const fsc  = fscs[0] || "";
+                  const isOpen = expandedFsc[dist.id || dist.name] !== false;
                   const totalExt = sols.reduce((s, d) => s + d.ext, 0);
 
+                  const distCardKey = dist.id || dist.name;
                   return h(
                     "div",
-                    { key: fsc, style: S.fscSection },
+                    { key: distCardKey, style: S.fscSection },
 
                     h(
                       "div",
                       {
                         style: S.fscHeader,
                         onClick: () =>
-                          setExpandedFsc((p) => ({ ...p, [fsc]: !isOpen })),
+                          setExpandedFsc((p) => ({ ...p, [distCardKey]: !isOpen })),
                       },
                       h(
                         "div",
@@ -1403,11 +1424,16 @@
                               letterSpacing: ".1em",
                             },
                           },
-                          "FSC " + fsc + " \u2014 " + (FSC_NAMES[fsc] || fsc),
+                          dist.name,
                         ),
                         h(
                           "span",
                           { style: S.badge("rgba(201,168,76,.15)") },
+                          "FSC " + fscs.join(", "),
+                        ),
+                        h(
+                          "span",
+                          { style: S.badge("rgba(46,204,113,.12)") },
                           sols.length + " sol" + (sols.length !== 1 ? "s" : ""),
                         ),
                         h(
@@ -1415,26 +1441,6 @@
                           { style: S.badge("rgba(46,204,113,.12)") },
                           "$" + totalExt.toLocaleString(),
                         ),
-                        dists.length > 0 &&
-                          h(
-                            "span",
-                            { style: S.badge("rgba(52,152,219,.15)") },
-                            dists.length +
-                              " dist" +
-                              (dists.length !== 1 ? "s" : ""),
-                          ),
-                        error &&
-                          h(
-                            "span",
-                            {
-                              style: {
-                                color: "#e74c3c",
-                                fontSize: "10px",
-                                fontFamily: "JetBrains Mono,monospace",
-                              },
-                            },
-                            "\u26a0 " + error,
-                          ),
                       ),
                       h(
                         "span",
@@ -1537,24 +1543,8 @@
                           ),
                         ),
 
-                        dists.length === 0 &&
-                          h(
-                            "div",
-                            {
-                              style: {
-                                padding: "16px 14px",
-                                color: "rgba(231,76,60,.7)",
-                                fontFamily: "JetBrains Mono,monospace",
-                                fontSize: "10px",
-                              },
-                            },
-                            "\u26a0 No distributors loaded for FSC " +
-                              fsc +
-                              ".",
-                          ),
-
-                        dists.map((dist) => {
-                          const ek = fsc + "-" + (dist.id || dist.name);
+                        (() => {
+                          const ek = fscs.join("-") + "-" + distCardKey;
                           const emailText = buildRFQEmail(dist, sols);
                           const isEmailOpen = expandedEmail[ek];
                           const isCopied = copiedKey === ek;
@@ -1777,8 +1767,8 @@
                                           encodeURIComponent(effectiveEmail) +
                                           "&su=" +
                                           encodeURIComponent(
-                                            "RFQ \u2013 " +
-                                              (FSC_NAMES[fsc] || fsc) +
+                                            "RFQ \u2013 FSC " +
+                                              fscs.join("/") +
                                               " | Government Requirement | Imperio Federal Logistics",
                                           ) +
                                           "&body=" +
@@ -1832,7 +1822,7 @@
                                           " as sent?",
                                       )
                                     )
-                                      handleMarkSent(fsc, distWithEmail, sols);
+                                      handleMarkSent(fscs.join(","), distWithEmail, sols);
                                   },
                                 },
                                 "Mark Sent",
@@ -1842,10 +1832,11 @@
                             isEmailOpen &&
                               h("div", { style: S.emailBox }, emailText),
                           );
-                        }),
+                        })(),
                       ),
                   );
-                }),
+                });
+              })(),
             ),
         ),
 
