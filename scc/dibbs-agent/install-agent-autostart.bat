@@ -18,7 +18,7 @@ set LAUNCHER=%AGENT_DIR%_launch-agent.bat
 
 :: ── Step 1: Write a clean launcher .bat (no nested quotes in schtasks) ──────
 echo @echo off > "%LAUNCHER%"
-echo wsl bash -c "cd /home/tu2kel/thok_Apps/thokWebsite/THOK_Site/scc/dibbs-agent ^&^& node dibbs-agent.js" >> "%LAUNCHER%"
+echo wsl bash -c "cd /home/tu2kel/thok_Apps/thokWebsite/THOK_Site/scc/dibbs-agent ^&^& node agent-launcher.js" >> "%LAUNCHER%"
 
 echo  Launcher written to: %LAUNCHER%
 

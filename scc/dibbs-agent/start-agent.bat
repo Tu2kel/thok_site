@@ -13,7 +13,7 @@ echo  Keep this window open while using SCC.
 echo  Close this window to stop the agent.
 echo.
 
-wsl bash -c "cd /home/tu2kel/thok_Apps/thokWebsite/THOK_Site/scc/dibbs-agent && node dibbs-agent.js"
+wsl bash -c "cd /home/tu2kel/thok_Apps/thokWebsite/THOK_Site/scc/dibbs-agent && node agent-launcher.js"
 
 echo.
 echo  [ERROR] Agent stopped unexpectedly. Check the error above.
