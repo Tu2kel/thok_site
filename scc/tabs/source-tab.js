@@ -112,6 +112,8 @@
 
     const [editingCards, setEditingCards] = useState({}); // id → draft object | undefined
     const [savingCards, setSavingCards] = useState({}); // id → bool
+    const [dnsPrompt, setDnsPrompt] = useState({}); // id → draft reason string
+    const [dnsSaving, setDnsSaving] = useState({}); // id → bool
 
     const startEdit = (d) =>
       setEditingCards((prev) => ({
@@ -266,6 +268,40 @@
           setDists([...window.SCC_DIST.DISTRIBUTORS]);
         } catch (e) {
           setStatus({ ok: false, msg: "Toggle error: " + e.message });
+        }
+      },
+      [distReloadCache],
+    );
+
+    const handleDNS = useCallback(
+      async (d, reason) => {
+        setDnsSaving((prev) => ({ ...prev, [d.id]: true }));
+        try {
+          await window.SCC_DIST.distSave({
+            ...d,
+            is_dns: true,
+            dns_reason: (reason || "").trim() || "No reason given.",
+          });
+          await window.SCC_DIST.distReloadCache();
+          setDists([...window.SCC_DIST.DISTRIBUTORS]);
+          setDnsPrompt((prev) => { const n = { ...prev }; delete n[d.id]; return n; });
+        } catch (e) {
+          alert("DNS save failed: " + e.message);
+        } finally {
+          setDnsSaving((prev) => { const n = { ...prev }; delete n[d.id]; return n; });
+        }
+      },
+      [distReloadCache],
+    );
+
+    const handleRestoreDNS = useCallback(
+      async (d) => {
+        try {
+          await window.SCC_DIST.distSave({ ...d, is_dns: false, dns_reason: "" });
+          await window.SCC_DIST.distReloadCache();
+          setDists([...window.SCC_DIST.DISTRIBUTORS]);
+        } catch (e) {
+          alert("Restore failed: " + e.message);
         }
       },
       [distReloadCache],
@@ -608,12 +644,15 @@
         if (dists.length === 0) return null;
         const isPreferred = (d) => (d.tags || []).includes("preferred-alt");
 
+        const activeDists = filtered.filter((d) => !d.is_dns);
+        const purgDists = filtered.filter((d) => !!d.is_dns);
+
         // Manufacturers are always shown first regardless of preferred tag
-        const mfrs = filtered.filter((d) => d.is_manufacturer);
+        const mfrs = activeDists.filter((d) => d.is_manufacturer);
         const mfrsJcp = mfrs.filter((d) => d.has_jcp);
         const mfrsOther = mfrs.filter((d) => !d.has_jcp);
 
-        const nonMfrs = filtered.filter((d) => !d.is_manufacturer);
+        const nonMfrs = activeDists.filter((d) => !d.is_manufacturer);
         const preferred = nonMfrs.filter(isPreferred);
         const others = nonMfrs.filter((d) => !isPreferred(d));
         const p1 = preferred.filter((d) => (d.priority || 9) === 1);
@@ -815,6 +854,118 @@
               },
               txt,
             );
+
+          // ── DNS prompt mode: show inline reason form instead of full card ──
+          if (dnsPrompt[d.id] !== undefined) {
+            const isSav = !!dnsSaving[d.id];
+            return h(
+              "div",
+              {
+                key: d.id,
+                style: {
+                  background: "rgba(139,92,246,.05)",
+                  border: "1px solid rgba(139,92,246,.4)",
+                  borderLeft: "3px solid rgba(139,92,246,.7)",
+                  borderRadius: "4px",
+                  padding: "14px 16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                },
+              },
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "13px",
+                    letterSpacing: ".04em",
+                    color: "rgba(139,92,246,.8)",
+                  },
+                },
+                d.name || d.id,
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "8px",
+                    letterSpacing: ".12em",
+                    textTransform: "uppercase",
+                    color: "rgba(139,92,246,.6)",
+                  },
+                },
+                "Why are you sending this to Purgatory?",
+              ),
+              h("textarea", {
+                value: dnsPrompt[d.id] || "",
+                onChange: (e) =>
+                  setDnsPrompt((prev) => ({ ...prev, [d.id]: e.target.value })),
+                placeholder: "e.g. came in too high on pricing, won’t negotiate…",
+                rows: 2,
+                autoFocus: true,
+                style: {
+                  fontFamily: "Cormorant Garamond,serif",
+                  fontStyle: "italic",
+                  fontSize: "13px",
+                  background: "rgba(139,92,246,.06)",
+                  border: "1px solid rgba(139,92,246,.3)",
+                  borderRadius: "3px",
+                  color: "var(--alabaster)",
+                  padding: "6px 10px",
+                  resize: "vertical",
+                  outline: "none",
+                },
+              }),
+              h(
+                "div",
+                { style: { display: "flex", gap: "6px" } },
+                h(
+                  "button",
+                  {
+                    onClick: () => handleDNS(d, dnsPrompt[d.id] || ""),
+                    disabled: isSav,
+                    style: {
+                      padding: "4px 12px",
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "8px",
+                      letterSpacing: ".1em",
+                      background: "rgba(139,92,246,.18)",
+                      border: "1px solid rgba(139,92,246,.6)",
+                      color: "#a78bfa",
+                      borderRadius: "3px",
+                      cursor: isSav ? "wait" : "pointer",
+                    },
+                  },
+                  isSav ? "Saving…" : "Confirm DNS",
+                ),
+                h(
+                  "button",
+                  {
+                    onClick: () =>
+                      setDnsPrompt((prev) => {
+                        const n = { ...prev };
+                        delete n[d.id];
+                        return n;
+                      }),
+                    disabled: isSav,
+                    style: {
+                      padding: "4px 9px",
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "9px",
+                      background: "transparent",
+                      border: "1px solid rgba(255,255,255,.12)",
+                      color: "var(--body-faint)",
+                      borderRadius: "3px",
+                      cursor: "pointer",
+                    },
+                  },
+                  "Cancel",
+                ),
+              ),
+            );
+          }
 
           return h(
             "div",
@@ -1065,6 +1216,26 @@
                       },
                     },
                     "Cancel",
+                  ),
+                !isEditing &&
+                  h(
+                    "button",
+                    {
+                      onClick: () =>
+                        setDnsPrompt((prev) => ({ ...prev, [d.id]: "" })),
+                      title: "Do Not Send \u2014 move to Purgatory",
+                      style: {
+                        padding: "2px 7px",
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "9px",
+                        background: "rgba(139,92,246,.08)",
+                        border: "1px solid rgba(139,92,246,.28)",
+                        color: "rgba(139,92,246,.7)",
+                        borderRadius: "3px",
+                        cursor: "pointer",
+                      },
+                    },
+                    "DNS",
                   ),
                 !isEditing &&
                   h(
@@ -1574,6 +1745,83 @@
           );
         };
 
+        const renderPurgCard = (d) =>
+          h(
+            "div",
+            {
+              key: d.id,
+              style: {
+                background: "rgba(139,92,246,.04)",
+                border: "1px solid rgba(139,92,246,.22)",
+                borderLeft: "3px solid rgba(139,92,246,.5)",
+                borderRadius: "4px",
+                padding: "12px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                opacity: 0.8,
+              },
+            },
+            h(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "8px",
+                },
+              },
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "13px",
+                    letterSpacing: ".04em",
+                    color: "rgba(139,92,246,.6)",
+                    textDecoration: "line-through",
+                    textDecorationColor: "rgba(139,92,246,.4)",
+                  },
+                },
+                d.name || d.id,
+              ),
+              h(
+                "button",
+                {
+                  onClick: () => handleRestoreDNS(d),
+                  title: "Restore to active roster",
+                  style: {
+                    padding: "2px 9px",
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "8px",
+                    letterSpacing: ".1em",
+                    background: "rgba(61,214,140,.08)",
+                    border: "1px solid rgba(61,214,140,.3)",
+                    color: "#3dd68c",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  },
+                },
+                "Restore",
+              ),
+            ),
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "Cormorant Garamond,serif",
+                  fontStyle: "italic",
+                  fontSize: "12px",
+                  color: "rgba(139,92,246,.55)",
+                  lineHeight: 1.45,
+                },
+              },
+              "“" + (d.dns_reason || "No reason given.") + "”",
+            ),
+          );
+
         const grid = (items, op) =>
           h(
             "div",
@@ -1676,6 +1924,30 @@
               null,
               tierLabel("Other Distributors", others.length, "var(--gold-dim)"),
               grid(others, 0.65),
+            ),
+
+          // \u2500\u2500 PURGATORY \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+          purgDists.length > 0 &&
+            h(
+              "div",
+              null,
+              tierLabel(
+                "Purgatory \u2014 Do Not Send",
+                purgDists.length,
+                "rgba(139,92,246,.7)",
+              ),
+              h(
+                "div",
+                {
+                  style: {
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
+                    gap: "10px",
+                    marginBottom: "6px",
+                  },
+                },
+                ...purgDists.map(renderPurgCard),
+              ),
             ),
         );
       })(),

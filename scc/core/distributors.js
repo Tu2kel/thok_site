@@ -146,9 +146,10 @@
   function getDistsByFSC(fsc) {
     const key = String(fsc);
     const ids = _fscMap[key] || [];
-    const raw = ids.length
+    const raw = (ids.length
       ? ids.map((id) => _cache.find((d) => d.id === id)).filter(Boolean)
-      : _cache.filter((d) => (d.fsc || []).includes(key));
+      : _cache.filter((d) => (d.fsc || []).includes(key))
+    ).filter((d) => !d.is_dns);
     // Preferred-alts first, sub-sorted by priority (1=highest), then legacy
     const preferred = raw
       .filter((d) => (d.tags || []).includes("preferred-alt"))

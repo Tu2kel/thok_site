@@ -105,6 +105,7 @@
     const addDist = (d, reason) => {
       if (!d || seenIds.has(d.id)) return;
       if (!d.email)                return;
+      if (d.is_dns)                return;
       if (BLK && BLK(d.name))     return;
       seenIds.add(d.id);
       selected.push({ dist: d, reason });
