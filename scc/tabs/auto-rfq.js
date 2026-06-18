@@ -361,6 +361,19 @@
       }
     }
 
+    // ── Apply vendor queue: sort by ext desc / due asc, cap at 10, track overflow ──
+    var VQ = window.SCC_VENDOR_QUEUE;
+    if (VQ) {
+      for (var [vqKey, vqEntry] of vendorMap.entries()) {
+        var vqResult = VQ.buildVendorBatch(vqKey, vqEntry.records);
+        vqEntry.records  = vqResult.batch;
+        vqEntry.overflow = vqResult.overflow;
+        if (vqResult.overflow.length > 0) {
+          addLog("AUTO ▶ " + vqEntry.dist.name + " — sending top " + vqResult.batch.length + " of " + (vqResult.batch.length + vqResult.overflow.length) + " matched sols (" + vqResult.overflow.length + " queued for next run)", "info");
+        }
+      }
+    }
+
     addLog(
       vendorMap.size + " vendor(s) to contact · " +
       results.go.length + " GO · " +
@@ -374,11 +387,12 @@
       for (var dre of vendorMap.values()) {
         var dreEmail = buildBatchEmail(dre.dist, dre.records);
         plan.push({
-          dist:    dre.dist,
-          records: dre.records,
-          reasons: Array.from(dre.reasons),
-          to:      opts.testMode ? TEST_EMAIL : dre.dist.email,
-          subject: opts.testMode ? "[TEST] " + dreEmail.subject : dreEmail.subject,
+          dist:     dre.dist,
+          records:  dre.records,
+          overflow: dre.overflow || [],
+          reasons:  Array.from(dre.reasons),
+          to:       opts.testMode ? TEST_EMAIL : dre.dist.email,
+          subject:  opts.testMode ? "[TEST] " + dreEmail.subject : dreEmail.subject,
         });
       }
       return { dryRun: true, plan, goCount: results.go.length };
@@ -550,6 +564,12 @@
       var data = await res.json();
       if (!data.ok) throw new Error(data.error || "send failed");
       logEntry.sent = true;
+      // Mark sent + save overflow so next run knows what was already blasted
+      var VQ2 = window.SCC_VENDOR_QUEUE;
+      if (VQ2) {
+        var vKey = entry.dist.id || entry.dist.email || entry.dist.name;
+        VQ2.markSent(vKey, entry.records, entry.overflow || []);
+      }
     } catch (e) {
       logEntry.error = e.message;
       try {

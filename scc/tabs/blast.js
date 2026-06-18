@@ -1387,15 +1387,19 @@
                     }
                   }
                 }
+                const VQ = window.SCC_VENDOR_QUEUE;
                 return Array.from(distMap.values())
                   .sort(function(a,b){ return (a.dist.name||"").localeCompare(b.dist.name||""); })
                   .map(function(entry) {
-                  const dist = entry.dist;
-                  const sols = entry.sols;
+                  const dist         = entry.dist;
+                  const distCardKey0 = dist.id || dist.name;
+                  const vqResult     = VQ ? VQ.buildVendorBatch(distCardKey0, entry.sols) : { batch: entry.sols.slice(0, 10), overflow: entry.sols.slice(10) };
+                  const sols         = vqResult.batch;
+                  const overflow     = vqResult.overflow;
                   const fscs = entry.fscs.slice().sort();
                   const fsc  = fscs[0] || "";
                   const isOpen = expandedFsc[dist.id || dist.name] !== false;
-                  const totalExt = sols.reduce((s, d) => s + d.ext, 0);
+                  const totalExt = sols.reduce((s, d) => s + (d.ext || 0), 0);
 
                   const distCardKey = dist.id || dist.name;
                   return h(
@@ -1438,6 +1442,11 @@
                           "span",
                           { style: S.badge("rgba(46,204,113,.12)") },
                           "$" + totalExt.toLocaleString(),
+                        ),
+                        overflow.length > 0 && h(
+                          "span",
+                          { style: S.badge("rgba(245,158,11,.2)"), title: overflow.length + " sols queued for next batch" },
+                          "+" + overflow.length + " queued",
                         ),
                       ),
                       h(
@@ -1820,7 +1829,8 @@
                                           " as sent?",
                                       )
                                     )
-                                      handleMarkSent(fscs.join(","), distWithEmail, sols);
+                                      if (VQ) VQ.markSent(distCardKey0, sols, overflow);
+                                    handleMarkSent(fscs.join(","), distWithEmail, sols);
                                   },
                                 },
                                 "Mark Sent",
