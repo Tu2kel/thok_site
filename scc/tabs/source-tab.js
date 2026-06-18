@@ -8,6 +8,515 @@
 
   const { createElement: h, useState, useEffect, useCallback } = React;
 
+  // ── USASPENDING INTELLIGENCE FEED ────────────────────────────────────
+  function USASpendingIntel({ dists, onRefresh }) {
+    const [open, setOpen] = useState(false);
+    const [qtype, setQtype] = useState("fsc");
+    const [qval, setQval] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState(null);
+    const [results, setResults] = useState([]);
+    const [addingKey, setAddingKey] = useState(null);
+    const [addedKeys, setAddedKeys] = useState(new Set());
+
+    const existingNames = new Set(
+      (dists || []).map((d) => (d.name || "").toUpperCase().trim()),
+    );
+
+    const runQuery = async () => {
+      const val = qval.trim();
+      if (!val) return;
+      setLoading(true);
+      setErr(null);
+      setResults([]);
+      try {
+        const filters =
+          qtype === "fsc"
+            ? {
+                psc_codes: [val.toUpperCase()],
+                award_type_codes: ["A", "B", "C", "D"],
+              }
+            : {
+                keywords: [val],
+                award_type_codes: ["A", "B", "C", "D"],
+              };
+
+        const res = await fetch(
+          "https://api.usaspending.gov/api/v2/search/spending_by_award/",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filters,
+              fields: [
+                "Recipient Name",
+                "Award Amount",
+                "Award Date",
+                "Description",
+                "PSC Code",
+              ],
+              sort: "Award Amount",
+              order: "desc",
+              limit: 100,
+              page: 1,
+              subawards: false,
+            }),
+          },
+        );
+        if (!res.ok) throw new Error("USASpending API error " + res.status);
+        const data = await res.json();
+
+        const map = new Map();
+        for (const a of data.results || []) {
+          const name = (a["Recipient Name"] || "").trim();
+          if (!name || name === "MULTIPLE RECIPIENTS") continue;
+          const key = name.toUpperCase();
+          if (!map.has(key)) {
+            map.set(key, {
+              name,
+              psc: a["PSC Code"] || val.toUpperCase(),
+              total: 0,
+              count: 0,
+              lastDate: "",
+              descs: [],
+            });
+          }
+          const e = map.get(key);
+          e.total += Number(a["Award Amount"] || 0);
+          e.count++;
+          if ((a["Award Date"] || "") > e.lastDate)
+            e.lastDate = a["Award Date"] || "";
+          const desc = (a["Description"] || "").trim().slice(0, 100);
+          if (desc && !e.descs.includes(desc) && e.descs.length < 2)
+            e.descs.push(desc);
+        }
+
+        setResults(
+          [...map.values()].sort((a, b) => b.total - a.total),
+        );
+      } catch (e) {
+        setErr(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const addVendor = async (v) => {
+      const key = v.name.toUpperCase().trim();
+      setAddingKey(key);
+      try {
+        const id =
+          "usa-" +
+          v.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+        const titleCase = v.name
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        await window.SCC_DIST.distSave({
+          id,
+          name: titleCase,
+          fsc: v.psc ? [v.psc] : [],
+          tags: ["usa-spending-verified"],
+          notes:
+            "USASpending · " +
+            v.count +
+            " award" +
+            (v.count !== 1 ? "s" : "") +
+            " · $" +
+            Math.round(v.total).toLocaleString() +
+            " total · Last: " +
+            (v.lastDate ? v.lastDate.slice(0, 10) : "unknown"),
+        });
+        await window.SCC_DIST.distReloadCache();
+        onRefresh();
+        setAddedKeys((prev) => new Set([...prev, key]));
+      } catch (e) {
+        alert("Add failed: " + e.message);
+      } finally {
+        setAddingKey(null);
+      }
+    };
+
+    const intelBlue = "rgba(56,189,248,";
+    const btnBase = {
+      fontFamily: "Cinzel,serif",
+      fontSize: "8px",
+      letterSpacing: ".1em",
+      borderRadius: "3px",
+      cursor: "pointer",
+      border: "1px solid",
+    };
+
+    return h(
+      "div",
+      {
+        style: {
+          border: "1px solid " + intelBlue + ".18)",
+          borderRadius: "6px",
+          marginBottom: "20px",
+          overflow: "hidden",
+        },
+      },
+
+      // ── Collapse toggle ──
+      h(
+        "div",
+        {
+          onClick: () => setOpen((v) => !v),
+          style: {
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "10px 16px",
+            background: intelBlue + ".04)",
+            cursor: "pointer",
+            userSelect: "none",
+          },
+        },
+        h(
+          "div",
+          {
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "9px",
+              letterSpacing: ".15em",
+              textTransform: "uppercase",
+              color: intelBlue + ".9)",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            },
+          },
+          "⚡ USASpending Intelligence Feed",
+          results.length > 0 &&
+            h(
+              "span",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "9px",
+                  color: intelBlue + ".6)",
+                  letterSpacing: 0,
+                },
+              },
+              results.length + " vendors",
+            ),
+        ),
+        h(
+          "span",
+          {
+            style: {
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "10px",
+              color: intelBlue + ".4)",
+            },
+          },
+          open ? "▲" : "▼",
+        ),
+      ),
+
+      // ── Body ──
+      open &&
+        h(
+          "div",
+          {
+            style: {
+              padding: "14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            },
+          },
+
+          // Query bar
+          h(
+            "div",
+            {
+              style: {
+                display: "flex",
+                gap: "6px",
+                alignItems: "center",
+                flexWrap: "wrap",
+              },
+            },
+            h(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  borderRadius: "3px",
+                  overflow: "hidden",
+                  border: "1px solid " + intelBlue + ".2)",
+                  flexShrink: 0,
+                },
+              },
+              ...["fsc", "nsn"].map((t) =>
+                h(
+                  "button",
+                  {
+                    onClick: () => setQtype(t),
+                    style: {
+                      padding: "4px 12px",
+                      fontFamily: "Cinzel,serif",
+                      fontSize: "8px",
+                      letterSpacing: ".1em",
+                      border: "none",
+                      borderRadius: 0,
+                      cursor: "pointer",
+                      background:
+                        qtype === t
+                          ? intelBlue + ".18)"
+                          : "rgba(255,255,255,.04)",
+                      color:
+                        qtype === t
+                          ? "rgb(56,189,248)"
+                          : "var(--body-faint)",
+                    },
+                  },
+                  t === "fsc" ? "FSC" : "NSN",
+                ),
+              ),
+            ),
+            h("input", {
+              value: qval,
+              onChange: (e) => setQval(e.target.value),
+              onKeyDown: (e) => e.key === "Enter" && runQuery(),
+              placeholder:
+                qtype === "fsc" ? "e.g. 5305" : "e.g. 1560-00-124-2288",
+              style: {
+                flex: 1,
+                minWidth: "140px",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "11px",
+                background: intelBlue + ".05)",
+                border: "1px solid " + intelBlue + ".25)",
+                borderRadius: "3px",
+                color: "var(--alabaster)",
+                padding: "5px 10px",
+                outline: "none",
+              },
+            }),
+            h(
+              "button",
+              {
+                onClick: runQuery,
+                disabled: loading || !qval.trim(),
+                style: {
+                  ...btnBase,
+                  padding: "5px 14px",
+                  background: loading
+                    ? intelBlue + ".04)"
+                    : intelBlue + ".12)",
+                  borderColor: intelBlue + ".4)",
+                  color: "rgb(56,189,248)",
+                  opacity: !qval.trim() ? 0.4 : 1,
+                  cursor:
+                    loading || !qval.trim() ? "not-allowed" : "pointer",
+                },
+              },
+              loading ? "Querying…" : "Query USASpending",
+            ),
+          ),
+
+          // Error
+          err &&
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "10px",
+                  color: "#e74c3c",
+                },
+              },
+              "Error: " + err,
+            ),
+
+          // Results table
+          results.length > 0 &&
+            h(
+              "div",
+              { style: { display: "flex", flexDirection: "column" } },
+              // Header row
+              h(
+                "div",
+                {
+                  style: {
+                    display: "grid",
+                    gridTemplateColumns: "1fr 60px 110px 90px 70px",
+                    gap: "0 10px",
+                    padding: "4px 8px 6px",
+                    fontFamily: "Cinzel,serif",
+                    fontSize: "7px",
+                    letterSpacing: ".12em",
+                    textTransform: "uppercase",
+                    color: "var(--body-faint)",
+                    borderBottom: "1px solid rgba(255,255,255,.06)",
+                  },
+                },
+                h("span", null, "Company"),
+                h("span", { style: { textAlign: "right" } }, "Awards"),
+                h("span", { style: { textAlign: "right" } }, "Total Value"),
+                h("span", null, "Last Award"),
+                h("span", null, ""),
+              ),
+              // Data rows
+              ...results.map((v) => {
+                const key = v.name.toUpperCase().trim();
+                const inDb = existingNames.has(key);
+                const wasAdded = addedKeys.has(key);
+                const isAdding = addingKey === key;
+                return h(
+                  "div",
+                  {
+                    key,
+                    style: {
+                      display: "grid",
+                      gridTemplateColumns: "1fr 60px 110px 90px 70px",
+                      gap: "0 10px",
+                      padding: "7px 8px",
+                      borderBottom: "1px solid rgba(255,255,255,.04)",
+                      alignItems: "center",
+                    },
+                  },
+                  h(
+                    "div",
+                    null,
+                    h(
+                      "div",
+                      {
+                        style: {
+                          fontFamily: "JetBrains Mono,monospace",
+                          fontSize: "10px",
+                          color: "var(--alabaster)",
+                        },
+                      },
+                      v.name,
+                    ),
+                    v.descs[0] &&
+                      h(
+                        "div",
+                        {
+                          style: {
+                            fontFamily: "Cormorant Garamond,serif",
+                            fontStyle: "italic",
+                            fontSize: "10px",
+                            color: "var(--body-faint)",
+                            marginTop: "2px",
+                          },
+                        },
+                        v.descs[0],
+                      ),
+                  ),
+                  h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "10px",
+                        color: "var(--body-dim)",
+                        textAlign: "right",
+                      },
+                    },
+                    v.count,
+                  ),
+                  h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "10px",
+                        color: "#3dd68c",
+                        textAlign: "right",
+                      },
+                    },
+                    "$" + Math.round(v.total).toLocaleString(),
+                  ),
+                  h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "9px",
+                        color: "var(--body-faint)",
+                      },
+                    },
+                    v.lastDate ? v.lastDate.slice(0, 10) : "—",
+                  ),
+                  inDb || wasAdded
+                    ? h(
+                        "span",
+                        {
+                          style: {
+                            fontFamily: "Cinzel,serif",
+                            fontSize: "7px",
+                            letterSpacing: ".08em",
+                            color: "#3dd68c",
+                            whiteSpace: "nowrap",
+                          },
+                        },
+                        "✓ In Roster",
+                      )
+                    : h(
+                        "button",
+                        {
+                          onClick: () => addVendor(v),
+                          disabled: isAdding,
+                          style: {
+                            ...btnBase,
+                            padding: "3px 10px",
+                            background: "rgba(61,214,140,.08)",
+                            borderColor: "rgba(61,214,140,.35)",
+                            color: "#3dd68c",
+                            whiteSpace: "nowrap",
+                            opacity: isAdding ? 0.6 : 1,
+                            cursor: isAdding ? "wait" : "pointer",
+                          },
+                        },
+                        isAdding ? "Adding…" : "+ Add",
+                      ),
+                );
+              }),
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "9px",
+                    color: "var(--body-faint)",
+                    fontStyle: "italic",
+                    padding: "8px 8px 0",
+                  },
+                },
+                results.length +
+                  " unique vendors · ranked by total award value · source: USASpending.gov",
+              ),
+            ),
+
+          // Empty prompt
+          results.length === 0 &&
+            !loading &&
+            !err &&
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "Cormorant Garamond,serif",
+                  fontStyle: "italic",
+                  fontSize: "13px",
+                  color: "var(--body-faint)",
+                  textAlign: "center",
+                  padding: "16px 0 8px",
+                },
+              },
+              "Enter an FSC code or NSN to pull real award history from USASpending.gov",
+            ),
+        ),
+    );
+  }
+
   // ── DISTRIBUTOR DB PANEL ─────────────────────────────────────────────
   function DistributorDB() {
     const { distBatch, distDelete, distReloadCache, needsSeed, DISTRIBUTORS } =
@@ -640,6 +1149,9 @@
             ),
         ),
       ),
+
+      // ── USASpending Intel Feed ──
+      h(USASpendingIntel, { dists, onRefresh: refresh }),
 
       // -- Tiered card grid --
       (() => {
