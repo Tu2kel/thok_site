@@ -53,6 +53,7 @@
           fscForTag = nsn.slice(0, 4);
           filters = {
             keywords: [nsn],
+            award_type_codes: ["A", "B", "C", "D"],
           };
         }
 
