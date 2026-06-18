@@ -101,8 +101,8 @@ exports.handler = async (event) => {
               existing.part_prefixes,
               record.part_prefixes,
             ),
-            fsc: mergeUnique(existing.fsc, record.fsc),
-            tags: mergeUnique(existing.tags, record.tags),
+            fsc:  record.fsc  != null ? record.fsc  : (existing.fsc  || []),
+            tags: record.tags != null ? record.tags : (existing.tags || []),
           };
           await dist.replaceOne({ id: record.id }, merged, { upsert: true });
           result = { action: "merged", id: record.id };
