@@ -40,19 +40,24 @@
         let filters, fscForTag;
 
         if (qtype === "fsc") {
-          // FSC/PSC codes are exactly 4 chars — auto-extract if user pasted a full NSN
+          // FSC/PSC codes are 4 chars. Auto-extract if user pasted a full NSN.
+          // psc_codes filter is hierarchical: Tier1=Product, Tier2=first 2 digits, Tier3=full 4-digit code
           const psc = raw.replace(/\D/g, "").slice(0, 4) || raw.slice(0, 4).toUpperCase();
+          const tier2 = psc.slice(0, 2);
           fscForTag = psc;
           filters = {
             award_type_codes: ["A", "B", "C", "D"],
-            psc_codes: { require: [[psc]] },
+            psc_codes: { require: [["Product", tier2, psc]] },
           };
         } else {
-          // NSN mode — format with dashes, keyword search
-          const nsn = fmtNSN(raw);
-          fscForTag = nsn.slice(0, 4);
+          // NSN mode — search both dashed (4320-01-047-1927) and plain (4320010471927) formats
+          const dashed = fmtNSN(raw);
+          const plain = raw.replace(/\D/g, "");
+          fscForTag = plain.slice(0, 4) || dashed.slice(0, 4);
+          // Use both formats as separate keywords (API treats array as OR within keywords)
+          const kws = [...new Set([dashed, plain].filter(Boolean))];
           filters = {
-            keywords: [nsn],
+            keywords: kws,
             award_type_codes: ["A", "B", "C", "D"],
           };
         }
