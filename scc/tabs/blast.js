@@ -160,8 +160,6 @@
           lines.push(
             "     Required Delivery: " + s.delivery_days + " days ARO",
           );
-        if (s.ext > 0)
-          lines.push("     Est. Gov. Value: $" + s.ext.toLocaleString());
         const rawDue = s.quote_due || "";
         if (rawDue) {
           const m = rawDue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
