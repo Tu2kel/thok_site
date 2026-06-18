@@ -23,23 +23,38 @@
       (dists || []).map((d) => (d.name || "").toUpperCase().trim()),
     );
 
+    const fmtNSN = (raw) => {
+      const d = raw.replace(/\D/g, "");
+      return d.length === 13
+        ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 9) + "-" + d.slice(9, 13)
+        : raw.trim();
+    };
+
     const runQuery = async () => {
-      const val = qval.trim();
-      if (!val) return;
+      const raw = qval.trim();
+      if (!raw) return;
       setLoading(true);
       setErr(null);
       setResults([]);
       try {
-        const filters =
-          qtype === "fsc"
-            ? {
-                psc_codes: [val.toUpperCase()],
-                award_type_codes: ["A", "B", "C", "D"],
-              }
-            : {
-                keywords: [val],
-                award_type_codes: ["A", "B", "C", "D"],
-              };
+        let filters, fscForTag;
+
+        if (qtype === "fsc") {
+          // FSC/PSC codes are exactly 4 chars — auto-extract if user pasted a full NSN
+          const psc = raw.replace(/\D/g, "").slice(0, 4) || raw.slice(0, 4).toUpperCase();
+          fscForTag = psc;
+          filters = {
+            award_type_codes: ["A", "B", "C", "D"],
+            psc_codes: { require: [[psc]] },
+          };
+        } else {
+          // NSN mode — format with dashes, keyword search
+          const nsn = fmtNSN(raw);
+          fscForTag = nsn.slice(0, 4);
+          filters = {
+            keywords: [nsn],
+          };
+        }
 
         const res = await fetch(
           "https://api.usaspending.gov/api/v2/search/spending_by_award/",
@@ -48,13 +63,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               filters,
-              fields: [
-                "Recipient Name",
-                "Award Amount",
-                "Award Date",
-                "Description",
-                "PSC Code",
-              ],
+              fields: ["Recipient Name", "Award Amount", "Description"],
               sort: "Award Amount",
               order: "desc",
               limit: 100,
@@ -63,7 +72,10 @@
             }),
           },
         );
-        if (!res.ok) throw new Error("USASpending API error " + res.status);
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          throw new Error("USASpending " + res.status + (body ? ": " + body.slice(0, 120) : ""));
+        }
         const data = await res.json();
 
         const map = new Map();
@@ -71,28 +83,32 @@
           const name = (a["Recipient Name"] || "").trim();
           if (!name || name === "MULTIPLE RECIPIENTS") continue;
           const key = name.toUpperCase();
+          const amt = Number(a["Award Amount"] || 0);
           if (!map.has(key)) {
             map.set(key, {
               name,
-              psc: a["PSC Code"] || val.toUpperCase(),
+              psc: fscForTag,
               total: 0,
               count: 0,
-              lastDate: "",
+              minAward: Infinity,
+              maxAward: 0,
               descs: [],
             });
           }
           const e = map.get(key);
-          e.total += Number(a["Award Amount"] || 0);
+          e.total += amt;
           e.count++;
-          if ((a["Award Date"] || "") > e.lastDate)
-            e.lastDate = a["Award Date"] || "";
+          if (amt > 0 && amt < e.minAward) e.minAward = amt;
+          if (amt > e.maxAward) e.maxAward = amt;
           const desc = (a["Description"] || "").trim().slice(0, 100);
           if (desc && !e.descs.includes(desc) && e.descs.length < 2)
             e.descs.push(desc);
         }
 
         setResults(
-          [...map.values()].sort((a, b) => b.total - a.total),
+          [...map.values()]
+            .map((e) => ({ ...e, minAward: e.minAward === Infinity ? 0 : e.minAward }))
+            .sort((a, b) => b.total - a.total),
         );
       } catch (e) {
         setErr(e.message);
@@ -284,7 +300,9 @@
               onChange: (e) => setQval(e.target.value),
               onKeyDown: (e) => e.key === "Enter" && runQuery(),
               placeholder:
-                qtype === "fsc" ? "e.g. 5305" : "e.g. 1560-00-124-2288",
+                qtype === "fsc"
+                  ? "e.g. 5305  (4-digit FSC/PSC code)"
+                  : "e.g. 4320-01-047-1927  (dashes optional)",
               style: {
                 flex: 1,
                 minWidth: "140px",
@@ -345,7 +363,7 @@
                 {
                   style: {
                     display: "grid",
-                    gridTemplateColumns: "1fr 60px 110px 90px 70px",
+                    gridTemplateColumns: "1fr 55px 110px 110px 70px",
                     gap: "0 10px",
                     padding: "4px 8px 6px",
                     fontFamily: "Cinzel,serif",
@@ -358,8 +376,8 @@
                 },
                 h("span", null, "Company"),
                 h("span", { style: { textAlign: "right" } }, "Awards"),
-                h("span", { style: { textAlign: "right" } }, "Total Value"),
-                h("span", null, "Last Award"),
+                h("span", { style: { textAlign: "right" } }, "Total Paid"),
+                h("span", { style: { textAlign: "right" } }, "Smallest Contract"),
                 h("span", null, ""),
               ),
               // Data rows
@@ -374,7 +392,7 @@
                     key,
                     style: {
                       display: "grid",
-                      gridTemplateColumns: "1fr 60px 110px 90px 70px",
+                      gridTemplateColumns: "1fr 55px 110px 110px 70px",
                       gap: "0 10px",
                       padding: "7px 8px",
                       borderBottom: "1px solid rgba(255,255,255,.04)",
@@ -437,13 +455,15 @@
                   h(
                     "span",
                     {
+                      title: "Smallest single contract — best proxy for their unit pricing",
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "9px",
-                        color: "var(--body-faint)",
+                        fontSize: "10px",
+                        color: "rgba(201,168,76,.8)",
+                        textAlign: "right",
                       },
                     },
-                    v.lastDate ? v.lastDate.slice(0, 10) : "—",
+                    v.minAward > 0 ? "$" + Math.round(v.minAward).toLocaleString() : "—",
                   ),
                   inDb || wasAdded
                     ? h(
@@ -491,7 +511,7 @@
                   },
                 },
                 results.length +
-                  " unique vendors · ranked by total award value · source: USASpending.gov",
+                  " unique vendors · ranked by total award value · Smallest Contract = best unit price signal · source: USASpending.gov",
               ),
             ),
 
