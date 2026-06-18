@@ -42,10 +42,12 @@
     2940:"Engine Filters",4110:"Refrigeration",4330:"Filters/Separators",
     4730:"Hose/Pipe Fittings",4820:"Valves",5305:"Screws",5306:"Bolts",
     5310:"Nuts/Washers",5315:"Pins",5320:"Rivets",5330:"Packing/Gaskets",
-    5331:"Seals/O-Rings",5340:"Hardware",5920:"Fuses",5925:"Circuit Breakers",
+    5331:"Seals/O-Rings",5340:"Hardware",5365:"Retaining Rings",
+    5920:"Fuses",5925:"Circuit Breakers",
     5935:"Connectors",6110:"Electrical Control",6145:"Wire/Cable",
     6210:"Lighting Fixtures",6230:"Portable Lighting",7110:"Office Furniture",
     7310:"Food Cooking Equipment",8415:"Individual Equipment",9510:"Bars/Rods/Wire",
+    9330:"Rubber Fabricated Materials",9340:"Plastics Fabricated Materials",
   };
   const fscName = (fsc) => FSC_NAMES[parseInt(fsc)] || "FSC " + fsc;
 
