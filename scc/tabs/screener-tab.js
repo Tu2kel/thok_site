@@ -57,6 +57,20 @@
       if (s.quantity) lines.push("     Qty: " + s.quantity + (s.unit_issue ? " " + s.unit_issue : ""));
       if (s.delivery_days) lines.push("     Required Delivery: " + s.delivery_days + " days ARO");
       if (s.sol_number)    lines.push("     Ref #: " + s.sol_number);
+      const rawDue = s.quote_due || s.quoteDue || "";
+      if (rawDue) {
+        const m = rawDue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (m) {
+          const yr = m[3].length === 2 ? "20" + m[3] : m[3];
+          const d = new Date(parseInt(yr), parseInt(m[1])-1, parseInt(m[2]));
+          d.setDate(d.getDate() - 1);
+          lines.push("     Please Respond By: " + (d.getMonth()+1) + "/" + d.getDate() + "/" + d.getFullYear());
+        } else {
+          lines.push("     Please Respond By: " + rawDue);
+        }
+      } else {
+        lines.push("     Please Respond By: As soon as possible");
+      }
       return lines.join("\n");
     }).join("\n\n");
     return [
