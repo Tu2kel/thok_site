@@ -625,7 +625,8 @@
                 h("div", { style: { ...monoSm, fontSize: "10px", color: "var(--gold-dim)", marginBottom: "4px" } },
                   [
                     r.quantity && (r.quantity + " " + (r.unit_issue || "EA")),
-                    r.unit_price && ("$" + r.unit_price + " hist."),
+                    r.unit_price && ("$" + Number(r.unit_price).toLocaleString() + "/ea"),
+                    r.ext_price && ("$" + Number(r.ext_price).toLocaleString() + " ext."),
                     r.quote_due && ("Due " + r.quote_due),
                     r.delivery_days && (r.delivery_days + "d del."),
                     r.nsn && ("NSN " + r.nsn),
