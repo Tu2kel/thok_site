@@ -126,6 +126,7 @@
           notes: d.notes || "",
           fsc: (d.fsc || []).join(", "),
           tags: (d.tags || []).filter((t) => t !== "preferred-alt").join(", "),
+          item_keywords: (d.item_keywords || []).join(", "),
           is_manufacturer: !!d.is_manufacturer,
         },
       }));
@@ -165,6 +166,7 @@
             ...parseCsv(draft.tags),
             ...(d.tags || []).filter((t) => t === "preferred-alt"),
           ],
+          item_keywords: parseCsv(draft.item_keywords).map((k) => k.toLowerCase()),
           is_manufacturer: !!draft.is_manufacturer,
         };
         await window.SCC_DIST.distSave(updated);
@@ -1697,6 +1699,20 @@
                     onChange: (e) => patchDraft(d.id, "tags", e.target.value),
                     placeholder: "master-distributor, texas, fleet-pricing",
                     title: "Comma-separated tags",
+                    style: inputStyle,
+                  }),
+                ),
+
+                // Item keywords
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("Items"),
+                  h("input", {
+                    value: draft.item_keywords,
+                    onChange: (e) => patchDraft(d.id, "item_keywords", e.target.value),
+                    placeholder: "bolt, screw, nut, stud",
+                    title: "Only send RFQs where item name contains one of these keywords (comma-separated). Leave blank to match all items in covered FSCs.",
                     style: inputStyle,
                   }),
                 ),

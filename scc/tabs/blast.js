@@ -1382,8 +1382,12 @@
                     if (!entry.fscs.includes(fsc)) entry.fscs.push(fsc);
                     for (const sol of sols) {
                       const sid = sol.id || sol.sol_number;
-                      if (!entry.sols.find(function(s){ return (s.id || s.sol_number) === sid; }))
-                        entry.sols.push(sol);
+                      if (entry.sols.find(function(s){ return (s.id || s.sol_number) === sid; })) continue;
+                      if (d.item_keywords && d.item_keywords.length > 0) {
+                        const iname = (sol.item_name || "").toLowerCase();
+                        if (!d.item_keywords.some(function(kw){ return iname.includes(kw.toLowerCase()); })) continue;
+                      }
+                      entry.sols.push(sol);
                     }
                   }
                 }

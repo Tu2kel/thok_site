@@ -107,6 +107,10 @@
       if (!d.email)                return;
       if (d.is_dns)                return;
       if (BLK && BLK(d.name))     return;
+      if (d.item_keywords && d.item_keywords.length > 0) {
+        const iname = (record.item_name || "").toLowerCase();
+        if (!d.item_keywords.some(kw => iname.includes(kw.toLowerCase()))) return;
+      }
       seenIds.add(d.id);
       selected.push({ dist: d, reason });
     };
