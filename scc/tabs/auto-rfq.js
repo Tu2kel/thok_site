@@ -187,9 +187,7 @@
       }
       rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Quantity:</td><td style='padding:2px 0;'>" + qty + "</td></tr>");
       rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Required Del.:</td><td style='padding:2px 0;'>" + del + "</td></tr>");
-      if (dueDate) {
-        rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Quote Due:</td><td style='padding:2px 0;'>" + dueDate + "</td></tr>");
-      }
+      rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Please Respond By:</td><td style='padding:2px 0;'><strong>" + (dueDate || "As soon as possible") + "</strong></td></tr>");
       rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Ref #:</td><td style='padding:2px 0;'>" + record.sol_number + "</td></tr>");
 
       return "<table style='border-left:3px solid #cc0000;padding-left:10px;margin:0 0 14px 0;border-spacing:0;border-collapse:collapse;'>" + rows.join("") + "</table>";
