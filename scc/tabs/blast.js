@@ -189,7 +189,7 @@
       "",
       "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have an active government procurement need in your lane.",
       "",
-      "Quick Note: I sent you an email from a different address — we went through a company restructure and transitioned to a new email. If you didn't see it, it may be in your spam folder.",
+      "Quick Note: I sent you an email from anthony@ifedlog.com — we went through a company restructure and transitioned to a new email. If you didn't see it, it may be in your spam folder.",
       "",
       "I need pricing and availability on the following item" +
         (sols.length > 1 ? "s" : "") +
