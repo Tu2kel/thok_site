@@ -687,58 +687,57 @@
                 style: { background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "18px" },
               }, "✕"),
             ),
-            Object.entries(blastPlan).map(([fsc, { sols: fscSols, dists }]) =>
-              h("div", {
-                key: fsc,
-                style: { marginBottom: "20px", border: "1px solid rgba(255,255,255,.07)", borderRadius: "6px", padding: "14px" },
-              },
-                h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: "var(--gold-solid)", marginBottom: "8px" } },
-                  "FSC " + fsc + " — " + fscName(fsc) + " (" + fscSols.length + " sol" + (fscSols.length !== 1 ? "s" : "") + ")",
-                ),
-                h("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginBottom: "10px" } },
-                  fscSols.map(s => s.sol_number).join("  ·  "),
-                ),
-                dists.length === 0
-                  ? h("div", { style: { fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic" } }, "No matched distributors for this FSC")
-                  : dists.map((dist, di) => {
-                    const subject = "RFQ — " + fscName(fsc) + " Parts (FSC " + fsc + ")";
-                    const body = buildRFQEmail(dist, fscSols);
-                    return h("div", {
-                      key: di,
+            Object.entries(blastPlan)
+              .sort(function(a, b){ return (a[1].dist.name||"").localeCompare(b[1].dist.name||""); })
+              .map(function([distKey, entry]) {
+                const dist = entry.dist;
+                const distSols = entry.sols;
+                const overflow = entry.overflow || [];
+                const fscs = entry.fscs || [];
+                const subject = "RFQ — FSC " + fscs.join("/") + " | Government Requirement | Imperio Federal Logistics";
+                const body = buildRFQEmail(dist, distSols);
+                return h("div", {
+                  key: distKey,
+                  style: { marginBottom: "16px", border: "1px solid rgba(255,255,255,.07)", borderRadius: "6px", padding: "14px" },
+                },
+                  h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", color: "var(--gold-solid)", marginBottom: "4px" } },
+                    dist.name,
+                  ),
+                  h("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px", display: "flex", gap: "10px", flexWrap: "wrap" } },
+                    h("span", null, "FSC " + fscs.join(", ")),
+                    h("span", null, "· " + distSols.length + " sol" + (distSols.length !== 1 ? "s" : "")),
+                    overflow.length > 0 && h("span", { style: { color: "rgba(245,158,11,.7)" } }, "· +" + overflow.length + " queued"),
+                    dist.email && h("span", { style: { color: "rgba(255,255,255,.35)" } }, "· " + dist.email),
+                  ),
+                  h("div", { style: { fontSize: "9px", color: "var(--text-muted)", marginBottom: "10px", lineHeight: "1.5" } },
+                    distSols.map(function(s){ return s.sol_number; }).join("  ·  "),
+                  ),
+                  h("div", { style: { display: "flex", gap: "8px" } },
+                    dist.email && h("button", {
+                      onClick: function(){ openGmailCompose(dist.email, subject, body); },
                       style: {
-                        display: "flex", alignItems: "center", gap: "10px",
-                        padding: "8px 0",
-                        borderTop: di > 0 ? "1px solid rgba(255,255,255,.05)" : "none",
+                        fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".06em",
+                        padding: "6px 14px", background: "rgba(201,168,76,.12)",
+                        border: "1px solid rgba(201,168,76,.35)", color: "var(--gold-solid)",
+                        cursor: "pointer", whiteSpace: "nowrap",
                       },
-                    },
-                      h("div", { style: { flex: 1, fontSize: "12px", color: "var(--text-primary)" } },
-                        dist.name,
-                        dist.email && h("span", { style: { fontSize: "10px", color: "var(--text-muted)", marginLeft: "6px" } }, "· " + dist.email),
-                      ),
-                      dist.email && h("button", {
-                        onClick: () => openGmailCompose(dist.email, subject, body),
-                        style: {
-                          fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".06em",
-                          padding: "6px 14px", background: "rgba(201,168,76,.12)",
-                          border: "1px solid rgba(201,168,76,.35)", color: "var(--gold-solid)",
-                          cursor: "pointer", whiteSpace: "nowrap",
-                        },
-                      }, "Gmail Compose"),
-                      h("button", {
-                        onClick: () => {
-                          navigator.clipboard.writeText(body).then(() => showToast("Email copied")).catch(() => showToast("Copy failed", true));
-                        },
-                        style: {
-                          fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".06em",
-                          padding: "6px 14px", background: "transparent",
-                          border: "1px solid rgba(255,255,255,.15)", color: "var(--text-muted)",
-                          cursor: "pointer",
-                        },
-                      }, "Copy"),
-                    );
-                  }),
-              ),
-            ),
+                    }, "Gmail Compose"),
+                    h("button", {
+                      onClick: function(){
+                        navigator.clipboard.writeText(body).then(function(){ showToast("Email copied"); }).catch(function(){ showToast("Copy failed", true); });
+                        const VQ = window.SCC_VENDOR_QUEUE;
+                        if (VQ) VQ.markSent(distKey, distSols, overflow);
+                      },
+                      style: {
+                        fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".06em",
+                        padding: "6px 14px", background: "transparent",
+                        border: "1px solid rgba(255,255,255,.15)", color: "var(--text-muted)",
+                        cursor: "pointer",
+                      },
+                    }, "Copy"),
+                  ),
+                );
+              }),
           ),
         ),
 
@@ -757,15 +756,25 @@
               if (!goSols.length) { showToast("Select GO sols first", true); return; }
               const SCC_DIST = window.SCC_DIST;
               if (!SCC_DIST) { showToast("Distributor DB not loaded", true); return; }
-              const byFSC = {};
+              // Group by distributor — each company gets one entry with all FSCs + combined sols
+              const byDist = new Map();
               for (const s of goSols) {
                 const fsc = s.fsc || "0000";
-                if (!byFSC[fsc]) byFSC[fsc] = [];
-                byFSC[fsc].push(s);
+                const matched = SCC_DIST.getDistsByFSC(fsc).slice(0, 5);
+                for (const dist of matched) {
+                  const key = dist.id || dist.name;
+                  if (!byDist.has(key)) byDist.set(key, { dist, sols: [], fscs: [] });
+                  const entry = byDist.get(key);
+                  if (!entry.fscs.includes(fsc)) entry.fscs.push(fsc);
+                  const sid = s.sol_number || s.id;
+                  if (!entry.sols.find(function(x){ return (x.sol_number || x.id) === sid; })) entry.sols.push(s);
+                }
               }
+              const VQ = window.SCC_VENDOR_QUEUE;
               const plan = {};
-              for (const [fsc, fscSols] of Object.entries(byFSC)) {
-                plan[fsc] = { sols: fscSols, dists: SCC_DIST.getDistsByFSC(fsc).slice(0, 5) };
+              for (const [key, entry] of byDist.entries()) {
+                const vqr = VQ ? VQ.buildVendorBatch(key, entry.sols) : { batch: entry.sols, overflow: [] };
+                plan[key] = { dist: entry.dist, sols: vqr.batch, overflow: vqr.overflow, fscs: entry.fscs.slice().sort() };
               }
               setBlastPlan(plan);
               setBlastView(true);
