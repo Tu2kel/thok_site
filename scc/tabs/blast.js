@@ -1383,8 +1383,11 @@
                     for (const sol of sols) {
                       const sid = sol.id || sol.sol_number;
                       if (entry.sols.find(function(s){ return (s.id || s.sol_number) === sid; })) continue;
-                      if (d.item_keywords && d.item_keywords.length > 0) {
-                        const iname = (sol.item_name || "").toLowerCase();
+                      var solNSNb = (sol.nsn || "").replace(/\D/g, "");
+                      if (solNSNb && (d.known_nsns || []).some(function(n){ return n.replace(/\D/g,"") === solNSNb; })) {
+                        // NSN exact match — bypass keyword filter
+                      } else if (d.item_keywords && d.item_keywords.length > 0) {
+                        var iname = (sol.item_name || "").toLowerCase();
                         if (!d.item_keywords.some(function(kw){ return iname.includes(kw.toLowerCase()); })) continue;
                       }
                       entry.sols.push(sol);

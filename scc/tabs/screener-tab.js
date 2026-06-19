@@ -938,7 +938,10 @@
                 const fsc = s.fsc || "0000";
                 const matched = SCC_DIST.getDistsByFSC(fsc).slice(0, 5);
                 for (const dist of matched) {
-                  if (dist.item_keywords && dist.item_keywords.length > 0) {
+                  const sNSN = (s.nsn || "").replace(/\D/g, "");
+                  if (sNSN && (dist.known_nsns || []).some(function(n){ return n.replace(/\D/g,"") === sNSN; })) {
+                    // NSN exact match — bypass keyword filter
+                  } else if (dist.item_keywords && dist.item_keywords.length > 0) {
                     const iname = (s.item_name || "").toLowerCase();
                     if (!dist.item_keywords.some(function(kw){ return iname.includes(kw.toLowerCase()); })) continue;
                   }

@@ -107,7 +107,10 @@
       if (!d.email)                return;
       if (d.is_dns)                return;
       if (BLK && BLK(d.name))     return;
-      if (d.item_keywords && d.item_keywords.length > 0) {
+      const solNSN = (record.nsn || "").replace(/\D/g, "");
+      if (solNSN && (d.known_nsns || []).some(n => n.replace(/\D/g, "") === solNSN)) {
+        // NSN exact match — bypass keyword filter, vendor has won this part before
+      } else if (d.item_keywords && d.item_keywords.length > 0) {
         const iname = (record.item_name || "").toLowerCase();
         if (!d.item_keywords.some(kw => iname.includes(kw.toLowerCase()))) return;
       }
@@ -119,6 +122,15 @@
       for (const w of WL.lookup(record.nsn, record.ref_part_number)) {
         const match = dists.find(d => d.name.toLowerCase() === w.vendor_name.toLowerCase());
         if (match) addDist(match, "Prior win · " + (w.date || w.logged));
+      }
+    }
+
+    // NSN exact-match vendors (from Intel run) — highest priority after prior wins
+    const solNSNClean = (record.nsn || "").replace(/\D/g, "");
+    if (solNSNClean) {
+      for (const d of dists) {
+        if ((d.known_nsns || []).some(n => n.replace(/\D/g, "") === solNSNClean))
+          addDist(d, "NSN match · " + record.nsn);
       }
     }
 

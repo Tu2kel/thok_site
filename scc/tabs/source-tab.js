@@ -75,6 +75,7 @@
           email: v.email || "",
           phone: v.phone || "",
           fsc: v.fsc || [],
+          known_nsns: v.nsns || [],
           tags: v.tags || ["usa-spending-verified"],
           notes: v.notes || "",
         });
