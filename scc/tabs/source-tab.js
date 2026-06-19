@@ -16,8 +16,47 @@
       try { return JSON.parse(localStorage.getItem(INTEL_PENDING_KEY) || "[]"); } catch { return []; }
     });
     const [adding, setAdding] = useState(null);
+    const [enriching, setEnriching] = useState(false);
+    const [enrichProgress, setEnrichProgress] = useState("");
 
     if (!pending.length) return null;
+
+    const reenrich = async () => {
+      const missing = pending.filter(v => !v.email);
+      if (!missing.length) { showToast("All vendors already have emails"); return; }
+      setEnriching(true);
+      let updated = [...pending];
+      for (let i = 0; i < missing.length; i++) {
+        const v = missing[i];
+        setEnrichProgress((i + 1) + "/" + missing.length + " " + v.name.slice(0, 20));
+        try {
+          const res = await fetch("/.netlify/functions/scc-intel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "samLookup", payload: { name: v.name } }),
+          });
+          const data = await res.json();
+          if (data.ok && data.result) {
+            const r = data.result;
+            updated = updated.map(u => u.id !== v.id ? u : {
+              ...u,
+              email:   r.email   || u.email   || "",
+              phone:   r.phone   || u.phone   || "",
+              cage:    r.cage    || u.cage    || "",
+              contact: r.contact || u.contact || "",
+              sam:     true,
+            });
+          }
+        } catch { /* skip failed vendor */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      localStorage.setItem(INTEL_PENDING_KEY, JSON.stringify(updated));
+      setPending(updated);
+      setEnriching(false);
+      setEnrichProgress("");
+      const filled = updated.filter(v => v.email).length;
+      showToast("Re-enriched · " + filled + "/" + updated.length + " now have email");
+    };
 
     const save = (updated) => {
       localStorage.setItem(INTEL_PENDING_KEY, JSON.stringify(updated));
@@ -83,16 +122,29 @@
           primeCount > 0 && h("span", { style: { color: "rgba(245,158,11,.8)", fontSize: "8px" } }, "⚠ " + primeCount + " possible prime"),
           noContactCount > 0 && h("span", { style: { color: "var(--body-faint)", fontSize: "8px" } }, noContactCount + " no email"),
         ),
-        safeCount > 0 && h("button", {
-          onClick: approveAll,
-          disabled: !!adding,
-          style: {
-            fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
-            padding: "4px 12px",
-            background: "rgba(61,214,140,.1)", border: "1px solid rgba(61,214,140,.35)",
-            color: "#3dd68c", borderRadius: "3px", cursor: adding ? "wait" : "pointer",
-          },
-        }, "Add All Safe (" + safeCount + ")"),
+        h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } },
+          noContactCount > 0 && h("button", {
+            onClick: reenrich,
+            disabled: enriching || !!adding,
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
+              padding: "4px 12px",
+              background: "rgba(56,189,248,.08)", border: "1px solid rgba(56,189,248,.3)",
+              color: "rgba(56,189,248,.9)", borderRadius: "3px", cursor: enriching ? "wait" : "pointer",
+              opacity: enriching ? 0.7 : 1,
+            },
+          }, enriching ? ("⟳ " + enrichProgress) : ("⟳ Re-enrich (" + noContactCount + ")")),
+          safeCount > 0 && h("button", {
+            onClick: approveAll,
+            disabled: !!adding || enriching,
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
+              padding: "4px 12px",
+              background: "rgba(61,214,140,.1)", border: "1px solid rgba(61,214,140,.35)",
+              color: "#3dd68c", borderRadius: "3px", cursor: (adding || enriching) ? "wait" : "pointer",
+            },
+          }, "Add All Safe (" + safeCount + ")"),
+        ),
       ),
 
       // Rows
