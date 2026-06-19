@@ -147,7 +147,149 @@
     const [dragOver, setDragOver] = useState(false);
     const [blastPlan, setBlastPlan] = useState(null);
     const [blastView, setBlastView] = useState(false);
+    const [intelRunning, setIntelRunning] = useState(null); // "go" | "verify" | null
+    const [intelProgress, setIntelProgress] = useState("");
     const fileRef = useRef(null);
+
+    // ── Intel helpers ────────────────────────────────────────────────────
+    const _fmtNSN = (raw) => {
+      const d = String(raw || "").replace(/\D/g, "");
+      return d.length === 13
+        ? d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6,9)+"-"+d.slice(9,13)
+        : String(raw || "").trim();
+    };
+
+    const _detectPrime = (descs) => {
+      const kw = ["overhaul","repair","installation","system","assembly","integration","maintenance","service support"];
+      const txt = descs.join(" ").toLowerCase();
+      return kw.some(k => txt.includes(k));
+    };
+
+    const _queryUSASpending = async (type, val) => {
+      try {
+        const filters = type === "fsc"
+          ? { award_type_codes: ["A","B","C","D"], psc_codes: { require: [["Product", val.slice(0,2), val]] } }
+          : { award_type_codes: ["A","B","C","D"], keywords: [_fmtNSN(val), val.replace(/\D/g,"")] };
+        const res = await fetch("https://api.usaspending.gov/api/v2/search/spending_by_award/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filters,
+            fields: ["Recipient Name", "Award Amount", "Description"],
+            sort: "Award Amount", order: "asc",
+            limit: 25, page: 1, subawards: false,
+          }),
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        const map = new Map();
+        for (const a of data.results || []) {
+          const name = (a["Recipient Name"] || "").trim();
+          if (!name || name === "MULTIPLE RECIPIENTS") continue;
+          const key = name.toUpperCase();
+          const amt = Number(a["Award Amount"] || 0);
+          if (!map.has(key)) map.set(key, { name, total: 0, count: 0, minAward: 0, descs: [] });
+          const e = map.get(key);
+          e.total += amt;
+          e.count++;
+          if (amt > 0 && (e.minAward === 0 || amt < e.minAward)) e.minAward = amt;
+          const desc = (a["Description"] || "").trim().slice(0, 100);
+          if (desc && !e.descs.includes(desc) && e.descs.length < 3) e.descs.push(desc);
+        }
+        return [...map.values()];
+      } catch { return []; }
+    };
+
+    const _fetchSAM = async (name) => {
+      try {
+        const res = await fetch("/.netlify/functions/scc-intel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "samLookup", payload: { name } }),
+        });
+        const data = await res.json();
+        return data.ok ? data.result : null;
+      } catch { return null; }
+    };
+
+    const runIntel = async (verdict) => {
+      const target = (results || []).filter(r =>
+        r.verdict === (verdict === "go" ? "GO" : "VERIFY FIRST")
+      );
+      if (!target.length) { showToast("No " + verdict.toUpperCase() + " sols", true); return; }
+
+      setIntelRunning(verdict);
+      setIntelProgress("Starting…");
+
+      const PENDING_KEY = "scc_intel_pending_v1";
+      const existing = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
+      const existNames = new Set(existing.map(v => v.name.toUpperCase().trim()));
+      // Also skip companies already in the dist DB
+      const dbNames = new Set((window.SCC_DIST && window.SCC_DIST.DISTRIBUTORS || []).map(d => (d.name||"").toUpperCase().trim()));
+
+      const found = new Map();
+
+      for (let i = 0; i < target.length; i++) {
+        const sol = target[i];
+        const nsn = (sol.nsn || "").trim();
+        const fsc = nsn ? nsn.replace(/\D/g,"").slice(0,4) : (sol.fsc || "").replace(/\D/g,"").slice(0,4);
+        setIntelProgress("USASpending " + (i+1) + "/" + target.length + " · " + (nsn || fsc || sol.sol_number));
+
+        let usaRows = nsn ? await _queryUSASpending("nsn", nsn) : [];
+        if (!usaRows.length && fsc) usaRows = await _queryUSASpending("fsc", fsc);
+
+        for (const v of usaRows) {
+          const key = v.name.toUpperCase().trim();
+          if (dbNames.has(key)) continue; // already in roster
+          if (!found.has(key)) {
+            found.set(key, { ...v, fscs: fsc ? [fsc] : [], nsns: nsn ? [nsn] : [] });
+          } else {
+            const e = found.get(key);
+            e.total += v.total;
+            e.count += v.count;
+            if (v.minAward > 0 && (e.minAward === 0 || v.minAward < e.minAward)) e.minAward = v.minAward;
+            if (fsc && !e.fscs.includes(fsc)) e.fscs.push(fsc);
+            if (nsn && !e.nsns.includes(nsn)) e.nsns.push(nsn);
+            v.descs.forEach(d => { if (!e.descs.includes(d) && e.descs.length < 3) e.descs.push(d); });
+          }
+        }
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      const foundArr = [...found.values()].filter(v => !existNames.has(v.name.toUpperCase().trim()));
+      const newVendors = [];
+
+      for (let i = 0; i < foundArr.length; i++) {
+        const v = foundArr[i];
+        setIntelProgress("SAM.gov " + (i+1) + "/" + foundArr.length + " · " + v.name.slice(0,30));
+        const sam = await _fetchSAM(v.name);
+        const titleCase = v.name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        newVendors.push({
+          id: "intel-" + v.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""),
+          name: (sam && sam.name) ? sam.name : titleCase,
+          cage: (sam && sam.cage) || "",
+          email: (sam && sam.email) || "",
+          phone: (sam && sam.phone) || "",
+          fsc: v.fscs,
+          nsns: v.nsns,
+          tags: ["usa-spending-verified", ...(sam ? [] : ["needs-contact"])],
+          notes: "Intel · " + v.count + " awards · $" + Math.round(v.total).toLocaleString() + " total · Smallest: $" + Math.round(v.minAward).toLocaleString(),
+          awards: v.count,
+          totalValue: v.total,
+          smallestAward: v.minAward,
+          isPrime: _detectPrime(v.descs),
+          pendingAt: new Date().toISOString(),
+          sam: !!sam,
+        });
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      const updated = [...existing, ...newVendors];
+      localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
+      setIntelRunning(null);
+      setIntelProgress("");
+      showToast("⚡ Intel done · " + newVendors.length + " new vendors queued → Source tab");
+    };
 
     // ── Load DIBBS batch + persisted analysis whenever mode = "dibbs" ────
     useEffect(() => {
@@ -580,6 +722,40 @@
             onClick: deselectAll,
             style: { background: "transparent", border: "none", color: "var(--gold-dim)", fontSize: "10px", cursor: "pointer", marginLeft: "auto" },
           }, "× clear selection"),
+        ),
+
+        // ── Intel buttons (DIBBS mode only) ──
+        mode === "dibbs" && h("div", {
+          style: { display: "flex", gap: "8px", marginBottom: "14px", alignItems: "center", flexWrap: "wrap" },
+        },
+          h("button", {
+            onClick: () => runIntel("go"),
+            disabled: !!intelRunning || goCount === 0,
+            title: "Query USASpending + SAM.gov for every GO sol — queue new vendors in Source tab",
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
+              padding: "5px 14px",
+              background: intelRunning === "go" ? "rgba(56,189,248,.15)" : "rgba(56,189,248,.08)",
+              border: "1px solid rgba(56,189,248," + (goCount === 0 ? ".15" : ".4") + ")",
+              color: "rgba(56,189,248," + (goCount === 0 ? ".3" : ".9") + ")",
+              borderRadius: "4px", cursor: intelRunning || goCount === 0 ? "not-allowed" : "pointer",
+              opacity: goCount === 0 ? 0.5 : 1,
+            },
+          }, intelRunning === "go" ? ("⚡ " + intelProgress) : ("⚡ Intel GO (" + goCount + ")")),
+          h("button", {
+            onClick: () => runIntel("verify"),
+            disabled: !!intelRunning || verifyCount === 0,
+            title: "Query USASpending + SAM.gov for VERIFY FIRST sols",
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
+              padding: "5px 14px",
+              background: intelRunning === "verify" ? "rgba(56,189,248,.15)" : "transparent",
+              border: "1px solid rgba(56,189,248," + (verifyCount === 0 ? ".1" : ".2") + ")",
+              color: "rgba(56,189,248," + (verifyCount === 0 ? ".2" : ".6") + ")",
+              borderRadius: "4px", cursor: intelRunning || verifyCount === 0 ? "not-allowed" : "pointer",
+              opacity: verifyCount === 0 ? 0.4 : 1,
+            },
+          }, intelRunning === "verify" ? ("⚡ " + intelProgress) : ("⚡ Intel VERIFY (" + verifyCount + ")")),
         ),
 
         // Cards

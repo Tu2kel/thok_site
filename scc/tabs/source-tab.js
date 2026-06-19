@@ -8,6 +8,184 @@
 
   const { createElement: h, useState, useEffect, useCallback } = React;
 
+  // ── PENDING VENDOR QUEUE (from Intel runs) ───────────────────────────
+  const INTEL_PENDING_KEY = "scc_intel_pending_v1";
+
+  function PendingVendorQueue({ onAdded }) {
+    const [pending, setPending] = useState(() => {
+      try { return JSON.parse(localStorage.getItem(INTEL_PENDING_KEY) || "[]"); } catch { return []; }
+    });
+    const [adding, setAdding] = useState(null);
+
+    if (!pending.length) return null;
+
+    const save = (updated) => {
+      localStorage.setItem(INTEL_PENDING_KEY, JSON.stringify(updated));
+      setPending(updated);
+    };
+
+    const skip = (id) => save(pending.filter(v => v.id !== id));
+
+    const approve = async (v) => {
+      setAdding(v.id);
+      try {
+        await window.SCC_DIST.distSave({
+          id: v.id,
+          name: v.name,
+          cage: v.cage || "",
+          email: v.email || "",
+          phone: v.phone || "",
+          fsc: v.fsc || [],
+          tags: v.tags || ["usa-spending-verified"],
+          notes: v.notes || "",
+        });
+        await window.SCC_DIST.distReloadCache();
+        onAdded();
+        save(pending.filter(p => p.id !== v.id));
+      } catch (e) {
+        alert("Add failed: " + e.message);
+      } finally {
+        setAdding(null);
+      }
+    };
+
+    const approveAll = async () => {
+      const safe = pending.filter(v => !v.isPrime);
+      for (const v of safe) await approve(v);
+    };
+
+    const primeCount  = pending.filter(v => v.isPrime).length;
+    const safeCount   = pending.length - primeCount;
+    const noContactCount = pending.filter(v => !v.email).length;
+
+    const qBlue = "rgba(56,189,248,";
+
+    return h("div", {
+      style: {
+        border: "1px solid " + qBlue + ".25)",
+        borderRadius: "6px",
+        marginBottom: "20px",
+        overflow: "hidden",
+      },
+    },
+      // Header
+      h("div", {
+        style: {
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "10px 16px",
+          background: qBlue + ".06)",
+        },
+      },
+        h("div", {
+          style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".15em", textTransform: "uppercase", color: qBlue + ".9)", display: "flex", alignItems: "center", gap: "10px" },
+        },
+          "⚡ Intel Queue — " + pending.length + " pending",
+          primeCount > 0 && h("span", { style: { color: "rgba(245,158,11,.8)", fontSize: "8px" } }, "⚠ " + primeCount + " possible prime"),
+          noContactCount > 0 && h("span", { style: { color: "var(--body-faint)", fontSize: "8px" } }, noContactCount + " no email"),
+        ),
+        safeCount > 0 && h("button", {
+          onClick: approveAll,
+          disabled: !!adding,
+          style: {
+            fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
+            padding: "4px 12px",
+            background: "rgba(61,214,140,.1)", border: "1px solid rgba(61,214,140,.35)",
+            color: "#3dd68c", borderRadius: "3px", cursor: adding ? "wait" : "pointer",
+          },
+        }, "Add All Safe (" + safeCount + ")"),
+      ),
+
+      // Rows
+      h("div", { style: { maxHeight: "340px", overflowY: "auto" } },
+        pending.map(v => {
+          const isAdding = adding === v.id;
+          return h("div", {
+            key: v.id,
+            style: {
+              display: "grid",
+              gridTemplateColumns: "1fr 90px 100px 60px 90px 65px 65px",
+              gap: "0 10px",
+              padding: "8px 16px",
+              borderBottom: "1px solid rgba(255,255,255,.04)",
+              alignItems: "center",
+              background: v.isPrime ? "rgba(245,158,11,.03)" : "transparent",
+            },
+          },
+            // Name + tags
+            h("div", null,
+              h("div", {
+                style: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: "var(--alabaster)", display: "flex", alignItems: "center", gap: "6px" },
+              },
+                v.name,
+                v.isPrime && h("span", { title: "Description suggests prime contractor, not supplier", style: { fontSize: "8px", color: "rgba(245,158,11,.8)" } }, "⚠ prime?"),
+                !v.sam && h("span", { title: "Not found in SAM.gov", style: { fontSize: "8px", color: "var(--body-faint)" } }, "no SAM"),
+              ),
+              v.fsc && v.fsc.length > 0 && h("div", {
+                style: { fontFamily: "JetBrains Mono,monospace", fontSize: "8px", color: "rgba(201,168,76,.6)", marginTop: "2px" },
+              }, "FSC " + v.fsc.join(", ")),
+            ),
+            // CAGE
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-dim)" } }, v.cage || "—"),
+            // Email
+            h("span", {
+              style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: v.email ? "rgba(56,189,248,.7)" : "var(--body-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+              title: v.email || "",
+            }, v.email || "no email"),
+            // Awards
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-dim)", textAlign: "right" } }, v.awards || "—"),
+            // Smallest award
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "rgba(201,168,76,.8)", textAlign: "right" }, title: "Smallest contract — unit price proxy" },
+              v.smallestAward > 0 ? "$" + Math.round(v.smallestAward).toLocaleString() : "—",
+            ),
+            // Add
+            h("button", {
+              onClick: () => approve(v),
+              disabled: isAdding,
+              style: {
+                fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".08em",
+                padding: "3px 8px",
+                background: "rgba(61,214,140,.08)", border: "1px solid rgba(61,214,140,.3)",
+                color: "#3dd68c", borderRadius: "3px", cursor: isAdding ? "wait" : "pointer",
+                opacity: isAdding ? 0.6 : 1,
+              },
+            }, isAdding ? "…" : "+ Add"),
+            // Skip
+            h("button", {
+              onClick: () => skip(v.id),
+              style: {
+                fontFamily: "JetBrains Mono,monospace", fontSize: "9px",
+                padding: "3px 8px",
+                background: "transparent", border: "1px solid rgba(255,255,255,.1)",
+                color: "var(--body-faint)", borderRadius: "3px", cursor: "pointer",
+              },
+            }, "Skip"),
+          );
+        }),
+      ),
+
+      // Column header
+      h("div", {
+        style: {
+          display: "grid",
+          gridTemplateColumns: "1fr 90px 100px 60px 90px 65px 65px",
+          gap: "0 10px",
+          padding: "4px 16px",
+          fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".12em",
+          textTransform: "uppercase", color: "var(--body-faint)",
+          borderTop: "1px solid rgba(255,255,255,.06)",
+        },
+      },
+        h("span", null, "Company"),
+        h("span", null, "CAGE"),
+        h("span", null, "Email"),
+        h("span", { style: { textAlign: "right" } }, "Awards"),
+        h("span", { style: { textAlign: "right" } }, "Smallest"),
+        h("span", null, ""),
+        h("span", null, ""),
+      ),
+    );
+  }
+
   // ── USASPENDING INTELLIGENCE FEED ────────────────────────────────────
   function USASpendingIntel({ dists, onRefresh }) {
     const [open, setOpen] = useState(false);
@@ -1175,6 +1353,9 @@
             ),
         ),
       ),
+
+      // ── Pending Vendor Queue (from Intel runs) ──
+      h(PendingVendorQueue, { onAdded: refresh }),
 
       // ── USASpending Intel Feed ──
       h(USASpendingIntel, { dists, onRefresh: refresh }),
