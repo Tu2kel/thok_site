@@ -790,6 +790,7 @@
                   { id: "dibbs", label: "DIBBS", icon: "⬇ " },
                   { id: "pipeline", label: "Pipeline", icon: "" },
                   { id: "source", label: "Source", icon: "◆ " },
+                  { id: "intel", label: "Intel", icon: "⚡ " },
                   { id: "awards", label: "Awards", icon: "🏆 " },
                 ],
               },
@@ -1103,6 +1104,11 @@
             setOpenDrawer,
             goPipeline,
           }),
+
+        tab === "intel" &&
+          (window.SCC_TABS && window.SCC_TABS.IntelTab
+            ? hA(window.SCC_TABS.IntelTab, { showToast })
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Intel loading...")),
 
         tab === "rfq" && hA(RFQTab, null),
 

@@ -441,6 +441,7 @@
         } catch {}
 
         setResults(merged);
+        try { localStorage.setItem("scc_screener_results_v1", JSON.stringify(merged)); } catch {}
         setProvider(`claude · ${dibbsBatch.date}`);
         const autoSel = new Set(merged.filter((r) => r.verdict === "GO").map((r) => r.sol_number));
         setSelected(autoSel);
@@ -724,38 +725,22 @@
           }, "× clear selection"),
         ),
 
-        // ── Intel buttons (DIBBS mode only) ──
-        mode === "dibbs" && h("div", {
-          style: { display: "flex", gap: "8px", marginBottom: "14px", alignItems: "center", flexWrap: "wrap" },
+        // ── Intel shortcut (DIBBS mode only) ──
+        mode === "dibbs" && goCount > 0 && h("div", {
+          style: { marginBottom: "14px" },
         },
           h("button", {
-            onClick: () => runIntel("go"),
-            disabled: !!intelRunning || goCount === 0,
-            title: "Query USASpending + SAM.gov for every GO sol — queue new vendors in Source tab",
+            onClick: () => {
+              try { localStorage.setItem("scc_screener_results_v1", JSON.stringify(results)); } catch {}
+              if (typeof setTab === "function") setTab("intel");
+            },
             style: {
               fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
               padding: "5px 14px",
-              background: intelRunning === "go" ? "rgba(56,189,248,.15)" : "rgba(56,189,248,.08)",
-              border: "1px solid rgba(56,189,248," + (goCount === 0 ? ".15" : ".4") + ")",
-              color: "rgba(56,189,248," + (goCount === 0 ? ".3" : ".9") + ")",
-              borderRadius: "4px", cursor: intelRunning || goCount === 0 ? "not-allowed" : "pointer",
-              opacity: goCount === 0 ? 0.5 : 1,
+              background: "rgba(56,189,248,.08)", border: "1px solid rgba(56,189,248,.3)",
+              color: "rgba(56,189,248,.85)", borderRadius: "4px", cursor: "pointer",
             },
-          }, intelRunning === "go" ? ("⚡ " + intelProgress) : ("⚡ Intel GO (" + goCount + ")")),
-          h("button", {
-            onClick: () => runIntel("verify"),
-            disabled: !!intelRunning || verifyCount === 0,
-            title: "Query USASpending + SAM.gov for VERIFY FIRST sols",
-            style: {
-              fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".1em",
-              padding: "5px 14px",
-              background: intelRunning === "verify" ? "rgba(56,189,248,.15)" : "transparent",
-              border: "1px solid rgba(56,189,248," + (verifyCount === 0 ? ".1" : ".2") + ")",
-              color: "rgba(56,189,248," + (verifyCount === 0 ? ".2" : ".6") + ")",
-              borderRadius: "4px", cursor: intelRunning || verifyCount === 0 ? "not-allowed" : "pointer",
-              opacity: verifyCount === 0 ? 0.4 : 1,
-            },
-          }, intelRunning === "verify" ? ("⚡ " + intelProgress) : ("⚡ Intel VERIFY (" + verifyCount + ")")),
+          }, "⚡ Run Intel on " + goCount + " GO sols →"),
         ),
 
         // Cards
