@@ -247,7 +247,20 @@
 
   function IntelTab({ showToast }) {
     const [manualInput, setManualInput] = useState("");
-    const [solList, setSolList]         = useState([]); // [{nsn, fsc, label}]
+    const [solList, setSolList]         = useState(() => {
+      // Auto-load GO sols if screener results are waiting
+      try {
+        const raw = localStorage.getItem("scc_screener_results_v1");
+        if (!raw) return [];
+        const goSols = JSON.parse(raw).filter(r => r.verdict === "GO");
+        return goSols.map(s => ({
+          nsn: (s.nsn || "").trim(),
+          fsc: (s.nsn ? s.nsn.replace(/\D/g,"").slice(0,4) : (s.fsc||"").replace(/\D/g,"").slice(0,4)),
+          label: s.item_name || s.sol_number || s.nsn || "unknown",
+          sol_number: s.sol_number,
+        })).filter(e => e.nsn || e.fsc);
+      } catch { return []; }
+    });
     const [running, setRunning]         = useState(null); // "nsn" | "fsc" | null
     const [progress, setProgress]       = useState("");
     const [nsnResults, setNsnResults]   = useState({}); // nsn → count found
