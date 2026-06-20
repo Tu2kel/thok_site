@@ -614,26 +614,35 @@ async function scrapeAnMsSweep() {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-gpu",
+        "--disable-notifications",
+        "--disable-infobars",
+        "--disable-extensions",
+        "--disable-popup-blocking",
+        "--deny-permission-prompts",
+        "--no-first-run",
+        "--no-default-browser-check",
       ],
     });
 
     const page = await browser.newPage();
-    page.setDefaultTimeout(60000);
+    page.setDefaultTimeout(120000);
+    await page.setViewport({ width: 1920, height: 1080 });
 
     // ── LOGIN ──────────────────────────────────────────────────────────
-    await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForSelector("#Main_Input_UserName", { timeout: 15000 });
-    await page.type("#Main_Input_UserName", CONFIG.username, { delay: 60 });
+    info("AN/MS Sweep — navigating to login page...");
+    await page.goto("https://dibbsnavigator.com/login.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.waitForSelector("#Main_Input_Customer_Name", { timeout: 120000 });
+    info("AN/MS Sweep — typing credentials...");
+    await page.type("#Main_Input_Customer_Name", CONFIG.username, { delay: 60 });
     await page.type("#Main_Input_Password", CONFIG.password, { delay: 60 });
     await Promise.all([
-      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 }),
-      page.click("#Main_Input_LoginButton"),
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
+      page.click("#Main_btnCustOK"),
     ]);
-    if (page.url().includes("login") || page.url().includes("Login")) {
-      throw new Error("Login failed — check credentials in .env");
+    if (page.url().includes("login.aspx")) {
+      throw new Error("Login failed — check NAVIGATOR_USERNAME / NAVIGATOR_PASSWORD in .env");
     }
-    info("✅ Login successful");
+    info("✅ Login successful:", page.url());
 
     const seen = new Set();
 
