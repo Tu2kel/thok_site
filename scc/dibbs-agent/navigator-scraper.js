@@ -622,7 +622,7 @@ async function scrapeAnMsSweep() {
     page.setDefaultTimeout(60000);
 
     // ── LOGIN ──────────────────────────────────────────────────────────
-    await page.goto("https://navigator.dla.mil/dn.aspx", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector("#Main_Input_UserName", { timeout: 15000 });
     await page.type("#Main_Input_UserName", CONFIG.username, { delay: 60 });
     await page.type("#Main_Input_Password", CONFIG.password, { delay: 60 });
