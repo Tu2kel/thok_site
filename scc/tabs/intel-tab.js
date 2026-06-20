@@ -222,6 +222,14 @@
                 (v.fsc || []).length > 0 && h("span", null, "FSC " + v.fsc.join(", ")),
                 (v.nsns || []).length > 0 && h("span", { style: { color: "rgba(56,189,248,.5)" } }, "NSN " + v.nsns.slice(0,2).join(", ") + (v.nsns.length > 2 ? " +" + (v.nsns.length-2) : "")),
               ),
+              (v.solRefs && v.solRefs.length > 0) && h("div", { style: { marginTop: "3px", display: "flex", flexDirection: "column", gap: "1px" } },
+                v.solRefs.map((ref, ri) => h("div", { key: ri, style: { fontFamily: "JetBrains Mono,monospace", fontSize: "8px", color: "rgba(245,158,11,.55)" } },
+                  (ref.sol_number ? ref.sol_number + " · " : "") +
+                  (ref.item_name  ? ref.item_name.slice(0,40) + (ref.item_name.length > 40 ? "…" : "") + " · " : "") +
+                  (ref.qty        ? ref.qty + " ea" : "") +
+                  (ref.ext_price  ? (ref.qty ? " · " : "") + "$" + Number(ref.ext_price).toLocaleString() + " est" : "")
+                ))
+              ),
             ),
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-dim)" } }, v.cage || "—"),
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: v.email ? "rgba(56,189,248,.7)" : "var(--body-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: v.email || "" }, v.email || "no email"),
@@ -254,10 +262,14 @@
         if (!raw) return [];
         const goSols = JSON.parse(raw).filter(r => r.verdict === "GO");
         return goSols.map(s => ({
-          nsn: (s.nsn || "").trim(),
-          fsc: (s.nsn ? s.nsn.replace(/\D/g,"").slice(0,4) : (s.fsc||"").replace(/\D/g,"").slice(0,4)),
-          label: s.item_name || s.sol_number || s.nsn || "unknown",
+          nsn:       (s.nsn || "").trim(),
+          fsc:       (s.nsn ? s.nsn.replace(/\D/g,"").slice(0,4) : (s.fsc||"").replace(/\D/g,"").slice(0,4)),
+          label:     s.item_name || s.sol_number || s.nsn || "unknown",
           sol_number: s.sol_number,
+          item_name: s.item_name || "",
+          qty:       s.quantity || s.qty || s.req_qty || null,
+          ext_price: s.ext_price || s.extended_price || null,
+          unit_price: s.unit_price || s.dibbs_price || null,
         })).filter(e => e.nsn || e.fsc);
       } catch { return []; }
     });
@@ -277,10 +289,14 @@
         const goSols = results.filter(r => r.verdict === "GO");
         if (!goSols.length) { showToast("No GO sols in screener results", true); return; }
         const entries = goSols.map(s => ({
-          nsn:   (s.nsn || "").trim(),
-          fsc:   (s.nsn ? s.nsn.replace(/\D/g,"").slice(0,4) : (s.fsc||"").replace(/\D/g,"").slice(0,4)),
-          label: s.item_name || s.sol_number || s.nsn || "unknown",
+          nsn:        (s.nsn || "").trim(),
+          fsc:        (s.nsn ? s.nsn.replace(/\D/g,"").slice(0,4) : (s.fsc||"").replace(/\D/g,"").slice(0,4)),
+          label:      s.item_name || s.sol_number || s.nsn || "unknown",
           sol_number: s.sol_number,
+          item_name:  s.item_name || "",
+          qty:        s.quantity || s.qty || s.req_qty || null,
+          ext_price:  s.ext_price || s.extended_price || null,
+          unit_price: s.unit_price || s.dibbs_price || null,
         })).filter(e => e.nsn || e.fsc);
         setSolList(entries);
         setNsnResults({});
@@ -347,8 +363,9 @@
         for (const v of rows) {
           const key = v.name.toUpperCase().trim();
           if (existNames.has(key) || pendingNames.has(key)) continue;
+          const solRef = { nsn: sol.nsn, sol_number: sol.sol_number, item_name: sol.item_name, qty: sol.qty, ext_price: sol.ext_price };
           if (!found.has(key)) {
-            found.set(key, { ...v, fscs: sol.fsc ? [sol.fsc] : [], nsns: sol.nsn ? [sol.nsn] : [] });
+            found.set(key, { ...v, fscs: sol.fsc ? [sol.fsc] : [], nsns: sol.nsn ? [sol.nsn] : [], solRefs: [solRef] });
           } else {
             const e = found.get(key);
             e.total += v.total; e.count += v.count;
@@ -356,6 +373,7 @@
             v.descs.forEach(d => { if (!e.descs.includes(d) && e.descs.length < 5) e.descs.push(d); });
             if (sol.fsc && !e.fscs.includes(sol.fsc)) e.fscs.push(sol.fsc);
             if (sol.nsn && !e.nsns.includes(sol.nsn)) e.nsns.push(sol.nsn);
+            if (!e.solRefs.find(r => r.sol_number === sol.sol_number)) e.solRefs.push(solRef);
           }
         }
         await new Promise(r => setTimeout(r, 280));
@@ -380,6 +398,7 @@
           contact:      (sam && sam.contact) || "",
           fsc:          v.fscs,
           nsns:         v.nsns,
+          solRefs:      v.solRefs || [],
           awards:       v.count,
           smallestAward: v.minAward,
           totalAward:   v.total,
