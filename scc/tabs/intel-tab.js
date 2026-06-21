@@ -580,108 +580,97 @@
       showToast("⚡ Done · " + newVendors.length + " new vendors in queue");
     };
 
-    const gold = "rgba(201,168,76,";
-    const blue = "rgba(56,189,248,";
+    const gold  = "rgba(201,168,76,";
+    const blue  = "rgba(56,189,248,";
     const green = "rgba(61,214,140,";
 
     const nsnCount  = solList.filter(s => s.nsn).length;
-    const emptyNSNs = solList.filter(s => s.nsn && (nsnResults[s.nsn] === 0)).length;
+    const emptyNSNs = solList.filter(s => s.nsn && nsnResults[s.nsn] === 0).length;
     const fscOnly   = solList.filter(s => !s.nsn && s.fsc).length;
+    const [showManual, setShowManual] = useState(false);
 
-    return h("div", { style: { padding: "24px", maxWidth: "960px" } },
+    const btnBase = { fontFamily: "Cinzel,serif", letterSpacing: ".08em", textTransform: "uppercase", borderRadius: "3px", cursor: "pointer", whiteSpace: "nowrap" };
 
-      // ── Header ──
-      h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".2em", textTransform: "uppercase", color: gold + ".9)", marginBottom: "20px" } },
-        "⚡ Vendor Intelligence",
+    return h("div", { style: { padding: "24px 28px", maxWidth: "1100px" } },
+
+      // ── Page header ──
+      h("div", { style: { display: "flex", alignItems: "baseline", gap: "16px", marginBottom: "20px", borderBottom: "1px solid rgba(255,255,255,.06)", paddingBottom: "14px" } },
+        h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".22em", textTransform: "uppercase", color: gold + ".9)" } }, "⚡ Vendor Intelligence"),
+        solList.length > 0 && h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: blue + ".6)" } },
+          solList.length + " sols · " + nsnCount + " NSN" + (fscOnly > 0 ? " · " + fscOnly + " FSC-only" : "") + (emptyNSNs > 0 ? " · " + emptyNSNs + " empty → FSC" : ""),
+        ),
+        solList.length > 0 && h("button", {
+          onClick: () => { setSolList([]); setNsnResults({}); },
+          style: { ...btnBase, fontSize: "7px", padding: "3px 8px", background: "transparent", border: "1px solid rgba(255,255,255,.08)", color: "var(--body-faint)", marginLeft: "auto" },
+        }, "✕ Clear"),
       ),
 
-      // ── Input section ──
-      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" } },
+      // ── Command bar ──
+      h("div", { style: { display: "flex", gap: "8px", alignItems: "stretch", marginBottom: "16px", flexWrap: "wrap" } },
 
-        // Manual input
-        h("div", { style: { border: "1px solid rgba(255,255,255,.08)", borderRadius: "5px", padding: "14px" } },
-          h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".15em", textTransform: "uppercase", color: "var(--body-dim)", marginBottom: "8px" } }, "Manual Input — paste NSNs or FSC codes"),
-          h("textarea", {
-            value: manualInput,
-            onChange: e => setManualInput(e.target.value),
-            placeholder: "4320-01-047-1927\n2910012345678\n5305\none per line or comma-separated",
-            rows: 5,
-            style: { width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", borderRadius: "3px", color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "10px", padding: "8px", resize: "vertical" },
-          }),
+        // Screener load — primary
+        h("button", {
+          onClick: loadFromScreener,
+          style: { ...btnBase, fontSize: "8px", padding: "8px 16px", background: gold + ".08)", border: "1px solid " + gold + ".25)", color: gold + ".9)" },
+        }, "↑ Load GO Sols"),
+
+        // Manual toggle
+        h("button", {
+          onClick: () => setShowManual(m => !m),
+          style: { ...btnBase, fontSize: "8px", padding: "8px 12px", background: showManual ? "rgba(255,255,255,.07)" : "transparent", border: "1px solid rgba(255,255,255,.1)", color: "var(--body-dim)" },
+        }, showManual ? "▲ Manual" : "▼ Manual"),
+
+        // Divider
+        h("div", { style: { width: "1px", background: "rgba(255,255,255,.08)", margin: "4px 4px" } }),
+
+        // NSN Intel button
+        h("button", {
+          onClick: () => runIntel("nsn"),
+          disabled: !!running || !nsnCount,
+          title: "Queries USASpending by exact NSN — vendors paid for this part number",
+          style: { ...btnBase, fontSize: "9px", padding: "8px 20px", background: blue + ".1)", border: "1px solid " + blue + ".3)", color: blue + ".95)", opacity: (running || !nsnCount) ? 0.4 : 1, cursor: (running || !nsnCount) ? "not-allowed" : "pointer" },
+        }, running === "nsn" ? ("⟳ " + progress) : ("⚡ NSN Intel" + (nsnCount ? " (" + nsnCount + ")" : ""))),
+
+        // FSC Fallback button
+        h("button", {
+          onClick: () => runIntel("fsc"),
+          disabled: !!running || !solList.length,
+          title: "FSC-level sweep on 0-result NSNs — broader, lower confidence",
+          style: { ...btnBase, fontSize: "9px", padding: "8px 20px", background: gold + ".07)", border: "1px solid " + gold + ".25)", color: gold + ".9)", opacity: (running || !solList.length) ? 0.4 : 1, cursor: (running || !solList.length) ? "not-allowed" : "pointer" },
+        }, running === "fsc" ? ("⟳ " + progress) : ("⚡ FSC Fallback" + (emptyNSNs + fscOnly > 0 ? " (" + (emptyNSNs + fscOnly) + ")" : ""))),
+      ),
+
+      // ── Manual input (collapsible) ──
+      showManual && h("div", { style: { marginBottom: "14px", border: "1px solid rgba(255,255,255,.08)", borderRadius: "4px", padding: "12px 14px" } },
+        h("textarea", {
+          value: manualInput,
+          onChange: e => setManualInput(e.target.value),
+          placeholder: "4320-01-047-1927\n2910012345678\n5305\none per line or comma-separated",
+          rows: 4,
+          style: { width: "100%", boxSizing: "border-box", background: "transparent", border: "none", color: "var(--alabaster)", fontFamily: "JetBrains Mono,monospace", fontSize: "10px", padding: "0", resize: "vertical", outline: "none" },
+        }),
+        h("div", { style: { marginTop: "8px", display: "flex", justifyContent: "flex-end" } },
           h("button", {
-            onClick: parseManualInput,
+            onClick: () => { parseManualInput(); setShowManual(false); },
             disabled: !manualInput.trim(),
-            style: { marginTop: "8px", fontFamily: "Cinzel,serif", fontSize: "8px", padding: "5px 14px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.15)", color: "var(--alabaster)", borderRadius: "3px", cursor: "pointer" },
+            style: { ...btnBase, fontSize: "8px", padding: "5px 14px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.12)", color: "var(--alabaster)" },
           }, "Load"),
         ),
-
-        // Screener import
-        h("div", { style: { border: "1px solid rgba(255,255,255,.08)", borderRadius: "5px", padding: "14px" } },
-          h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".15em", textTransform: "uppercase", color: "var(--body-dim)", marginBottom: "8px" } }, "Import from Screener"),
-          h("p", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-faint)", lineHeight: "1.6", marginBottom: "12px" } },
-            "Pulls all GO sols from the last screener triage. Run triage first, then load here to query USASpending by their specific NSNs.",
-          ),
-          h("button", {
-            onClick: loadFromScreener,
-            style: { fontFamily: "Cinzel,serif", fontSize: "8px", padding: "5px 14px", background: gold + ".08)", border: "1px solid " + gold + ".3)", color: gold + ".9)", borderRadius: "3px", cursor: "pointer" },
-          }, "Load GO Sols from Screener"),
-        ),
       ),
 
-      // ── Sol list summary ──
-      solList.length > 0 && h("div", { style: { border: "1px solid rgba(255,255,255,.07)", borderRadius: "5px", padding: "12px 16px", marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" } },
-        h("div", { style: { display: "flex", gap: "20px", alignItems: "center" } },
-          h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: "var(--alabaster)" } }, solList.length + " sols loaded"),
-          h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: blue + ".7)" } }, nsnCount + " with NSN"),
-          fscOnly > 0 && h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: gold + ".6)" } }, fscOnly + " FSC-only"),
-          emptyNSNs > 0 && h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "rgba(245,158,11,.7)" } }, emptyNSNs + " NSN returned 0 → ready for FSC fallback"),
-        ),
-        h("button", {
-          onClick: () => { setSolList([]); setNsnResults({}); },
-          style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", padding: "3px 10px", background: "transparent", border: "1px solid rgba(255,255,255,.1)", color: "var(--body-faint)", borderRadius: "3px", cursor: "pointer" },
-        }, "Clear"),
-      ),
-
-      // ── Action buttons ──
-      h("div", { style: { display: "flex", gap: "12px", marginBottom: "28px" } },
-        h("div", { style: { flex: 1, border: "1px solid " + blue + ".2)", borderRadius: "5px", padding: "14px 18px" } },
-          h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".15em", textTransform: "uppercase", color: blue + ".8)", marginBottom: "6px" } }, "NSN Intel"),
-          h("p", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-faint)", lineHeight: "1.5", marginBottom: "12px" } },
-            "Queries USASpending by exact NSN. Tight match — vendors who have literally been paid for this part number before.",
-          ),
-          h("button", {
-            onClick: () => runIntel("nsn"),
-            disabled: !!running || !solList.length || nsnCount === 0,
-            style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em", padding: "6px 18px", background: blue + ".1)", border: "1px solid " + blue + ".35)", color: blue + ".95)", borderRadius: "3px", cursor: (running || !nsnCount) ? "not-allowed" : "pointer", opacity: (running || !nsnCount) ? 0.5 : 1 },
-          }, running === "nsn" ? ("⟳ " + progress) : ("⚡ Run NSN Intel (" + nsnCount + ")")),
-        ),
-
-        h("div", { style: { flex: 1, border: "1px solid " + gold + ".2)", borderRadius: "5px", padding: "14px 18px" } },
-          h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".15em", textTransform: "uppercase", color: gold + ".8)", marginBottom: "6px" } }, "FSC Fallback"),
-          h("p", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-faint)", lineHeight: "1.5", marginBottom: "12px" } },
-            "Runs FSC-level queries on any NSNs that returned 0 results above, plus any FSC-only entries. Broader sweep, lower confidence.",
-          ),
-          h("button", {
-            onClick: () => runIntel("fsc"),
-            disabled: !!running || !solList.length,
-            style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em", padding: "6px 18px", background: gold + ".08)", border: "1px solid " + gold + ".3)", color: gold + ".9)", borderRadius: "3px", cursor: (running || !solList.length) ? "not-allowed" : "pointer", opacity: (running || !solList.length) ? 0.5 : 1 },
-          }, running === "fsc" ? ("⟳ " + progress) : "⚡ FSC Fallback" + (emptyNSNs + fscOnly > 0 ? " (" + (emptyNSNs + fscOnly) + ")" : "")),
-        ),
-      ),
-
-      // ── NSN result summary (after NSN run) ──
-      Object.keys(nsnResults).length > 0 && h("div", { style: { marginBottom: "20px" } },
-        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".12em", textTransform: "uppercase", color: "var(--body-dim)", marginBottom: "8px" } }, "NSN Query Results"),
-        h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } },
+      // ── NSN result chips (after run) ──
+      Object.keys(nsnResults).length > 0 && h("div", { style: { marginBottom: "18px" } },
+        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".14em", textTransform: "uppercase", color: "var(--body-faint)", marginBottom: "7px" } }, "NSN Query Results"),
+        h("div", { style: { display: "flex", flexWrap: "wrap", gap: "5px" } },
           solList.filter(s => s.nsn && nsnResults[s.nsn] !== undefined).map(s =>
-            h("div", { key: s.nsn, style: { fontFamily: "JetBrains Mono,monospace", fontSize: "8px", padding: "3px 8px", borderRadius: "3px", background: nsnResults[s.nsn] > 0 ? "rgba(61,214,140,.08)" : "rgba(245,158,11,.06)", border: "1px solid " + (nsnResults[s.nsn] > 0 ? "rgba(61,214,140,.25)" : "rgba(245,158,11,.2)"), color: nsnResults[s.nsn] > 0 ? "#3dd68c" : "rgba(245,158,11,.8)" } },
-              fmtNSN(s.nsn) + " · " + (nsnResults[s.nsn] > 0 ? nsnResults[s.nsn] + " vendors" : "0 — try FSC fallback"),
+            h("div", { key: s.nsn, style: { fontFamily: "JetBrains Mono,monospace", fontSize: "8px", padding: "2px 7px", borderRadius: "3px", background: nsnResults[s.nsn] > 0 ? "rgba(61,214,140,.07)" : "rgba(245,158,11,.05)", border: "1px solid " + (nsnResults[s.nsn] > 0 ? "rgba(61,214,140,.2)" : "rgba(245,158,11,.15)"), color: nsnResults[s.nsn] > 0 ? "#3dd68c" : "rgba(245,158,11,.75)" } },
+              fmtNSN(s.nsn) + (nsnResults[s.nsn] > 0 ? " · " + nsnResults[s.nsn] : " · 0 → FSC"),
             )
           ),
         ),
       ),
 
-      // ── Pending Queue ──
+      // ── Queue ──
       h(PendingVendorQueue, { showToast }),
     );
   }
