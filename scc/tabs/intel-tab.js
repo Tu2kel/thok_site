@@ -70,15 +70,127 @@
     } catch { return null; }
   };
 
+  // ── VendorDrawer ───────────────────────────────────────────────────────
+
+  function VendorDrawer({ vendor: v, onClose, onApprove, onPipeline, onSkip, onReenrich, adding, enrichingSingle }) {
+    if (!v) return null;
+    const gold  = "rgba(201,168,76,";
+    const blue  = "rgba(56,189,248,";
+    const green = "rgba(61,214,140,";
+    const dim   = "var(--body-dim)";
+
+    const dibbsUrl = (sol) => "https://www.dibbs.bsm.dla.mil/Solicitations/RFQ/SolRFQDetail.aspx?sno=" + encodeURIComponent(sol);
+
+    const Section = ({ label, children }) => h("div", { style: { marginBottom: "20px" } },
+      h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".15em", textTransform: "uppercase", color: gold + ".5)", marginBottom: "8px", borderBottom: "1px solid rgba(255,255,255,.06)", paddingBottom: "4px" } }, label),
+      children,
+    );
+
+    const Field = ({ label, value, color }) => value ? h("div", { style: { display: "flex", gap: "8px", marginBottom: "4px" } },
+      h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".1em", textTransform: "uppercase", color: dim, minWidth: "52px", paddingTop: "1px" } }, label),
+      h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: color || "var(--alabaster)", wordBreak: "break-all" } }, value),
+    ) : null;
+
+    return h(React.Fragment, null,
+      h("div", { onClick: onClose, style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 1000 } }),
+      h("div", {
+        style: { position: "fixed", right: 0, top: 0, bottom: 0, width: "440px", background: "#0f1117", zIndex: 1001, overflowY: "auto", padding: "24px 28px", boxShadow: "-4px 0 32px rgba(0,0,0,.6)", borderLeft: "1px solid rgba(255,255,255,.08)" },
+      },
+        // header
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" } },
+          h("div", null,
+            h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "13px", color: "var(--alabaster)", fontWeight: 600, lineHeight: 1.3 } }, v.name),
+            h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: dim, marginTop: "4px", display: "flex", gap: "10px" } },
+              v.cage && h("span", null, "CAGE " + v.cage),
+              v.sam  && h("span", { style: { color: green + ".7)" } }, "SAM ✓"),
+              !v.sam && h("span", { style: { color: "var(--body-faint)" } }, "no SAM"),
+              v.isPrime && h("span", { style: { color: "rgba(245,158,11,.8)" } }, "⚠ possible prime"),
+            ),
+          ),
+          h("button", { onClick: onClose, style: { background: "transparent", border: "none", color: dim, fontSize: "18px", cursor: "pointer", padding: "0 4px", lineHeight: 1 } }, "×"),
+        ),
+
+        // contact
+        Section({ label: "Contact" },
+          h("div", null,
+            Field({ label: "Email",   value: v.email,   color: blue + ".85)" }),
+            Field({ label: "Phone",   value: v.phone,   color: blue + ".85)" }),
+            Field({ label: "Contact", value: v.contact, color: dim }),
+          ),
+        ),
+
+        // solicitations
+        (v.solRefs && v.solRefs.length > 0) && Section({ label: "Solicitations" },
+          h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+            v.solRefs.map((ref, ri) => h("div", { key: ri, style: { background: "rgba(245,158,11,.04)", border: "1px solid rgba(245,158,11,.12)", borderRadius: "4px", padding: "8px 10px" } },
+              h("a", {
+                href: dibbsUrl(ref.sol_number), target: "_blank", rel: "noopener",
+                style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: gold + ".9)", textDecoration: "none", display: "block", marginBottom: "3px", cursor: "pointer" },
+              }, "↗ " + ref.sol_number),
+              ref.item_name && h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: "var(--alabaster)" } }, ref.item_name),
+              h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: dim, marginTop: "2px", display: "flex", gap: "10px" } },
+                ref.qty       && h("span", null, ref.qty + " ea"),
+                ref.ext_price && h("span", { style: { color: gold + ".7)" } }, "$" + Number(ref.ext_price).toLocaleString() + " est"),
+              ),
+            )),
+          ),
+        ),
+
+        // fsc / nsn coverage
+        Section({ label: "Coverage" },
+          h("div", null,
+            (v.fsc  || []).length > 0 && Field({ label: "FSC",  value: v.fsc.join(", "),  color: gold + ".7)" }),
+            (v.nsns || []).length > 0 && Field({ label: "NSNs", value: v.nsns.join(", "), color: blue + ".6)" }),
+          ),
+        ),
+
+        // usaspending history
+        Section({ label: "Award History" },
+          h("div", null,
+            Field({ label: "Awards",   value: v.awards ? String(v.awards) : null, color: dim }),
+            Field({ label: "Smallest", value: v.smallestAward > 0 ? "$" + Math.round(v.smallestAward).toLocaleString() : null, color: gold + ".8)" }),
+            Field({ label: "Total",    value: v.totalAward   > 0 ? "$" + Math.round(v.totalAward).toLocaleString()   : null, color: dim }),
+            v.notes && h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "8px", color: "var(--body-faint)", marginTop: "6px", lineHeight: 1.5 } }, v.notes),
+          ),
+        ),
+
+        // actions
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" } },
+          h("button", {
+            onClick: () => onPipeline(v),
+            disabled: !!adding,
+            style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".08em", padding: "10px 16px", background: "rgba(56,189,248,.1)", border: "1px solid " + blue + ".4)", color: blue + ".95)", borderRadius: "4px", cursor: adding ? "wait" : "pointer", opacity: adding ? 0.6 : 1 },
+          }, adding === v.id ? "Adding…" : "→ Send to Pipeline"),
+          h("button", {
+            onClick: () => onApprove(v),
+            disabled: !!adding,
+            style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".08em", padding: "10px 16px", background: green + ".08)", border: "1px solid " + green + ".3)", color: "#3dd68c", borderRadius: "4px", cursor: adding ? "wait" : "pointer", opacity: adding ? 0.6 : 1 },
+          }, adding === v.id ? "Adding…" : "+ Add to DB"),
+          h("button", {
+            onClick: () => onReenrich(v),
+            disabled: enrichingSingle === v.id,
+            style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".08em", padding: "10px 16px", background: "transparent", border: "1px solid rgba(255,255,255,.12)", color: dim, borderRadius: "4px", cursor: "pointer" },
+          }, enrichingSingle === v.id ? "Looking up…" : "⟳ Re-enrich Contact"),
+          h("button", {
+            onClick: () => { onSkip(v.id); onClose(); },
+            style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".08em", padding: "10px 16px", background: "transparent", border: "1px solid rgba(255,255,255,.06)", color: "var(--body-faint)", borderRadius: "4px", cursor: "pointer" },
+          }, "Skip"),
+        ),
+      ),
+    );
+  }
+
   // ── PendingVendorQueue ─────────────────────────────────────────────────
 
   function PendingVendorQueue({ showToast }) {
     const [pending, setPending] = useState(() => {
       try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); } catch { return []; }
     });
-    const [adding, setAdding]       = useState(null);
-    const [enriching, setEnriching] = useState(false);
-    const [enrichProg, setEnrichProg] = useState("");
+    const [adding, setAdding]           = useState(null);
+    const [enriching, setEnriching]     = useState(false);
+    const [enrichProg, setEnrichProg]   = useState("");
+    const [drawer, setDrawer]           = useState(null);
+    const [enrichSingle, setEnrichSingle] = useState(null);
 
     if (!pending.length) return null;
 
@@ -123,6 +235,42 @@
       for (const v of safe) await approve(v);
     };
 
+    const pipeline = async (v) => {
+      setAdding(v.id);
+      try {
+        await window.SCC_DIST.distSave({
+          id: v.id, name: v.name, cage: v.cage || "", email: v.email || "",
+          phone: v.phone || "", fsc: v.fsc || [], known_nsns: v.nsns || [],
+          tags: [...(v.tags || ["usa-spending-verified"]), "pipeline"],
+          notes: v.notes || "",
+        });
+        await window.SCC_DIST.distReloadCache();
+        save(pending.filter(p => p.id !== v.id));
+        setDrawer(null);
+        showToast("→ Pipeline: " + v.name);
+      } catch (e) { alert("Pipeline failed: " + e.message); }
+      finally { setAdding(null); }
+    };
+
+    const reenrichOne = async (v) => {
+      setEnrichSingle(v.id);
+      try {
+        const res = await fetch("/.netlify/functions/scc-intel", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "samLookup", payload: { name: v.name } }),
+        });
+        const data = await res.json();
+        if (data.ok && data.result) {
+          const r = data.result;
+          const updated = pending.map(u => u.id !== v.id ? u : { ...u, email: r.email || u.email || "", phone: r.phone || u.phone || "", cage: r.cage || u.cage || "", contact: r.contact || u.contact || "", sam: true });
+          save(updated);
+          setDrawer(updated.find(u => u.id === v.id) || null);
+          showToast("Contact updated · " + v.name.slice(0, 24));
+        } else { showToast("No new contact found", true); }
+      } catch { showToast("Re-enrich failed", true); }
+      finally { setEnrichSingle(null); }
+    };
+
     const reenrich = async () => {
       const missing = pending.filter(v => !v.email);
       if (!missing.length) { showToast("All vendors have emails"); return; }
@@ -165,7 +313,18 @@
     const noEmailCount  = pending.filter(v => !v.email).length;
     const qBlue = "rgba(56,189,248,";
 
-    return h("div", {
+    return h(React.Fragment, null,
+      h(VendorDrawer, {
+        vendor: drawer,
+        onClose: () => setDrawer(null),
+        onApprove: async (v) => { await approve(v); setDrawer(null); },
+        onPipeline: pipeline,
+        onSkip: skip,
+        onReenrich: reenrichOne,
+        adding,
+        enrichingSingle: enrichSingle,
+      }),
+      h("div", {
       style: { border: "1px solid " + qBlue + ".2)", borderRadius: "6px", overflow: "hidden", marginTop: "24px" },
     },
       // header
@@ -210,7 +369,8 @@
           const isAdding = adding === v.id;
           return h("div", {
             key: v.id,
-            style: { display: "grid", gridTemplateColumns: "1fr 80px 110px 55px 90px 60px 60px", gap: "0 10px", padding: "7px 16px", borderBottom: "1px solid rgba(255,255,255,.03)", alignItems: "center", background: v.isPrime ? "rgba(245,158,11,.03)" : "transparent" },
+            onClick: (e) => { if (!e.target.closest("button")) setDrawer(v); },
+            style: { display: "grid", gridTemplateColumns: "1fr 80px 110px 55px 90px 60px 60px", gap: "0 10px", padding: "7px 16px", borderBottom: "1px solid rgba(255,255,255,.03)", alignItems: "center", background: v.isPrime ? "rgba(245,158,11,.03)" : "transparent", cursor: "pointer" },
           },
             h("div", null,
               h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: "var(--alabaster)", display: "flex", alignItems: "center", gap: "6px" } },
@@ -248,7 +408,7 @@
           );
         }),
       ),
-    );
+    )); // close queue div + Fragment
   }
 
   // ── Main IntelTab component ────────────────────────────────────────────
