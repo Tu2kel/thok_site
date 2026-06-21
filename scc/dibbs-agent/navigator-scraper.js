@@ -554,10 +554,11 @@ async function scrapeNavigatorBatch() {
 }
 
 // ── AN/MS 30-DAY SWEEP ────────────────────────────────────────────────────
-// One-time pass: searches Piece Part No = "AN" then "MS", last 30 days.
+// One-time pass: searches Piece Part No = "AN" then "MS".
+// dateRadioId: Main_rbDateRange_2 = Last 7 days, Main_rbDateRange_3 = Last 30 days
 // Triggered manually from the UI — not part of the daily batch.
-async function runPnPass(page, { pnPrefix, seen }) {
-  info(`\n── AN/MS SWEEP: Piece Part No "${pnPrefix}" — Last 30 days ──`);
+async function runPnPass(page, { pnPrefix, seen, dateRadioId = "Main_rbDateRange_3", dateLabel = "Last 30 days" }) {
+  info(`\n── AN/MS SWEEP: Piece Part No "${pnPrefix}" — ${dateLabel} ──`);
 
   await goToSearchPage(page);
   await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
@@ -571,9 +572,8 @@ async function runPnPass(page, { pnPrefix, seen }) {
   }
   info(`✅ Piece Part No set: ${pnPrefix}`);
 
-  // Last 30 days
-  await clickRadio(page, "#Main_rbDateRange_3");
-  info("✅ Date: Last 30 days");
+  await clickRadio(page, `#${dateRadioId}`);
+  info(`✅ Date: ${dateLabel}`);
 
   await setCommonFilters(page);
   info("✅ Common filters set");
@@ -646,21 +646,31 @@ async function scrapeAnMsSweep() {
 
     const seen = new Set();
 
-    // Pass AN
-    const anSols = await runPnPass(page, { pnPrefix: "AN", seen });
-    // Pass MS
-    const msSols = await runPnPass(page, { pnPrefix: "MS", seen });
+    // Pass AN + MS — Last 30 days
+    const anSols = await runPnPass(page, { pnPrefix: "AN", seen, dateRadioId: "Main_rbDateRange_3", dateLabel: "Last 30 days" });
+    const msSols = await runPnPass(page, { pnPrefix: "MS", seen, dateRadioId: "Main_rbDateRange_3", dateLabel: "Last 30 days" });
+
+    let allSols = [...anSols, ...msSols];
+    info(`   30-day total: ${allSols.length} sols`);
+
+    // If 30-day pull is under 100, rerun with last 7 days to catch recent activity
+    if (allSols.length < 100) {
+      info(`   < 100 sols from 30-day — running 7-day fallback pass...`);
+      const an7 = await runPnPass(page, { pnPrefix: "AN", seen, dateRadioId: "Main_rbDateRange_2", dateLabel: "Last 7 days" });
+      const ms7 = await runPnPass(page, { pnPrefix: "MS", seen, dateRadioId: "Main_rbDateRange_2", dateLabel: "Last 7 days" });
+      allSols = [...allSols, ...an7, ...ms7];
+      info(`   7-day fallback added ${an7.length + ms7.length} more · new total: ${allSols.length}`);
+    }
 
     await browser.close();
 
-    const allSols = [...anSols, ...msSols];
-    info(`\n✅ AN/MS SWEEP COMPLETE — AN: ${anSols.length} | MS: ${msSols.length} | Total: ${allSols.length}`);
+    info(`\n✅ AN/MS SWEEP COMPLETE — Total: ${allSols.length}`);
 
     const timestamp = new Date().toISOString().split("T")[0];
     const backupPath = path.join(CONFIG.backupDir, `navigator-anms-${timestamp}.json`);
     fs.writeFileSync(backupPath, JSON.stringify(allSols, null, 2));
 
-    return { ok: true, sols: allSols, count: allSols.length, an: anSols.length, ms: msSols.length, backupPath };
+    return { ok: true, sols: allSols, count: allSols.length, backupPath };
   } catch (e) {
     fail("AN/MS sweep failed:", e.message);
     if (browser) { try { await browser.close(); } catch (_) {} }
