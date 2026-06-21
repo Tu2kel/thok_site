@@ -647,20 +647,10 @@ async function scrapeAnMsSweep() {
     const seen = new Set();
 
     // Pass AN + MS — Last 30 days
-    const anSols = await runPnPass(page, { pnPrefix: "AN", seen, dateRadioId: "Main_rbDateRange_3", dateLabel: "Last 30 days" });
-    const msSols = await runPnPass(page, { pnPrefix: "MS", seen, dateRadioId: "Main_rbDateRange_3", dateLabel: "Last 30 days" });
+    const anSols = await runPnPass(page, { pnPrefix: "AN", seen });
+    const msSols = await runPnPass(page, { pnPrefix: "MS", seen });
 
-    let allSols = [...anSols, ...msSols];
-    info(`   30-day total: ${allSols.length} sols`);
-
-    // If 30-day pull is under 100, rerun with last 7 days to catch recent activity
-    if (allSols.length < 100) {
-      info(`   < 100 sols from 30-day — running 7-day fallback pass...`);
-      const an7 = await runPnPass(page, { pnPrefix: "AN", seen, dateRadioId: "Main_rbDateRange_2", dateLabel: "Last 7 days" });
-      const ms7 = await runPnPass(page, { pnPrefix: "MS", seen, dateRadioId: "Main_rbDateRange_2", dateLabel: "Last 7 days" });
-      allSols = [...allSols, ...an7, ...ms7];
-      info(`   7-day fallback added ${an7.length + ms7.length} more · new total: ${allSols.length}`);
-    }
+    const allSols = [...anSols, ...msSols];
 
     await browser.close();
 
