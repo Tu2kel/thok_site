@@ -251,12 +251,12 @@
   let history = [];
 
   const CHIPS = [
+    "NSNs with score ≥ 80",
+    "NSNs with score ≥ 90",
     "Pipeline status summary",
     "Which sols are due this week?",
-    "Which distributors have active bids?",
     "Show me all Awaiting Quotes sols",
     "Which FSC lanes have no distributors?",
-    "What did AFI bid on?",
   ];
 
   const msgBox = document.getElementById("scc-chat-messages");
@@ -413,6 +413,105 @@
     return parts.join("\n\n---\n\n");
   }
 
+  // ── Local query engine — answers data questions without Claude API ──
+  // Returns answer string if handled locally, null if Claude should handle it.
+  async function tryLocalQuery(q) {
+    const ql = q.toLowerCase();
+
+    // ── NSN Intel score query ──────────────────────────────────────────
+    const isScoreQ = ql.includes("score") || ql.includes("intel") || ql.includes("bid worthiness") || ql.includes("nsn");
+    const numMatch  = q.match(/(\d+)/);
+    if (isScoreQ && numMatch) {
+      const threshold = parseInt(numMatch[1], 10);
+      if (threshold >= 1 && threshold <= 100) {
+        // Harvest all scc_bws_* keys
+        const scores = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || !key.startsWith("scc_bws_")) continue;
+          try {
+            const e = JSON.parse(localStorage.getItem(key) || "null");
+            if (e && typeof e.score === "number") {
+              scores.push({ nsn: key.replace("scc_bws_", ""), score: e.score, label: e.label || "" });
+            }
+          } catch (_) {}
+        }
+        if (scores.length === 0) return null; // No cache yet — fall through to Claude
+
+        // Join with pipeline rows for item names
+        const nsnToItem = {};
+        try {
+          const rows = (await window.SCC_DB.dbGetAll()) || [];
+          for (const r of rows) {
+            if (r.nsn) nsnToItem[r.nsn.replace(/-/g, "")] = r.item_name || "";
+          }
+        } catch (_) {}
+
+        const matching = scores
+          .filter((s) => s.score >= threshold)
+          .sort((a, b) => b.score - a.score);
+
+        if (matching.length === 0) {
+          return (
+            "No NSNs in cache with Intel Score ≥ " + threshold + ".\n" +
+            "(Checked " + scores.length + " cached NSN" + (scores.length !== 1 ? "s" : "") + ". " +
+            "Open NSN Intel or Pipeline to build the cache.)"
+          );
+        }
+
+        const lines = matching.map((s) => {
+          const clean = s.nsn.replace(/-/g, "");
+          const item  = nsnToItem[clean] || nsnToItem[s.nsn] || "";
+          const fmt   = clean.length === 13
+            ? clean.replace(/(\d{4})(\d{2})(\d{3})(\d{4})/, "$1-$2-$3-$4")
+            : s.nsn;
+          return fmt + (item ? "  —  " + item : "") + "  ·  " + s.score + "/100  (" + s.label + ")";
+        });
+
+        return (
+          matching.length + " NSN" + (matching.length !== 1 ? "s" : "") +
+          " with Intel Score ≥ " + threshold +
+          " (out of " + scores.length + " cached):\n\n" +
+          lines.join("\n")
+        );
+      }
+    }
+
+    // ── Pipeline summary ───────────────────────────────────────────────
+    if (ql.includes("pipeline") && (ql.includes("summary") || ql.includes("status") || ql.match(/how many sol/))) {
+      try {
+        const rows = (await window.SCC_DB.dbGetAll()) || [];
+        if (rows.length === 0) return "Pipeline is empty.";
+        const byStatus = {};
+        for (const r of rows) byStatus[r.status || "Unknown"] = (byStatus[r.status || "Unknown"] || 0) + 1;
+        const statusLines = Object.entries(byStatus)
+          .sort((a, b) => b[1] - a[1])
+          .map(([s, c]) => c + "× " + s)
+          .join("  |  ");
+        return rows.length + " total sols in pipeline.\n" + statusLines;
+      } catch (_) {}
+    }
+
+    // ── Due this week / today ──────────────────────────────────────────
+    if (ql.includes("due") && (ql.includes("week") || ql.includes("today") || ql.includes("tomorrow") || ql.includes("soon"))) {
+      try {
+        const rows = (await window.SCC_DB.dbGetAll()) || [];
+        const now = Date.now();
+        const end = now + 7 * 24 * 60 * 60 * 1000;
+        const due = rows
+          .filter((r) => { const d = new Date(r.quote_due); return r.quote_due && d >= now && d <= end; })
+          .sort((a, b) => new Date(a.quote_due) - new Date(b.quote_due));
+        if (due.length === 0) return "No open sols due in the next 7 days.";
+        return (
+          due.length + " sol" + (due.length !== 1 ? "s" : "") + " due this week:\n\n" +
+          due.map((r) => r.quote_due + "  —  " + r.sol_number + "  |  " + (r.item_name || "?") + "  |  " + (r.status || "?")).join("\n")
+        );
+      } catch (_) {}
+    }
+
+    return null; // Let Claude handle it
+  }
+
   async function send() {
     const text = input.value.trim();
     if (!text || thinking) return;
@@ -426,6 +525,18 @@
     sendBtn.disabled = true;
 
     try {
+      // Try local data query first — no API credits needed
+      const localAnswer = await tryLocalQuery(text);
+      if (localAnswer) {
+        thinkingEl.remove();
+        addMsg("assistant", localAnswer);
+        history.push({ role: "assistant", content: localAnswer });
+        saveHistory();
+        thinking = false;
+        sendBtn.disabled = false;
+        return;
+      }
+
       const context = await buildContext();
 
       const systemPrompt = `You are the SCC Assistant for Imperio Federal Logistics (CAGE 152U4), an SDVOSB DLA DIBBS contractor run by Anthony Kelley.
@@ -456,7 +567,13 @@ ${context}`;
 
       if (!resp.ok) {
         const err = await resp.text();
-        addMsg("err", "API error " + resp.status + ": " + err.slice(0, 200));
+        let msg;
+        if (err.toLowerCase().includes("credit balance") || err.toLowerCase().includes("credit_balance")) {
+          msg = "Anthropic API credits depleted.\n\nFix: go to console.anthropic.com → Billing and add credits.\n\nNote: data queries (scores, pipeline status, due dates) still work without API credits — just ask those directly.";
+        } else {
+          msg = "API error " + resp.status + ": " + err.slice(0, 200);
+        }
+        addMsg("err", msg);
         history.pop();
         thinking = false;
         sendBtn.disabled = false;
