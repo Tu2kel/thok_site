@@ -461,44 +461,89 @@ Imperio Talent Solutions | CAGE 152U4<br>
           ),
 
         dtab === "supplier" &&
-          hP(
-            PFrag,
-            null,
-            hP(
-              "div",
-              {
-                className: "drawer-section-title",
-                style: {
-                  color: "var(--accent-blue)",
-                  borderColor: "rgba(126,184,247,.25)",
-                  fontSize: "13px",
+          hP(PFrag, null,
+            (() => {
+              const fld = (k, lbl, opts = {}) => hP("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+                hP("label", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".18em",
+                  textTransform: "uppercase", color: "rgba(245,240,232,.38)" } }, lbl),
+                hP("input", {
+                  className: "drawer-input",
+                  type: opts.type || "text",
+                  value: form[k] || "",
+                  placeholder: opts.ph || lbl,
+                  onChange: e => set(k, e.target.value),
+                  style: { fontSize: opts.size || "15px", width: "100%", boxSizing: "border-box",
+                    padding: "9px 12px", ...(opts.bold ? { fontWeight: "600" } : {}) },
+                }),
+              );
+
+              const hasQuote = !!(form.supplier_quote_price && parseFloat(form.supplier_quote_price) > 0);
+              const quotePx  = hasQuote ? parseFloat(form.supplier_quote_price) : 0;
+
+              return hP(PFrag, null,
+
+                // ── Contact card ──
+                hP("div", {
+                  style: { background: "rgba(56,189,248,.04)", border: "1px solid rgba(56,189,248,.18)",
+                    borderLeft: "3px solid rgba(56,189,248,.55)", borderRadius: "5px",
+                    padding: "18px 20px", marginBottom: "12px" }
                 },
-              },
-              "Supplier Intelligence",
-            ),
-            hP(
-              "div",
-              { className: "drawer-grid" },
-              inp("supplier_website", "Website"),
-              inp("supplier_phone", "Phone"),
-              inp("supplier_email", "Email"),
-              inp("supplier_poc", "Point of Contact"),
-              inp("supplier_quote_price", "Quote Price/ea ($)"),
-              inp("supplier_quote_date", "Quote Date (MM/DD/YY)"),
-              inp("supplier_quote_expires", "Quote Expires (MM/DD/YY)"),
-              inp("supplier_lead_time", "Lead Time (days)"),
-              inp("supplier_moq", "MOQ"),
-            ),
-            hP(
-              "button",
-              {
-                className: "btn btn-primary",
-                onClick: () => onSave(form),
-                style: { marginTop: "8px" },
-              },
-              hP("span", { className: "glint" }),
-              "Save Details",
-            ),
+                  hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".22em",
+                    textTransform: "uppercase", color: "rgba(56,189,248,.65)", marginBottom: "16px" } }, "Contact"),
+
+                  hP("div", { style: { marginBottom: "14px" } },
+                    fld("supplier_website", "Website", { ph: "https://" })
+                  ),
+                  hP("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" } },
+                    fld("supplier_phone", "Phone", { ph: "(xxx) xxx-xxxx" }),
+                    fld("supplier_email", "Email", { ph: "vendor@company.com" }),
+                  ),
+                  fld("supplier_poc", "Point of Contact", { ph: "Name / title" }),
+                ),
+
+                // ── Quote card ──
+                hP("div", {
+                  style: { background: "rgba(201,168,76,.04)", border: "1px solid rgba(201,168,76,.22)",
+                    borderLeft: "3px solid rgba(201,168,76,.65)", borderRadius: "5px",
+                    padding: "18px 20px", marginBottom: "14px" }
+                },
+                  hP("div", { style: { display: "flex", alignItems: "flex-start",
+                    justifyContent: "space-between", marginBottom: "16px" } },
+                    hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".22em",
+                      textTransform: "uppercase", color: "var(--gold-dim)" } }, "Quote"),
+                    hasQuote && hP("div", {
+                      style: { fontFamily: "JetBrains Mono,monospace", fontSize: "30px", fontWeight: "700",
+                        background: "linear-gradient(to bottom,#cf972d,#f9f295,#e0aa3e)",
+                        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                        lineHeight: 1, letterSpacing: "-.02em" }
+                    }, "$" + quotePx.toFixed(2) + " /ea"),
+                  ),
+
+                  hP("div", { style: { marginBottom: "16px" } },
+                    fld("supplier_quote_price", "Quote Price / EA ($)", { type: "number", ph: "0.00", size: "22px", bold: true })
+                  ),
+
+                  hP("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" } },
+                    fld("supplier_quote_date",    "Quote Date",  { ph: "MM/DD/YY" }),
+                    fld("supplier_quote_expires", "Expires",     { ph: "MM/DD/YY" }),
+                    fld("supplier_lead_time",     "Lead Time",   { ph: "5 days ARO" }),
+                  ),
+
+                  hP("div", { style: { maxWidth: "42%" } },
+                    fld("supplier_moq", "MOQ", { ph: "e.g. 10 EA" })
+                  ),
+                ),
+
+                hP("button", {
+                  className: "btn btn-primary",
+                  onClick: () => onSave(form),
+                  style: { marginTop: "4px" },
+                },
+                  hP("span", { className: "glint" }),
+                  "Save Details",
+                ),
+              );
+            })(),
           ),
 
         dtab === "bid" &&
