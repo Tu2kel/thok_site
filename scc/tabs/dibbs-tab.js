@@ -421,7 +421,10 @@
     const [anmsSweeping, setAnmsSweeping] = useState(false);
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
-    const [minValue, setMinValue] = useState(500); // dispatch value floor
+    const [minValue, setMinValue] = useState(500);   // dispatch value floor
+    const [minScore, setMinScore] = useState(30);    // hide Avoid-rated sols by default
+    const [bwsScores, setBwsScores] = useState({});  // nsn → { score, label, color }
+    const [bwsLoading, setBwsLoading] = useState(false);
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
     const [liveMode, setLiveMode] = useState(false); // always starts OFF — must be explicitly enabled each session
@@ -596,6 +599,8 @@
         verify.sort((a, b) => (b.ext_price || 0) - (a.ext_price || 0));
         setAnalysis({ go, verify, reject });
         setSelected(new Set(go.map((r) => r.sol_number)));
+        setBwsScores({});
+        autoScoreGO(go); // fire-and-forget — demotes OEM-locked sols as scores arrive
         addLog("AUTO ▶ " + go.length + " GO · " + verify.length + " VERIFY · " + reject.length + " REJECT", "ok");
 
         if (go.length === 0) {
@@ -823,6 +828,49 @@
       setRunning(false);
     }, [running, addLog]);
 
+    // ── AUTO NSN SCORE — runs after analysis, scores all GO NSNs in background ──
+    // Catches OEM lock-in, low demand, and sole-source signals that AMSC alone misses.
+    const autoScoreGO = useCallback(async (goSols) => {
+      const fetchFn = window.SCC_TABS && window.SCC_TABS.fetchAwardHistory;
+      const scoreFn = window.SCC_TABS && window.SCC_TABS.calcNSNScore;
+      if (!fetchFn || !scoreFn) return;
+
+      const nsns = [...new Set(goSols.map((s) => s.nsn).filter(Boolean))];
+      if (!nsns.length) return;
+
+      setBwsLoading(true);
+      const results = {};
+
+      await Promise.all(
+        nsns.map((nsn, i) =>
+          new Promise((res) =>
+            setTimeout(async () => {
+              try {
+                // Check localStorage cache first (6h TTL)
+                const cacheKey = "scc_bws_" + nsn.replace(/-/g, "");
+                const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+                const BWS_TTL = 6 * 60 * 60 * 1000;
+                if (cached && cached.score != null && Date.now() - cached.ts < BWS_TTL) {
+                  results[nsn] = { score: cached.score, label: cached.label, color: cached.color };
+                  setBwsScores((prev) => ({ ...prev, [nsn]: results[nsn] }));
+                  return res();
+                }
+                const { results: awards } = await fetchFn(nsn);
+                const s = scoreFn(awards, "");
+                const entry = { score: s.score, label: s.label, color: s.color };
+                results[nsn] = entry;
+                try { localStorage.setItem(cacheKey, JSON.stringify({ ...entry, ts: Date.now() })); } catch (_) {}
+                setBwsScores((prev) => ({ ...prev, [nsn]: entry }));
+              } catch (_) {}
+              res();
+            }, i * 160)
+          )
+        )
+      );
+
+      setBwsLoading(false);
+    }, []);
+
     // ── ANALYZE ───────────────────────────────────────────────────────
     const runAnalysis = useCallback(async () => {
       if (!sols.length || analyzing) return;
@@ -864,6 +912,8 @@
         setAnalysis({ go, verify, reject });
         setSelected(new Set(go.map((r) => r.sol_number)));
         setResultTab("GO");
+        setBwsScores({});
+        autoScoreGO(go); // fire-and-forget background scoring
         toast_(`Analysis complete — ${go.length} GO · ${verify.length} VERIFY · ${reject.length} REJECT`);
       } catch (e) {
         setAnalyzeErr(e.message);
@@ -2044,13 +2094,62 @@
                 }, label)
               ),
             ),
+            // Score loading indicator
+            bwsLoading && h("span", {
+              style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--gold-dim)", animation: "pulse 1s infinite" },
+            }, "⟳ scoring…"),
             h("span", {
               style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-faint)", marginLeft: "auto" },
             },
               (() => {
-                const hidden = analysis.go.filter((r) => (parseFloat(r.ext_price) || 0) < minValue).length;
-                return hidden > 0 ? hidden + " below floor hidden" : analysis.go.length + " sols";
+                const hiddenVal   = analysis.go.filter((r) => (parseFloat(r.ext_price) || 0) < minValue).length;
+                const hiddenScore = analysis.go.filter((r) => {
+                  const s = bwsScores[r.nsn] || bwsScores[(r.nsn||"").replace(/-/g,"")];
+                  return s && s.score < minScore;
+                }).length;
+                const parts = [];
+                if (hiddenVal   > 0) parts.push(hiddenVal   + " below $" + minValue.toLocaleString());
+                if (hiddenScore > 0) parts.push(hiddenScore + " Avoid-rated");
+                return parts.length ? parts.join(" · ") + " hidden" : analysis.go.length + " sols";
               })()
+            ),
+          ),
+
+          // Min score filter strip (GO tab only)
+          resultTab === "GO" && h("div", {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "6px 14px",
+              background: "rgba(231,76,60,.03)",
+              border: "1px solid rgba(231,76,60,.1)",
+              borderRadius: "4px",
+              marginBottom: "8px",
+              flexWrap: "wrap",
+            },
+          },
+            h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em", color: "rgba(232,116,116,.7)", textTransform: "uppercase" } }, "Min Score"),
+            h("div", { style: { display: "flex", gap: "4px" } },
+              ...[ [0,"All"], [30,"30+"], [50,"50+"], [70,"70+"] ].map(([v, label]) =>
+                h("button", {
+                  key: v,
+                  onClick: () => setMinScore(v),
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "9px",
+                    padding: "3px 8px",
+                    background: minScore === v ? "rgba(232,116,116,.18)" : "transparent",
+                    border: "1px solid " + (minScore === v ? "rgba(232,116,116,.45)" : "rgba(232,116,116,.15)"),
+                    borderRadius: "3px",
+                    color: minScore === v ? "#e87474" : "var(--body-dim)",
+                    cursor: "pointer",
+                  },
+                }, label)
+              ),
+            ),
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-faint)" } },
+              "hides Avoid/low-demand NSNs · scores load automatically after analysis"
             ),
           ),
 
@@ -2063,10 +2162,26 @@
                   ? analysis.verify
                   : analysis.reject
             );
-            // Apply value floor to GO tab only
-            const bucketRecs = (resultTab === "GO" && minValue > 0)
-              ? allBucket.filter((r) => (parseFloat(r.ext_price) || 0) >= minValue)
-              : allBucket;
+            // Apply value floor + score floor to GO tab, then sort: Avoid-rated sinks below passing rows
+            let bucketRecs = allBucket;
+            if (resultTab === "GO") {
+              if (minValue > 0) bucketRecs = bucketRecs.filter((r) => (parseFloat(r.ext_price) || 0) >= minValue);
+              if (minScore > 0) {
+                bucketRecs = bucketRecs.filter((r) => {
+                  const s = bwsScores[r.nsn] || bwsScores[(r.nsn||"").replace(/-/g,"")];
+                  return !s || s.score >= minScore; // keep unscored (still loading) + passing
+                });
+              }
+              // Sort: passing score first (by value), then unscored (still loading) at bottom
+              bucketRecs = [...bucketRecs].sort((a, b) => {
+                const sa = bwsScores[a.nsn] || bwsScores[(a.nsn||"").replace(/-/g,"")] || null;
+                const sb = bwsScores[b.nsn] || bwsScores[(b.nsn||"").replace(/-/g,"")] || null;
+                const aOk = !sa || sa.score >= 30;
+                const bOk = !sb || sb.score >= 30;
+                if (aOk !== bOk) return aOk ? -1 : 1;
+                return (parseFloat(b.ext_price) || 0) - (parseFloat(a.ext_price) || 0);
+              });
+            }
             const bucketColor =
               resultTab === "GO"
                 ? "var(--accent-green)"
@@ -2180,15 +2295,17 @@
                             },
                             rec.winProbabilityPct + "%",
                           ),
-                        // BWS Intel Score badge — reads from localStorage cache
+                        // BWS Intel Score badge — live state (updates as autoScoreGO completes)
                         (() => {
                           if (!rec.nsn) return null;
-                          const nsnKey = rec.nsn.replace(/-/g, "");
-                          let bws = null;
-                          try {
-                            bws = JSON.parse(localStorage.getItem("scc_bws_" + nsnKey) || "null") ||
-                                  JSON.parse(localStorage.getItem("scc_bws_" + rec.nsn) || "null");
-                          } catch (_) {}
+                          const nsnKey = (rec.nsn||"").replace(/-/g, "");
+                          // Live state first, localStorage fallback
+                          const bws = bwsScores[rec.nsn] || bwsScores[nsnKey] || (() => {
+                            try {
+                              return JSON.parse(localStorage.getItem("scc_bws_" + nsnKey) || "null") ||
+                                     JSON.parse(localStorage.getItem("scc_bws_" + rec.nsn) || "null");
+                            } catch (_) { return null; }
+                          })();
                           if (!bws || bws.score == null) return null;
                           const action = bws.score >= 70 ? "BID" : bws.score >= 45 ? "CHECK" : "SKIP";
                           return h("span", {
