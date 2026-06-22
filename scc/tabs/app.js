@@ -798,7 +798,7 @@
                 id: "tools",
                 label: "Tools",
                 tabs: [
-                  { id: "rolodex", label: "Rolodex", icon: "☎ " },
+                  { id: "rolodex", label: "NSN Intel", icon: "◈ " },
                   { id: "intake", label: "Intake", icon: "" },
                   { id: "esbd", label: "State/Fed", icon: "🏛 " },
                   { id: "archive", label: "Archive", icon: "⬇ " },
@@ -1140,7 +1140,7 @@
             : hA(
                 "div",
                 { style: { padding: "20px", color: "var(--body-dim)" } },
-                "Rolodex loading...",
+                "NSN Intel loading...",
               )),
 
         tab === "lanelookup" &&

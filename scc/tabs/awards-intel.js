@@ -1,23 +1,13 @@
 (function () {
   // ═══════════════════════════════════════════════════════════════════════
   //  IMPERIO SCC — AWARDS INTEL PANEL
-  //  USASpending.gov award history lookup per NSN/sol
-  //  Scores competition concentration, price anchors, OEM flags
-  //  Exposes: window.SCC_TABS.AwardsIntelPanel
+  //  USASpending.gov award history + 0-100 Bid Worthiness Score
+  //  Exposes: AwardsIntelPanel, BidWorthinessGauge, AwardsTable,
+  //           calcNSNScore, fetchAwardHistory
   // ═══════════════════════════════════════════════════════════════════════
 
   const { createElement: h, useState, useEffect, useRef } = React;
 
-  // ── OEM BLOCK LIST (manufacturer-controlled CAGEs — never dealer channel) ──
-  const OEM_BLOCK_CAGES = new Set([
-    "07482",
-    "062W0", // GE
-    "81SA7",
-    "R9004", // Falcom
-    "75Q65", // Oshkosh Defense (unrestricted direct bids)
-  ]);
-
-  // ── USASPENDING API ────────────────────────────────────────────────────
   const USA_SPENDING_URL =
     "https://api.usaspending.gov/api/v2/search/spending_by_award/";
 
@@ -35,10 +25,14 @@
     "Period of Performance Current End Date",
   ];
 
-  // FSC → PSC is a direct 1:1 mapping for DLA (FSC == PSC for supply items)
+  const OEM_NAMES = [
+    "OSHKOSH", "GENERAL ELECTRIC", "FALCOM", "BOEING",
+    "LOCKHEED", "RAYTHEON", "NORTHROP", "L3 TECH",
+    "BAE SYSTEMS", "HONEYWELL", "TEXTRON", "SIKORSKY",
+  ];
+
   function fscToPsc(nsn) {
-    const raw = nsn.replace(/-/g, "");
-    return raw.slice(0, 4); // first 4 digits = FSC = PSC
+    return nsn.replace(/-/g, "").slice(0, 4);
   }
 
   async function postAwards(body) {
@@ -49,16 +43,8 @@
     });
     if (!res.ok) {
       let errBody = "";
-      try {
-        errBody = await res.text();
-      } catch (_) {}
-      console.error("USASpending 4xx body:", errBody);
-      throw new Error(
-        "USASpending API returned " +
-          res.status +
-          " — " +
-          errBody.slice(0, 200),
-      );
+      try { errBody = await res.text(); } catch (_) {}
+      throw new Error("USASpending " + res.status + " — " + errBody.slice(0, 200));
     }
     const data = await res.json();
     return data.results || [];
@@ -67,7 +53,6 @@
   async function fetchAwardHistory(nsn) {
     if (!nsn) return { results: [], mode: "none" };
 
-    // ── Stage 1: NSN keyword search ──────────────────────────────────────
     const nsnDashed = nsn.includes("-")
       ? nsn
       : nsn.replace(/(\d{4})(\d{2})(\d{3})(\d{4})/, "$1-$2-$3-$4");
@@ -80,23 +65,18 @@
       },
       fields: AWARD_FIELDS,
       page: 1,
-      limit: 10,
+      limit: 15,
       sort: "Start Date",
       order: "desc",
     });
 
-    if (nsnResults.length > 0) {
-      return { results: nsnResults, mode: "nsn" };
-    }
+    if (nsnResults.length > 0) return { results: nsnResults, mode: "nsn" };
 
-    // ── Stage 2: PSC + DLA awarding agency fallback ──────────────────────
     const psc = fscToPsc(nsn);
     const pscResults = await postAwards({
       filters: {
         award_type_codes: ["A", "B", "C", "D"],
-        psc_codes: {
-          require: [["Product", psc]],
-        },
+        psc_codes: { require: [["Product", psc]] },
         time_period: [{ start_date: "2020-01-01", end_date: "2026-12-31" }],
       },
       fields: AWARD_FIELDS,
@@ -106,780 +86,617 @@
       order: "desc",
     });
 
-    return {
-      results: pscResults,
-      mode: pscResults.length > 0 ? "psc" : "none",
-    };
+    return { results: pscResults, mode: pscResults.length > 0 ? "psc" : "none" };
   }
 
-  // ── SCORING ENGINE ─────────────────────────────────────────────────────
-  function scoreAwards(awards, histPrice) {
-    if (!awards.length) {
+  // ── BID WORTHINESS SCORE (0-100) ────────────────────────────────────────
+  function calcNSNScore(awards, restriction) {
+    if (!awards || !awards.length) {
       return {
-        grade: "UNKNOWN",
-        color: "var(--body-faint)",
-        headline: "No award history found",
-        detail:
-          "This NSN has no prior contract awards in USASpending. No price anchor available — you set the baseline.",
-        priceAnchor: null,
-        concentration: null,
-        oemFlag: false,
-        setAsideTypes: [],
+        score: 0, color: "#e74c3c", label: "No Data",
+        reason: "No award history found in USASpending",
+        uniqueWinners: [], avgAward: 0, oemHit: false, hasRestriction: false,
       };
     }
 
-    // Unique awardees
-    const awardees = [
-      ...new Set(awards.map((a) => (a["Recipient Name"] || "").toUpperCase())),
+    const uniqueWinners = [
+      ...new Set(
+        awards.map(a => (a["Recipient Name"] || "").toUpperCase().trim()).filter(Boolean)
+      ),
     ];
-    const concentration =
-      awardees.length === 1
-        ? "sole"
-        : awardees.length <= 3
-          ? "concentrated"
-          : "competitive";
+    const amounts = awards.map(a => parseFloat(a["Award Amount"] || 0)).filter(v => v > 0);
+    const avgAward = amounts.length ? amounts.reduce((s, v) => s + v, 0) / amounts.length : 0;
+    const oemHit = uniqueWinners.some(n => OEM_NAMES.some(k => n.includes(k)));
+    const hasRestriction =
+      (restriction || "").toLowerCase().includes("approved source") ||
+      (restriction || "").toLowerCase().includes("source only") ||
+      (restriction || "").toLowerCase().includes("restricted");
 
-    // Price anchor — median of award amounts (unit price not returned by API, use award amount as proxy)
-    const amounts = awards
-      .map((a) => parseFloat(a["Award Amount"] || 0))
-      .filter((v) => v > 0);
-    const priceAnchor = amounts.length
-      ? amounts.reduce((s, v) => s + v, 0) / amounts.length
-      : null;
+    let score = 40;
 
-    // OEM flag
-    const oemFlag = false; // recipient_id CAGE extraction not reliable from this endpoint — flag manually via name check
-    const oemNameFlag = awardees.some((name) =>
-      [
-        "OSHKOSH",
-        "GENERAL ELECTRIC",
-        "FALCOM",
-        "BOEING",
-        "LOCKHEED",
-        "RAYTHEON",
-        "NORTHROP",
-        "L3 ",
-        "BAE SYSTEMS",
-      ].some((k) => name.includes(k)),
-    );
+    // Demand signal — how many times DLA has bought this
+    score += Math.min(25, awards.length * 4);
 
-    // Set-aside type signals from award type codes (description field)
-    const typeDescs = [
-      ...new Set(awards.map((a) => a["Award Type"] || "").filter(Boolean)),
-    ];
+    // Market openness — number of distinct winners = dealer channel health
+    if (uniqueWinners.length >= 4) score += 20;
+    else if (uniqueWinners.length === 3) score += 14;
+    else if (uniqueWinners.length === 2) score += 7;
 
-    // Grade
-    let grade, color, headline, detail;
+    // Value — is it worth the margin effort?
+    if (avgAward > 50000) score += 12;
+    else if (avgAward > 10000) score += 8;
+    else if (avgAward > 1000) score += 4;
 
-    if (oemNameFlag && concentration === "sole") {
-      grade = "BLOCK";
-      color = "var(--red)";
-      headline = "OEM-controlled — sole awardee is prime manufacturer";
-      detail =
-        "All prior awards went to a single OEM. No dealer channel visible. High probability of manufacturer-controlled NSN. Verify approved source list before sourcing.";
-    } else if (concentration === "sole") {
-      grade = "AMBER";
-      color: "var(--amber)";
-      color = "var(--amber)";
-      headline = "Single awardee — concentrated but may have dealer path";
-      detail =
-        "One company has won all prior awards. Check if they distribute through resellers or if this is a direct-manufacture NSN.";
-    } else if (concentration === "concentrated") {
-      grade = "GREEN";
-      color = "var(--accent-green)";
-      headline = "2-3 prior awardees — competitive, dealer path likely";
-      detail =
-        "Multiple companies have won this NSN before. Strong signal that the approved source list includes resellers.";
-    } else {
-      grade = "GREEN";
-      color = "var(--accent-green)";
-      headline = "Open competition — " + awardees.length + " prior awardees";
-      detail =
-        "Wide competition history. Approved source list is open. Source from any qualified distributor.";
-    }
+    // Penalties
+    if (uniqueWinners.length === 1 && oemHit) score -= 40;
+    else if (uniqueWinners.length === 1) score -= 18;
+    if (hasRestriction) score -= 15;
+    if (oemHit && uniqueWinners.length > 1) score -= 8;
 
-    // Price delta vs Hist.
-    let priceDelta = null;
-    if (priceAnchor && histPrice) {
-      priceDelta = ((histPrice - priceAnchor) / priceAnchor) * 100;
-    }
+    score = Math.min(100, Math.max(0, Math.round(score)));
 
-    return {
-      grade,
-      color,
-      headline,
-      detail,
-      priceAnchor,
-      concentration,
-      oemFlag: oemNameFlag,
-      setAsideTypes: typeDescs,
-      awardees,
-      priceDelta,
-    };
+    const color =
+      score >= 80 ? "#3dd68c" :
+      score >= 60 ? "#7eb8f7" :
+      score >= 40 ? "#f59e0b" :
+      score >= 20 ? "#e87474" : "#e74c3c";
+
+    const label =
+      score >= 80 ? "Strong Play" :
+      score >= 60 ? "Good Odds" :
+      score >= 40 ? "Possible" :
+      score >= 20 ? "Risky" : "Avoid";
+
+    const reason =
+      score >= 80 ? "Open market with active demand — bid it" :
+      score >= 60 ? "Competitive history, viable dealer channel" :
+      score >= 40 ? "Limited competition — assess approved-source restriction" :
+      score >= 20 ? "Concentrated or OEM-linked market — high risk" :
+      "Sole-source OEM or manufacturer-controlled — do not bid without CAGE";
+
+    return { score, color, label, reason, uniqueWinners, avgAward, oemHit, hasRestriction };
   }
 
-  // ── PANEL COMPONENT ────────────────────────────────────────────────────
+  // ── BID WORTHINESS GAUGE (SVG circular ring) ────────────────────────────
+  function BidWorthinessGauge({ score, size }) {
+    const sz = size || 100;
+    const radius = sz * 0.38;
+    const circ = 2 * Math.PI * radius;
+    const filled = (score / 100) * circ;
+    const cx = sz / 2;
+    const cy = sz / 2;
+    const sw = sz * 0.09;
+
+    const color =
+      score >= 80 ? "#3dd68c" :
+      score >= 60 ? "#7eb8f7" :
+      score >= 40 ? "#f59e0b" :
+      score >= 20 ? "#e87474" : "#e74c3c";
+
+    const label =
+      score >= 80 ? "Strong Play" :
+      score >= 60 ? "Good Odds" :
+      score >= 40 ? "Possible" :
+      score >= 20 ? "Risky" : "Avoid";
+
+    return h(
+      "div",
+      { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" } },
+      h(
+        "svg",
+        { width: sz, height: sz, viewBox: "0 0 " + sz + " " + sz, style: { overflow: "visible" } },
+        // track
+        h("circle", {
+          cx, cy, r: radius,
+          fill: "none",
+          stroke: "rgba(255,255,255,.07)",
+          strokeWidth: sw,
+        }),
+        // fill
+        h("circle", {
+          cx, cy, r: radius,
+          fill: "none",
+          stroke: color,
+          strokeWidth: sw,
+          strokeDasharray: circ,
+          strokeDashoffset: circ - filled,
+          strokeLinecap: "round",
+          transform: "rotate(-90 " + cx + " " + cy + ")",
+          style: { transition: "stroke-dashoffset .9s ease, stroke .4s ease" },
+        }),
+        // score number
+        h("text", {
+          x: cx, y: cy - sz * 0.04,
+          textAnchor: "middle",
+          dominantBaseline: "central",
+          fill: color,
+          fontFamily: "JetBrains Mono,monospace",
+          fontSize: sz * 0.22,
+          fontWeight: "700",
+        }, String(score)),
+        // /100 sub
+        h("text", {
+          x: cx, y: cy + sz * 0.23,
+          textAnchor: "middle",
+          dominantBaseline: "central",
+          fill: "rgba(245,240,232,.28)",
+          fontFamily: "Cinzel,serif",
+          fontSize: sz * 0.09,
+          letterSpacing: "0.08em",
+        }, "/100"),
+      ),
+      h("div", {
+        style: {
+          fontFamily: "Cinzel,serif",
+          fontSize: "8px",
+          letterSpacing: ".16em",
+          textTransform: "uppercase",
+          color,
+          textAlign: "center",
+        },
+      }, label),
+    );
+  }
+
+  // ── AWARDS TABLE (clean tabular layout) ─────────────────────────────────
+  function AwardsTable({ awards }) {
+    const fmt = n => "$" + Math.round(Number(n) || 0).toLocaleString();
+
+    if (!awards || !awards.length) {
+      return h("div", {
+        style: {
+          padding: "20px 16px",
+          fontFamily: "Cormorant Garamond,serif",
+          fontSize: "14px",
+          fontStyle: "italic",
+          color: "rgba(245,240,232,.38)",
+          textAlign: "center",
+        },
+      }, "No award history found in USASpending for this NSN.");
+    }
+
+    const thS = {
+      fontFamily: "Cinzel,serif",
+      fontSize: "8px",
+      letterSpacing: ".14em",
+      textTransform: "uppercase",
+      color: "rgba(245,240,232,.35)",
+      padding: "7px 10px",
+      borderBottom: "1px solid rgba(255,255,255,.06)",
+      textAlign: "left",
+      background: "rgba(255,255,255,.018)",
+      whiteSpace: "nowrap",
+    };
+    const tdS = {
+      fontFamily: "JetBrains Mono,monospace",
+      fontSize: "11px",
+      padding: "8px 10px",
+      borderBottom: "1px solid rgba(255,255,255,.04)",
+      verticalAlign: "top",
+    };
+
+    return h("div", {
+      style: { borderRadius: "6px", overflow: "hidden", border: "1px solid rgba(201,168,76,.15)" },
+    },
+      h("table", { style: { width: "100%", borderCollapse: "collapse" } },
+        h("thead", null,
+          h("tr", null,
+            h("th", { style: thS }, "Date"),
+            h("th", { style: thS }, "Award ID"),
+            h("th", { style: thS }, "Winner"),
+            h("th", { style: { ...thS, textAlign: "right" } }, "Amount"),
+            h("th", { style: thS }, "Type"),
+          ),
+        ),
+        h("tbody", null,
+          ...awards.slice(0, 14).map((a, i) => {
+            const amt = parseFloat(a["Award Amount"] || 0);
+            const date = (a["Start Date"] || "").slice(0, 7);
+            const rawName = a["Recipient Name"] || "—";
+            const winner = rawName.length > 32 ? rawName.slice(0, 32) + "…" : rawName;
+            const awardId = (a["Award ID"] || "—").slice(0, 18);
+            const type = a["Award Type"] || "—";
+            const rowBg = i % 2 === 0 ? "rgba(255,255,255,.013)" : "transparent";
+            return h("tr", { key: i, style: { background: rowBg } },
+              h("td", { style: { ...tdS, color: "rgba(245,240,232,.42)", fontSize: "10px" } }, date || "—"),
+              h("td", { style: { ...tdS, color: "rgba(201,168,76,.65)", fontSize: "10px" } }, awardId),
+              h("td", { style: { ...tdS, color: "rgba(245,240,232,.82)" } }, winner),
+              h("td", { style: { ...tdS, color: "#f59e0b", textAlign: "right", fontWeight: "600" } },
+                amt > 0 ? fmt(amt) : "—"),
+              h("td", { style: { ...tdS, color: "rgba(245,240,232,.32)", fontSize: "9px", letterSpacing: ".04em" } }, type),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  // ── AWARDS INTEL PANEL (pipeline drawer tab) ────────────────────────────
   function AwardsIntelPanel({ record }) {
-    const [status, setStatus] = useState("idle"); // idle | loading | done | error
+    const [status, setStatus] = useState("idle");
     const [awards, setAwards] = useState([]);
-    const [score, setScore] = useState(null);
+    const [nsnScore, setNsnScore] = useState(null);
     const [errorMsg, setErrorMsg] = useState("");
-    const [queryMode, setQueryMode] = useState(null); // "nsn" | "psc" | "none"
+    const [queryMode, setQueryMode] = useState(null);
     const fetchedNsn = useRef(null);
 
     const nsn = record.nsn || "";
     const fsc = record.fsc || nsn.replace(/-/g, "").slice(0, 4);
     const histPrice = parseFloat(record.unit_price) || null;
+    const restriction = record.supplier_restrictions || "";
 
     const runFetch = async () => {
       if (!nsn) return;
       setStatus("loading");
       setAwards([]);
-      setScore(null);
+      setNsnScore(null);
       setQueryMode(null);
       setErrorMsg("");
       try {
         const { results, mode } = await fetchAwardHistory(nsn);
         setAwards(results);
         setQueryMode(mode);
-        setScore(scoreAwards(results, histPrice));
+        setNsnScore(calcNSNScore(results, restriction));
         setStatus("done");
       } catch (e) {
         setErrorMsg(e.message);
         setStatus("error");
       }
     };
-    // Auto-fetch when panel mounts with an NSN
+
     useEffect(() => {
       if (!nsn || fetchedNsn.current === nsn) return;
       fetchedNsn.current = nsn;
       runFetch();
     }, [nsn]);
-    // ── styles ──
-    const S = {
-      mono: { fontFamily: "JetBrains Mono,monospace" },
-      cinzel: { fontFamily: "Cinzel,serif" },
-      cormorant: { fontFamily: "Cormorant Garamond,serif" },
-      label: {
-        fontFamily: "Cinzel,serif",
-        fontSize: "9px",
-        letterSpacing: ".18em",
-        textTransform: "uppercase",
-        color: "var(--gold-dim)",
-        marginBottom: "4px",
-        display: "block",
-      },
-      card: {
-        background: "var(--surface-inset, rgba(0,0,0,.25))",
-        border: "1px solid rgba(201,168,76,.12)",
-        padding: "12px 14px",
-        marginBottom: "8px",
-      },
-      row: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        gap: "8px",
-        flexWrap: "wrap",
-      },
-    };
 
-    // ── Loading state ──
+    // ── idle / loading ──
     if (status === "idle" || status === "loading") {
-      return h(
-        "div",
-        { style: { padding: "32px 0", textAlign: "center" } },
+      return h("div", { style: { padding: "40px 0", textAlign: "center" } },
         status === "loading"
-          ? h(
-              "div",
-              null,
+          ? h("div", null,
               h("div", {
                 style: {
-                  width: "32px",
-                  height: "32px",
-                  border: "2px solid rgba(201,168,76,.15)",
-                  borderTop: "2px solid var(--gold-solid, #C9A84C)",
+                  width: "36px", height: "36px",
+                  border: "2px solid rgba(201,168,76,.12)",
+                  borderTop: "2px solid #C9A84C",
                   borderRadius: "50%",
                   animation: "spin 0.8s linear infinite",
-                  margin: "0 auto 12px",
+                  margin: "0 auto 14px",
                 },
               }),
-              h(
-                "div",
-                {
-                  style: {
-                    ...S.cormorant,
-                    fontSize: "14px",
-                    color: "var(--body-faint)",
-                    fontStyle: "italic",
-                  },
+              h("div", {
+                style: {
+                  fontFamily: "Cormorant Garamond,serif",
+                  fontSize: "15px",
+                  color: "rgba(245,240,232,.42)",
+                  fontStyle: "italic",
                 },
-                "Querying USASpending.gov…",
-              ),
+              }, "Querying USASpending.gov…"),
             )
-          : h(
-              "div",
-              null,
-              h(
-                "div",
-                {
-                  style: {
-                    ...S.cinzel,
-                    fontSize: "13px",
-                    color: "var(--gold-dim)",
-                    marginBottom: "8px",
-                  },
-                },
-                "Awards Intel",
-              ),
-              h(
-                "div",
-                {
-                  style: {
-                    ...S.cormorant,
-                    fontSize: "14px",
-                    color: "var(--body-faint)",
-                    fontStyle: "italic",
-                    marginBottom: "20px",
-                  },
-                },
-                nsn ? "NSN " + nsn : "No NSN on this solicitation",
-              ),
-              nsn &&
-                h(
-                  "button",
-                  {
-                    onClick: runFetch,
-                    style: {
-                      background: "rgba(201,168,76,.1)",
-                      border: "1px solid rgba(201,168,76,.35)",
-                      color: "var(--gold-solid, #C9A84C)",
-                      fontFamily: "Cinzel,serif",
-                      fontSize: "9px",
-                      letterSpacing: ".2em",
-                      textTransform: "uppercase",
-                      padding: "10px 24px",
-                      cursor: "pointer",
-                    },
-                  },
-                  "⬡ Pull Award History",
-                ),
-            ),
-      );
-    }
-
-    // ── Error state ──
-    if (status === "error") {
-      return h(
-        "div",
-        { style: { padding: "20px 0" } },
-        h(
-          "div",
-          {
-            style: {
-              color: "var(--red)",
-              ...S.mono,
-              fontSize: "12px",
-              marginBottom: "12px",
-            },
-          },
-          "USASpending fetch failed: " + errorMsg,
-        ),
-        h(
-          "button",
-          {
-            onClick: runFetch,
-            style: {
-              background: "transparent",
-              border: "1px solid var(--border-subtle)",
-              color: "var(--body-dim)",
-              fontFamily: "Cinzel,serif",
-              fontSize: "9px",
-              letterSpacing: ".16em",
-              textTransform: "uppercase",
-              padding: "8px 16px",
-              cursor: "pointer",
-            },
-          },
-          "Retry",
-        ),
-      );
-    }
-
-    // ── Done state ──
-    return h(
-      "div",
-      { style: { animation: "fadeUp .4s ease both" } },
-
-      // ── Query mode indicator ──
-      queryMode &&
-        h(
-          "div",
-          {
-            style: {
-              fontFamily: "JetBrains Mono,monospace",
-              fontSize: "9px",
-              letterSpacing: ".14em",
-              textTransform: "uppercase",
-              color:
-                queryMode === "nsn"
-                  ? "var(--accent-green)"
-                  : queryMode === "psc"
-                    ? "var(--amber)"
-                    : "var(--body-faint)",
-              marginBottom: "10px",
-              opacity: 0.75,
-            },
-          },
-          queryMode === "nsn"
-            ? "● NSN match — exact history for " + nsn
-            : queryMode === "psc"
-              ? "◎ PSC fallback — FSC " +
-                fsc +
-                " lane (no NSN-specific history)"
-              : "○ No award history found in either pass",
-        ),
-
-      // ── Score badge ──
-      score &&
-        h(
-          "div",
-          {
-            style: {
-              padding: "16px 18px",
-              marginBottom: "16px",
-              background: "var(--surface-inset, rgba(0,0,0,.25))",
-              border: "1px solid " + (score.color || "rgba(201,168,76,.2)"),
-              borderLeft: "4px solid " + (score.color || "rgba(201,168,76,.4)"),
-            },
-          },
-          h(
-            "div",
-            { style: { ...S.row, marginBottom: "6px" } },
-            h(
-              "div",
-              {
+          : h("div", null,
+              h("div", {
                 style: {
-                  ...S.cinzel,
-                  fontSize: "11px",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "13px",
+                  color: "rgba(201,168,76,.55)",
+                  marginBottom: "10px",
+                  letterSpacing: ".1em",
+                },
+              }, nsn ? "NSN " + nsn : "No NSN on this solicitation"),
+              nsn && h("button", {
+                onClick: runFetch,
+                style: {
+                  background: "rgba(201,168,76,.08)",
+                  border: "1px solid rgba(201,168,76,.3)",
+                  color: "#C9A84C",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "9px",
                   letterSpacing: ".2em",
-                  color: score.color,
-                  fontWeight: "700",
+                  textTransform: "uppercase",
+                  padding: "11px 28px",
+                  cursor: "pointer",
+                  borderRadius: "3px",
                 },
-              },
-              "◆ " + score.grade + " — " + score.headline,
+              }, "⬡ Pull Award History"),
             ),
-            h(
-              "div",
-              {
-                style: {
-                  ...S.mono,
-                  fontSize: "10px",
-                  color: "var(--body-faint)",
-                  whiteSpace: "nowrap",
-                },
-              },
-              awards.length +
-                " award" +
-                (awards.length !== 1 ? "s" : "") +
-                " found",
-            ),
-          ),
-          h(
-            "div",
-            {
-              style: {
-                ...S.cormorant,
-                fontSize: "13.5px",
-                color: "var(--body-dim)",
-                fontStyle: "italic",
-                lineHeight: "1.6",
-              },
-            },
-            score.detail,
-          ),
+      );
+    }
 
-          // Price anchor vs Hist.
-          score.priceAnchor &&
-            h(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  gap: "24px",
-                  marginTop: "14px",
-                  paddingTop: "12px",
-                  borderTop: "1px solid rgba(201,168,76,.1)",
-                  flexWrap: "wrap",
-                },
-              },
-              h(
-                "div",
-                null,
-                h("span", { style: S.label }, "Avg Award Value"),
-                h(
-                  "span",
-                  {
-                    style: {
-                      ...S.mono,
-                      fontSize: "15px",
-                      color: "var(--amber)",
-                    },
-                  },
-                  "$" +
-                    score.priceAnchor.toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }),
-                ),
-              ),
-              histPrice &&
-                h(
-                  "div",
-                  null,
-                  h("span", { style: S.label }, "Hist. Unit Price"),
-                  h(
-                    "span",
-                    {
-                      style: {
-                        ...S.mono,
-                        fontSize: "15px",
-                        color: "var(--gold-solid, #C9A84C)",
-                      },
-                    },
-                    "$" + histPrice.toFixed(2),
-                  ),
-                ),
-              score.priceDelta !== null &&
-                h(
-                  "div",
-                  null,
-                  h("span", { style: S.label }, "Hist. vs Avg"),
-                  h(
-                    "span",
-                    {
-                      style: {
-                        ...S.mono,
-                        fontSize: "15px",
-                        color:
-                          score.priceDelta > 0
-                            ? "var(--accent-green)"
-                            : "var(--red)",
-                        fontWeight: "700",
-                      },
-                    },
-                    (score.priceDelta > 0 ? "+" : "") +
-                      score.priceDelta.toFixed(1) +
-                      "%",
-                  ),
-                ),
-              score.concentration &&
-                h(
-                  "div",
-                  null,
-                  h("span", { style: S.label }, "Competition"),
-                  h(
-                    "span",
-                    {
-                      style: {
-                        ...S.mono,
-                        fontSize: "12px",
-                        color:
-                          score.concentration === "competitive"
-                            ? "var(--accent-green)"
-                            : score.concentration === "concentrated"
-                              ? "var(--amber)"
-                              : "var(--red)",
-                        textTransform: "uppercase",
-                        letterSpacing: ".1em",
-                      },
-                    },
-                    score.concentration,
-                  ),
-                ),
-            ),
-
-          // Prior awardees list
-          score.awardees &&
-            score.awardees.length > 0 &&
-            h(
-              "div",
-              { style: { marginTop: "12px" } },
-              h("span", { style: S.label }, "Prior Awardees"),
-              h(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "6px",
-                    marginTop: "4px",
-                  },
-                },
-                ...score.awardees.map((name, i) => {
-                  const SA = window.SCC_SOURCE_ACTIONS || {};
-                  return h(
-                    "div",
-                    {
-                      key: i,
-                      style: {
-                        display: "inline-flex",
-                        alignItems: "center",
-                        background: "rgba(201,168,76,.08)",
-                        border: "1px solid rgba(201,168,76,.18)",
-                        gap: "0",
-                      },
-                    },
-                    h(
-                      "span",
-                      {
-                        style: {
-                          ...S.mono,
-                          fontSize: "10px",
-                          padding: "3px 8px",
-                          color: "var(--body-dim)",
-                        },
-                      },
-                      name,
-                    ),
-                    h(
-                      "button",
-                      {
-                        title: "SAM.gov entity lookup",
-                        onClick: () =>
-                          SA.searchAwardee && SA.searchAwardee(name),
-                        style: {
-                          background: "transparent",
-                          border: "none",
-                          borderLeft: "1px solid rgba(201,168,76,.18)",
-                          color: "var(--gold-dim)",
-                          fontFamily: "Cinzel,serif",
-                          fontSize: "8px",
-                          letterSpacing: ".1em",
-                          padding: "3px 6px",
-                          cursor: "pointer",
-                        },
-                      },
-                      "SAM",
-                    ),
-                    h(
-                      "button",
-                      {
-                        title: "USASpending award history",
-                        onClick: () =>
-                          SA.searchUSASpending && SA.searchUSASpending(name),
-                        style: {
-                          background: "transparent",
-                          border: "none",
-                          borderLeft: "1px solid rgba(201,168,76,.18)",
-                          color: "var(--body-faint)",
-                          fontFamily: "Cinzel,serif",
-                          fontSize: "8px",
-                          letterSpacing: ".1em",
-                          padding: "3px 6px",
-                          cursor: "pointer",
-                        },
-                      },
-                      "$",
-                    ),
-                  );
-                }),
-              ),
-            ),
-        ),
-
-      // ── Award history table ──
-      awards.length > 0 &&
-        h(
-          "div",
-          null,
-          h(
-            "div",
-            {
-              style: {
-                ...S.cinzel,
-                fontSize: "9px",
-                letterSpacing: ".2em",
-                textTransform: "uppercase",
-                color: "var(--gold-dim)",
-                marginBottom: "10px",
-                paddingBottom: "6px",
-                borderBottom: "1px solid rgba(201,168,76,.1)",
-              },
-            },
-            "◆ Award History",
-          ),
-          ...awards.map((award, i) =>
-            h(
-              "div",
-              { key: i, style: { ...S.card, marginBottom: "6px" } },
-              h(
-                "div",
-                { style: { ...S.row, marginBottom: "4px" } },
-                h(
-                  "div",
-                  {
-                    style: {
-                      ...S.mono,
-                      fontSize: "11px",
-                      color: "var(--alabaster)",
-                      fontWeight: "700",
-                      flex: "1",
-                    },
-                  },
-                  (award["Recipient Name"] || "Unknown").toUpperCase(),
-                ),
-                h(
-                  "div",
-                  {
-                    style: {
-                      ...S.mono,
-                      fontSize: "12px",
-                      color: "var(--amber)",
-                      whiteSpace: "nowrap",
-                    },
-                  },
-                  award["Award Amount"]
-                    ? "$" +
-                        parseFloat(award["Award Amount"]).toLocaleString(
-                          "en-US",
-                          {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          },
-                        )
-                    : "—",
-                ),
-              ),
-              h(
-                "div",
-                { style: { display: "flex", gap: "16px", flexWrap: "wrap" } },
-                h(
-                  "span",
-                  {
-                    style: {
-                      ...S.mono,
-                      fontSize: "10px",
-                      color: "var(--body-faint)",
-                    },
-                  },
-                  (award["Start Date"] || "").slice(0, 7),
-                ),
-                h(
-                  "span",
-                  {
-                    style: {
-                      ...S.mono,
-                      fontSize: "10px",
-                      color: "var(--body-faint)",
-                    },
-                  },
-                  award["Award Type"] || "",
-                ),
-                h(
-                  "span",
-                  {
-                    style: {
-                      ...S.mono,
-                      fontSize: "10px",
-                      color: "var(--body-faint)",
-                    },
-                  },
-                  award["Awarding Sub Agency"] ||
-                    award["Awarding Agency"] ||
-                    "",
-                ),
-              ),
-              award["Description"] &&
-                h(
-                  "div",
-                  {
-                    style: {
-                      ...S.cormorant,
-                      fontSize: "12px",
-                      color: "var(--body-faint)",
-                      fontStyle: "italic",
-                      marginTop: "4px",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    },
-                  },
-                  award["Description"],
-                ),
-            ),
-          ),
-        ),
-
-      // No results
-      awards.length === 0 &&
-        h(
-          "div",
-          {
-            style: {
-              ...S.card,
-              textAlign: "center",
-              padding: "24px",
-            },
+    // ── error ──
+    if (status === "error") {
+      return h("div", { style: { padding: "20px 0" } },
+        h("div", {
+          style: {
+            color: "#e74c3c",
+            fontFamily: "JetBrains Mono,monospace",
+            fontSize: "12px",
+            marginBottom: "14px",
           },
-          h(
-            "div",
-            {
-              style: {
-                ...S.cinzel,
-                fontSize: "11px",
-                color: "var(--gold-dim)",
-                marginBottom: "8px",
-              },
-            },
-            "No Awards Found",
-          ),
-          h(
-            "div",
-            {
-              style: {
-                ...S.cormorant,
-                fontSize: "14px",
-                color: "var(--body-faint)",
-                fontStyle: "italic",
-              },
-            },
-            "NSN " +
-              nsn +
-              " has no contract history in USASpending. This is either a new NSN or awards are not yet reported. No price anchor — you set the baseline.",
-          ),
-        ),
+        }, "USASpending fetch failed: " + errorMsg),
+        h("button", {
+          onClick: runFetch,
+          style: {
+            background: "transparent",
+            border: "1px solid rgba(245,240,232,.15)",
+            color: "rgba(245,240,232,.5)",
+            fontFamily: "Cinzel,serif",
+            fontSize: "9px",
+            letterSpacing: ".16em",
+            textTransform: "uppercase",
+            padding: "8px 16px",
+            cursor: "pointer",
+          },
+        }, "Retry"),
+      );
+    }
 
-      // Refresh button
-      h(
-        "div",
-        { style: { marginTop: "16px" } },
-        h(
-          "button",
-          {
-            onClick: () => {
-              fetchedNsn.current = null;
-              runFetch();
-            },
+    // ── done ──
+    const scoreColor = nsnScore ? nsnScore.color : "rgba(201,168,76,.4)";
+    const uniqueWinners = nsnScore ? nsnScore.uniqueWinners : [];
+    const avgAward = nsnScore ? nsnScore.avgAward : 0;
+    const fmt = n => "$" + Math.round(Number(n) || 0).toLocaleString();
+
+    return h("div", { style: { animation: "fadeUp .4s ease both" } },
+
+      // ── Bid Worthiness header card ──
+      h("div", {
+        style: {
+          display: "flex",
+          gap: "22px",
+          alignItems: "flex-start",
+          padding: "20px",
+          marginBottom: "18px",
+          background: "#201f2d",
+          border: "1px solid rgba(201,168,76,.18)",
+          borderTop: "2px solid " + scoreColor,
+          borderRadius: "6px",
+          boxShadow: "0 8px 32px rgba(0,0,0,.55)",
+        },
+      },
+        nsnScore && h(BidWorthinessGauge, { score: nsnScore.score, size: 88 }),
+        h("div", { style: { flex: 1, minWidth: 0 } },
+          h("div", {
             style: {
-              background: "transparent",
-              border: "1px solid rgba(201,168,76,.2)",
-              color: "var(--body-faint)",
               fontFamily: "Cinzel,serif",
               fontSize: "9px",
-              letterSpacing: ".14em",
+              letterSpacing: ".18em",
               textTransform: "uppercase",
-              padding: "6px 14px",
-              cursor: "pointer",
+              color: "rgba(201,168,76,.45)",
+              marginBottom: "7px",
             },
-          },
-          "↻ Refresh",
+          }, "Bid Worthiness — " + nsn),
+          nsnScore && h("div", {
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "15px",
+              color: nsnScore.color,
+              letterSpacing: ".04em",
+              marginBottom: "5px",
+            },
+          }, nsnScore.label),
+          nsnScore && h("div", {
+            style: {
+              fontFamily: "Cormorant Garamond,serif",
+              fontSize: "13.5px",
+              color: "rgba(245,240,232,.52)",
+              fontStyle: "italic",
+              lineHeight: 1.55,
+              marginBottom: "14px",
+            },
+          }, nsnScore.reason),
+
+          // stat row
+          h("div", { style: { display: "flex", gap: "22px", flexWrap: "wrap" } },
+            avgAward > 0 && h("div", null,
+              h("div", {
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "8px",
+                  letterSpacing: ".14em", textTransform: "uppercase",
+                  color: "rgba(245,240,232,.32)", marginBottom: "3px",
+                },
+              }, "Avg Award"),
+              h("div", {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "16px", color: "#f59e0b", fontWeight: "600",
+                },
+              }, fmt(avgAward)),
+            ),
+            histPrice && h("div", null,
+              h("div", {
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "8px",
+                  letterSpacing: ".14em", textTransform: "uppercase",
+                  color: "rgba(245,240,232,.32)", marginBottom: "3px",
+                },
+              }, "Gov Price"),
+              h("div", {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "16px", color: "#C9A84C", fontWeight: "600",
+                },
+              }, "$" + histPrice.toFixed(2)),
+            ),
+            histPrice && avgAward > 0 && h("div", null,
+              h("div", {
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "8px",
+                  letterSpacing: ".14em", textTransform: "uppercase",
+                  color: "rgba(245,240,232,.32)", marginBottom: "3px",
+                },
+              }, "vs Avg"),
+              h("div", {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "16px", fontWeight: "600",
+                  color: histPrice > avgAward ? "#e87474" : "#3dd68c",
+                },
+              }, (((histPrice - avgAward) / avgAward) * 100 > 0 ? "+" : "") +
+                 (((histPrice - avgAward) / avgAward) * 100).toFixed(1) + "%"),
+            ),
+            uniqueWinners.length > 0 && h("div", null,
+              h("div", {
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "8px",
+                  letterSpacing: ".14em", textTransform: "uppercase",
+                  color: "rgba(245,240,232,.32)", marginBottom: "3px",
+                },
+              }, "Winners"),
+              h("div", {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "16px", fontWeight: "600",
+                  color: uniqueWinners.length >= 3 ? "#3dd68c" :
+                         uniqueWinners.length >= 2 ? "#7eb8f7" : "#e87474",
+                },
+              }, String(uniqueWinners.length)),
+            ),
+            h("div", null,
+              h("div", {
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "8px",
+                  letterSpacing: ".14em", textTransform: "uppercase",
+                  color: "rgba(245,240,232,.32)", marginBottom: "3px",
+                },
+              }, "Awards"),
+              h("div", {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "16px", color: "rgba(245,240,232,.65)", fontWeight: "600",
+                },
+              }, String(awards.length)),
+            ),
+          ),
         ),
       ),
+
+      // ── Query mode indicator ──
+      queryMode && h("div", {
+        style: {
+          fontFamily: "JetBrains Mono,monospace",
+          fontSize: "9px",
+          letterSpacing: ".12em",
+          textTransform: "uppercase",
+          color: queryMode === "nsn" ? "#3dd68c" : queryMode === "psc" ? "#f59e0b" : "rgba(245,240,232,.3)",
+          marginBottom: "16px",
+          opacity: 0.8,
+        },
+      },
+        queryMode === "nsn"
+          ? "● Exact NSN match — " + nsn
+          : queryMode === "psc"
+            ? "◎ PSC fallback — FSC " + fsc + " lane (no NSN-specific history)"
+            : "○ No award history found",
+      ),
+
+      // ── Prior Awardees ──
+      uniqueWinners.length > 0 && h("div", { style: { marginBottom: "18px" } },
+        h("div", {
+          style: {
+            fontFamily: "Cinzel,serif",
+            fontSize: "9px",
+            letterSpacing: ".18em",
+            textTransform: "uppercase",
+            color: "rgba(201,168,76,.52)",
+            marginBottom: "10px",
+          },
+        }, "Prior Awardees — Who's Been Winning"),
+        h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } },
+          ...uniqueWinners.map((name, i) => {
+            const SA = window.SCC_SOURCE_ACTIONS || {};
+            return h("div", {
+              key: i,
+              style: {
+                display: "inline-flex",
+                alignItems: "center",
+                background: "rgba(201,168,76,.06)",
+                border: "1px solid rgba(201,168,76,.2)",
+                borderRadius: "3px",
+              },
+            },
+              h("span", {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "10px",
+                  padding: "4px 8px",
+                  color: "rgba(245,240,232,.8)",
+                },
+              }, name),
+              h("button", {
+                title: "SAM.gov entity lookup",
+                onClick: () => SA.searchAwardee && SA.searchAwardee(name),
+                style: {
+                  background: "transparent",
+                  border: "none",
+                  borderLeft: "1px solid rgba(201,168,76,.15)",
+                  color: "rgba(201,168,76,.55)",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".1em",
+                  padding: "4px 7px",
+                  cursor: "pointer",
+                },
+              }, "SAM"),
+              h("button", {
+                title: "USASpending award history",
+                onClick: () => SA.searchUSASpending && SA.searchUSASpending(name),
+                style: {
+                  background: "transparent",
+                  border: "none",
+                  borderLeft: "1px solid rgba(201,168,76,.15)",
+                  color: "rgba(245,240,232,.3)",
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "8px",
+                  letterSpacing: ".1em",
+                  padding: "4px 7px",
+                  cursor: "pointer",
+                },
+              }, "$"),
+            );
+          }),
+        ),
+      ),
+
+      // ── Procurement History Table ──
+      h("div", { style: { marginBottom: "18px" } },
+        h("div", {
+          style: {
+            fontFamily: "Cinzel,serif",
+            fontSize: "9px",
+            letterSpacing: ".18em",
+            textTransform: "uppercase",
+            color: "rgba(201,168,76,.52)",
+            marginBottom: "10px",
+          },
+        }, "Procurement History"),
+        h(AwardsTable, { awards }),
+      ),
+
+      // ── Refresh ──
+      h("button", {
+        onClick: () => { fetchedNsn.current = null; runFetch(); },
+        style: {
+          background: "transparent",
+          border: "1px solid rgba(201,168,76,.15)",
+          color: "rgba(245,240,232,.35)",
+          fontFamily: "Cinzel,serif",
+          fontSize: "9px",
+          letterSpacing: ".14em",
+          textTransform: "uppercase",
+          padding: "6px 14px",
+          cursor: "pointer",
+          borderRadius: "3px",
+        },
+      }, "↻ Refresh"),
     );
   }
 
   // ── Expose ──
   window.SCC_TABS = window.SCC_TABS || {};
   window.SCC_TABS.AwardsIntelPanel = AwardsIntelPanel;
+  window.SCC_TABS.BidWorthinessGauge = BidWorthinessGauge;
+  window.SCC_TABS.AwardsTable = AwardsTable;
+  window.SCC_TABS.calcNSNScore = calcNSNScore;
+  window.SCC_TABS.fetchAwardHistory = fetchAwardHistory;
 })();
