@@ -113,7 +113,7 @@
 
   const labelStyle = {
     fontFamily: "Cinzel,serif",
-    fontSize: "9px",
+    fontSize: "14px",
     letterSpacing: ".14em",
     textTransform: "uppercase",
     color: "var(--body-faint)",
@@ -125,7 +125,7 @@
       {
         style: {
           fontFamily: "Cinzel,serif",
-          fontSize: "9px",
+          fontSize: "14px",
           letterSpacing: ".18em",
           textTransform: "uppercase",
           color: "var(--gold-dim)",
@@ -146,7 +146,7 @@
         style: {
           padding: "2px 9px",
           borderRadius: "99px",
-          fontSize: "9px",
+          fontSize: "14px",
           fontFamily: "Cinzel,serif",
           letterSpacing: ".08em",
           background: color + "16",
@@ -185,7 +185,7 @@
           {
             style: {
               fontFamily: "JetBrains Mono,monospace",
-              fontSize: "24px",
+              fontSize: "29px",
               fontWeight: "700",
               color,
               lineHeight: 1,
@@ -200,7 +200,7 @@
               style: {
                 fontFamily: "Cormorant Garamond,serif",
                 fontStyle: "italic",
-                fontSize: "11px",
+                fontSize: "16px",
                 color: "var(--body-faint)",
                 marginTop: "5px",
               },
@@ -275,7 +275,7 @@
           {
             style: {
               fontFamily: "Cinzel,serif",
-              fontSize: "7px",
+              fontSize: "12px",
               letterSpacing: ".15em",
               textTransform: "uppercase",
               color: "var(--gold-dim)",
@@ -299,7 +299,7 @@
               {
                 style: {
                   fontFamily: "Cinzel,serif",
-                  fontSize: "7px",
+                  fontSize: "12px",
                   letterSpacing: ".1em",
                   textTransform: "uppercase",
                   color: "var(--body-faint)",
@@ -314,7 +314,7 @@
               {
                 style: {
                   fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "10px",
+                  fontSize: "15px",
                   color: color || "var(--alabaster)",
                   wordBreak: "break-all",
                 },
@@ -350,7 +350,7 @@
           disabled,
           style: {
             fontFamily: "Cinzel,serif",
-            fontSize: "8px",
+            fontSize: "13px",
             letterSpacing: ".1em",
             textTransform: "uppercase",
             padding: "10px 16px",
@@ -415,7 +415,7 @@
               {
                 style: {
                   fontFamily: "Cinzel,serif",
-                  fontSize: "14px",
+                  fontSize: "19px",
                   letterSpacing: ".06em",
                   color: "var(--gold-solid)",
                   lineHeight: 1.3,
@@ -429,7 +429,7 @@
                 style: {
                   fontFamily: "Cormorant Garamond,serif",
                   fontStyle: "italic",
-                  fontSize: "12px",
+                  fontSize: "17px",
                   color: "var(--gold-dim)",
                   marginTop: "4px",
                   display: "flex",
@@ -452,7 +452,7 @@
                 background: "transparent",
                 border: "none",
                 color: "var(--body-faint)",
-                fontSize: "20px",
+                fontSize: "25px",
                 cursor: "pointer",
                 lineHeight: 1,
                 paddingTop: "2px",
@@ -510,7 +510,7 @@
                       rel: "noopener",
                       style: {
                         fontFamily: "Cinzel,serif",
-                        fontSize: "8px",
+                        fontSize: "13px",
                         letterSpacing: ".08em",
                         color: "var(--gold-solid)",
                         textDecoration: "none",
@@ -526,7 +526,7 @@
                       {
                         style: {
                           fontFamily: "Cormorant Garamond,serif",
-                          fontSize: "13px",
+                          fontSize: "18px",
                           color: "var(--alabaster)",
                           marginBottom: "4px",
                         },
@@ -538,7 +538,7 @@
                     {
                       style: {
                         fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "9px",
+                        fontSize: "14px",
                         color: "var(--body-dim)",
                         display: "flex",
                         gap: "12px",
@@ -607,7 +607,7 @@
                 {
                   style: {
                     fontFamily: "JetBrains Mono,monospace",
-                    fontSize: "8px",
+                    fontSize: "13px",
                     color: "var(--body-faint)",
                     marginTop: "8px",
                     lineHeight: 1.6,
@@ -733,7 +733,7 @@
               display: "flex",
               gap: "10px",
               fontFamily: "JetBrains Mono,monospace",
-              fontSize: "9px",
+              fontSize: "14px",
               color: v.email ? "rgba(56,189,248,.78)" : "var(--body-faint)",
             },
           },
@@ -762,7 +762,7 @@
           {
             style: {
               fontFamily: "JetBrains Mono,monospace",
-              fontSize: "13px",
+              fontSize: "18px",
               fontWeight: "700",
               color:
                 v.totalAward > 0 ? "var(--gold-solid)" : "var(--body-faint)",
@@ -775,7 +775,7 @@
           {
             style: {
               fontFamily: "Cinzel,serif",
-              fontSize: "7px",
+              fontSize: "12px",
               letterSpacing: ".08em",
               textTransform: "uppercase",
               color: "var(--body-faint)",
@@ -801,7 +801,7 @@
             disabled: isAdding,
             style: {
               fontFamily: "Cinzel,serif",
-              fontSize: "8px",
+              fontSize: "13px",
               letterSpacing: ".08em",
               padding: "5px 11px",
               background: "rgba(61,214,140,.08)",
@@ -821,7 +821,7 @@
             onClick: () => onSkip(v.id),
             style: {
               fontFamily: "Cinzel,serif",
-              fontSize: "8px",
+              fontSize: "13px",
               letterSpacing: ".06em",
               padding: "5px 9px",
               background: "transparent",
@@ -846,6 +846,14 @@
     const [enrichProg, setEnrichProg] = useState("");
     const [drawer, setDrawer] = useState(null);
     const [enrichSingle, setEnrichSingle] = useState(null);
+    const [openKeys, setOpenKeys] = useState(() => new Set()); // empty = all collapsed by default
+
+    const toggleGroup = (key) =>
+      setOpenKeys((prev) => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+      });
 
     const save = (updated) => {
       localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
@@ -1053,7 +1061,7 @@
           {
             style: {
               fontFamily: "Cinzel,serif",
-              fontSize: "12px",
+              fontSize: "17px",
               letterSpacing: ".1em",
               color: "var(--gold-dim)",
               marginBottom: "6px",
@@ -1067,7 +1075,7 @@
             style: {
               fontFamily: "Cormorant Garamond,serif",
               fontStyle: "italic",
-              fontSize: "13px",
+              fontSize: "18px",
               color: "var(--body-faint)",
             },
           },
@@ -1173,6 +1181,57 @@
               flexWrap: "wrap",
             },
           },
+          h(
+            "div",
+            {
+              style: {
+                display: "flex",
+                gap: "0",
+                border: "1px solid rgba(201,168,76,.2)",
+                borderRadius: "3px",
+                overflow: "hidden",
+              },
+            },
+            h(
+              "button",
+              {
+                onClick: () => setOpenKeys(new Set()),
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "13px",
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  padding: "6px 12px",
+                  background: "transparent",
+                  border: "none",
+                  borderRight: "1px solid rgba(201,168,76,.2)",
+                  color: "var(--body-dim)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                },
+              },
+              "▸ Collapse All",
+            ),
+            h(
+              "button",
+              {
+                onClick: () => setOpenKeys(new Set(groupArr.map((g) => g.key))),
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "13px",
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  padding: "6px 12px",
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--gold-dim)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                },
+              },
+              "▾ Expand All",
+            ),
+          ),
           missingEmail > 0 &&
             h(
               "button",
@@ -1181,7 +1240,7 @@
                 disabled: enriching,
                 style: {
                   fontFamily: "Cinzel,serif",
-                  fontSize: "8px",
+                  fontSize: "13px",
                   letterSpacing: ".08em",
                   textTransform: "uppercase",
                   padding: "6px 12px",
@@ -1204,7 +1263,7 @@
                 onClick: approveAll,
                 style: {
                   fontFamily: "Cinzel,serif",
-                  fontSize: "8px",
+                  fontSize: "13px",
                   letterSpacing: ".08em",
                   textTransform: "uppercase",
                   padding: "6px 12px",
@@ -1224,7 +1283,7 @@
               onClick: clearAll,
               style: {
                 fontFamily: "Cinzel,serif",
-                fontSize: "8px",
+                fontSize: "13px",
                 letterSpacing: ".06em",
                 textTransform: "uppercase",
                 padding: "6px 10px",
@@ -1252,6 +1311,8 @@
             onOpen: setDrawer,
             onApprove: approve,
             onSkip: skip,
+            isOpen: openKeys.has(g.key),
+            onToggle: toggleGroup,
           }),
         ),
       ),
@@ -1260,8 +1321,15 @@
 
   // ── SolGroup — collapsible block of vendors tied to one sol/NSN ───────
 
-  function SolGroup({ g, adding, onOpen, onApprove, onSkip }) {
-    const [open, setOpen] = useState(true);
+  function SolGroup({
+    g,
+    adding,
+    onOpen,
+    onApprove,
+    onSkip,
+    isOpen,
+    onToggle,
+  }) {
     const dibbsUrl = g.sol_number
       ? "https://www.dibbs.bsm.dla.mil/Solicitations/RFQ/SolRFQDetail.aspx?sno=" +
         encodeURIComponent(g.sol_number)
@@ -1281,7 +1349,7 @@
       h(
         "div",
         {
-          onClick: () => setOpen((o) => !o),
+          onClick: () => onToggle(g.key),
           style: {
             display: "flex",
             justifyContent: "space-between",
@@ -1307,11 +1375,11 @@
             {
               style: {
                 fontFamily: "Cinzel,serif",
-                fontSize: "9px",
+                fontSize: "14px",
                 color: "var(--body-faint)",
               },
             },
-            open ? "▾" : "▸",
+            isOpen ? "▾" : "▸",
           ),
           h(
             "div",
@@ -1336,7 +1404,7 @@
                       onClick: (e) => e.stopPropagation(),
                       style: {
                         fontFamily: "Cinzel,serif",
-                        fontSize: "12px",
+                        fontSize: "17px",
                         letterSpacing: ".04em",
                         color: "var(--gold-solid)",
                         textDecoration: "none",
@@ -1349,7 +1417,7 @@
                     {
                       style: {
                         fontFamily: "Cinzel,serif",
-                        fontSize: "12px",
+                        fontSize: "17px",
                         letterSpacing: ".04em",
                         color: "var(--gold-solid)",
                       },
@@ -1363,7 +1431,7 @@
                   {
                     style: {
                       fontFamily: "JetBrains Mono,monospace",
-                      fontSize: "9px",
+                      fontSize: "14px",
                       color: "rgba(56,189,248,.6)",
                     },
                   },
@@ -1379,7 +1447,7 @@
                   style: {
                     fontFamily: "Cormorant Garamond,serif",
                     fontStyle: "italic",
-                    fontSize: "12px",
+                    fontSize: "17px",
                     color: "var(--body-faint)",
                     marginTop: "2px",
                     overflow: "hidden",
@@ -1409,7 +1477,7 @@
               {
                 style: {
                   fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "15px",
+                  fontSize: "20px",
                   fontWeight: "700",
                   color: "var(--gold-solid)",
                 },
@@ -1421,7 +1489,7 @@
               {
                 style: {
                   fontFamily: "Cinzel,serif",
-                  fontSize: "7px",
+                  fontSize: "12px",
                   letterSpacing: ".08em",
                   textTransform: "uppercase",
                   color: "var(--body-faint)",
@@ -1438,7 +1506,7 @@
       ),
 
       // vendor rows
-      open &&
+      isOpen &&
         h(
           "div",
           {
@@ -1743,7 +1811,7 @@
           style: {
             ...styles[variant || "ghost"],
             fontFamily: "Cinzel,serif",
-            fontSize: "9px",
+            fontSize: "14px",
             letterSpacing: ".1em",
             textTransform: "uppercase",
             padding: "8px 16px",
@@ -1783,7 +1851,7 @@
                 title: "Load GO-verdict sols from the latest Screener run",
                 style: {
                   fontFamily: "Cinzel,serif",
-                  fontSize: "10px",
+                  fontSize: "15px",
                   letterSpacing: ".14em",
                   color: "var(--gold-dim)",
                   border: "1px solid rgba(201,168,76,.2)",
@@ -1809,7 +1877,7 @@
               style: {
                 fontFamily: "Cormorant Garamond,serif",
                 fontStyle: "italic",
-                fontSize: "13px",
+                fontSize: "18px",
                 color: "var(--gold-dim)",
               },
             },
@@ -1843,7 +1911,7 @@
               border: "1px solid rgba(201,168,76,.2)",
               color: "var(--alabaster)",
               fontFamily: "JetBrains Mono,monospace",
-              fontSize: "12px",
+              fontSize: "17px",
               outline: "none",
               width: "300px",
               letterSpacing: ".04em",
@@ -1923,7 +1991,7 @@
                   border: "none",
                   color: "var(--body-faint)",
                   cursor: "pointer",
-                  fontSize: "14px",
+                  fontSize: "19px",
                 },
               },
               "×",
@@ -1942,7 +2010,7 @@
               border: "1px solid rgba(201,168,76,.15)",
               color: "var(--alabaster)",
               fontFamily: "JetBrains Mono,monospace",
-              fontSize: "11px",
+              fontSize: "16px",
               padding: "8px 10px",
               resize: "vertical",
               outline: "none",
@@ -1972,7 +2040,7 @@
                     border: "none",
                     color: "var(--body-faint)",
                     fontFamily: "Cinzel,serif",
-                    fontSize: "8px",
+                    fontSize: "13px",
                     cursor: "pointer",
                     letterSpacing: ".08em",
                   },
@@ -2019,7 +2087,7 @@
                     key: s.nsn,
                     style: {
                       fontFamily: "JetBrains Mono,monospace",
-                      fontSize: "8px",
+                      fontSize: "13px",
                       padding: "2px 8px",
                       borderRadius: "3px",
                       background:
