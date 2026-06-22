@@ -87,37 +87,63 @@
       (r) => r.nsn && !["Closed", "No Source", "Archive", "Awarded"].includes(r.status)
     );
 
-    // Parallel DIBBS fetch for all unique NSNs (throttled by stagger)
-    const nsnSet = [...new Set(actionable.map((r) => r.nsn).filter(Boolean))];
-    const dibbsMap = {};
-    await Promise.all(
-      nsnSet.map((nsn, i) =>
-        new Promise((res) => setTimeout(() => getDIBBSData(nsn).then((d) => { dibbsMap[nsn] = d; res(); }), i * 120))
-      )
-    );
-
     // Accumulate CAGE → { companyName, partNumber, sols[] }
+    // Primary: approved_sources already on the pipeline row (from Navigator supplier_list)
+    // Fallback: DIBBS NSN API (async, only for rows with no sources yet)
     const cageMap = {};
-    for (const row of actionable) {
-      const dibbs = dibbsMap[row.nsn];
-      if (!dibbs || !dibbs.approvedSources || !dibbs.approvedSources.length) continue;
-      for (const src of dibbs.approvedSources) {
+
+    function addSourcesToMap(row, sources, itemName) {
+      for (const src of sources) {
         const cage = (src.cage || "").toUpperCase().trim();
         if (!cage) continue;
         if (!cageMap[cage]) {
-          cageMap[cage] = { cage, companyName: src.companyName || "", partNumber: src.partNumber || "", sols: [] };
+          cageMap[cage] = {
+            cage,
+            companyName: src.companyName || src.name || "",
+            partNumber:  src.partNumber  || src.pn   || "",
+            sols: [],
+          };
         }
-        // Add sol context if not already present for this sol
         if (!cageMap[cage].sols.find((s) => s.sol_number === row.sol_number)) {
           cageMap[cage].sols.push({
-            sol_number:  row.sol_number,
-            nsn:         row.nsn,
-            itemName:    row.item_name || dibbs.nomenclature || "",
-            qty:         row.qty || row.quantity || "",
-            price:       row.unit_price || row.price || "",
-            quoteDue:    row.quote_due || "",
-            partNumber:  src.partNumber || "",
+            sol_number: row.sol_number,
+            nsn:        row.nsn,
+            itemName:   itemName || row.item_name || "",
+            qty:        row.qty || row.quantity || "",
+            price:      row.unit_price || row.price || "",
+            quoteDue:   row.quote_due || "",
+            partNumber: src.partNumber || src.pn || "",
           });
+        }
+      }
+    }
+
+    // Pass 1 — use Navigator approved_sources already on the record
+    const needsDIBBS = [];
+    for (const row of actionable) {
+      const sources = row.approved_sources || [];
+      if (sources.length) {
+        addSourcesToMap(row, sources, row.item_name);
+      } else {
+        needsDIBBS.push(row); // no inline sources — try DIBBS API fallback
+      }
+    }
+
+    // Pass 2 — DIBBS API fallback only for rows missing sources (capped to avoid timeout)
+    if (needsDIBBS.length) {
+      const nsnSet = [...new Set(needsDIBBS.map((r) => r.nsn).filter(Boolean))].slice(0, 30);
+      const dibbsMap = {};
+      await Promise.all(
+        nsnSet.map((nsn, i) =>
+          new Promise((res) =>
+            setTimeout(() => getDIBBSData(nsn).then((d) => { dibbsMap[nsn] = d; res(); }).catch(() => res()), i * 120)
+          )
+        )
+      );
+      for (const row of needsDIBBS) {
+        const dibbs = dibbsMap[row.nsn];
+        if (dibbs && dibbs.approvedSources && dibbs.approvedSources.length) {
+          addSourcesToMap(row, dibbs.approvedSources, dibbs.nomenclature || row.item_name);
         }
       }
     }

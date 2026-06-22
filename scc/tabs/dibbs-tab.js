@@ -89,6 +89,22 @@
   const FSC_NAMES = window.SCC_CONSTANTS.FSC_NAMES;
   const fscName = (fsc) => FSC_NAMES[parseInt(fsc)] || "FSC " + fsc;
 
+  // ── PARSE NAVIGATOR SUPPLIER LIST ────────────────────────────────────
+  // Format: "COMPANY NAME|CAGE|PART_NO; COMPANY NAME|CAGE|PART_NO; ..."
+  function parseSupplierList(raw) {
+    if (!raw || typeof raw !== "string") return [];
+    return raw.split(";")
+      .map((s) => {
+        const parts = s.trim().split("|");
+        return {
+          companyName: (parts[0] || "").trim(),
+          cage:        (parts[1] || "").trim().toUpperCase(),
+          partNumber:  (parts[2] || "").trim(),
+        };
+      })
+      .filter((s) => s.cage || s.companyName);
+  }
+
   // ── BUILD PIPELINE RECORD ─────────────────────────────────────────────
   function buildRecord(rec) {
     return {
@@ -129,7 +145,9 @@
       supplier_lead_time: "",
       ref_supplier: "",
       ref_cage: "",
-      approved_sources: [],
+      approved_sources: rec.approved_sources && rec.approved_sources.length
+        ? rec.approved_sources
+        : parseSupplierList(rec.supplier_list),
     };
   }
 
