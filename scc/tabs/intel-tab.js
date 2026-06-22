@@ -662,14 +662,14 @@
     );
   }
 
-  // ── VendorCard ─────────────────────────────────────────────────────────
+  // ── VendorRow (compact, lives inside a sol/NSN group) ───────────────────
 
-  function VendorCard({ v, isAdding, onOpen, onApprove, onSkip }) {
+  function VendorRow({ v, isAdding, onOpen, onApprove, onSkip }) {
     const borderColor = v.isPrime
       ? "#f59e0b"
       : v.sam
         ? "var(--accent-green)"
-        : "rgba(201,168,76,.3)";
+        : "rgba(201,168,76,.25)";
 
     return h(
       "div",
@@ -677,46 +677,45 @@
         onClick: () => onOpen(v),
         style: {
           background: "var(--surface-inset)",
-          border: "1px solid var(--gold-border)",
+          border: "1px solid rgba(201,168,76,.12)",
           borderLeft: "3px solid " + borderColor,
-          borderRadius: "6px",
-          padding: "14px 16px",
+          borderRadius: "5px",
+          padding: "10px 12px",
           cursor: "pointer",
-          transition: "border-color .15s, transform .1s",
+          transition: "border-color .15s",
           display: "flex",
-          flexDirection: "column",
-          gap: "10px",
+          alignItems: "center",
+          gap: "12px",
         },
         onMouseEnter: (e) => {
-          e.currentTarget.style.borderColor = "rgba(201,168,76,.45)";
+          e.currentTarget.style.borderColor = "rgba(201,168,76,.4)";
         },
         onMouseLeave: (e) => {
-          e.currentTarget.style.borderColor = "var(--gold-border)";
+          e.currentTarget.style.borderColor = "rgba(201,168,76,.12)";
         },
       },
-      // top row: name + status badges
+      // name + badges
       h(
         "div",
-        {
-          style: {
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: "10px",
-          },
-        },
+        { style: { flex: "1 1 auto", minWidth: 0 } },
         h(
           "div",
-          { style: { flex: 1, minWidth: 0 } },
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "7px",
+              marginBottom: "2px",
+            },
+          },
           h(
-            "div",
+            "span",
             {
               style: {
                 fontFamily: "Cinzel,serif",
-                fontSize: "13px",
+                fontSize: "11.5px",
                 letterSpacing: ".03em",
                 color: "var(--gold-solid)",
-                marginBottom: "4px",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -724,116 +723,24 @@
             },
             v.name,
           ),
-          h(
-            "div",
-            { style: { display: "flex", gap: "6px", flexWrap: "wrap" } },
-            v.isPrime && pill("⚠ POSSIBLE PRIME", "#f59e0b"),
-            v.sam
-              ? pill("SAM ✓", "var(--accent-green)")
-              : pill("NO SAM", "var(--body-faint)"),
-            v.cage && pill("CAGE " + v.cage, "var(--gold-dim)"),
-          ),
+          v.isPrime && pill("⚠ PRIME", "#f59e0b"),
+          v.sam ? pill("SAM ✓", "var(--accent-green)") : null,
         ),
-        h(
-          "div",
-          { style: { textAlign: "right", flexShrink: 0 } },
-          h(
-            "div",
-            {
-              style: {
-                fontFamily: "JetBrains Mono,monospace",
-                fontSize: "15px",
-                fontWeight: "700",
-                color:
-                  v.smallestAward > 0
-                    ? "var(--gold-solid)"
-                    : "var(--body-faint)",
-              },
-            },
-            v.smallestAward > 0
-              ? "$" + Math.round(v.smallestAward).toLocaleString()
-              : "—",
-          ),
-          h(
-            "div",
-            {
-              style: {
-                fontFamily: "Cinzel,serif",
-                fontSize: "7px",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                color: "var(--body-faint)",
-              },
-            },
-            "smallest award",
-          ),
-        ),
-      ),
-
-      // coverage row
-      h(
-        "div",
-        {
-          style: {
-            display: "flex",
-            gap: "14px",
-            flexWrap: "wrap",
-            fontFamily: "JetBrains Mono,monospace",
-            fontSize: "10px",
-          },
-        },
-        (v.fsc || []).length > 0 &&
-          h(
-            "span",
-            { style: { color: "var(--gold-dim)" } },
-            "FSC " + v.fsc.join(", "),
-          ),
-        (v.nsns || []).length > 0 &&
-          h(
-            "span",
-            { style: { color: "rgba(56,189,248,.6)" } },
-            "NSN " +
-              v.nsns.slice(0, 2).join(", ") +
-              (v.nsns.length > 2 ? " +" + (v.nsns.length - 2) : ""),
-          ),
-        v.awards > 0 &&
-          h(
-            "span",
-            { style: { color: "var(--body-dim)" } },
-            v.awards + " award" + (v.awards !== 1 ? "s" : "") + " on record",
-          ),
-      ),
-
-      // contact row
-      h(
-        "div",
-        {
-          style: {
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            borderTop: "1px solid rgba(201,168,76,.1)",
-            paddingTop: "10px",
-          },
-        },
         h(
           "div",
           {
             style: {
               display: "flex",
-              flexDirection: "column",
-              gap: "2px",
-              minWidth: 0,
-              flex: 1,
+              gap: "10px",
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "9px",
+              color: v.email ? "rgba(56,189,248,.78)" : "var(--body-faint)",
             },
           },
           h(
             "span",
             {
               style: {
-                fontFamily: "JetBrains Mono,monospace",
-                fontSize: "10px",
-                color: v.email ? "rgba(56,189,248,.82)" : "var(--body-faint)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -842,64 +749,90 @@
             v.email || "no contact found",
           ),
           v.phone &&
-            h(
-              "span",
-              {
-                style: {
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: "9px",
-                  color: "rgba(56,189,248,.5)",
-                },
-              },
-              v.phone,
-            ),
+            h("span", { style: { color: "rgba(56,189,248,.5)" } }, v.phone),
+        ),
+      ),
+
+      // award figures — biggest first
+      h(
+        "div",
+        { style: { textAlign: "right", flexShrink: 0, minWidth: "84px" } },
+        h(
+          "div",
+          {
+            style: {
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "13px",
+              fontWeight: "700",
+              color:
+                v.totalAward > 0 ? "var(--gold-solid)" : "var(--body-faint)",
+            },
+          },
+          v.totalAward > 0 ? fmtMoney(v.totalAward) : "—",
         ),
         h(
           "div",
           {
-            style: { display: "flex", gap: "6px", flexShrink: 0 },
-            onClick: (e) => e.stopPropagation(),
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "7px",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              color: "var(--body-faint)",
+            },
           },
-          h(
-            "button",
-            {
-              onClick: () => onApprove(v),
-              disabled: isAdding,
-              style: {
-                fontFamily: "Cinzel,serif",
-                fontSize: "8px",
-                letterSpacing: ".08em",
-                padding: "6px 12px",
-                background: "rgba(61,214,140,.08)",
-                border: "1px solid rgba(61,214,140,.3)",
-                color: "var(--accent-green)",
-                borderRadius: "3px",
-                cursor: isAdding ? "wait" : "pointer",
-                opacity: isAdding ? 0.5 : 1,
-                textTransform: "uppercase",
-              },
+          v.awards
+            ? v.awards + " award" + (v.awards !== 1 ? "s" : "") + " total"
+            : "no history",
+        ),
+      ),
+
+      // actions
+      h(
+        "div",
+        {
+          style: { display: "flex", gap: "6px", flexShrink: 0 },
+          onClick: (e) => e.stopPropagation(),
+        },
+        h(
+          "button",
+          {
+            onClick: () => onApprove(v),
+            disabled: isAdding,
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "8px",
+              letterSpacing: ".08em",
+              padding: "5px 11px",
+              background: "rgba(61,214,140,.08)",
+              border: "1px solid rgba(61,214,140,.3)",
+              color: "var(--accent-green)",
+              borderRadius: "3px",
+              cursor: isAdding ? "wait" : "pointer",
+              opacity: isAdding ? 0.5 : 1,
+              textTransform: "uppercase",
             },
-            isAdding ? "…" : "+ Add",
-          ),
-          h(
-            "button",
-            {
-              onClick: () => onSkip(v.id),
-              style: {
-                fontFamily: "Cinzel,serif",
-                fontSize: "8px",
-                letterSpacing: ".06em",
-                padding: "6px 10px",
-                background: "transparent",
-                border: "1px solid rgba(255,255,255,.1)",
-                color: "var(--body-faint)",
-                borderRadius: "3px",
-                cursor: "pointer",
-                textTransform: "uppercase",
-              },
+          },
+          isAdding ? "…" : "+ Add",
+        ),
+        h(
+          "button",
+          {
+            onClick: () => onSkip(v.id),
+            style: {
+              fontFamily: "Cinzel,serif",
+              fontSize: "8px",
+              letterSpacing: ".06em",
+              padding: "5px 9px",
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,.1)",
+              color: "var(--body-faint)",
+              borderRadius: "3px",
+              cursor: "pointer",
+              textTransform: "uppercase",
             },
-            "Skip",
-          ),
+          },
+          "Skip",
         ),
       ),
     );
@@ -913,7 +846,6 @@
     const [enrichProg, setEnrichProg] = useState("");
     const [drawer, setDrawer] = useState(null);
     const [enrichSingle, setEnrichSingle] = useState(null);
-    const [sortBy, setSortBy] = useState("default"); // default | award | name
 
     const save = (updated) => {
       localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
@@ -1146,35 +1078,55 @@
     const safeCount = pending.filter((v) => !v.isPrime).length;
     const missingEmail = pending.filter((v) => !v.email).length;
 
-    let sorted = [...pending];
-    if (sortBy === "award")
-      sorted.sort((a, b) => (b.smallestAward || 0) - (a.smallestAward || 0));
-    else if (sortBy === "name")
-      sorted.sort((a, b) => a.name.localeCompare(b.name));
-    else sorted.sort((a, b) => (a.isPrime ? 1 : 0) - (b.isPrime ? 1 : 0)); // primes sink to bottom by default
+    // ── group vendors by the sol/NSN that surfaced them ───────────────
+    // A vendor can have multiple solRefs (matched on more than one sol),
+    // so it can legitimately appear in more than one group — that's the
+    // point: you need to see it under every sol it's relevant to.
+    const groups = new Map(); // key: sol_number (or nsn if no sol) → { label, nsn, sol_number, vendors: [] }
 
-    const SortBtn = ({ val, label }) =>
-      h(
-        "button",
-        {
-          onClick: () => setSortBy(val),
-          style: {
-            fontFamily: "Cinzel,serif",
-            fontSize: "8px",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
-            padding: "5px 11px",
-            background: sortBy === val ? "rgba(201,168,76,.12)" : "transparent",
-            border:
-              "1px solid " +
-              (sortBy === val ? "rgba(201,168,76,.5)" : "rgba(201,168,76,.18)"),
-            color: sortBy === val ? "var(--gold-solid)" : "var(--body-faint)",
-            borderRadius: "3px",
-            cursor: "pointer",
-          },
-        },
-        label,
+    pending.forEach((v) => {
+      const refs =
+        v.solRefs && v.solRefs.length > 0
+          ? v.solRefs
+          : [
+              {
+                sol_number: null,
+                nsn: (v.nsns || [])[0] || null,
+                item_name: null,
+              },
+            ];
+      refs.forEach((ref) => {
+        const key = ref.sol_number || ref.nsn || "ungrouped";
+        if (!groups.has(key)) {
+          groups.set(key, {
+            key,
+            sol_number: ref.sol_number || null,
+            nsn: ref.nsn || (v.nsns || [])[0] || "",
+            item_name: ref.item_name || "",
+            fsc: (v.fsc || [])[0] || "",
+            vendors: [],
+          });
+        }
+        const g = groups.get(key);
+        if (!g.vendors.find((x) => x.id === v.id)) g.vendors.push(v);
+        if (!g.item_name && ref.item_name) g.item_name = ref.item_name;
+      });
+    });
+
+    let groupArr = [...groups.values()];
+
+    // sort vendors within each group: highest total award first
+    groupArr.forEach((g) => {
+      g.vendors.sort((a, b) => (b.totalAward || 0) - (a.totalAward || 0));
+      g.maxAward = g.vendors.reduce(
+        (m, v) => Math.max(m, v.totalAward || 0),
+        0,
       );
+      g.primeCount = g.vendors.filter((v) => v.isPrime).length;
+    });
+
+    // sort groups: highest opportunity (max award found in that group) first
+    groupArr.sort((a, b) => b.maxAward - a.maxAward);
 
     return h(
       React.Fragment,
@@ -1205,8 +1157,11 @@
           },
         },
         sectionHeader(
-          "Vendor Queue",
-          pill(pending.length + " pending", "var(--gold-solid)"),
+          "Vendor Queue — by Sol / NSN",
+          pill(
+            pending.length + " vendors · " + groupArr.length + " lanes",
+            "var(--gold-solid)",
+          ),
         ),
         h(
           "div",
@@ -1218,21 +1173,6 @@
               flexWrap: "wrap",
             },
           },
-          h(
-            "div",
-            {
-              style: {
-                display: "flex",
-                gap: "0",
-                border: "1px solid rgba(201,168,76,.2)",
-                borderRadius: "3px",
-                overflow: "hidden",
-              },
-            },
-            h(SortBtn, { val: "default", label: "Default" }),
-            h(SortBtn, { val: "award", label: "Smallest Award" }),
-            h(SortBtn, { val: "name", label: "Name" }),
-          ),
           missingEmail > 0 &&
             h(
               "button",
@@ -1300,27 +1240,226 @@
         ),
       ),
 
-      // card grid
+      // ── grouped lanes ──
       h(
         "div",
-        {
-          style: {
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
-            gap: "10px",
-          },
-        },
-        sorted.map((v) =>
-          h(VendorCard, {
-            key: v.id,
-            v,
-            isAdding: adding === v.id,
+        { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+        groupArr.map((g) =>
+          h(SolGroup, {
+            key: g.key,
+            g,
+            adding,
             onOpen: setDrawer,
             onApprove: approve,
             onSkip: skip,
           }),
         ),
       ),
+    );
+  }
+
+  // ── SolGroup — collapsible block of vendors tied to one sol/NSN ───────
+
+  function SolGroup({ g, adding, onOpen, onApprove, onSkip }) {
+    const [open, setOpen] = useState(true);
+    const dibbsUrl = g.sol_number
+      ? "https://www.dibbs.bsm.dla.mil/Solicitations/RFQ/SolRFQDetail.aspx?sno=" +
+        encodeURIComponent(g.sol_number)
+      : null;
+
+    return h(
+      "div",
+      {
+        style: {
+          border: "1px solid var(--gold-border)",
+          borderRadius: "6px",
+          background: "rgba(201,168,76,.02)",
+          overflow: "hidden",
+        },
+      },
+      // group header — click to collapse
+      h(
+        "div",
+        {
+          onClick: () => setOpen((o) => !o),
+          style: {
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "12px 16px",
+            cursor: "pointer",
+            background: "var(--surface-inset)",
+          },
+        },
+        h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              minWidth: 0,
+              flex: 1,
+            },
+          },
+          h(
+            "span",
+            {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: "9px",
+                color: "var(--body-faint)",
+              },
+            },
+            open ? "▾" : "▸",
+          ),
+          h(
+            "div",
+            { style: { minWidth: 0 } },
+            h(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                },
+              },
+              dibbsUrl
+                ? h(
+                    "a",
+                    {
+                      href: dibbsUrl,
+                      target: "_blank",
+                      rel: "noopener",
+                      onClick: (e) => e.stopPropagation(),
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "12px",
+                        letterSpacing: ".04em",
+                        color: "var(--gold-solid)",
+                        textDecoration: "none",
+                      },
+                    },
+                    "↗ " + g.sol_number,
+                  )
+                : h(
+                    "span",
+                    {
+                      style: {
+                        fontFamily: "Cinzel,serif",
+                        fontSize: "12px",
+                        letterSpacing: ".04em",
+                        color: "var(--gold-solid)",
+                      },
+                    },
+                    "NSN " + fmtNSN(g.nsn),
+                  ),
+              g.sol_number &&
+                g.nsn &&
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "9px",
+                      color: "rgba(56,189,248,.6)",
+                    },
+                  },
+                  "NSN " + fmtNSN(g.nsn),
+                ),
+              g.fsc && pill("FSC " + g.fsc, "var(--gold-dim)"),
+              g.primeCount > 0 && pill(g.primeCount + " prime", "#f59e0b"),
+            ),
+            g.item_name &&
+              h(
+                "div",
+                {
+                  style: {
+                    fontFamily: "Cormorant Garamond,serif",
+                    fontStyle: "italic",
+                    fontSize: "12px",
+                    color: "var(--body-faint)",
+                    marginTop: "2px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  },
+                },
+                g.item_name,
+              ),
+          ),
+        ),
+        h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              flexShrink: 0,
+            },
+          },
+          h(
+            "div",
+            { style: { textAlign: "right" } },
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "15px",
+                  fontWeight: "700",
+                  color: "var(--gold-solid)",
+                },
+              },
+              g.maxAward > 0 ? fmtMoney(g.maxAward) : "—",
+            ),
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "7px",
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  color: "var(--body-faint)",
+                },
+              },
+              "top award found",
+            ),
+          ),
+          pill(
+            g.vendors.length + " vendor" + (g.vendors.length !== 1 ? "s" : ""),
+            "var(--body-dim)",
+          ),
+        ),
+      ),
+
+      // vendor rows
+      open &&
+        h(
+          "div",
+          {
+            style: {
+              padding: "10px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            },
+          },
+          g.vendors.map((v) =>
+            h(VendorRow, {
+              key: v.id + "::" + g.key,
+              v,
+              isAdding: adding === v.id,
+              onOpen,
+              onApprove,
+              onSkip,
+            }),
+          ),
+        ),
     );
   }
 
