@@ -436,7 +436,9 @@
             }
           } catch (_) {}
         }
-        if (scores.length === 0) return null; // No cache yet — fall through to Claude
+        if (scores.length === 0) {
+          return "No Intel Scores cached yet.\n\nOpen the Pipeline tab — scores auto-populate for every NSN as it loads. Then come back and ask again.";
+        }
 
         // Join with pipeline rows for item names
         const nsnToItem = {};
