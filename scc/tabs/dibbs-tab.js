@@ -192,6 +192,55 @@
     return allResults;
   }
 
+  // ── LOCAL ANALYSIS — instant GO/VERIFY/REJECT with no API credits ─────
+  // Uses AMSC code + extended value + prime-dominated FSC list.
+  // Returns same structure as analyzeWithClaude: [{sol_number, verdict, reason, ...}]
+  const LOCAL_PRIME_FSCS = new Set([
+    "1560","1305","1310","1315","1320","1340","1350","1360","1376",
+    "2835","2840","1720","1730","1680","6910","6920","6930","5860","1081",
+  ]);
+  const LOCAL_AMSC_BLOCKED     = new Set(["D","E","V","K"]);
+  const LOCAL_AMSC_RESTRICTED  = new Set(["R","C","F","G"]);
+
+  function analyzeLocal(sols, logFn) {
+    const log = logFn || (() => {});
+    log("Local filter — no Claude credits needed.", "info");
+    const results = [];
+    for (const s of sols) {
+      const amsc    = String(s.amsc || "").toUpperCase().trim().slice(0, 1);
+      const ext     = parseFloat(s.ext_price) || 0;
+      const fsc     = String(s.fsc || "").trim();
+      const restr   = String(s.supplier_restrictions || "").toUpperCase();
+
+      let verdict, reason;
+
+      if (LOCAL_PRIME_FSCS.has(fsc)) {
+        verdict = "REJECT"; reason = "Prime-dominated FSC " + fsc + " — no resale channel.";
+      } else if (LOCAL_AMSC_BLOCKED.has(amsc)) {
+        verdict = "REJECT"; reason = "AMSC " + amsc + " — sole source or not procured commercially. Do not bid.";
+      } else if (ext < 50) {
+        verdict = "REJECT"; reason = "Extended value $" + ext.toFixed(2) + " below minimum. Not worth pursuing.";
+      } else if (ext >= 500 && (amsc === "A" || amsc === "B" || amsc === "")) {
+        verdict = "GO"; reason = "Open competition (AMSC " + (amsc || "unknown") + "), value $" + Math.round(ext).toLocaleString() + " qualifies.";
+      } else if (ext >= 500 && LOCAL_AMSC_RESTRICTED.has(amsc)) {
+        verdict = "VERIFY FIRST"; reason = "AMSC " + amsc + " — must be on approved source list. Verify before bidding.";
+      } else if (restr.includes("RESTRICTED")) {
+        verdict = "VERIFY FIRST"; reason = "Supplier restrictions flagged — verify eligibility.";
+      } else if (ext >= 500) {
+        verdict = "GO"; reason = "Value $" + Math.round(ext).toLocaleString() + " qualifies. AMSC unknown — verify restrictions.";
+      } else {
+        verdict = "VERIFY FIRST"; reason = "Value $" + Math.round(ext).toFixed(2) + " below $500 floor — proceed only if margin works.";
+      }
+
+      results.push({ sol_number: s.sol_number, verdict, reason, winProbabilityPct: null, localScored: true });
+    }
+    const go     = results.filter((r) => r.verdict === "GO").length;
+    const verify = results.filter((r) => r.verdict === "VERIFY FIRST").length;
+    const reject = results.filter((r) => r.verdict === "REJECT").length;
+    log("Local filter complete — " + go + " GO · " + verify + " VERIFY · " + reject + " REJECT", "ok");
+    return results;
+  }
+
   // ── RFQ EMAIL BUILDER ─────────────────────────────────────────────────
   function buildRFQEmail(dist, sols) {
     const lane = fscName(sols[0].fsc);
@@ -372,6 +421,7 @@
     const [anmsSweeping, setAnmsSweeping] = useState(false);
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
+    const [minValue, setMinValue] = useState(500); // dispatch value floor
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
     const [liveMode, setLiveMode] = useState(false); // always starts OFF — must be explicitly enabled each session
@@ -523,7 +573,17 @@
       addLog("AUTO ▶ Analyzing " + solsToAnalyze.length + " sol(s)" + (isLive ? "" : " [TEST — capped at " + TEST_SOL_CAP + "]") + "…", "info");
       setAnalyzing(true);
       try {
-        const results = await analyzeWithClaude(solsToAnalyze, addLog);
+        let results;
+        try {
+          results = await analyzeWithClaude(solsToAnalyze, addLog);
+        } catch (claudeErr) {
+          if (claudeErr.message.toLowerCase().includes("credit")) {
+            addLog("AUTO ▶ Claude credits depleted — switching to local value/AMSC filter.", "info");
+            results = analyzeLocal(solsToAnalyze, addLog);
+          } else {
+            throw claudeErr;
+          }
+        }
         const go = [], verify = [], reject = [];
         for (const res of results) {
           const orig = solsToAnalyze.find((s) => s.sol_number === res.sol_number) || {};
@@ -773,7 +833,18 @@
       setPushLog([]);
 
       try {
-        const results = await analyzeWithClaude(sols, addLog);
+        let results;
+        try {
+          results = await analyzeWithClaude(sols, addLog);
+        } catch (claudeErr) {
+          const isCredits = claudeErr.message.toLowerCase().includes("credit");
+          if (isCredits) {
+            addLog("Claude credits depleted — switching to local value/AMSC filter.", "info");
+            results = analyzeLocal(sols, addLog);
+          } else {
+            throw claudeErr;
+          }
+        }
 
         const go = [];
         const verify = [];
@@ -1940,15 +2011,62 @@
               ),
             ),
 
+          // Value floor filter bar (GO tab only)
+          resultTab === "GO" && h("div", {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "8px 14px",
+              background: "rgba(201,168,76,.04)",
+              border: "1px solid rgba(201,168,76,.12)",
+              borderRadius: "4px",
+              marginBottom: "8px",
+              flexWrap: "wrap",
+            },
+          },
+            h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".12em", color: "var(--gold-dim)", textTransform: "uppercase" } }, "Value Floor"),
+            h("div", { style: { display: "flex", gap: "4px" } },
+              ...[ [0,"All"], [500,"$500"], [1000,"$1k"], [5000,"$5k"], [10000,"$10k"] ].map(([v, label]) =>
+                h("button", {
+                  key: v,
+                  onClick: () => setMinValue(v),
+                  style: {
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: "9px",
+                    padding: "3px 8px",
+                    background: minValue === v ? "rgba(201,168,76,.2)" : "transparent",
+                    border: "1px solid " + (minValue === v ? "rgba(201,168,76,.5)" : "rgba(201,168,76,.15)"),
+                    borderRadius: "3px",
+                    color: minValue === v ? "var(--gold-solid)" : "var(--body-dim)",
+                    cursor: "pointer",
+                  },
+                }, label)
+              ),
+            ),
+            h("span", {
+              style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-faint)", marginLeft: "auto" },
+            },
+              (() => {
+                const hidden = analysis.go.filter((r) => (parseFloat(r.ext_price) || 0) < minValue).length;
+                return hidden > 0 ? hidden + " below floor hidden" : analysis.go.length + " sols";
+              })()
+            ),
+          ),
+
           // Sol rows for active bucket
           (() => {
-            const bucketRecs = (
+            const allBucket = (
               resultTab === "GO"
                 ? analysis.go
                 : resultTab === "VERIFY FIRST"
                   ? analysis.verify
                   : analysis.reject
             );
+            // Apply value floor to GO tab only
+            const bucketRecs = (resultTab === "GO" && minValue > 0)
+              ? allBucket.filter((r) => (parseFloat(r.ext_price) || 0) >= minValue)
+              : allBucket;
             const bucketColor =
               resultTab === "GO"
                 ? "var(--accent-green)"
@@ -2062,6 +2180,37 @@
                             },
                             rec.winProbabilityPct + "%",
                           ),
+                        // BWS Intel Score badge — reads from localStorage cache
+                        (() => {
+                          if (!rec.nsn) return null;
+                          const nsnKey = rec.nsn.replace(/-/g, "");
+                          let bws = null;
+                          try {
+                            bws = JSON.parse(localStorage.getItem("scc_bws_" + nsnKey) || "null") ||
+                                  JSON.parse(localStorage.getItem("scc_bws_" + rec.nsn) || "null");
+                          } catch (_) {}
+                          if (!bws || bws.score == null) return null;
+                          const action = bws.score >= 70 ? "BID" : bws.score >= 45 ? "CHECK" : "SKIP";
+                          return h("span", {
+                            title: "Intel Score " + bws.score + "/100 — " + bws.label,
+                            style: {
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontFamily: "JetBrains Mono,monospace",
+                              fontSize: "9px",
+                              padding: "2px 6px",
+                              background: bws.color + "18",
+                              border: "1px solid " + bws.color + "45",
+                              borderRadius: "3px",
+                              color: bws.color,
+                              flexShrink: 0,
+                            },
+                          },
+                            h("span", { style: { fontWeight: 700, fontSize: "10px" } }, bws.score),
+                            h("span", { style: { letterSpacing: ".1em", fontFamily: "Cinzel,serif", fontSize: "8px" } }, action),
+                          );
+                        })(),
                         h(
                           "a",
                           {
