@@ -168,6 +168,208 @@
     );
   }
 
+  // ── BID SCORE BADGE — auto-fetches Bid Worthiness per NSN, 6h cache ──
+  const BWS_TTL = 6 * 60 * 60 * 1000;
+
+  function BidScoreBadge({ nsn, idx }) {
+    const readCache = () => {
+      if (!nsn) return null;
+      try {
+        const c = JSON.parse(localStorage.getItem("scc_bws_" + nsn) || "null");
+        if (c && Date.now() - c.ts < BWS_TTL) return c;
+      } catch (_) {}
+      return "pending";
+    };
+
+    const [entry, setEntry] = usePState(readCache);
+
+    usePEffect(() => {
+      if (!nsn || (entry && entry !== "pending")) return;
+      const fetchFn = window.SCC_TABS && window.SCC_TABS.fetchAwardHistory;
+      const scoreFn = window.SCC_TABS && window.SCC_TABS.calcNSNScore;
+      if (!fetchFn || !scoreFn) { setEntry(null); return; }
+      let cancelled = false;
+      const t = setTimeout(() => {
+        fetchFn(nsn)
+          .then(({ results }) => {
+            if (cancelled) return;
+            const s = scoreFn(results, "");
+            const e = { score: s.score, color: s.color, label: s.label, ts: Date.now() };
+            try { localStorage.setItem("scc_bws_" + nsn, JSON.stringify(e)); } catch (_) {}
+            setEntry(e);
+          })
+          .catch(() => { if (!cancelled) setEntry(null); });
+      }, (idx || 0) * 180);
+      return () => { cancelled = true; clearTimeout(t); };
+    }, [nsn]);
+
+    if (!nsn || !entry) return null;
+    if (entry === "pending") {
+      return hP("span", {
+        style: {
+          display: "block",
+          fontFamily: "JetBrains Mono,monospace",
+          fontSize: "9px",
+          color: "rgba(245,240,232,.15)",
+          marginTop: "4px",
+          letterSpacing: ".08em",
+        },
+      }, "···");
+    }
+
+    const action = entry.score >= 70 ? "BID" : entry.score >= 45 ? "CHECK" : "SKIP";
+    return hP("div", {
+      style: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "5px",
+        marginTop: "5px",
+        background: entry.color + "16",
+        border: "1px solid " + entry.color + "42",
+        borderRadius: "3px",
+        padding: "2px 7px",
+        cursor: "default",
+      },
+      title: "Bid Worthiness " + entry.score + "/100 — " + entry.label + " · click Awards Intel for full analysis",
+    },
+      hP("span", {
+        style: {
+          fontFamily: "JetBrains Mono,monospace",
+          fontSize: "11px",
+          fontWeight: "700",
+          color: entry.color,
+          lineHeight: 1,
+        },
+      }, String(entry.score)),
+      hP("span", {
+        style: {
+          fontFamily: "Cinzel,serif",
+          fontSize: "8px",
+          letterSpacing: ".1em",
+          color: entry.color,
+          opacity: 0.8,
+          lineHeight: 1,
+        },
+      }, action),
+    );
+  }
+
+  // ── FSC HEAT STRIP — demand signal per FSC lane in active pipeline ───
+  const FSC_DEMAND_TTL = 12 * 60 * 60 * 1000;
+
+  function FSCHeat({ fsc }) {
+    const readCache = () => {
+      try {
+        const c = JSON.parse(localStorage.getItem("scc_fsc_heat_" + fsc) || "null");
+        if (c && Date.now() - c.ts < FSC_DEMAND_TTL) return c;
+      } catch (_) {}
+      return "pending";
+    };
+    const [data, setData] = usePState(readCache);
+
+    usePEffect(() => {
+      if (data && data !== "pending") return;
+      const fn = window.SCC_TABS && window.SCC_TABS.fetchFSCDemand;
+      if (!fn) { setData(null); return; }
+      let cancelled = false;
+      fn(fsc)
+        .then(count => {
+          if (cancelled) return;
+          const e = { count, ts: Date.now() };
+          try { localStorage.setItem("scc_fsc_heat_" + fsc, JSON.stringify(e)); } catch (_) {}
+          setData(e);
+        })
+        .catch(() => { if (!cancelled) setData(null); });
+      return () => { cancelled = true; };
+    }, [fsc]);
+
+    const count = data && data !== "pending" ? data.count : null;
+    const heat = count === null ? null : count >= 20 ? "HOT" : count >= 8 ? "WARM" : count >= 3 ? "ACTIVE" : "COLD";
+    const heatColor = heat === "HOT" ? "#e87474" : heat === "WARM" ? "#f59e0b" : heat === "ACTIVE" ? "#7eb8f7" : "rgba(245,240,232,.22)";
+    const heatIcon = heat === "HOT" ? "🔥" : heat === "WARM" ? "⚡" : heat === "ACTIVE" ? "◎" : "○";
+
+    return hP("div", {
+      style: {
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "3px",
+        padding: "8px 14px",
+        background: count !== null ? heatColor + "10" : "rgba(255,255,255,.03)",
+        border: "1px solid " + (count !== null ? heatColor + "35" : "rgba(201,168,76,.1)"),
+        borderRadius: "4px",
+        minWidth: "72px",
+        cursor: "default",
+      },
+      title: count !== null ? "FSC " + fsc + " — " + count + " awards (last 2yr)" : "Loading FSC " + fsc + " demand…",
+    },
+      hP("div", {
+        style: {
+          fontFamily: "JetBrains Mono,monospace",
+          fontSize: "13px",
+          fontWeight: "700",
+          color: count !== null ? heatColor : "rgba(245,240,232,.3)",
+          letterSpacing: ".04em",
+        },
+      }, fsc),
+      data === "pending"
+        ? hP("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "rgba(245,240,232,.18)" } }, "···")
+        : hP("div", { style: { display: "flex", alignItems: "center", gap: "4px" } },
+            hP("span", { style: { fontSize: "10px" } }, heatIcon),
+            hP("span", {
+              style: {
+                fontFamily: "Cinzel,serif",
+                fontSize: "8px",
+                letterSpacing: ".12em",
+                color: heatColor,
+                textTransform: "uppercase",
+              },
+            }, heat || "—"),
+          ),
+      count !== null && hP("div", {
+        style: {
+          fontFamily: "JetBrains Mono,monospace",
+          fontSize: "9px",
+          color: "rgba(245,240,232,.3)",
+          letterSpacing: ".04em",
+        },
+      }, count + " awards"),
+    );
+  }
+
+  function FSCHeatStrip({ rows }) {
+    const fscs = [...new Set(
+      rows.map(r => (r.fsc || (r.nsn || "").replace(/\D/g, "").slice(0, 4))).filter(Boolean)
+    )].slice(0, 12);
+
+    if (!fscs.length) return null;
+
+    return hP("div", {
+      style: {
+        display: "flex",
+        gap: "8px",
+        flexWrap: "wrap",
+        alignItems: "flex-start",
+        padding: "12px 0 4px",
+        marginBottom: "2px",
+      },
+    },
+      hP("div", {
+        style: {
+          fontFamily: "Cinzel,serif",
+          fontSize: "8px",
+          letterSpacing: ".18em",
+          textTransform: "uppercase",
+          color: "rgba(201,168,76,.45)",
+          alignSelf: "center",
+          whiteSpace: "nowrap",
+          marginRight: "4px",
+        },
+      }, "FSC Demand"),
+      ...fscs.map(fsc => hP(FSCHeat, { key: fsc, fsc })),
+    );
+  }
+
   // ── PIPELINE TAB ─────────────────────────────────────────────────────
   const BID_BANDS = {
     All: [0, Infinity],
@@ -1592,6 +1794,8 @@ Rules:
         ),
       ),
 
+      rows.length > 0 && hP(FSCHeatStrip, { rows }),
+
       rows.length === 0
         ? hP(
             "div",
@@ -1805,7 +2009,7 @@ Rules:
                         : "No solicitations match this filter.",
                     ),
                   ),
-                ...visible.map((r) => {
+                ...visible.map((r, rowIdx) => {
                   const qty = parseFloat(r.quantity) || 1;
                   const govUnit = parseFloat(r.unit_price) || 0;
                   const tier = r.tier || "Standard";
@@ -1935,6 +2139,7 @@ Rules:
                               verticalAlign: "middle" }
                           }, "↩ Won");
                         })(),
+                        r.nsn && hP(BidScoreBadge, { nsn: r.nsn, idx: rowIdx }),
                       ),
                       hP(
                         "td",

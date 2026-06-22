@@ -89,6 +89,31 @@
     return { results: pscResults, mode: pscResults.length > 0 ? "psc" : "none" };
   }
 
+  // ── FSC DEMAND COUNT — how many awards in this PSC lane (last 2y) ──────
+  async function fetchFSCDemand(fsc) {
+    if (!fsc) return 0;
+    const res = await fetch(USA_SPENDING_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filters: {
+          award_type_codes: ["A", "B", "C", "D"],
+          psc_codes: { require: [["Product", String(fsc).slice(0, 4)]] },
+          time_period: [{ start_date: "2024-01-01", end_date: "2026-12-31" }],
+        },
+        fields: ["Award ID"],
+        page: 1,
+        limit: 1,
+        sort: "Start Date",
+        order: "desc",
+      }),
+    });
+    if (!res.ok) throw new Error("FSC demand " + res.status);
+    const data = await res.json();
+    return (data.page_metadata && (data.page_metadata.total || data.page_metadata.count)) ||
+           (data.results || []).length;
+  }
+
   // ── BID WORTHINESS SCORE (0-100) ────────────────────────────────────────
   function calcNSNScore(awards, restriction) {
     if (!awards || !awards.length) {
@@ -699,4 +724,5 @@
   window.SCC_TABS.AwardsTable = AwardsTable;
   window.SCC_TABS.calcNSNScore = calcNSNScore;
   window.SCC_TABS.fetchAwardHistory = fetchAwardHistory;
+  window.SCC_TABS.fetchFSCDemand = fetchFSCDemand;
 })();
