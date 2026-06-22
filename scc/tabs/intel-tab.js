@@ -330,10 +330,10 @@
         onPipeline: pipeline, onSkip: skip, onReenrich: reenrichOne,
         adding, enrichingSingle: enrichSingle,
       }),
-      h("div", { style: { background: "var(--metallic-black-surface)", border: "1px solid rgba(201,168,76,.28)", borderRadius: "8px", overflow: "hidden", boxShadow: "0 8px 48px rgba(0,0,0,.65), inset 0 1px 0 rgba(201,168,76,.07)" } },
+      h("div", { style: { background: "#201f2d", border: "1px solid rgba(201,168,76,.38)", borderTop: "2px solid rgba(201,168,76,.65)", borderRadius: "8px", overflow: "hidden", boxShadow: "0 16px 72px rgba(0,0,0,.85), 0 4px 24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04)" } },
 
         // ── Queue header ──
-        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: "var(--surface-inset)", borderBottom: "1px solid var(--gold-border)" } },
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: "#19182500", borderBottom: "1px solid rgba(201,168,76,.22)" } },
           h("div", { style: { display: "flex", alignItems: "center", gap: "14px" } },
             h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".15em", textTransform: "uppercase", color: "var(--gold-solid)" } }, "Review Queue"),
             h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-dim)" } }, pending.length + " pending"),
@@ -362,7 +362,7 @@
             return h("div", {
               key: v.id,
               onClick: (e) => { if (!e.target.closest("button")) setDrawer(v); },
-              style: { display: "grid", gridTemplateColumns: "1fr 80px 185px 60px 100px 58px 50px", gap: "0 10px", padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,.04)", alignItems: "start", background: v.isPrime ? "rgba(245,158,11,.05)" : "rgba(255,255,255,.013)", cursor: "pointer", transition: "background .12s" },
+              style: { display: "grid", gridTemplateColumns: "1fr 80px 185px 60px 100px 58px 50px", gap: "0 10px", padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,.06)", alignItems: "start", background: v.isPrime ? "rgba(245,158,11,.08)" : "rgba(255,255,255,.028)", cursor: "pointer", transition: "background .12s" },
             },
               // company cell
               h("div", null,
