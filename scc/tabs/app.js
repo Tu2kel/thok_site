@@ -799,6 +799,7 @@
                 label: "Tools",
                 tabs: [
                   { id: "rolodex", label: "NSN Intel", icon: "◈ " },
+                  { id: "calllist", label: "Outreach", icon: "📞 " },
                   { id: "intake", label: "Intake", icon: "" },
                   { id: "esbd", label: "State/Fed", icon: "🏛 " },
                   { id: "archive", label: "Archive", icon: "⬇ " },
@@ -1141,6 +1142,15 @@
                 "div",
                 { style: { padding: "20px", color: "var(--body-dim)" } },
                 "NSN Intel loading...",
+              )),
+
+        tab === "calllist" &&
+          (window.SCC_TABS && window.SCC_TABS.CallListTab
+            ? hA(window.SCC_TABS.CallListTab, null)
+            : hA(
+                "div",
+                { style: { padding: "20px", color: "var(--body-dim)" } },
+                "Outreach loading...",
               )),
 
         tab === "lanelookup" &&
