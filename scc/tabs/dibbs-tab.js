@@ -422,7 +422,7 @@
     const [toast, setToast] = useState(null);
     const [resultTab, setResultTab] = useState("GO");
     const [minValue, setMinValue] = useState(500);   // dispatch value floor
-    const [minScore, setMinScore] = useState(30);    // hide Avoid-rated sols by default
+    const [minScore, setMinScore] = useState(0);     // show all by default — use filter to hide low scores
     const [bwsScores, setBwsScores] = useState({});  // nsn → { score, label, color }
     const [bwsLoading, setBwsLoading] = useState(false);
     const [rawExpanded, setRawExpanded] = useState(false);
