@@ -364,7 +364,7 @@
         h("span", null, ""),
       ),
       // rows
-      h("div", { style: { maxHeight: "380px", overflowY: "auto" } },
+      h("div", { style: { maxHeight: "calc(100vh - 340px)", overflowY: "auto" } },
         pending.map(v => {
           const isAdding = adding === v.id;
           return h("div", {
@@ -591,7 +591,7 @@
 
     const btnBase = { fontFamily: "Cinzel,serif", letterSpacing: ".08em", textTransform: "uppercase", borderRadius: "3px", cursor: "pointer", whiteSpace: "nowrap" };
 
-    return h("div", { style: { padding: "24px 28px", maxWidth: "1100px" } },
+    return h("div", { style: { padding: "24px 28px" } },
 
       // ── Page header ──
       h("div", { style: { display: "flex", alignItems: "baseline", gap: "16px", marginBottom: "20px", borderBottom: "1px solid rgba(255,255,255,.06)", paddingBottom: "14px" } },
