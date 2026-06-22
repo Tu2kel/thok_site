@@ -708,8 +708,10 @@
                 if (evt.type === "log") addLog(evt.msg, evt.level || "info");
                 if (evt.type === "result") {
                   if (evt.ok && Array.isArray(evt.sols)) {
+                    const sd = new Date().toLocaleString();
                     setSols(evt.sols);
-                    setScrapeDate(new Date().toLocaleString());
+                    setScrapeDate(sd);
+                    storeSave({ mode: modeRef.current, sols: evt.sols, scrapeDate: sd, analysis: null });
                     addLog("✓ AN/MS sweep: " + evt.an + " AN · " + evt.ms + " MS · " + evt.count + " total — analyzing…", "ok");
                     await autoChain(evt.sols);
                   } else {
@@ -722,8 +724,10 @@
         } else {
           const data = await resp.json();
           if (data.ok && Array.isArray(data.sols)) {
+            const sd = new Date().toLocaleString();
             setSols(data.sols);
-            setScrapeDate(new Date().toLocaleString());
+            setScrapeDate(sd);
+            storeSave({ mode: modeRef.current, sols: data.sols, scrapeDate: sd, analysis: null });
             addLog("✓ AN/MS sweep: " + data.an + " AN · " + data.ms + " MS · " + data.count + " total — analyzing…", "ok");
             await autoChain(data.sols);
           } else {
@@ -807,8 +811,10 @@
                 if (evt.type === "log") addLog(evt.msg, evt.level || "info");
                 if (evt.type === "result") {
                   if (evt.ok && Array.isArray(evt.sols)) {
+                    const sd = new Date().toLocaleString();
                     setSols(evt.sols);
-                    setScrapeDate(new Date().toLocaleString());
+                    setScrapeDate(sd);
+                    storeSave({ mode: modeRef.current, sols: evt.sols, scrapeDate: sd, analysis: null });
                     if (modeRef.current === "auto") {
                       await autoChain(evt.sols);
                     } else {
@@ -827,8 +833,10 @@
           const data = await resp.json();
           if (data.ok && Array.isArray(data.sols)) {
             data.sols.forEach((msg) => addLog(msg, "info"));
+            const sd = new Date().toLocaleString();
             setSols(data.sols);
-            setScrapeDate(new Date().toLocaleString());
+            setScrapeDate(sd);
+            storeSave({ mode: modeRef.current, sols: data.sols, scrapeDate: sd, analysis: null });
             if (modeRef.current === "auto") {
               await autoChain(data.sols);
             } else {

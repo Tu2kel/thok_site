@@ -1039,14 +1039,14 @@
             ? hA(window.SCC_TABS.DibbsIngestTab, null)
             : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Email Ingestor loading...")),
 
-        tab === "dibbs" &&
-          (window.SCC_TABS && window.SCC_TABS.DibbsTab
+        // DIBBS tab stays mounted always — batch runs survive tab switches
+        hA(
+          "div",
+          { style: { display: tab === "dibbs" ? "block" : "none" } },
+          window.SCC_TABS && window.SCC_TABS.DibbsTab
             ? hA(window.SCC_TABS.DibbsTab, { setTab })
-            : hA(
-                "div",
-                { style: { padding: "20px", color: "var(--body-dim)" } },
-                "DIBBS loading...",
-              )),
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "DIBBS loading..."),
+        ),
 
         tab === "screener" &&
           (window.SCC_TABS && window.SCC_TABS.ScreenerTab
