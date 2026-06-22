@@ -224,9 +224,36 @@
           notes: v.notes || "",
         });
         await window.SCC_DIST.distReloadCache();
+        // Push associated solicitations into the active pipeline
+        let solsAdded = 0;
+        if (v.solRefs && v.solRefs.length > 0 && window.SCC_DB) {
+          const existing = await window.SCC_DB.dbGetAll();
+          const existingNums = new Set((existing || []).map(s => s.sol_number));
+          for (const ref of v.solRefs) {
+            if (ref.sol_number && !existingNums.has(ref.sol_number)) {
+              const fsc = ref.nsn ? String(ref.nsn).replace(/\D/g, "").slice(0, 4) : "";
+              await window.SCC_DB.dbSave({
+                sol_number:       ref.sol_number,
+                item_name:        ref.item_name || "",
+                nsn:              ref.nsn || "",
+                fsc,
+                quantity:         ref.qty || 0,
+                unit_price:       ref.ext_price || 0,
+                unit_issue:       "EA",
+                status:           "Sourcing",
+                date_added:       new Date().toISOString().slice(0, 10),
+                notes:            "Vendor Intel → " + v.name,
+                screener_verdict: "GO",
+              });
+              solsAdded++;
+            }
+          }
+        }
         save(pending.filter(p => p.id !== v.id));
         setDrawer(null);
-        showToast("→ Pipeline: " + v.name);
+        showToast(solsAdded
+          ? "→ Pipeline: " + v.name + " · " + solsAdded + " sol" + (solsAdded !== 1 ? "s" : "") + " added"
+          : "→ Pipeline: " + v.name + " (no new sols)");
       } catch (e) { alert("Pipeline failed: " + e.message); }
       finally { setAdding(null); }
     };
@@ -303,7 +330,7 @@
         onPipeline: pipeline, onSkip: skip, onReenrich: reenrichOne,
         adding, enrichingSingle: enrichSingle,
       }),
-      h("div", { style: { border: "1px solid var(--gold-border)", borderRadius: "6px", overflow: "hidden" } },
+      h("div", { style: { background: "var(--metallic-black-surface)", border: "1px solid rgba(201,168,76,.28)", borderRadius: "8px", overflow: "hidden", boxShadow: "0 8px 48px rgba(0,0,0,.65), inset 0 1px 0 rgba(201,168,76,.07)" } },
 
         // ── Queue header ──
         h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: "var(--surface-inset)", borderBottom: "1px solid var(--gold-border)" } },
@@ -321,8 +348,8 @@
         ),
 
         // ── Column headers ──
-        h("div", { style: { display: "grid", gridTemplateColumns: "1fr 90px 160px 60px 100px 58px 50px", gap: "0 10px", padding: "5px 16px", fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".12em", textTransform: "uppercase", color: "var(--body-faint)", borderBottom: "1px solid rgba(255,255,255,.05)", background: "rgba(255,255,255,.015)" } },
-          h("span", null, "Company"), h("span", null, "CAGE"), h("span", null, "Email"),
+        h("div", { style: { display: "grid", gridTemplateColumns: "1fr 80px 185px 60px 100px 58px 50px", gap: "0 10px", padding: "6px 16px", fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".12em", textTransform: "uppercase", color: "var(--body-faint)", borderBottom: "1px solid rgba(255,255,255,.05)", background: "rgba(255,255,255,.018)" } },
+          h("span", null, "Company"), h("span", null, "CAGE"), h("span", null, "Email / Phone"),
           h("span", { style: { textAlign: "right" } }, "Awards"),
           h("span", { style: { textAlign: "right" } }, "Smallest"),
           h("span", null, ""), h("span", null, ""),
@@ -335,7 +362,7 @@
             return h("div", {
               key: v.id,
               onClick: (e) => { if (!e.target.closest("button")) setDrawer(v); },
-              style: { display: "grid", gridTemplateColumns: "1fr 90px 160px 60px 100px 58px 50px", gap: "0 10px", padding: "9px 16px", borderBottom: "1px solid rgba(255,255,255,.03)", alignItems: "start", background: v.isPrime ? "rgba(245,158,11,.02)" : "transparent", cursor: "pointer", transition: "background .12s" },
+              style: { display: "grid", gridTemplateColumns: "1fr 80px 185px 60px 100px 58px 50px", gap: "0 10px", padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,.04)", alignItems: "start", background: v.isPrime ? "rgba(245,158,11,.05)" : "rgba(255,255,255,.013)", cursor: "pointer", transition: "background .12s" },
             },
               // company cell
               h("div", null,
@@ -356,7 +383,10 @@
                 ),
               ),
               h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-dim)", paddingTop: "2px" } }, v.cage || "—"),
-              h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: v.email ? "rgba(56,189,248,.75)" : "var(--body-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingTop: "2px" }, title: v.email || "" }, v.email || "—"),
+              h("div", { style: { display: "flex", flexDirection: "column", gap: "3px", paddingTop: "2px" } },
+                h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: v.email ? "rgba(56,189,248,.82)" : "var(--body-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: v.email || "" }, v.email || "—"),
+                v.phone && h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "8px", color: "rgba(56,189,248,.52)", letterSpacing: ".01em" } }, v.phone),
+              ),
               h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--body-dim)", textAlign: "right", paddingTop: "2px" } }, v.awards || "—"),
               h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "var(--gold-dim)", textAlign: "right", paddingTop: "2px" } }, v.smallestAward > 0 ? "$" + Math.round(v.smallestAward).toLocaleString() : "—"),
               h("button", { onClick: () => approve(v), disabled: isAdding, style: { fontFamily: "Cinzel,serif", fontSize: "7px", letterSpacing: ".08em", padding: "4px 8px", background: "rgba(61,214,140,.07)", border: "1px solid rgba(61,214,140,.25)", color: "var(--accent-green)", borderRadius: "3px", cursor: isAdding ? "wait" : "pointer", opacity: isAdding ? 0.5 : 1 } }, isAdding ? "…" : "+ Add"),
