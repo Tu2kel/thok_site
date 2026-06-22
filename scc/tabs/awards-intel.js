@@ -2,8 +2,9 @@
   // ═══════════════════════════════════════════════════════════════════════
   //  IMPERIO SCC — AWARDS INTEL PANEL
   //  USASpending.gov award history + 0-100 Bid Worthiness Score
+  //  DIBBS NSN API for AMSC code + approved sources (NSN-specific)
   //  Exposes: AwardsIntelPanel, BidWorthinessGauge, AwardsTable,
-  //           calcNSNScore, fetchAwardHistory
+  //           calcNSNScore, fetchAwardHistory, fetchDIBBSData, fetchFSCDemand
   // ═══════════════════════════════════════════════════════════════════════
 
   const { createElement: h, useState, useEffect, useRef } = React;
@@ -114,13 +115,50 @@
            (data.results || []).length;
   }
 
+  // ── DIBBS NSN DATA — AMSC + approved sources ────────────────────────────
+  async function fetchDIBBSData(nsn) {
+    if (!nsn) return null;
+    const res = await fetch("/.netlify/functions/dibbs-nsn", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nsn }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.ok ? data : null;
+  }
+
+  // AMSC codes that allow open bidding (no approved-source restriction)
+  const AMSC_OPEN = new Set(["A", "B", ""]);
+  // AMSC codes that are fully blocked (sole source / no commercial source)
+  const AMSC_BLOCKED = new Set(["D", "E", "V", "K"]);
+
   // ── BID WORTHINESS SCORE (0-100) ────────────────────────────────────────
-  function calcNSNScore(awards, restriction) {
-    if (!awards || !awards.length) {
+  // opts: { restriction, amsc, approvedSources, mode }
+  // mode: "nsn" = exact match | "psc" = FSC fallback | "none" = no history
+  function calcNSNScore(awards, restriction, opts) {
+    const amsc = ((opts && opts.amsc) || "").toUpperCase().trim();
+    const mode = (opts && opts.mode) || "nsn";
+    const approvedSources = (opts && opts.approvedSources) || [];
+
+    // AMSC blocked = immediate low score regardless of history
+    if (AMSC_BLOCKED.has(amsc)) {
       return {
-        score: 0, color: "#e74c3c", label: "No Data",
-        reason: "No award history found in USASpending",
-        uniqueWinners: [], avgAward: 0, oemHit: false, hasRestriction: false,
+        score: 8, color: "#e74c3c", label: "Blocked",
+        reason: "AMSC " + amsc + " — not procured from commercial sources or sole-source. Do not bid.",
+        uniqueWinners: [], avgAward: 0, oemHit: false, hasRestriction: true,
+        amsc, approvedSources, fallback: mode !== "nsn",
+      };
+    }
+
+    if (!awards || !awards.length) {
+      const baseScore = amsc && !AMSC_OPEN.has(amsc) ? 15 : 25;
+      return {
+        score: baseScore, color: "#e74c3c", label: "No Data",
+        reason: "No award history in USASpending" + (amsc ? " · AMSC " + amsc : ""),
+        uniqueWinners: [], avgAward: 0, oemHit: false,
+        hasRestriction: !AMSC_OPEN.has(amsc),
+        amsc, approvedSources, fallback: mode !== "nsn",
       };
     }
 
@@ -133,30 +171,39 @@
     const avgAward = amounts.length ? amounts.reduce((s, v) => s + v, 0) / amounts.length : 0;
     const oemHit = uniqueWinners.some(n => OEM_NAMES.some(k => n.includes(k)));
     const hasRestriction =
+      !AMSC_OPEN.has(amsc) ||
       (restriction || "").toLowerCase().includes("approved source") ||
       (restriction || "").toLowerCase().includes("source only") ||
       (restriction || "").toLowerCase().includes("restricted");
 
     let score = 40;
 
-    // Demand signal — how many times DLA has bought this
+    // Demand signal
     score += Math.min(25, awards.length * 4);
 
-    // Market openness — number of distinct winners = dealer channel health
+    // Market openness
     if (uniqueWinners.length >= 4) score += 20;
     else if (uniqueWinners.length === 3) score += 14;
     else if (uniqueWinners.length === 2) score += 7;
 
-    // Value — is it worth the margin effort?
+    // Value signal
     if (avgAward > 50000) score += 12;
     else if (avgAward > 10000) score += 8;
     else if (avgAward > 1000) score += 4;
 
-    // Penalties
+    // AMSC penalty — R/C/F/G = approved source restriction
+    if (amsc === "R") score -= 30;
+    else if (amsc === "C" || amsc === "F" || amsc === "G") score -= 15;
+    else if (AMSC_OPEN.has(amsc) && amsc) score += 5; // confirmed open
+
+    // Concentration penalties
     if (uniqueWinners.length === 1 && oemHit) score -= 40;
     else if (uniqueWinners.length === 1) score -= 18;
-    if (hasRestriction) score -= 15;
+    if (hasRestriction && !amsc) score -= 10; // generic restriction signal
     if (oemHit && uniqueWinners.length > 1) score -= 8;
+
+    // FSC fallback uncertainty discount
+    if (mode === "psc") score -= 12;
 
     score = Math.min(100, Math.max(0, Math.round(score)));
 
@@ -172,14 +219,21 @@
       score >= 40 ? "Possible" :
       score >= 20 ? "Risky" : "Avoid";
 
-    const reason =
-      score >= 80 ? "Open market with active demand — bid it" :
-      score >= 60 ? "Competitive history, viable dealer channel" :
-      score >= 40 ? "Limited competition — assess approved-source restriction" :
-      score >= 20 ? "Concentrated or OEM-linked market — high risk" :
-      "Sole-source OEM or manufacturer-controlled — do not bid without CAGE";
+    const amscNote = amsc === "R" ? " — AMSC R: approved sources only" :
+                     amsc === "C" ? " — AMSC C: approved sources required" :
+                     mode === "psc" ? " — FSC lane estimate, not NSN-specific" : "";
 
-    return { score, color, label, reason, uniqueWinners, avgAward, oemHit, hasRestriction };
+    const reason =
+      (score >= 80 ? "Open market with active demand — bid it" :
+       score >= 60 ? "Competitive history, viable dealer channel" :
+       score >= 40 ? "Limited competition — verify approved-source restriction" :
+       score >= 20 ? "Concentrated or OEM-linked — high risk" :
+       "Sole-source or manufacturer-controlled — do not bid without CAGE") + amscNote;
+
+    return {
+      score, color, label, reason, uniqueWinners, avgAward, oemHit, hasRestriction,
+      amsc, approvedSources, fallback: mode !== "nsn",
+    };
   }
 
   // ── BID WORTHINESS GAUGE (SVG circular ring) ────────────────────────────
@@ -349,6 +403,7 @@
     const fsc = record.fsc || nsn.replace(/-/g, "").slice(0, 4);
     const histPrice = parseFloat(record.unit_price) || null;
     const restriction = record.supplier_restrictions || "";
+    const [dibbsData, setDibbsData] = useState(null);
 
     const runFetch = async () => {
       if (!nsn) return;
@@ -357,11 +412,21 @@
       setNsnScore(null);
       setQueryMode(null);
       setErrorMsg("");
+      setDibbsData(null);
       try {
-        const { results, mode } = await fetchAwardHistory(nsn);
+        // Parallel: USASpending + DIBBS
+        const [{ results, mode }, dibbs] = await Promise.all([
+          fetchAwardHistory(nsn),
+          fetchDIBBSData(nsn),
+        ]);
         setAwards(results);
         setQueryMode(mode);
-        setNsnScore(calcNSNScore(results, restriction));
+        setDibbsData(dibbs);
+        setNsnScore(calcNSNScore(results, restriction, {
+          amsc: dibbs ? dibbs.amsc : "",
+          approvedSources: dibbs ? dibbs.approvedSources : [],
+          mode,
+        }));
         setStatus("done");
       } catch (e) {
         setErrorMsg(e.message);
@@ -615,6 +680,66 @@
             : "○ No award history found",
       ),
 
+      // ── DIBBS: AMSC + Approved Sources ──
+      dibbsData && h("div", {
+        style: {
+          marginBottom: "18px",
+          padding: "14px 16px",
+          background: dibbsData.amsc && !AMSC_OPEN.has(dibbsData.amsc)
+            ? "rgba(231,76,60,.05)" : "rgba(61,214,140,.04)",
+          border: "1px solid " + (dibbsData.amsc && !AMSC_OPEN.has(dibbsData.amsc)
+            ? "rgba(231,76,60,.22)" : "rgba(61,214,140,.18)"),
+          borderLeft: "3px solid " + (dibbsData.amsc && !AMSC_OPEN.has(dibbsData.amsc)
+            ? "rgba(231,76,60,.55)" : "rgba(61,214,140,.5)"),
+          borderRadius: "5px",
+        },
+      },
+        h("div", { style: { display: "flex", gap: "16px", alignItems: "baseline", marginBottom: "10px", flexWrap: "wrap" } },
+          h("div", {
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".18em",
+              textTransform: "uppercase", color: "rgba(201,168,76,.52)",
+            },
+          }, "DIBBS Approved Source Data"),
+          dibbsData.amsc && h("div", {
+            style: {
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "2px 10px",
+              background: AMSC_OPEN.has(dibbsData.amsc) ? "rgba(61,214,140,.1)" : "rgba(231,76,60,.12)",
+              border: "1px solid " + (AMSC_OPEN.has(dibbsData.amsc) ? "rgba(61,214,140,.35)" : "rgba(231,76,60,.45)"),
+              borderRadius: "3px",
+            },
+          },
+            h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".12em", color: "rgba(245,240,232,.45)" } }, "AMSC"),
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "13px", fontWeight: "700",
+              color: AMSC_OPEN.has(dibbsData.amsc) ? "#3dd68c" : "#e87474" } }, dibbsData.amsc),
+            h("span", { style: { fontFamily: "Cormorant Garamond,serif", fontSize: "12px", fontStyle: "italic",
+              color: AMSC_OPEN.has(dibbsData.amsc) ? "rgba(61,214,140,.7)" : "rgba(232,116,116,.75)" } },
+              dibbsData.amscDesc || ""),
+          ),
+          dibbsData.nomenclature && h("div", {
+            style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "rgba(245,240,232,.55)", letterSpacing: ".04em" },
+          }, dibbsData.nomenclature),
+        ),
+        dibbsData.approvedSources && dibbsData.approvedSources.length > 0 && h("div", null,
+          h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".14em", textTransform: "uppercase",
+            color: "rgba(245,240,232,.32)", marginBottom: "8px" } }, "Approved CAGEs"),
+          h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } },
+            ...dibbsData.approvedSources.map((src, i) =>
+              h("div", { key: i, style: { background: "rgba(201,168,76,.06)", border: "1px solid rgba(201,168,76,.18)",
+                borderRadius: "3px", padding: "4px 10px" } },
+                h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", fontWeight: "700",
+                  color: "#C9A84C", marginBottom: "2px" } }, src.cage || "—"),
+                src.partNumber && h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px",
+                  color: "rgba(245,240,232,.45)" } }, src.partNumber),
+                src.companyName && h("div", { style: { fontFamily: "Cormorant Garamond,serif", fontSize: "11px", fontStyle: "italic",
+                  color: "rgba(245,240,232,.5)" } }, src.companyName),
+              ),
+            ),
+          ),
+        ),
+      ),
+
       // ── Prior Awardees ──
       uniqueWinners.length > 0 && h("div", { style: { marginBottom: "18px" } },
         h("div", {
@@ -725,4 +850,6 @@
   window.SCC_TABS.calcNSNScore = calcNSNScore;
   window.SCC_TABS.fetchAwardHistory = fetchAwardHistory;
   window.SCC_TABS.fetchFSCDemand = fetchFSCDemand;
+  window.SCC_TABS.fetchDIBBSData = fetchDIBBSData;
+  window.SCC_TABS.AMSC_OPEN = AMSC_OPEN;
 })();

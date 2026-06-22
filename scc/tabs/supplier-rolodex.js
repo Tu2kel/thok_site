@@ -67,9 +67,17 @@
       setErrorMsg("");
 
       try {
-        const { results, mode } = await fetchFn(nsn);
-        const nsnScore = scoreFn(results, "");
-        const res = { nsn, awards: results, nsnScore, queryMode: mode };
+        const dibbsFn = window.SCC_TABS && window.SCC_TABS.fetchDIBBSData;
+        const [{ results, mode }, dibbs] = await Promise.all([
+          fetchFn(nsn),
+          dibbsFn ? dibbsFn(nsn) : Promise.resolve(null),
+        ]);
+        const nsnScore = scoreFn(results, "", {
+          amsc: dibbs ? dibbs.amsc : "",
+          approvedSources: dibbs ? dibbs.approvedSources : [],
+          mode,
+        });
+        const res = { nsn, awards: results, nsnScore, queryMode: mode, dibbs };
         setResult(res);
 
         const entry = { nsn, score: nsnScore.score, label: nsnScore.label, color: nsnScore.color, ts: Date.now() };
@@ -340,6 +348,63 @@
             : result.queryMode === "psc"
               ? "◎ FSC " + result.nsn.replace(/\D/g, "").slice(0, 4) + " lane fallback (no NSN-specific history)"
               : "○ No award history found",
+        ),
+
+        // ── DIBBS: AMSC + Approved Sources ──
+        result.dibbs && h("div", {
+          style: {
+            marginBottom: "18px",
+            padding: "14px 16px",
+            background: result.dibbs.amsc && !(result.dibbs.amsc === "A" || result.dibbs.amsc === "B" || result.dibbs.amsc === "")
+              ? "rgba(231,76,60,.05)" : "rgba(61,214,140,.04)",
+            border: "1px solid " + (result.dibbs.amsc && !(result.dibbs.amsc === "A" || result.dibbs.amsc === "B" || result.dibbs.amsc === "")
+              ? "rgba(231,76,60,.22)" : "rgba(61,214,140,.18)"),
+            borderLeft: "3px solid " + (result.dibbs.amsc && !(result.dibbs.amsc === "A" || result.dibbs.amsc === "B" || result.dibbs.amsc === "")
+              ? "rgba(231,76,60,.55)" : "rgba(61,214,140,.5)"),
+            borderRadius: "5px",
+          },
+        },
+          h("div", { style: { display: "flex", gap: "16px", alignItems: "baseline", marginBottom: "10px", flexWrap: "wrap" } },
+            h("div", {
+              style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".18em",
+                textTransform: "uppercase", color: "rgba(201,168,76,.52)" },
+            }, "DIBBS Approved Source Data"),
+            result.dibbs.amsc && h("div", {
+              style: {
+                display: "inline-flex", alignItems: "center", gap: "6px", padding: "2px 10px",
+                background: (result.dibbs.amsc === "A" || result.dibbs.amsc === "B") ? "rgba(61,214,140,.1)" : "rgba(231,76,60,.12)",
+                border: "1px solid " + ((result.dibbs.amsc === "A" || result.dibbs.amsc === "B") ? "rgba(61,214,140,.35)" : "rgba(231,76,60,.45)"),
+                borderRadius: "3px",
+              },
+            },
+              h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".12em", color: "rgba(245,240,232,.45)" } }, "AMSC"),
+              h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "14px", fontWeight: "700",
+                color: (result.dibbs.amsc === "A" || result.dibbs.amsc === "B") ? "#3dd68c" : "#e87474" } }, result.dibbs.amsc),
+              h("span", { style: { fontFamily: "Cormorant Garamond,serif", fontSize: "13px", fontStyle: "italic",
+                color: (result.dibbs.amsc === "A" || result.dibbs.amsc === "B") ? "rgba(61,214,140,.7)" : "rgba(232,116,116,.75)" } },
+                result.dibbs.amscDesc || ""),
+            ),
+            result.dibbs.nomenclature && h("div", {
+              style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "rgba(245,240,232,.5)", letterSpacing: ".04em" },
+            }, result.dibbs.nomenclature),
+          ),
+          result.dibbs.approvedSources && result.dibbs.approvedSources.length > 0 && h("div", null,
+            h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "8px", letterSpacing: ".14em", textTransform: "uppercase",
+              color: "rgba(245,240,232,.3)", marginBottom: "8px" } }, "Approved CAGEs"),
+            h("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } },
+              ...result.dibbs.approvedSources.map((src, i) =>
+                h("div", { key: i, style: { background: "rgba(201,168,76,.06)", border: "1px solid rgba(201,168,76,.18)",
+                  borderRadius: "3px", padding: "5px 12px" } },
+                  h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "12px", fontWeight: "700",
+                    color: "#C9A84C", marginBottom: "2px" } }, src.cage || "—"),
+                  src.partNumber && h("div", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px",
+                    color: "rgba(245,240,232,.45)" } }, src.partNumber),
+                  src.companyName && h("div", { style: { fontFamily: "Cormorant Garamond,serif", fontSize: "11px",
+                    fontStyle: "italic", color: "rgba(245,240,232,.5)" } }, src.companyName),
+                ),
+              ),
+            ),
+          ),
         ),
 
         // ── Prior Awardees ──
