@@ -663,7 +663,6 @@
       if (anmsSweeping || running) return;
       setAnmsSweeping(true);
       setLog([]);
-      setSols([]);
       setAnalysis(null);
       setSelected(new Set());
 
@@ -709,9 +708,13 @@
                 if (evt.type === "result") {
                   if (evt.ok && Array.isArray(evt.sols)) {
                     const sd = new Date().toLocaleString();
-                    setSols(evt.sols);
+                    const prevSols = storeLoad().sols || [];
+                    const mergedMap = new Map(prevSols.map(s => [s.sol_number, s]));
+                    for (const s of evt.sols) if (!mergedMap.has(s.sol_number)) mergedMap.set(s.sol_number, s);
+                    const merged = Array.from(mergedMap.values());
+                    setSols(merged);
                     setScrapeDate(sd);
-                    storeSave({ mode: modeRef.current, sols: evt.sols, scrapeDate: sd, analysis: null });
+                    storeSave({ mode: modeRef.current, sols: merged, scrapeDate: sd, analysis: null });
                     addLog("✓ AN/MS sweep: " + evt.an + " AN · " + evt.ms + " MS · " + evt.count + " total — analyzing…", "ok");
                     await autoChain(evt.sols);
                   } else {
@@ -725,9 +728,13 @@
           const data = await resp.json();
           if (data.ok && Array.isArray(data.sols)) {
             const sd = new Date().toLocaleString();
-            setSols(data.sols);
+            const prevSols = storeLoad().sols || [];
+            const mergedMap = new Map(prevSols.map(s => [s.sol_number, s]));
+            for (const s of data.sols) if (!mergedMap.has(s.sol_number)) mergedMap.set(s.sol_number, s);
+            const merged = Array.from(mergedMap.values());
+            setSols(merged);
             setScrapeDate(sd);
-            storeSave({ mode: modeRef.current, sols: data.sols, scrapeDate: sd, analysis: null });
+            storeSave({ mode: modeRef.current, sols: merged, scrapeDate: sd, analysis: null });
             addLog("✓ AN/MS sweep: " + data.an + " AN · " + data.ms + " MS · " + data.count + " total — analyzing…", "ok");
             await autoChain(data.sols);
           } else {
@@ -818,6 +825,7 @@
                     if (modeRef.current === "auto") {
                       await autoChain(evt.sols);
                     } else {
+                      localStorage.removeItem("scc_auto_analyzed");
                       addLog("✓ Scraped " + evt.sols.length + " sols — heading to Screener…", "ok");
                       setTimeout(() => setTab && setTab("screener"), 1200);
                     }
@@ -840,6 +848,7 @@
             if (modeRef.current === "auto") {
               await autoChain(data.sols);
             } else {
+              localStorage.removeItem("scc_auto_analyzed");
               addLog("✓ Scraped " + data.sols.length + " sols — heading to Screener…", "ok");
               setTimeout(() => setTab && setTab("screener"), 1200);
             }
