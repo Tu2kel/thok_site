@@ -326,6 +326,21 @@
       }
     }, [mode]);
 
+    // ── AUTO-ANALYZE: trigger when fresh batch has no analysis ──────────
+    useEffect(() => {
+      if (mode !== "dibbs" || !dibbsBatch || results !== null || loading) return;
+      // Dedup: only auto-analyze each batch date once
+      const key = "scc_auto_analyzed";
+      if (localStorage.getItem(key) === dibbsBatch.date) return;
+      localStorage.setItem(key, dibbsBatch.date);
+      // Request notification permission early (benign if already set)
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+      const t = setTimeout(() => analyzeDibbsBatch(), 800);
+      return () => clearTimeout(t);
+    }, [dibbsBatch, results, mode, loading]);
+
     // ── Clipboard paste (Ctrl+V image) ──────────────────────────────────
     useEffect(() => {
       const onPaste = (e) => {
@@ -413,7 +428,7 @@
             supplier_restrictions: s.supplier_restrictions,
             piece_part_no: s.ref_part_number || s.piece_part_no,
             material: s.material, part_char: s.part_char, quote_due: s.quote_due,
-            amsc: s.amsc || "", approved_sources: s.approved_sources || [],
+            amsc: s.amsc || "", supplier_list: s.supplier_list || "",
           }));
           const results = await fetchChunk(payload);
           if (results) { allResults.push(...results); } else { skipped += chunks[i].length; }
@@ -446,7 +461,22 @@
         const autoSel = new Set(merged.filter((r) => r.verdict === "GO").map((r) => r.sol_number));
         setSelected(autoSel);
         setDibbsProgress("");
-        showToast(`Analysis complete — ${autoSel.size} GO · ${merged.filter(r=>r.verdict==="VERIFY FIRST").length} VERIFY · ${merged.filter(r=>r.verdict==="REJECT").length} REJECT` + (skipped > 0 ? ` · ${skipped} skipped (API error)` : ""));
+        const goN      = autoSel.size;
+        const verifyN  = merged.filter(r => r.verdict === "VERIFY FIRST").length;
+        const rejectN  = merged.filter(r => r.verdict === "REJECT").length;
+        showToast(`Analysis complete — ${goN} GO · ${verifyN} VERIFY · ${rejectN} REJECT` + (skipped > 0 ? ` · ${skipped} skipped (API error)` : ""));
+
+        // ── AUTO-CHAIN → Intel tab ──────────────────────────────────────
+        if (goN > 0 && typeof setTab === "function") {
+          localStorage.setItem("scc_auto_chain", "nsn");
+          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            new Notification("SCC: Analysis Done", {
+              body: goN + " GO · " + verifyN + " Verify — running intel sweep now",
+              icon: "/scc/favicon.ico",
+            });
+          }
+          setTimeout(() => setTab("intel"), 500);
+        }
       } catch (e) {
         showToast("Analysis failed: " + e.message, true);
         setDibbsProgress("");

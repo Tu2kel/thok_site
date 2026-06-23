@@ -407,19 +407,37 @@
           ),
         ),
 
-        // ── Prior Awardees ──
+        // ── Competitors — Prior Award Winners ──
         result.nsnScore.uniqueWinners && result.nsnScore.uniqueWinners.length > 0 &&
-          h("div", { style: { marginBottom: "18px" } },
-            h("div", {
-              style: {
-                fontFamily: "Cinzel,serif",
-                fontSize: "9px",
-                letterSpacing: ".18em",
-                textTransform: "uppercase",
-                color: "rgba(201,168,76,.52)",
-                marginBottom: "10px",
-              },
-            }, "Prior Awardees — Who's Been Winning"),
+          h("div", {
+            style: {
+              marginBottom: "18px",
+              padding: "14px 16px",
+              background: "rgba(231,76,60,.04)",
+              border: "1px solid rgba(231,76,60,.2)",
+              borderLeft: "3px solid rgba(231,76,60,.5)",
+              borderRadius: "5px",
+            },
+          },
+            h("div", { style: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" } },
+              h("div", {
+                style: {
+                  fontFamily: "Cinzel,serif",
+                  fontSize: "9px",
+                  letterSpacing: ".18em",
+                  textTransform: "uppercase",
+                  color: "rgba(231,76,60,.8)",
+                },
+              }, "⚠ Competitors — Who Has Won Before"),
+              h("div", {
+                style: {
+                  fontFamily: "Cormorant Garamond,serif",
+                  fontStyle: "italic",
+                  fontSize: "12px",
+                  color: "rgba(245,240,232,.35)",
+                },
+              }, "These companies bid and won — they compete in your lane. Do NOT add to vendor DB."),
+            ),
             h("div", { style: { display: "flex", flexWrap: "wrap", gap: "7px" } },
               ...result.nsnScore.uniqueWinners.map((name, i) => {
                 const SA = window.SCC_SOURCE_ACTIONS || {};
@@ -428,8 +446,8 @@
                   style: {
                     display: "inline-flex",
                     alignItems: "center",
-                    background: "rgba(201,168,76,.06)",
-                    border: "1px solid rgba(201,168,76,.18)",
+                    background: "rgba(231,76,60,.07)",
+                    border: "1px solid rgba(231,76,60,.22)",
                     borderRadius: "3px",
                   },
                 },
@@ -438,7 +456,7 @@
                       fontFamily: "JetBrains Mono,monospace",
                       fontSize: "10px",
                       padding: "4px 9px",
-                      color: "rgba(245,240,232,.82)",
+                      color: "rgba(232,116,116,.9)",
                     },
                   }, name),
                   h("button", {
@@ -447,8 +465,8 @@
                     style: {
                       background: "transparent",
                       border: "none",
-                      borderLeft: "1px solid rgba(201,168,76,.15)",
-                      color: "rgba(201,168,76,.55)",
+                      borderLeft: "1px solid rgba(231,76,60,.15)",
+                      color: "rgba(231,76,60,.5)",
                       fontFamily: "Cinzel,serif",
                       fontSize: "8px",
                       letterSpacing: ".1em",

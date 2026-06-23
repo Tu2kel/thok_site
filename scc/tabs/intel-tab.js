@@ -1531,6 +1531,16 @@
     );
   }
 
+  // ── Helper: parse DIBBS supplier_list string into approved sources ─────
+  // Format: "CompanyName|CAGE|PartNumber;CompanyName|CAGE|PartNumber;..."
+  function parseSupplierList(raw) {
+    if (!raw) return [];
+    return String(raw).split(";").map(entry => {
+      const p = entry.trim().split("|");
+      return { name: (p[0] || "").trim(), cage: (p[1] || "").trim(), partNumber: (p[2] || "").trim() };
+    }).filter(e => e.cage || e.name);
+  }
+
   // ── Main IntelTab component ────────────────────────────────────────────
 
   function IntelTab({ showToast }) {
@@ -1553,6 +1563,8 @@
             qty: s.quantity || s.qty || s.req_qty || null,
             ext_price: s.ext_price || s.extended_price || null,
             unit_price: s.unit_price || s.dibbs_price || null,
+            delivery_days: s.delivery_days || 0,
+            suppliers: parseSupplierList(s.supplier_list || ""),
           }))
           .filter((e) => e.nsn || e.fsc);
       } catch {
@@ -1570,6 +1582,47 @@
         return [];
       }
     });
+
+    // ── AUTO-CHAIN: read flag set by screener after analysis ─────────────
+    // Uses a ref so phase transitions don't cause extra renders
+    const autoChainRef = useRef((() => {
+      const v = localStorage.getItem("scc_auto_chain");
+      if (v) { localStorage.removeItem("scc_auto_chain"); }
+      return v || null; // "nsn" initially, null if no auto-chain
+    })());
+
+    // Mount: kick off NSN sweep if chain flag was set
+    useEffect(() => {
+      if (!autoChainRef.current || autoChainRef.current !== "nsn") return;
+      if (!solList.length) return;
+      autoChainRef.current = "fsc"; // next phase after NSN
+      // Small delay so component fully paints first
+      setTimeout(() => runIntel("nsn"), 600);
+    }, []); // eslint-disable-line
+
+    // Running-watcher: chain NSN → FSC → notify when each phase finishes
+    useEffect(() => {
+      if (running !== null) return; // still working
+      const phase = autoChainRef.current;
+      if (!phase) return;
+
+      if (phase === "fsc") {
+        autoChainRef.current = "notify";
+        setTimeout(() => runIntel("fsc"), 400);
+      } else if (phase === "notify") {
+        autoChainRef.current = null;
+        const queueSize = (() => {
+          try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]").length; } catch { return 0; }
+        })();
+        showToast("⚡ Daily intel chain complete — " + queueSize + " vendors in queue");
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          new Notification("SCC: Daily Scrub Done", {
+            body: "Intelligence sweep complete — " + queueSize + " vendors queued for triage.",
+            icon: "/scc/favicon.ico",
+          });
+        }
+      }
+    }, [running]); // eslint-disable-line
 
     // Pull GO sols from screener results if available
     const loadFromScreener = () => {
@@ -1597,6 +1650,8 @@
             qty: s.quantity || s.qty || s.req_qty || null,
             ext_price: s.ext_price || s.extended_price || null,
             unit_price: s.unit_price || s.dibbs_price || null,
+            delivery_days: s.delivery_days || 0,
+            suppliers: parseSupplierList(s.supplier_list || ""),
           }))
           .filter((e) => e.nsn || e.fsc);
         setSolList(entries);
@@ -1630,144 +1685,151 @@
     };
 
     const runIntel = async (mode) => {
-      // mode: "nsn" = NSN-only tight queries, "fsc" = FSC fallback on empties
-      if (!solList.length) {
-        showToast("No sols loaded", true);
-        return;
-      }
+      if (!solList.length) { showToast("No sols loaded", true); return; }
       setRunning(mode);
       setProgress("");
 
-      const existing =
-        window.SCC_DIST && window.SCC_DIST.getAll
-          ? window.SCC_DIST.getAll()
-          : [];
-      const existNames = new Set(
-        existing.map((d) => (d.name || "").toUpperCase().trim()),
-      );
-      const pendingNow = (() => {
-        try {
-          return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
-        } catch {
-          return [];
+      const existing = window.SCC_DIST && window.SCC_DIST.getAll ? window.SCC_DIST.getAll() : [];
+      const existNames  = new Set(existing.map(d => (d.name || "").toUpperCase().trim()));
+      const pendingNow  = (() => { try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); } catch { return []; } })();
+      const pendingCages = new Set(pendingNow.map(v => (v.cage || "").toUpperCase().trim()).filter(Boolean));
+      const pendingNames = new Set(pendingNow.map(v => (v.name || "").toUpperCase().trim()));
+
+      // ── MANUFACTURER SWEEP: use approved sources from DIBBS supplier_list ──
+      // These are the companies CLEARED to supply each NSN — your sourcing contacts
+      if (mode === "nsn") {
+        const cageMap = new Map();
+        const newNsnResults = {};
+
+        for (const sol of solList) {
+          const suppliers = sol.suppliers || [];
+          newNsnResults[sol.nsn] = suppliers.length;
+          for (const sup of suppliers) {
+            if (!sup.cage) continue;
+            const key = sup.cage.toUpperCase();
+            if (existNames.has((sup.name || "").toUpperCase().trim()) || pendingCages.has(key)) continue;
+            const solRef = { nsn: sol.nsn, sol_number: sol.sol_number, item_name: sol.item_name, qty: sol.qty, ext_price: sol.ext_price, delivery_days: sol.delivery_days || 0 };
+            if (!cageMap.has(key)) {
+              cageMap.set(key, { name: sup.name, cage: sup.cage, partNumbers: sup.partNumber ? [sup.partNumber] : [], solRefs: [solRef], fscs: sol.fsc ? [sol.fsc] : [], nsns: sol.nsn ? [sol.nsn] : [] });
+            } else {
+              const e = cageMap.get(key);
+              if (sup.partNumber && !e.partNumbers.includes(sup.partNumber)) e.partNumbers.push(sup.partNumber);
+              if (!e.solRefs.find(r => r.sol_number === sol.sol_number)) e.solRefs.push(solRef);
+              if (sol.fsc && !e.fscs.includes(sol.fsc)) e.fscs.push(sol.fsc);
+              if (sol.nsn && !e.nsns.includes(sol.nsn)) e.nsns.push(sol.nsn);
+            }
+          }
         }
-      })();
-      const pendingNames = new Set(
-        pendingNow.map((v) => (v.name || "").toUpperCase().trim()),
-      );
 
-      const found = new Map();
-      const newNsnResults = {};
+        setNsnResults(prev => ({ ...prev, ...newNsnResults }));
 
-      const toQuery =
-        mode === "nsn"
-          ? solList.filter((s) => s.nsn)
-          : solList.filter(
-              (s) => !nsnResults[s.nsn] || nsnResults[s.nsn] === 0,
-            ); // only empties for FSC fallback
+        const mfrList = [...cageMap.values()];
+        if (!mfrList.length) {
+          showToast("No approved manufacturer data on these sols — check supplier_list field", true);
+          setRunning(null);
+          return;
+        }
 
-      if (!toQuery.length) {
-        showToast(
-          mode === "fsc"
-            ? "No empties to fall back on — run NSN first"
-            : "No NSNs in sol list",
-          true,
-        );
+        const newVendors = [];
+        for (let i = 0; i < mfrList.length; i++) {
+          const mfr = mfrList[i];
+          setProgress("CAGE " + mfr.cage + " · " + (i + 1) + "/" + mfrList.length + " · " + mfr.name.slice(0, 22));
+          // SAM.gov lookup by CAGE — scc-intel supports cage param
+          const sam = await fetchSAM(mfr.cage);
+          newVendors.push({
+            id: "mfr-" + mfr.cage,
+            name: (sam && sam.name) || mfr.name,
+            cage: mfr.cage,
+            email: (sam && sam.email) || "",
+            phone: (sam && sam.phone) || "",
+            contact: (sam && sam.contact) || "",
+            fsc: mfr.fscs,
+            nsns: mfr.nsns,
+            solRefs: mfr.solRefs,
+            partNumbers: mfr.partNumbers,
+            awards: 0, smallestAward: 0, totalAward: 0, isPrime: false,
+            sam: !!sam,
+            tags: ["approved-manufacturer", "source-contact", ...(sam ? ["sam-verified"] : ["needs-contact"])],
+            notes: (() => {
+              const maxDays = Math.max(...mfr.solRefs.map(r => r.delivery_days || 0));
+              const strategy = maxDays >= 180 ? "BID FIRST — " + maxDays + "d delivery, source post-award"
+                             : maxDays >= 60  ? "SOURCE SOON — " + maxDays + "d delivery window"
+                             : maxDays > 0    ? "SOURCE NOW — only " + maxDays + "d delivery"
+                             : "check delivery window";
+              return "Approved mfr · P/N: " + (mfr.partNumbers[0] || "—") + " · " + mfr.solRefs.length + " sol(s) · " + strategy;
+            })(),
+            pendingAt: new Date().toISOString(),
+            source: "supplier-list",
+          });
+          await new Promise(r => setTimeout(r, 200));
+        }
+
+        const updated = [...pendingNow, ...newVendors];
+        localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
+        setPending(updated);
+        setProgress("");
+        setRunning(null);
+        showToast("⚡ " + newVendors.length + " approved manufacturers queued — call these to source, not the award winners");
+        return;
+      }
+
+      // ── TEAMING INTEL: USASpending FSC sweep for open-market sols ──────
+      // These are companies that won awards in the same FSC lane.
+      // Use for teaming partnerships — NOT for sourcing (they are competitors).
+      const fscSols = solList.filter(s => !nsnResults[s.nsn] || nsnResults[s.nsn] === 0);
+      if (!fscSols.length) {
+        showToast("All sols have approved manufacturer data — no FSC sweep needed", true);
         setRunning(null);
         return;
       }
 
-      for (let i = 0; i < toQuery.length; i++) {
-        const sol = toQuery[i];
-        const label = sol.nsn || sol.fsc;
-        setProgress(i + 1 + "/" + toQuery.length + " · " + label);
-
-        let rows = [];
-        if (mode === "nsn" && sol.nsn) {
-          rows = await queryUSASpending("nsn", sol.nsn);
-          newNsnResults[sol.nsn] = rows.length;
-        } else if (mode === "fsc" && sol.fsc) {
-          rows = await queryUSASpending("fsc", sol.fsc);
-        }
-
+      const found = new Map();
+      for (let i = 0; i < fscSols.length; i++) {
+        const sol = fscSols[i];
+        setProgress(i + 1 + "/" + fscSols.length + " · FSC " + sol.fsc);
+        const rows = sol.fsc ? await queryUSASpending("fsc", sol.fsc) : [];
         for (const v of rows) {
           const key = v.name.toUpperCase().trim();
           if (existNames.has(key) || pendingNames.has(key)) continue;
-          const solRef = {
-            nsn: sol.nsn,
-            sol_number: sol.sol_number,
-            item_name: sol.item_name,
-            qty: sol.qty,
-            ext_price: sol.ext_price,
-          };
+          const solRef = { nsn: sol.nsn, sol_number: sol.sol_number, item_name: sol.item_name, qty: sol.qty, ext_price: sol.ext_price };
           if (!found.has(key)) {
-            found.set(key, {
-              ...v,
-              fscs: sol.fsc ? [sol.fsc] : [],
-              nsns: sol.nsn ? [sol.nsn] : [],
-              solRefs: [solRef],
-            });
+            found.set(key, { ...v, fscs: sol.fsc ? [sol.fsc] : [], nsns: sol.nsn ? [sol.nsn] : [], solRefs: [solRef] });
           } else {
             const e = found.get(key);
-            e.total += v.total;
-            e.count += v.count;
-            if (v.minAward > 0 && (e.minAward === 0 || v.minAward < e.minAward))
-              e.minAward = v.minAward;
-            v.descs.forEach((d) => {
-              if (!e.descs.includes(d) && e.descs.length < 5) e.descs.push(d);
-            });
+            e.total += v.total; e.count += v.count;
+            if (v.minAward > 0 && (e.minAward === 0 || v.minAward < e.minAward)) e.minAward = v.minAward;
+            v.descs.forEach(d => { if (!e.descs.includes(d) && e.descs.length < 5) e.descs.push(d); });
             if (sol.fsc && !e.fscs.includes(sol.fsc)) e.fscs.push(sol.fsc);
             if (sol.nsn && !e.nsns.includes(sol.nsn)) e.nsns.push(sol.nsn);
-            if (!e.solRefs.find((r) => r.sol_number === sol.sol_number))
-              e.solRefs.push(solRef);
+            if (!e.solRefs.find(r => r.sol_number === sol.sol_number)) e.solRefs.push(solRef);
           }
         }
-        await new Promise((r) => setTimeout(r, 280));
+        await new Promise(r => setTimeout(r, 280));
       }
-
-      if (mode === "nsn")
-        setNsnResults((prev) => ({ ...prev, ...newNsnResults }));
 
       const foundArr = [...found.values()];
       const newVendors = [];
-
       for (let i = 0; i < foundArr.length; i++) {
         const v = foundArr[i];
-        setProgress(
-          "Contact lookup " +
-            (i + 1) +
-            "/" +
-            foundArr.length +
-            " · " +
-            v.name.slice(0, 28),
-        );
+        setProgress("SAM lookup " + (i + 1) + "/" + foundArr.length + " · " + v.name.slice(0, 28));
         const sam = await fetchSAM(v.name);
         const isPrime = detectPrime(v.descs);
         newVendors.push({
-          id: "intel-" + Date.now() + "-" + i,
+          id: "fsc-" + Date.now() + "-" + i,
           name: (sam && sam.name) || v.name,
           cage: (sam && sam.cage) || "",
           email: (sam && sam.email) || "",
           phone: (sam && sam.phone) || "",
           contact: (sam && sam.contact) || "",
-          fsc: v.fscs,
-          nsns: v.nsns,
-          solRefs: v.solRefs || [],
-          awards: v.count,
-          smallestAward: v.minAward,
-          totalAward: v.total,
-          isPrime,
-          sam: !!sam,
-          tags: [
-            "usa-spending-verified",
-            ...(isPrime ? ["possible-prime"] : []),
-            ...(sam ? [] : ["needs-contact"]),
-          ],
-          notes: v.descs.join(" | ").slice(0, 200),
+          fsc: v.fscs, nsns: v.nsns, solRefs: v.solRefs || [],
+          awards: v.count, smallestAward: v.minAward, totalAward: v.total,
+          isPrime, sam: !!sam,
+          tags: ["fsc-lane-winner", "teaming-intel", ...(isPrime ? ["possible-prime"] : []), ...(sam ? [] : ["needs-contact"])],
+          notes: "FSC lane winner · " + v.count + " awards · avg $" + Math.round(v.total / Math.max(v.count, 1)).toLocaleString() + " — teaming contact, not a source",
           pendingAt: new Date().toISOString(),
-          source: mode,
+          source: "fsc",
         });
-        await new Promise((r) => setTimeout(r, 180));
+        await new Promise(r => setTimeout(r, 180));
       }
 
       const updated = [...pendingNow, ...newVendors];
@@ -1775,7 +1837,7 @@
       setPending(updated);
       setProgress("");
       setRunning(null);
-      showToast("⚡ Done · " + newVendors.length + " new vendors in queue");
+      showToast("⚡ Teaming intel done · " + newVendors.length + " lane contacts queued (teaming only — they compete in this lane)");
     };
 
     const nsnCount = solList.filter((s) => s.nsn).length;
@@ -1882,12 +1944,13 @@
               },
             },
             solList.length > 0
-              ? solList.length +
-                  " solicitations loaded · " +
-                  nsnCount +
-                  " NSN" +
-                  (emptyNSNs > 0 ? " · " + emptyNSNs + " returned empty" : "")
-              : "Load solicitations to begin intelligence sweep",
+              ? ((() => {
+                  const withMfr = solList.filter(s => (s.suppliers || []).length > 0).length;
+                  const totalMfr = solList.reduce((n, s) => n + (s.suppliers || []).length, 0);
+                  return solList.length + " solicitations loaded · " + nsnCount + " NSN · "
+                    + withMfr + " have approved manufacturers (" + totalMfr + " CAGEs)";
+                })())
+              : "Load solicitations to begin manufacturer sweep",
           ),
         ),
         h(
@@ -1926,12 +1989,11 @@
                 onClick: () => runIntel("nsn"),
                 disabled: !!running || !nsnCount,
                 variant: "blue",
-                title:
-                  "Queries USASpending by exact NSN — vendors paid for this part number",
+                title: "Look up approved manufacturers from DIBBS supplier_list — these are your sourcing contacts",
               },
               running === "nsn"
                 ? "⟳ " + progress
-                : "⚡ NSN Intel" + (nsnCount ? " (" + nsnCount + ")" : ""),
+                : "⚡ Mfr. Sweep" + (nsnCount ? " (" + nsnCount + ")" : ""),
             ),
             h(
               ActionBtn,
@@ -1939,12 +2001,11 @@
                 onClick: () => runIntel("fsc"),
                 disabled: !!running || !solList.length,
                 variant: "gold",
-                title:
-                  "FSC-level sweep on 0-result NSNs — broader, lower confidence",
+                title: "USASpending FSC sweep — finds lane winners for teaming intel (not sourcing vendors)",
               },
               running === "fsc"
                 ? "⟳ " + progress
-                : "⚡ FSC Fallback" +
+                : "⚡ Teaming Intel" +
                     (emptyNSNs + fscOnly > 0
                       ? " (" + (emptyNSNs + fscOnly) + ")"
                       : ""),
