@@ -1543,7 +1543,7 @@
 
   // ── Main IntelTab component ────────────────────────────────────────────
 
-  function IntelTab({ showToast }) {
+  function IntelTab({ showToast, setTab }) {
     const [manualInput, setManualInput] = useState("");
     const [solList, setSolList] = useState(() => {
       // Auto-load GO sols if screener results are waiting
@@ -1614,13 +1614,17 @@
         const queueSize = (() => {
           try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]").length; } catch { return 0; }
         })();
-        showToast("⚡ Daily intel chain complete — " + queueSize + " vendors in queue");
+        showToast("⚡ Intel sweep done — " + queueSize + " vendors queued · building email drafts…");
         if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-          new Notification("SCC: Daily Scrub Done", {
-            body: "Intelligence sweep complete — " + queueSize + " vendors queued for triage.",
+          new Notification("SCC: Intel Done — Drafting Emails", {
+            body: queueSize + " vendors queued · returning to review email drafts now.",
             icon: "/scc/favicon.ico",
           });
         }
+        // Signal DIBBS tab to build the blast approval panel, then navigate there
+        // DibbsTab is always mounted and listens for this event
+        window.dispatchEvent(new CustomEvent("scc:auto_blast"));
+        if (typeof setTab === "function") setTimeout(() => setTab("dibbs"), 600);
       }
     }, [running]); // eslint-disable-line
 

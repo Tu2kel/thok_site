@@ -463,6 +463,42 @@
       storeSave({ mode, sols, scrapeDate, analysis });
     }, [mode, sols, scrapeDate, analysis]);
 
+    // ── Auto-blast trigger: intel chain fires "scc:auto_blast" window event ──
+    // DibbsTab is always mounted, so we listen for the event rather than watching mount/unmount
+    useEffect(() => {
+      const handler = () => {
+        if (!window.SCC_AUTO_RFQ) return;
+
+        let goSols = [];
+        try {
+          const raw = localStorage.getItem("scc_screener_results_v1");
+          if (raw) goSols = JSON.parse(raw).filter(r => r.verdict === "GO");
+        } catch {}
+        if (!goSols.length) { addLog("AUTO ▶ No GO sols in screener — skipping email build.", "info"); return; }
+
+        const isLive = liveModeRef.current;
+        const blastRecs = goSols.map(buildRecord);
+        addLog("AUTO ▶ Building email drafts for " + blastRecs.length + " GO sol(s)…", "info");
+
+        window.SCC_AUTO_RFQ.runBatch(blastRecs, {
+          dryRun: true,
+          testMode: !isLive,
+          onLog: (m) => addLog(m, "info"),
+          onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Part numbers missing — resolve PN Queue then release.", "info"); },
+        }).then(r => {
+          if (r.dryRun && r.plan && r.plan.length > 0) {
+            setPendingBlast({ plan: r.plan, isLive, idx: 0 });
+            addLog("AUTO ▶ " + r.plan.length + " email draft(s) ready — review and approve below ↓", "ok");
+          } else if (r.dryRun && (!r.plan || r.plan.length === 0)) {
+            addLog("AUTO ▶ No rolodex vendors matched these GO sols — add vendors with matching FSC lanes first.", "info");
+          }
+        }).catch(e => addLog("AUTO ▶ Blast error — " + e.message, "err"));
+      };
+
+      window.addEventListener("scc:auto_blast", handler);
+      return () => window.removeEventListener("scc:auto_blast", handler);
+    }, []); // eslint-disable-line
+
     // ── Toast ──
     const toast_ = useCallback((msg, err = false) => {
       setToast({ msg, err });

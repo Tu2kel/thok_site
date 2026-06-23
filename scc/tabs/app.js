@@ -1108,7 +1108,7 @@
 
         tab === "intel" &&
           (window.SCC_TABS && window.SCC_TABS.IntelTab
-            ? hA(window.SCC_TABS.IntelTab, { showToast })
+            ? hA(window.SCC_TABS.IntelTab, { showToast, setTab })
             : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Intel loading...")),
 
         tab === "rfq" && hA(RFQTab, null),
