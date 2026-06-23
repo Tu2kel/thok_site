@@ -469,6 +469,7 @@
       const handler = () => {
         if (!window.SCC_AUTO_RFQ) return;
 
+        // Read GO sols
         let goSols = [];
         try {
           const raw = localStorage.getItem("scc_screener_results_v1");
@@ -476,23 +477,61 @@
         } catch {}
         if (!goSols.length) { addLog("AUTO ▶ No GO sols in screener — skipping email build.", "info"); return; }
 
-        const isLive = liveModeRef.current;
-        const blastRecs = goSols.map(buildRecord);
-        addLog("AUTO ▶ Building email drafts for " + blastRecs.length + " GO sol(s)…", "info");
+        // Read intel pending vendors (approved mfrs + teaming contacts from intel sweep)
+        let pendingVendors = [];
+        try {
+          const raw = localStorage.getItem("scc_intel_pending_v1");
+          if (raw) pendingVendors = JSON.parse(raw).filter(v => v.email && !v.is_dns);
+        } catch {}
 
-        window.SCC_AUTO_RFQ.runBatch(blastRecs, {
-          dryRun: true,
-          testMode: !isLive,
-          onLog: (m) => addLog(m, "info"),
-          onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Part numbers missing — resolve PN Queue then release.", "info"); },
-        }).then(r => {
-          if (r.dryRun && r.plan && r.plan.length > 0) {
-            setPendingBlast({ plan: r.plan, isLive, idx: 0 });
-            addLog("AUTO ▶ " + r.plan.length + " email draft(s) ready — review and approve below ↓", "ok");
-          } else if (r.dryRun && (!r.plan || r.plan.length === 0)) {
-            addLog("AUTO ▶ No rolodex vendors matched these GO sols — add vendors with matching FSC lanes first.", "info");
-          }
-        }).catch(e => addLog("AUTO ▶ Blast error — " + e.message, "err"));
+        if (!pendingVendors.length) {
+          addLog("AUTO ▶ No vendors with emails in intel queue — run intel sweep first or add vendors to DB.", "info");
+          return;
+        }
+
+        const isLive = liveModeRef.current;
+        addLog("AUTO ▶ Matching " + pendingVendors.length + " intel vendors to " + goSols.length + " GO sol(s)…", "info");
+
+        // Match each vendor to GO sols by NSN or FSC lane
+        const plan = [];
+        for (const vendor of pendingVendors) {
+          const vendorNsns = new Set((vendor.nsns || []).map(n => n.replace(/\D/g, "")));
+          const vendorFscs = new Set(Array.isArray(vendor.fsc) ? vendor.fsc : [vendor.fsc].filter(Boolean));
+
+          const matchedSols = goSols.filter(sol => {
+            const solNsn = (sol.nsn || "").replace(/\D/g, "");
+            const solFsc = sol.fsc || (sol.nsn || "").replace(/\D/g, "").slice(0, 4);
+            return (solNsn && vendorNsns.has(solNsn)) || (solFsc && vendorFscs.has(solFsc));
+          });
+
+          if (!matchedSols.length) continue;
+
+          const recs = matchedSols.map(buildRecord);
+          const dist = {
+            id: vendor.id || vendor.cage || vendor.name,
+            name: vendor.name,
+            email: vendor.email,
+            cage: vendor.cage || "",
+            fsc: Array.isArray(vendor.fsc) ? vendor.fsc : [vendor.fsc].filter(Boolean),
+            tags: vendor.tags || [],
+          };
+          plan.push({
+            dist,
+            records: recs,
+            overflow: [],
+            reasons: (vendor.tags || []).slice(0, 2),
+            to: isLive ? vendor.email : "tu2kel.lg@gmail.com",
+            subject: (isLive ? "" : "[TEST] ") + "RFQ - " + (recs.length === 1 ? recs[0].item_name + " | " + recs[0].sol_number : recs.length + " Items Needed") + " | Imperio Federal Logistics",
+          });
+        }
+
+        if (!plan.length) {
+          addLog("AUTO ▶ Intel vendors don't overlap with current GO sol NSNs/FSCs — sweep may need to run again after new batch.", "info");
+          return;
+        }
+
+        setPendingBlast({ plan, isLive, idx: 0 });
+        addLog("AUTO ▶ " + plan.length + " email draft(s) ready — review and approve below ↓", "ok");
       };
 
       window.addEventListener("scc:auto_blast", handler);
