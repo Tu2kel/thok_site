@@ -2181,6 +2181,70 @@
 
       // ── vendor queue ──
       h(PendingVendorQueue, { showToast, pending, setPending }),
+
+      // ── NAICS Distributor Reference ──
+      h(NaicsDistRef),
+    );
+  }
+
+  const NAICS_DIST_LANES = [
+    { code: "423840", label: "Industrial Supplies",                   fscs: "Most DLA FSC categories",          priority: true },
+    { code: "423710", label: "Hardware",                              fscs: "5305 · 5310 · 5315 · 5320",        priority: true },
+    { code: "423610", label: "Electrical Apparatus & Wiring",        fscs: "5930 · 5940 · 5945 · 5950",        priority: true },
+    { code: "423690", label: "Other Electronic Parts & Equipment",   fscs: "5960 · 5963 · 5970",                priority: false },
+    { code: "423830", label: "Industrial Machinery & Equipment",     fscs: "4730 · 4820 · 4810",                priority: false },
+    { code: "423860", label: "Transportation Equipment (non-motor)", fscs: "1560 · 4730 aerospace fittings",    priority: false },
+    { code: "423490", label: "Other Professional Equipment",         fscs: "6625 · 6630 test/instruments",      priority: false },
+  ];
+
+  function NaicsDistRef() {
+    const [open, setOpen] = React.useState(false);
+    const serif = "Cinzel,serif";
+    const mono  = "JetBrains Mono,monospace";
+    return h("div", { style: { marginTop: "28px" } },
+      // collapsed header
+      h("div", {
+        onClick: () => setOpen(o => !o),
+        style: {
+          display: "flex", alignItems: "center", gap: "10px",
+          cursor: "pointer", padding: "10px 0", borderTop: "1px solid rgba(201,168,76,.1)",
+          userSelect: "none",
+        },
+      },
+        h("div", { style: { fontFamily: serif, fontSize: "8px", letterSpacing: ".22em", textTransform: "uppercase", color: "rgba(201,168,76,.4)" } },
+          "Wholesaler NAICS Reference"),
+        h("div", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.25)" } },
+          open ? "▲" : "▼"),
+        h("div", { style: { fontFamily: mono, fontSize: "8px", color: "rgba(245,240,232,.2)", marginLeft: "auto" } },
+          "distributor codes for your DLA FSC lanes"),
+      ),
+
+      open && h("div", { style: { marginTop: "8px", marginBottom: "16px" } },
+        // priority note
+        h("div", { style: { fontFamily: mono, fontSize: "8px", color: "rgba(245,240,232,.3)", marginBottom: "10px", letterSpacing: ".06em" } },
+          "★ Start with these three — cover 80% of your DIBBS batch"),
+
+        // table
+        h("div", { style: { display: "grid", gridTemplateColumns: "90px 1fr 1fr", gap: "0", borderTop: "1px solid rgba(201,168,76,.1)" } },
+          // header
+          ["NAICS", "Category", "Your FSC Lanes"].map(col =>
+            h("div", { key: col, style: { fontFamily: mono, fontSize: "7px", letterSpacing: ".18em", textTransform: "uppercase", color: "rgba(201,168,76,.35)", padding: "6px 10px 6px 0", borderBottom: "1px solid rgba(201,168,76,.08)" } }, col)
+          ),
+          // rows
+          ...NAICS_DIST_LANES.map(row =>
+            [
+              h("div", { key: row.code + "a", style: { fontFamily: mono, fontSize: "10px", color: row.priority ? "rgba(201,168,76,.9)" : "rgba(245,240,232,.45)", padding: "8px 10px 8px 0", borderBottom: "1px solid rgba(255,255,255,.03)", display: "flex", alignItems: "center", gap: "5px" } },
+                row.priority && h("span", { style: { color: "rgba(201,168,76,.6)", fontSize: "8px" } }, "★"),
+                row.code),
+              h("div", { key: row.code + "b", style: { fontFamily: "Cormorant Garamond,serif", fontSize: "13px", color: row.priority ? "rgba(245,240,232,.85)" : "rgba(245,240,232,.45)", padding: "8px 10px 8px 0", borderBottom: "1px solid rgba(255,255,255,.03)" } }, row.label),
+              h("div", { key: row.code + "c", style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.5)", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,.03)" } }, row.fscs),
+            ]
+          ),
+        ),
+
+        h("div", { style: { fontFamily: mono, fontSize: "8px", color: "rgba(245,240,232,.18)", marginTop: "10px", letterSpacing: ".06em" } },
+          "Skip: 423110–423140 (motor vehicle) · 423210–423220 (furniture) · 423310–423390 (construction materials)"),
+      ),
     );
   }
 
