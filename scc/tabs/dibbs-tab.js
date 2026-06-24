@@ -637,16 +637,31 @@
         }
         addLog("AUTO ▶ " + goSols.length + " qualifying sol(s) — unrestricted, ≥70% win rate.", "info");
 
-        // DB vendors (curated, have emails + FSC lanes)
-        const dbVendors = (window.SCC_DIST && window.SCC_DIST.DISTRIBUTORS) || [];
+        // DB vendors — top 3 per FSC lane, exclude OEM/approved-manufacturer tags
+        // (DB may have thousands; cap per lane to keep blast manageable)
+        const dbAll = (window.SCC_DIST && window.SCC_DIST.DISTRIBUTORS) || [];
         const seenNames = new Set();
         const blastVendors = [];
 
-        for (const d of dbVendors) {
-          if (!d.email || d.is_dns) continue;
+        // Collect GO sol FSC codes so we only pull vendors for relevant lanes
+        const goFscs = new Set(goSols.map(s => String(s.fsc || (s.nsn || "").replace(/\D/g,"").slice(0,4))).filter(Boolean));
+
+        // Per-FSC cap: pick tier-1 first, then tier-2, max 3 per lane
+        const fscVendorCount = {};
+        const DB_CAP_PER_FSC = 3;
+        const eligible = dbAll
+          .filter(d => d.email && !d.is_dns && !(d.tags || []).includes("approved-manufacturer"))
+          .sort((a, b) => (a.tier || 9) - (b.tier || 9));
+
+        for (const d of eligible) {
+          const dFscs = (d.fsc || []).map(String).filter(f => goFscs.has(f));
+          if (!dFscs.length) continue; // vendor has no lanes matching today's GO sols
+          const underCap = dFscs.some(f => (fscVendorCount[f] || 0) < DB_CAP_PER_FSC);
+          if (!underCap) continue;
           const key = (d.name || "").toUpperCase().trim();
           if (seenNames.has(key)) continue;
           seenNames.add(key);
+          dFscs.forEach(f => { fscVendorCount[f] = (fscVendorCount[f] || 0) + 1; });
           blastVendors.push({ id: d.id, name: d.name, email: d.email, cage: d.cage || "", fsc: d.fsc || [], nsns: d.known_nsns || [], tags: d.tags || [], source: "db" });
         }
 
