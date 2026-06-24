@@ -1251,7 +1251,8 @@
           const isMfr = !!d.is_manufacturer;
           const isWholesaler = !!d.is_wholesaler || (d.tags || []).includes("wholesaler");
           const isDistributor = !!d.is_distributor;
-          const isTier1Wholesaler = isWholesaler && d.tier === 1;
+          const isAuthDist = (d.tags || []).includes("authorized-dist");
+          const isTier1Wholesaler = (isWholesaler || isAuthDist) && d.tier === 1;
           const isTxLocal = (d.tags || []).includes("tx-local");
 
           // Border + card bg: mfr+jcp > mfr > rep > account > pref tiers > default
@@ -1634,6 +1635,21 @@
                       whiteSpace: "nowrap",
                     },
                   }, "WHOLESALE"),
+                !isEditing &&
+                  isAuthDist && !isTxLocal &&
+                  h("span", {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "8px",
+                      color: "rgba(56,189,248,.85)",
+                      background: "rgba(56,189,248,.10)",
+                      border: "1px solid rgba(56,189,248,.35)",
+                      padding: "2px 6px",
+                      borderRadius: "2px",
+                      letterSpacing: ".05em",
+                      whiteSpace: "nowrap",
+                    },
+                  }, "AUTH DIST"),
                 !isEditing &&
                   (d.tags || []).includes("iso-9000") &&
                   h("span", {
