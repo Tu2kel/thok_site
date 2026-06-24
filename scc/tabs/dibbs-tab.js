@@ -356,57 +356,209 @@
   // ── PENDING BLAST PANEL ───────────────────────────────────────────────
   // Shows after AUTO dry-run — lists vendors + items, requires manual approval.
   function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, sending }) {
-    const Sm = { fontFamily: "JetBrains Mono,monospace", fontSize: "10px" };
+    const mono  = "JetBrains Mono,monospace";
+    const serif = "Cinzel,serif";
+    const body  = "Cormorant Garamond,serif";
+
+    const totalExt = entry.records.reduce(function (s, r) {
+      return s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0);
+    }, 0);
+    const avgDel = Math.round(
+      entry.records.reduce(function (s, r) { return s + (parseInt(r.delivery_days) || 0); }, 0) /
+      Math.max(entry.records.filter(function (r) { return parseInt(r.delivery_days); }).length, 1)
+    );
+    const earliestDue = entry.records
+      .map(function (r) { return r.quote_due; })
+      .filter(Boolean)
+      .sort()[0];
+    const tags = entry.reasons || [];
+    const isMfr = tags.some(function (t) { return String(t).includes("manufacturer") || String(t).includes("source-contact"); });
+
+    const winColor = totalExt >= 100000 ? "rgba(61,214,140,.9)"
+                   : totalExt >= 25000  ? "rgba(245,158,11,.9)"
+                   : "rgba(245,240,232,.5)";
+
     const btnBase = {
-      fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em",
-      textTransform: "uppercase", padding: "7px 18px", cursor: sending ? "not-allowed" : "pointer",
-      opacity: sending ? 0.5 : 1, transition: "all .15s", border: "none",
+      fontFamily: serif, fontSize: "9px", letterSpacing: ".14em",
+      textTransform: "uppercase", cursor: sending ? "not-allowed" : "pointer",
+      opacity: sending ? 0.5 : 1, transition: "all .18s", border: "none",
+      borderRadius: "2px",
     };
+
     return h("div", {
       style: {
-        background: "var(--card-bg)",
-        border: "2px solid rgba(245,158,11,.55)",
-        borderLeft: "4px solid rgba(245,158,11,.9)",
-        padding: "18px 20px",
-        marginBottom: "14px",
+        background: "linear-gradient(160deg, rgba(15,12,8,1) 0%, rgba(22,17,10,1) 100%)",
+        border: "1px solid rgba(201,168,76,.22)",
+        borderTop: "3px solid rgba(201,168,76,.7)",
+        borderRadius: "4px",
+        marginBottom: "18px",
+        overflow: "hidden",
+        boxShadow: "0 8px 40px rgba(0,0,0,.6), inset 0 1px 0 rgba(201,168,76,.08)",
       },
     },
-      // ── Header row ──
-      h("div", { style: { display: "flex", alignItems: "center", gap: "14px", marginBottom: "12px", flexWrap: "wrap" } },
-        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", letterSpacing: ".16em", color: "rgba(245,158,11,.95)", textTransform: "uppercase" } },
-          "⏸ Email " + (idx + 1) + " of " + total),
-        h("div", { style: { ...Sm, fontSize: "9px", background: isLive ? "rgba(231,76,60,.15)" : "rgba(245,158,11,.12)", color: isLive ? "#e74c3c" : "rgba(245,158,11,.85)", border: "1px solid " + (isLive ? "rgba(231,76,60,.4)" : "rgba(245,158,11,.3)"), borderRadius: "3px", padding: "2px 8px" } },
-          isLive ? "LIVE" : "TEST"),
+
+      // ══ COMMAND HEADER ══════════════════════════════════════════════════
+      h("div", {
+        style: {
+          display: "flex", alignItems: "center", gap: "18px",
+          padding: "14px 24px", borderBottom: "1px solid rgba(201,168,76,.12)",
+          background: "rgba(201,168,76,.04)",
+        },
+      },
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
+          h("div", { style: { fontFamily: serif, fontSize: "8px", letterSpacing: ".25em", color: "rgba(201,168,76,.45)", textTransform: "uppercase" } },
+            "Daily Outreach Brief"),
+          h("div", { style: { fontFamily: serif, fontSize: "13px", letterSpacing: ".1em", color: "rgba(201,168,76,.95)" } },
+            "RFQ " + (idx + 1) + " of " + total),
+        ),
+        h("div", {
+          style: {
+            fontFamily: mono, fontSize: "8px", letterSpacing: ".1em", textTransform: "uppercase",
+            padding: "3px 10px", borderRadius: "2px",
+            background: isLive ? "rgba(231,76,60,.15)" : "rgba(245,158,11,.1)",
+            color: isLive ? "rgba(231,76,60,.9)" : "rgba(245,158,11,.75)",
+            border: "1px solid " + (isLive ? "rgba(231,76,60,.35)" : "rgba(245,158,11,.25)"),
+          },
+        }, isLive ? "⬤ LIVE" : "◯ TEST"),
+
         h("div", { style: { flex: 1 } }),
+
+        // ── Progress bar ──
+        h("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" } },
+          h("div", { style: { fontFamily: mono, fontSize: "8px", color: "rgba(245,240,232,.25)", letterSpacing: ".08em" } },
+            Math.round((idx / Math.max(total, 1)) * 100) + "% complete"),
+          h("div", { style: { width: "160px", height: "3px", background: "rgba(255,255,255,.06)", borderRadius: "2px", overflow: "hidden" } },
+            h("div", { style: { width: (idx / Math.max(total, 1) * 100) + "%", height: "100%", background: "rgba(201,168,76,.6)", transition: "width .4s ease" } }),
+          ),
+        ),
+
+        // ── Action buttons ──
         h("button", {
           onClick: onCancel, disabled: sending,
-          style: { ...btnBase, background: "transparent", color: "rgba(231,76,60,.75)", border: "1px solid rgba(231,76,60,.4)" },
-        }, "✕ Cancel All"),
+          style: { ...btnBase, background: "transparent", color: "rgba(231,76,60,.6)", border: "1px solid rgba(231,76,60,.25)", padding: "7px 14px" },
+        }, "✕ Cancel"),
         h("button", {
           onClick: onSkip, disabled: sending,
-          style: { ...btnBase, background: "transparent", color: "var(--body-dim)", border: "1px solid rgba(255,255,255,.12)" },
-        }, "→ Skip"),
+          style: { ...btnBase, background: "rgba(255,255,255,.04)", color: "rgba(245,240,232,.4)", border: "1px solid rgba(255,255,255,.1)", padding: "7px 16px" },
+        }, "Skip →"),
         h("button", {
           onClick: onSend, disabled: sending,
-          style: { ...btnBase, background: "rgba(61,214,140,.12)", color: "var(--accent-green)", border: "1px solid rgba(61,214,140,.5)" },
-        }, sending ? "Sending…" : "✓ Send This Email"),
+          style: { ...btnBase, background: sending ? "rgba(61,214,140,.06)" : "rgba(61,214,140,.14)", color: "rgba(61,214,140,.95)", border: "1px solid rgba(61,214,140,.45)", padding: "9px 24px", fontSize: "10px" },
+        }, sending ? "Sending…" : "✓ Send Email"),
       ),
 
-      // ── Vendor + items ──
-      h("div", { style: { display: "flex", gap: "10px", alignItems: "baseline", flexWrap: "wrap", marginBottom: "6px" } },
-        h("span", { style: { fontFamily: "Cinzel,serif", fontSize: "12px", color: "var(--alabaster)", letterSpacing: ".06em" } }, entry.dist.name),
-        h("span", { style: { ...Sm, color: "var(--gold-dim)" } }, isLive ? entry.dist.email : "→ tu2kel.lg@gmail.com"),
-        h("span", { style: { ...Sm, fontSize: "9px", color: "var(--body-faint)" } }, entry.records.length + " item(s)"),
-        h("span", { style: { ...Sm, fontSize: "9px", color: "rgba(201,168,76,.5)" } }, entry.reasons.join(" · ")),
+      // ══ VENDOR + STATS ROW ══════════════════════════════════════════════
+      h("div", {
+        style: {
+          display: "grid", gridTemplateColumns: "1fr auto",
+          padding: "20px 24px 16px", gap: "24px", alignItems: "start",
+          borderBottom: "1px solid rgba(201,168,76,.08)",
+        },
+      },
+        // Left: vendor identity
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+          h("div", { style: { fontFamily: serif, fontSize: "20px", letterSpacing: ".08em", color: "rgba(245,240,232,.95)", lineHeight: 1 } },
+            entry.dist.name),
+          h("div", { style: { display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" } },
+            h("span", { style: { fontFamily: mono, fontSize: "10px", color: "rgba(201,168,76,.6)" } },
+              isLive ? entry.to : "→ tu2kel.lg@gmail.com"),
+            entry.dist.cage && h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(245,240,232,.25)", letterSpacing: ".1em" } },
+              "CAGE " + entry.dist.cage),
+            h("span", {
+              style: {
+                fontFamily: mono, fontSize: "8px", letterSpacing: ".1em", textTransform: "uppercase",
+                padding: "2px 8px", borderRadius: "2px",
+                background: isMfr ? "rgba(61,214,140,.08)" : "rgba(96,165,250,.08)",
+                color: isMfr ? "rgba(61,214,140,.7)" : "rgba(96,165,250,.7)",
+                border: "1px solid " + (isMfr ? "rgba(61,214,140,.2)" : "rgba(96,165,250,.2)"),
+              },
+            }, isMfr ? "Approved Mfr" : "Lane Contact"),
+          ),
+        ),
+
+        // Right: key numbers
+        h("div", { style: { display: "flex", gap: "28px", alignItems: "flex-start" } },
+          h("div", { style: { textAlign: "right" } },
+            h("div", { style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(245,240,232,.25)", textTransform: "uppercase", marginBottom: "4px" } }, "Total Ext $"),
+            h("div", { style: { fontFamily: serif, fontSize: "22px", color: winColor, letterSpacing: ".04em", lineHeight: 1 } },
+              "$" + totalExt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })),
+          ),
+          h("div", { style: { textAlign: "right" } },
+            h("div", { style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(245,240,232,.25)", textTransform: "uppercase", marginBottom: "4px" } }, "Items"),
+            h("div", { style: { fontFamily: serif, fontSize: "22px", color: "rgba(245,240,232,.7)", lineHeight: 1 } },
+              entry.records.length),
+          ),
+          earliestDue && h("div", { style: { textAlign: "right" } },
+            h("div", { style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(245,240,232,.25)", textTransform: "uppercase", marginBottom: "4px" } }, "Quote Due"),
+            h("div", { style: { fontFamily: serif, fontSize: "16px", color: "rgba(245,158,11,.8)", lineHeight: 1 } }, earliestDue),
+          ),
+          avgDel > 0 && h("div", { style: { textAlign: "right" } },
+            h("div", { style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(245,240,232,.25)", textTransform: "uppercase", marginBottom: "4px" } }, "Avg Del"),
+            h("div", { style: { fontFamily: serif, fontSize: "16px", color: "rgba(245,240,232,.5)", lineHeight: 1 } }, avgDel + "d"),
+          ),
+        ),
       ),
-      h("div", { style: { ...Sm, fontSize: "9px", color: "var(--body-dim)", paddingLeft: "2px", lineHeight: "1.6" } },
+
+      // ══ SOL TABLE ═══════════════════════════════════════════════════════
+      h("div", { style: { padding: "0 24px 20px" } },
+        // Table header
+        h("div", {
+          style: {
+            display: "grid",
+            gridTemplateColumns: "140px 1fr 120px 80px 80px 90px",
+            gap: "0 16px",
+            padding: "10px 0 6px",
+            borderBottom: "1px solid rgba(201,168,76,.12)",
+            marginBottom: "2px",
+          },
+        },
+          ["Sol #", "Item", "Part Number", "Qty", "Unit $", "Ext $"].map(function (h_) {
+            return h("div", {
+              key: h_,
+              style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".16em", color: "rgba(201,168,76,.4)", textTransform: "uppercase" },
+            }, h_);
+          }),
+        ),
+
+        // Rows
         entry.records.map(function (r) {
-          return h("div", { key: r.sol_number },
-            h("span", { style: { color: "rgba(201,168,76,.6)", marginRight: "6px" } }, r.sol_number),
-            r.item_name || "—",
-            r.ref_part_number ? h("span", { style: { color: "rgba(61,214,140,.6)", marginLeft: "8px" } }, "P/N: " + r.ref_part_number) : null,
+          const ext = parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0;
+          const rowColor = ext >= 50000 ? "rgba(61,214,140,.08)" : "transparent";
+          return h("div", {
+            key: r.sol_number,
+            style: {
+              display: "grid",
+              gridTemplateColumns: "140px 1fr 120px 80px 80px 90px",
+              gap: "0 16px",
+              padding: "8px 0",
+              borderBottom: "1px solid rgba(255,255,255,.04)",
+              background: rowColor,
+              alignItems: "center",
+            },
+          },
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.65)", letterSpacing: ".06em" } }, r.sol_number),
+            h("span", { style: { fontFamily: body, fontSize: "13px", color: "rgba(245,240,232,.85)", lineHeight: 1.2 } }, r.item_name || "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(61,214,140,.7)" } }, r.ref_part_number || "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(245,240,232,.6)", textAlign: "right" } }, r.quantity || "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(245,240,232,.5)", textAlign: "right" } },
+              r.unit_price ? "$" + parseFloat(r.unit_price).toLocaleString() : "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "10px", color: ext >= 50000 ? "rgba(61,214,140,.9)" : "rgba(245,240,232,.7)", textAlign: "right", fontWeight: ext >= 50000 ? "bold" : "normal" } },
+              ext > 0 ? "$" + ext.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "—"),
           );
         }),
+
+        // Total row
+        h("div", {
+          style: {
+            display: "grid", gridTemplateColumns: "140px 1fr 120px 80px 80px 90px",
+            gap: "0 16px", padding: "10px 0 0",
+            borderTop: "1px solid rgba(201,168,76,.18)", marginTop: "4px",
+          },
+        },
+          h("span", { style: { gridColumn: "1 / 6", fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
+          h("span", { style: { fontFamily: serif, fontSize: "14px", color: winColor, textAlign: "right", letterSpacing: ".04em" } },
+            "$" + totalExt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })),
+        ),
       ),
     );
   }
