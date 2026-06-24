@@ -387,13 +387,13 @@
 
     return h("div", {
       style: {
-        background: "linear-gradient(160deg, rgba(15,12,8,1) 0%, rgba(22,17,10,1) 100%)",
-        border: "1px solid rgba(201,168,76,.22)",
+        background: "transparent",
         borderTop: "3px solid rgba(201,168,76,.7)",
-        borderRadius: "4px",
-        marginBottom: "18px",
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
         overflow: "hidden",
-        boxShadow: "0 8px 40px rgba(0,0,0,.6), inset 0 1px 0 rgba(201,168,76,.08)",
+        minHeight: 0,
       },
     },
 
@@ -511,7 +511,7 @@
       ),
 
       // ══ SOL TABLE ═══════════════════════════════════════════════════════
-      h("div", { style: { padding: "0 24px 20px" } },
+      h("div", { style: { padding: "0 24px 20px", overflowY: "auto", flex: 1, minHeight: 0 } },
         // Table header
         h("div", {
           style: {
@@ -1707,18 +1707,45 @@
           },
         }),
 
-      // ── STEP-THROUGH APPROVAL PANEL — one vendor batch at a time ──
-      pendingBlast &&
-        h(PendingBlastPanel, {
-          entry:   pendingBlast.plan[pendingBlast.idx],
-          idx:     pendingBlast.idx,
-          total:   pendingBlast.plan.length,
-          isLive:  pendingBlast.isLive,
-          sending: blasting,
-          onSend:  handleSendOneBatch,
-          onSkip:  handleSkipBatch,
-          onCancel: () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
-        }),
+      // ── RIGHT-SIDE BRIEF DRAWER ──────────────────────────────────────────
+      h("div", {
+        style: {
+          position: "fixed",
+          top: 0,
+          right: 0,
+          width: pendingBlast ? "520px" : "0px",
+          height: "100vh",
+          zIndex: 9000,
+          transition: "width .32s cubic-bezier(.4,0,.2,1)",
+          overflow: "hidden",
+          boxShadow: pendingBlast ? "-8px 0 48px rgba(0,0,0,.7), -1px 0 0 rgba(201,168,76,.15)" : "none",
+          display: "flex",
+          flexDirection: "column",
+          background: "linear-gradient(160deg, rgba(12,9,5,1) 0%, rgba(18,14,8,1) 100%)",
+        },
+      },
+        pendingBlast && h("div", {
+          style: {
+            width: "520px",
+            height: "100vh",
+            overflowY: "auto",
+            overflowX: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          },
+        },
+          h(PendingBlastPanel, {
+            entry:   pendingBlast.plan[pendingBlast.idx],
+            idx:     pendingBlast.idx,
+            total:   pendingBlast.plan.length,
+            isLive:  pendingBlast.isLive,
+            sending: blasting,
+            onSend:  handleSendOneBatch,
+            onSkip:  handleSkipBatch,
+            onCancel: () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
+          }),
+        ),
+      ),
 
       // ── LIVE LOG ──
       log.length > 0 &&
