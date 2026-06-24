@@ -621,47 +621,67 @@
       const handler = () => {
         if (!window.SCC_AUTO_RFQ) return;
 
-        // Read GO sols
+        // Read GO sols — filter to unrestricted + ≥70% win probability only
         let goSols = [];
         try {
           const raw = localStorage.getItem("scc_screener_results_v1");
-          if (raw) goSols = JSON.parse(raw).filter(r => r.verdict === "GO");
+          if (raw) goSols = JSON.parse(raw).filter(r =>
+            r.verdict === "GO" &&
+            (r.winProbabilityPct == null || r.winProbabilityPct >= 70) &&
+            (r.supplier_restrictions || "").toLowerCase() !== "restricted"
+          );
         } catch {}
-        if (!goSols.length) { addLog("AUTO ▶ No GO sols in screener — skipping email build.", "info"); return; }
+        if (!goSols.length) {
+          addLog("AUTO ▶ No qualifying GO sols (need ≥70% win rate + unrestricted sourcing).", "info");
+          return;
+        }
+        addLog("AUTO ▶ " + goSols.length + " qualifying sol(s) — unrestricted, ≥70% win rate.", "info");
 
-        // Read intel pending vendors (approved mfrs + teaming contacts from intel sweep)
-        let pendingVendors = [];
-        try {
-          const raw = localStorage.getItem("scc_intel_pending_v1");
-          if (raw) pendingVendors = JSON.parse(raw).filter(v => v.email && !v.is_dns);
-        } catch {}
-
-        // Also pull MongoDB vendors (have emails, cover FSC lanes) — merge, dedup by name
+        // DB vendors (curated, have emails + FSC lanes)
         const dbVendors = (window.SCC_DIST && window.SCC_DIST.DISTRIBUTORS) || [];
-        const seenNames = new Set(pendingVendors.map(v => (v.name || "").toUpperCase().trim()));
+        const seenNames = new Set();
+        const blastVendors = [];
+
         for (const d of dbVendors) {
           if (!d.email || d.is_dns) continue;
           const key = (d.name || "").toUpperCase().trim();
           if (seenNames.has(key)) continue;
           seenNames.add(key);
-          pendingVendors.push({
-            id: d.id, name: d.name, email: d.email, cage: d.cage || "",
-            fsc: d.fsc || [], nsns: d.known_nsns || [],
-            tags: d.tags || [], source: "db",
-          });
+          blastVendors.push({ id: d.id, name: d.name, email: d.email, cage: d.cage || "", fsc: d.fsc || [], nsns: d.known_nsns || [], tags: d.tags || [], source: "db" });
         }
 
-        if (!pendingVendors.length) {
-          addLog("AUTO ▶ No vendors with emails found — intel sweep may still be running or DB is empty.", "info");
+        // Intel FSC lane companies (small DLA distributors from USASpending) — exclude OEM manufacturers
+        // Skip "approved-manufacturer" tagged vendors (OEMs who won't quote cold)
+        // Skip large-award primes (totalAward > $10M — those are big contractors)
+        try {
+          const raw = localStorage.getItem("scc_intel_pending_v1");
+          if (raw) {
+            JSON.parse(raw)
+              .filter(v =>
+                v.email && !v.is_dns &&
+                !(v.tags || []).includes("approved-manufacturer") &&
+                (v.totalAward == null || v.totalAward <= 10000000)
+              )
+              .forEach(v => {
+                const key = (v.name || "").toUpperCase().trim();
+                if (seenNames.has(key)) return;
+                seenNames.add(key);
+                blastVendors.push(v);
+              });
+          }
+        } catch {}
+
+        if (!blastVendors.length) {
+          addLog("AUTO ▶ No blast vendors available — DB vendors have no email or intel sweep hasn't run.", "info");
           return;
         }
 
         const isLive = liveModeRef.current;
-        addLog("AUTO ▶ Matching " + pendingVendors.length + " intel vendors to " + goSols.length + " GO sol(s)…", "info");
+        addLog("AUTO ▶ Matching " + blastVendors.length + " vendors to " + goSols.length + " qualifying sol(s)…", "info");
 
-        // Match each vendor to GO sols by NSN or FSC lane
+        // Match each vendor to qualifying GO sols by NSN or FSC lane
         const plan = [];
-        for (const vendor of pendingVendors) {
+        for (const vendor of blastVendors) {
           const vendorNsns = new Set((vendor.nsns || []).map(n => n.replace(/\D/g, "")));
           const vendorFscs = new Set(Array.isArray(vendor.fsc) ? vendor.fsc : [vendor.fsc].filter(Boolean));
 
