@@ -474,6 +474,17 @@
               },
             }, isMfr ? "Approved Mfr" : "Lane Contact"),
           ),
+          // FSC lanes covered in this email
+          (function() {
+            var laneFscs = [...new Set(entry.records.map(function(r){ return r.fsc; }).filter(Boolean))].sort();
+            if (!laneFscs.length) return null;
+            return h("div", { style: { display: "flex", gap: "5px", flexWrap: "wrap", marginTop: "2px" } },
+              h("span", { style: { fontFamily: mono, fontSize: "8px", color: "rgba(245,240,232,.2)", letterSpacing: ".1em", alignSelf: "center" } }, "LANES"),
+              laneFscs.map(function(fsc) {
+                return h("span", { key: fsc, style: { fontFamily: mono, fontSize: "8px", color: "rgba(201,168,76,.7)", background: "rgba(201,168,76,.08)", border: "1px solid rgba(201,168,76,.2)", padding: "1px 6px", borderRadius: "2px", letterSpacing: ".06em" } }, fsc);
+              })
+            );
+          })(),
         ),
 
         // Right: key numbers
@@ -505,14 +516,14 @@
         h("div", {
           style: {
             display: "grid",
-            gridTemplateColumns: "140px 1fr 120px 80px 80px 90px",
-            gap: "0 16px",
+            gridTemplateColumns: "140px 52px 1fr 120px 80px 80px 90px",
+            gap: "0 12px",
             padding: "10px 0 6px",
             borderBottom: "1px solid rgba(201,168,76,.12)",
             marginBottom: "2px",
           },
         },
-          ["Sol #", "Item", "Part Number", "Qty", "Unit $", "Ext $"].map(function (h_) {
+          ["Sol #", "FSC", "Item", "Part Number", "Qty", "Unit $", "Ext $"].map(function (h_) {
             return h("div", {
               key: h_,
               style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".16em", color: "rgba(201,168,76,.4)", textTransform: "uppercase" },
@@ -528,8 +539,8 @@
             key: r.sol_number,
             style: {
               display: "grid",
-              gridTemplateColumns: "140px 1fr 120px 80px 80px 90px",
-              gap: "0 16px",
+              gridTemplateColumns: "140px 52px 1fr 120px 80px 80px 90px",
+              gap: "0 12px",
               padding: "8px 0",
               borderBottom: "1px solid rgba(255,255,255,.04)",
               background: rowColor,
@@ -537,6 +548,7 @@
             },
           },
             h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.65)", letterSpacing: ".06em" } }, r.sol_number),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.55)", background: "rgba(201,168,76,.07)", border: "1px solid rgba(201,168,76,.18)", padding: "1px 4px", borderRadius: "2px", letterSpacing: ".04em" } }, r.fsc || "—"),
             h("span", { style: { fontFamily: body, fontSize: "13px", color: "rgba(245,240,232,.85)", lineHeight: 1.2 } }, r.item_name || "—"),
             h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(61,214,140,.7)" } }, r.ref_part_number || "—"),
             h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(245,240,232,.6)", textAlign: "right" } }, r.quantity || "—"),
@@ -550,12 +562,12 @@
         // Total row
         h("div", {
           style: {
-            display: "grid", gridTemplateColumns: "140px 1fr 120px 80px 80px 90px",
-            gap: "0 16px", padding: "10px 0 0",
+            display: "grid", gridTemplateColumns: "140px 52px 1fr 120px 80px 80px 90px",
+            gap: "0 12px", padding: "10px 0 0",
             borderTop: "1px solid rgba(201,168,76,.18)", marginTop: "4px",
           },
         },
-          h("span", { style: { gridColumn: "1 / 6", fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
+          h("span", { style: { gridColumn: "1 / 7", fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
           h("span", { style: { fontFamily: serif, fontSize: "14px", color: winColor, textAlign: "right", letterSpacing: ".04em" } },
             "$" + totalExt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })),
         ),
