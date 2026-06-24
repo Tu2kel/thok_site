@@ -385,6 +385,8 @@
       borderRadius: "2px",
     };
 
+    const expectedValue = entry.expectedValue || (totalExt * ((entry.avgWin || 50) / 100));
+
     return h("div", {
       style: {
         background: "transparent",
@@ -394,6 +396,7 @@
         flexDirection: "column",
         overflow: "hidden",
         minHeight: 0,
+        cursor: "default",
       },
     },
 
@@ -491,6 +494,13 @@
               "$" + totalExt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })),
           ),
           h("div", { style: { textAlign: "right" } },
+            h("div", { style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(245,240,232,.25)", textTransform: "uppercase", marginBottom: "4px" } }, "Exp. Value"),
+            h("div", { style: { fontFamily: serif, fontSize: "16px", color: "rgba(96,165,250,.8)", letterSpacing: ".04em", lineHeight: 1 } },
+              "$" + Math.round(expectedValue).toLocaleString()),
+            h("div", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(245,240,232,.3)", marginTop: "3px" } },
+              Math.round(entry.avgWin || 50) + "% avg win"),
+          ),
+          h("div", { style: { textAlign: "right" } },
             h("div", { style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(245,240,232,.25)", textTransform: "uppercase", marginBottom: "4px" } }, "Items"),
             h("div", { style: { fontFamily: serif, fontSize: "22px", color: "rgba(245,240,232,.7)", lineHeight: 1 } },
               entry.records.length),
@@ -512,14 +522,14 @@
         h("div", {
           style: {
             display: "grid",
-            gridTemplateColumns: "140px 52px 1fr 120px 80px 80px 90px",
-            gap: "0 12px",
+            gridTemplateColumns: "120px 46px 1fr 100px 55px 70px 80px 46px",
+            gap: "0 10px",
             padding: "10px 0 6px",
             borderBottom: "1px solid rgba(201,168,76,.12)",
             marginBottom: "2px",
           },
         },
-          ["Sol #", "FSC", "Item", "Part Number", "Qty", "Unit $", "Ext $"].map(function (h_) {
+          ["Sol #", "FSC", "Item", "Part #", "Qty", "Unit $", "Ext $", "Win%"].map(function (h_) {
             return h("div", {
               key: h_,
               style: { fontFamily: mono, fontSize: "8px", letterSpacing: ".16em", color: "rgba(201,168,76,.4)", textTransform: "uppercase" },
@@ -543,15 +553,17 @@
               alignItems: "center",
             },
           },
-            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.65)", letterSpacing: ".06em" } }, r.sol_number),
-            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.55)", background: "rgba(201,168,76,.07)", border: "1px solid rgba(201,168,76,.18)", padding: "1px 4px", borderRadius: "2px", letterSpacing: ".04em" } }, r.fsc || "—"),
-            h("span", { style: { fontFamily: body, fontSize: "13px", color: "rgba(245,240,232,.85)", lineHeight: 1.2 } }, r.item_name || "—"),
-            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(61,214,140,.7)" } }, r.ref_part_number || "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.65)", letterSpacing: ".04em" } }, r.sol_number),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(201,168,76,.55)", background: "rgba(201,168,76,.07)", border: "1px solid rgba(201,168,76,.18)", padding: "1px 4px", borderRadius: "2px" } }, r.fsc || "—"),
+            h("span", { style: { fontFamily: body, fontSize: "12px", color: "rgba(245,240,232,.85)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.item_name || "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(61,214,140,.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.ref_part_number || "—"),
             h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(245,240,232,.6)", textAlign: "right" } }, r.quantity || "—"),
             h("span", { style: { fontFamily: mono, fontSize: "9px", color: "rgba(245,240,232,.5)", textAlign: "right" } },
               r.unit_price ? "$" + parseFloat(r.unit_price).toLocaleString() : "—"),
             h("span", { style: { fontFamily: mono, fontSize: "10px", color: ext >= 50000 ? "rgba(61,214,140,.9)" : "rgba(245,240,232,.7)", textAlign: "right", fontWeight: ext >= 50000 ? "bold" : "normal" } },
               ext > 0 ? "$" + ext.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "9px", textAlign: "right", color: parseFloat(r.win_probability) >= 70 ? "rgba(61,214,140,.8)" : parseFloat(r.win_probability) >= 50 ? "rgba(245,158,11,.7)" : "rgba(245,240,232,.3)" } },
+              r.win_probability ? Math.round(r.win_probability) + "%" : "—"),
           );
         }),
 
@@ -563,7 +575,7 @@
             borderTop: "1px solid rgba(201,168,76,.18)", marginTop: "4px",
           },
         },
-          h("span", { style: { gridColumn: "1 / 7", fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
+          h("span", { style: { gridColumn: "1 / 8", fontFamily: mono, fontSize: "8px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
           h("span", { style: { fontFamily: serif, fontSize: "14px", color: winColor, textAlign: "right", letterSpacing: ".04em" } },
             "$" + totalExt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })),
         ),
@@ -751,6 +763,12 @@
           // Skip if total opportunity < $1,000 — not worth the outreach
           const totalExt = recs.reduce((s, r) => s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0), 0);
           if (totalExt < 1000) continue;
+
+          // Risk-adjusted value: ext $ × avg win probability — used for sort order
+          const winPcts = recs.map(r => parseFloat(r.win_probability || 0)).filter(n => n > 0);
+          const avgWin = winPcts.length ? winPcts.reduce((a, b) => a + b, 0) / winPcts.length : 50;
+          const expectedValue = totalExt * (avgWin / 100);
+
           const dist = {
             id: vendor.id || vendor.cage || vendor.name,
             name: vendor.name,
@@ -766,6 +784,9 @@
             reasons: (vendor.tags || []).slice(0, 2),
             to: isLive ? vendor.email : "tu2kel.lg@gmail.com",
             subject: (isLive ? "" : "[TEST] ") + "RFQ - " + (recs.length === 1 ? recs[0].item_name + " | " + recs[0].sol_number : recs.length + " Items Needed") + " | Imperio Federal Logistics",
+            totalExt,
+            avgWin,
+            expectedValue,
           });
         }
 
@@ -773,6 +794,10 @@
           addLog("AUTO ▶ Intel vendors don't overlap with current GO sol NSNs/FSCs — sweep may need to run again after new batch.", "info");
           return;
         }
+
+        // Sort by risk-adjusted expected value — high $ + high win % first
+        // Deprioritizes big $ with low win (OEM-locked, restricted, blockers)
+        plan.sort((a, b) => b.expectedValue - a.expectedValue);
 
         setPendingBlast({ plan, isLive, idx: 0 });
         addLog("AUTO ▶ " + plan.length + " email draft(s) ready — review and approve below ↓", "ok");
@@ -1739,7 +1764,7 @@
           position: "fixed",
           top: 0,
           right: 0,
-          width: pendingBlast ? "520px" : "0px",
+          width: pendingBlast ? "660px" : "0px",
           height: "100vh",
           zIndex: 9000,
           transition: "width .32s cubic-bezier(.4,0,.2,1)",
@@ -1752,7 +1777,7 @@
       },
         pendingBlast && h("div", {
           style: {
-            width: "520px",
+            width: "660px",
             height: "100vh",
             overflowY: "auto",
             overflowX: "hidden",
