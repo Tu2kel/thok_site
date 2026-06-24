@@ -522,7 +522,7 @@
         h("div", {
           style: {
             display: "grid",
-            gridTemplateColumns: "120px 46px 1fr 100px 55px 70px 80px 46px",
+            gridTemplateColumns: "130px 46px 1fr 110px 55px 75px 88px 48px",
             gap: "0 10px",
             padding: "10px 0 6px",
             borderBottom: "1px solid rgba(201,168,76,.12)",
@@ -1764,7 +1764,7 @@
           position: "fixed",
           top: 0,
           right: 0,
-          width: pendingBlast ? "660px" : "0px",
+          width: pendingBlast ? "740px" : "0px",
           height: "100vh",
           zIndex: 9000,
           transition: "width .32s cubic-bezier(.4,0,.2,1)",
@@ -1777,7 +1777,7 @@
       },
         pendingBlast && h("div", {
           style: {
-            width: "660px",
+            width: "740px",
             height: "100vh",
             overflowY: "auto",
             overflowX: "hidden",
