@@ -721,6 +721,10 @@
           if (!matchedSols.length) continue;
 
           const recs = matchedSols.map(buildRecord);
+
+          // Skip if total opportunity < $1,000 — not worth the outreach
+          const totalExt = recs.reduce((s, r) => s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0), 0);
+          if (totalExt < 1000) continue;
           const dist = {
             id: vendor.id || vendor.cage || vendor.name,
             name: vendor.name,
