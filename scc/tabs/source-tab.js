@@ -1249,8 +1249,10 @@
           const hasJcp = !!d.has_jcp;
           const hasMilPack = !!d.has_mil_std_pack;
           const isMfr = !!d.is_manufacturer;
-          const isWholesaler = !!d.is_wholesaler;
+          const isWholesaler = !!d.is_wholesaler || (d.tags || []).includes("wholesaler");
           const isDistributor = !!d.is_distributor;
+          const isTier1Wholesaler = isWholesaler && d.tier === 1;
+          const isTxLocal = (d.tags || []).includes("tx-local");
 
           // Border + card bg: mfr+jcp > mfr > rep > account > pref tiers > default
           let borderColor, cardBg, cardBorder;
@@ -1262,6 +1264,10 @@
             borderColor = "rgba(249,200,80,.9)";
             cardBg = "rgba(249,200,80,.06)";
             cardBorder = "1px solid rgba(249,200,80,.35)";
+          } else if (isTier1Wholesaler) {
+            borderColor = "rgba(251,146,60,1)";
+            cardBg = "rgba(251,146,60,.10)";
+            cardBorder = "1px solid rgba(251,146,60,.55)";
           } else if (isWholesaler) {
             borderColor = "rgba(251,146,60,.85)";
             cardBg = "rgba(251,146,60,.05)";
@@ -1514,13 +1520,16 @@
               style: {
                 background: cardBg,
                 border: cardBorder,
-                borderLeft: "3px solid " + borderColor,
+                borderLeft: (isTier1Wholesaler ? "4px" : "3px") + " solid " + borderColor,
                 borderRadius: "4px",
                 padding: "14px 16px",
                 display: "flex",
                 flexDirection: "column",
                 gap: "8px",
-                transition: "background .15s, border .15s",
+                transition: "background .15s, border .15s, box-shadow .15s",
+                boxShadow: isTier1Wholesaler
+                  ? "0 0 18px rgba(251,146,60,.22), 0 4px 16px rgba(0,0,0,.45)"
+                  : "none",
               },
             },
 
@@ -1561,11 +1570,15 @@
                           ? "#c4b5fd"
                           : isMfr
                             ? "#f9c850"
-                            : hasRep
-                              ? "#3dd68c"
-                              : hasAcct
-                                ? "#d4a843"
-                                : "var(--gold-solid)",
+                            : isTier1Wholesaler
+                              ? "#fb923c"
+                              : isWholesaler
+                                ? "rgba(251,146,60,.8)"
+                                : hasRep
+                                  ? "#3dd68c"
+                                  : hasAcct
+                                    ? "#d4a843"
+                                    : "var(--gold-solid)",
                         lineHeight: 1.35,
                         flex: 1,
                         minWidth: 0,
@@ -1589,6 +1602,53 @@
                 },
 
                 // Status badges (view mode only)
+                !isEditing &&
+                  isTxLocal &&
+                  h("span", {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "8px",
+                      fontWeight: "700",
+                      color: "#fb923c",
+                      background: "rgba(251,146,60,.18)",
+                      border: "1px solid rgba(251,146,60,.55)",
+                      padding: "2px 7px",
+                      borderRadius: "2px",
+                      letterSpacing: ".08em",
+                      whiteSpace: "nowrap",
+                      boxShadow: "0 0 8px rgba(251,146,60,.3)",
+                    },
+                  }, "★ TX LOCAL"),
+                !isEditing &&
+                  isWholesaler && !isTxLocal &&
+                  h("span", {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "8px",
+                      color: "rgba(251,146,60,.8)",
+                      background: "rgba(251,146,60,.10)",
+                      border: "1px solid rgba(251,146,60,.3)",
+                      padding: "2px 6px",
+                      borderRadius: "2px",
+                      letterSpacing: ".05em",
+                      whiteSpace: "nowrap",
+                    },
+                  }, "WHOLESALE"),
+                !isEditing &&
+                  (d.tags || []).includes("iso-9000") &&
+                  h("span", {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "8px",
+                      color: "rgba(56,189,248,.8)",
+                      background: "rgba(56,189,248,.08)",
+                      border: "1px solid rgba(56,189,248,.25)",
+                      padding: "2px 6px",
+                      borderRadius: "2px",
+                      letterSpacing: ".05em",
+                      whiteSpace: "nowrap",
+                    },
+                  }, "ISO 9000"),
                 !isEditing &&
                   hasRep &&
                   h(
