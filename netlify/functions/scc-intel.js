@@ -24,6 +24,7 @@ async function sbaLookup(name) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...SBA_BODY_BASE, searchProfiles: { searchTerm: name } }),
+    signal: AbortSignal.timeout(7000),
   });
   if (!res.ok) return null;
   const data = await res.json();
@@ -68,7 +69,7 @@ async function samLookup(name, cage, uei) {
   else if (cage) params.set("cageCode", cage);
   else           params.set("q", `"${name}"`);
 
-  const res = await fetch(`${SAM_BASE}?${params}`);
+  const res = await fetch(`${SAM_BASE}?${params}`, { signal: AbortSignal.timeout(7000) });
   if (!res.ok) return null;
   const data = await res.json();
   const entities = data.entityData || [];

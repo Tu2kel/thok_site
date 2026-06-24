@@ -636,8 +636,23 @@
           if (raw) pendingVendors = JSON.parse(raw).filter(v => v.email && !v.is_dns);
         } catch {}
 
+        // Also pull MongoDB vendors (have emails, cover FSC lanes) — merge, dedup by name
+        const dbVendors = (window.SCC_DIST && window.SCC_DIST.DISTRIBUTORS) || [];
+        const seenNames = new Set(pendingVendors.map(v => (v.name || "").toUpperCase().trim()));
+        for (const d of dbVendors) {
+          if (!d.email || d.is_dns) continue;
+          const key = (d.name || "").toUpperCase().trim();
+          if (seenNames.has(key)) continue;
+          seenNames.add(key);
+          pendingVendors.push({
+            id: d.id, name: d.name, email: d.email, cage: d.cage || "",
+            fsc: d.fsc || [], nsns: d.known_nsns || [],
+            tags: d.tags || [], source: "db",
+          });
+        }
+
         if (!pendingVendors.length) {
-          addLog("AUTO ▶ No vendors with emails in intel queue — run intel sweep first or add vendors to DB.", "info");
+          addLog("AUTO ▶ No vendors with emails found — intel sweep may still be running or DB is empty.", "info");
           return;
         }
 
