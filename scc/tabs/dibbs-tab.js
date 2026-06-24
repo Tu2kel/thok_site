@@ -432,19 +432,15 @@
           ),
         ),
 
-        // ── Action buttons ──
+        // ── Cancel + Skip in header ──
         h("button", {
           onClick: onCancel, disabled: sending,
           style: { ...btnBase, background: "transparent", color: "rgba(231,76,60,.6)", border: "1px solid rgba(231,76,60,.25)", padding: "7px 14px" },
-        }, "✕ Cancel"),
+        }, "✕"),
         h("button", {
           onClick: onSkip, disabled: sending,
           style: { ...btnBase, background: "rgba(255,255,255,.04)", color: "rgba(245,240,232,.4)", border: "1px solid rgba(255,255,255,.1)", padding: "7px 16px" },
         }, "Skip →"),
-        h("button", {
-          onClick: onSend, disabled: sending,
-          style: { ...btnBase, background: sending ? "rgba(61,214,140,.06)" : "rgba(61,214,140,.14)", color: "rgba(61,214,140,.95)", border: "1px solid rgba(61,214,140,.45)", padding: "9px 24px", fontSize: "10px" },
-        }, sending ? "Sending…" : "✓ Send Email"),
       ),
 
       // ══ VENDOR + STATS ROW ══════════════════════════════════════════════
@@ -511,7 +507,7 @@
       ),
 
       // ══ SOL TABLE ═══════════════════════════════════════════════════════
-      h("div", { style: { padding: "0 24px 20px", overflowY: "auto", flex: 1, minHeight: 0 } },
+      h("div", { style: { padding: "0 24px 12px", overflowY: "auto", flex: 1, minHeight: 0 } },
         // Table header
         h("div", {
           style: {
@@ -571,6 +567,33 @@
           h("span", { style: { fontFamily: serif, fontSize: "14px", color: winColor, textAlign: "right", letterSpacing: ".04em" } },
             "$" + totalExt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })),
         ),
+      ),
+
+      // ══ STICKY SEND FOOTER ══════════════════════════════════════════════
+      h("div", {
+        style: {
+          padding: "16px 24px",
+          borderTop: "1px solid rgba(201,168,76,.15)",
+          background: "rgba(10,8,4,.95)",
+          flexShrink: 0,
+        },
+      },
+        h("button", {
+          onClick: onSend, disabled: sending,
+          style: {
+            width: "100%",
+            padding: "14px 0",
+            fontFamily: serif, fontSize: "11px", letterSpacing: ".2em",
+            textTransform: "uppercase",
+            background: sending ? "rgba(61,214,140,.06)" : "rgba(61,214,140,.16)",
+            color: sending ? "rgba(61,214,140,.4)" : "rgba(61,214,140,.95)",
+            border: "1px solid " + (sending ? "rgba(61,214,140,.2)" : "rgba(61,214,140,.5)"),
+            borderRadius: "3px",
+            cursor: sending ? "not-allowed" : "pointer",
+            boxShadow: sending ? "none" : "0 0 20px rgba(61,214,140,.12)",
+            transition: "all .18s",
+          },
+        }, sending ? "Sending…" : "✓ Send Email"),
       ),
     );
   }
@@ -677,9 +700,8 @@
           blastVendors.push({ id: d.id, name: d.name, email: d.email, cage: d.cage || "", fsc: d.fsc || [], nsns: d.known_nsns || [], tags: d.tags || [], source: "db" });
         }
 
-        // Intel FSC lane companies (small DLA distributors from USASpending) — exclude OEM manufacturers
-        // Skip "approved-manufacturer" tagged vendors (OEMs who won't quote cold)
-        // Skip large-award primes (totalAward > $10M — those are big contractors)
+        // Intel FSC lane companies — same 3-per-FSC cap as DB vendors
+        // Skip approved-manufacturer (OEMs), large primes (>$10M), already-seen names
         try {
           const raw = localStorage.getItem("scc_intel_pending_v1");
           if (raw) {
@@ -690,9 +712,13 @@
                 (v.totalAward == null || v.totalAward <= 10000000)
               )
               .forEach(v => {
+                const vFsc = String(v.fsc || "");
+                if (!vFsc || !goFscs.has(vFsc)) return; // only lanes in today's GO sols
+                if ((fscVendorCount[vFsc] || 0) >= DB_CAP_PER_FSC) return; // cap hit for this lane
                 const key = (v.name || "").toUpperCase().trim();
                 if (seenNames.has(key)) return;
                 seenNames.add(key);
+                fscVendorCount[vFsc] = (fscVendorCount[vFsc] || 0) + 1;
                 blastVendors.push(v);
               });
           }
