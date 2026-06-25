@@ -651,6 +651,7 @@
     const [dnsSaving, setDnsSaving] = useState({}); // id → bool
     const [pocLookingUp, setPocLookingUp] = useState({}); // id → bool
     const [enrichingAll, setEnrichingAll] = useState(false);
+    const [enrichProgress, setEnrichProgress] = useState("");
 
     const handleLookupPOC = useCallback(async (d) => {
       setPocLookingUp(prev => ({ ...prev, [d.id]: true }));
@@ -675,27 +676,52 @@
     }, []);
 
     const handleEnrichAll = useCallback(async () => {
-      if (!confirm("Run SAM.gov POC lookup on all vendors missing a POC name? This may take up to 30 seconds.")) return;
+      if (!confirm("Run SAM.gov POC lookup on ALL vendors missing a POC? Processes 50 at a time until complete. Keep this tab open.")) return;
       setEnrichingAll(true);
+      setEnrichProgress("Starting…");
+
+      let totalEnriched = 0, totalEmails = 0, totalNotFound = 0, totalFailed = 0, pass = 0;
+
       try {
-        const res  = await fetch("/.netlify/functions/scc-sam-lookup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "enrichAll", limit: 50 }),
-        });
-        const data = await res.json();
-        if (data.ok) {
+        while (true) {
+          pass++;
+          setEnrichProgress("Pass " + pass + " — " + totalEnriched + " enriched so far…");
+
+          const res  = await fetch("/.netlify/functions/scc-sam-lookup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "enrichAll", limit: 50 }),
+          });
+          const data = await res.json();
+          if (!data.ok) { alert("Enrich failed on pass " + pass + ": " + data.error); break; }
+
           const r = data.result;
-          alert("SAM Enrich done — " + r.enriched + " enriched, " + (r.emails_filled || 0) + " emails auto-filled, " + r.not_found + " not found, " + r.failed + " failed out of " + r.total);
+          totalEnriched  += r.enriched  || 0;
+          totalEmails    += r.emails_filled || 0;
+          totalNotFound  += r.not_found  || 0;
+          totalFailed    += r.failed     || 0;
+
+          // Reload cards after each pass so you see progress
           await window.SCC_DIST.distReloadCache();
           setDists([...window.SCC_DIST.DISTRIBUTORS]);
-        } else {
-          alert("Enrich failed: " + data.error);
+
+          // If this batch returned fewer than 50 records to process, we're done
+          if ((r.total || 0) < 50) break;
         }
+
+        setEnrichProgress("");
+        alert(
+          "SAM Enrich complete — " + totalEnriched + " enriched, " +
+          totalEmails + " emails auto-filled, " +
+          totalNotFound + " not found, " + totalFailed + " failed" +
+          " (" + pass + " passes)"
+        );
       } catch (e) {
+        setEnrichProgress("");
         alert("Enrich error: " + e.message);
       } finally {
         setEnrichingAll(false);
+        setEnrichProgress("");
       }
     }, []);
 
@@ -1012,7 +1038,7 @@
               whiteSpace: "nowrap",
               opacity: enrichingAll ? 0.6 : 1,
             },
-          }, enrichingAll ? "SAM Enriching…" : "Enrich All POC"),
+          }, enrichingAll ? (enrichProgress || "SAM Enriching…") : "Enrich All POC"),
         ),
       ),
 
