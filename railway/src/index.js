@@ -5,6 +5,7 @@
 // Pass --run-now as CLI arg to fire immediately (for testing / manual trigger).
 
 const cron = require("node-cron");
+const { scrape }           = require("./scraper");
 const { fetchDibbsSols }   = require("./gmail-watcher");
 const { fetchAllSolDetails } = require("./dibbs-fetcher");
 const { screenBatch }      = require("./screener");
@@ -12,6 +13,10 @@ const { buildBlastPlan, runBlast } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
 const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, upsertNsnWatch, saveDailyBrief } = require("./db");
+
+// SOL_SOURCE=navigator (default, uses DIBBS Navigator scraper)
+// SOL_SOURCE=email (switches to DLA Gmail after Navigator sub ends)
+const SOL_SOURCE = process.env.SOL_SOURCE || "navigator";
 
 const SCHEDULE  = process.env.CRON_SCHEDULE || "0 12 * * 1-5"; // 6 AM CT Mon–Fri
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
@@ -43,30 +48,50 @@ async function runPipeline() {
     return;
   }
 
-  // ── 2. Parse DLA email + fetch PDFs ──────────────────────────────────
-  log("Checking Gmail for DLA solicitation emails…");
-  let emailSols = [];
-  try {
-    emailSols = await fetchDibbsSols({ lookbackHours: 26 });
-  } catch (e) {
-    err("Gmail fetch failed:", e.message);
-    errors.push("Gmail: " + e.message);
-  }
+  // ── 2. Get solicitations ──────────────────────────────────────────────
+  let rawSols = [];
+  let scrapeResult = { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } };
 
-  if (!emailSols.length) {
-    log("No DLA solicitation emails found in last 26h — sending summary");
-    await sendSummary({
-      scrape: { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } },
-      screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate,
+  if (SOL_SOURCE === "email") {
+    // Post-July-3: DLA emails → Gmail → PDF parse
+    log("Checking Gmail for DLA solicitation emails…");
+    let emailSols = [];
+    try {
+      emailSols = await fetchDibbsSols({ lookbackHours: 26 });
+    } catch (e) {
+      err("Gmail fetch failed:", e.message);
+      errors.push("Gmail: " + e.message);
+    }
+    if (!emailSols.length) {
+      log("No DLA solicitation emails found in last 26h — sending summary");
+      await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
+      return;
+    }
+    log("Found " + emailSols.length + " sols from email — fetching PDFs…");
+    rawSols = await fetchAllSolDetails(emailSols);
+    log("PDF fetch complete — " + rawSols.filter(s => s.pdf_parsed).length + "/" + rawSols.length + " PDFs parsed");
+    scrapeResult = { counts: { total: rawSols.length, pass1: emailSols.length, pass2: 0, pass3: 0 } };
+
+  } else {
+    // Navigator scraper (active until Navigator sub ends)
+    log("Scraping DIBBS Navigator…");
+    const fscLanes = (process.env.NAVIGATOR_FSC_LANES || "").split(",").map(s => s.trim()).filter(Boolean);
+    const result = await scrape({
+      username:  process.env.NAVIGATOR_USERNAME,
+      password:  process.env.NAVIGATOR_PASSWORD,
+      fscLanes,
+      minPrice:  1000,
     });
-    return;
+    if (!result.ok || !result.sols.length) {
+      err("Navigator scrape failed or returned 0 sols:", result.error || "no sols");
+      errors.push("Scraper: " + (result.error || "0 sols"));
+      await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
+      return;
+    }
+    rawSols = result.sols;
+    scrapeResult = { counts: result.counts };
+    log("Scrape complete — " + rawSols.length + " sols");
   }
-
-  log("Found " + emailSols.length + " sols from email — fetching PDFs…");
-  const rawSols = await fetchAllSolDetails(emailSols);
-  log("PDF fetch complete — " + rawSols.filter(s => s.pdf_parsed).length + "/" + rawSols.length + " PDFs parsed");
-
-  const scrapeResult = { counts: { total: rawSols.length, pass1: emailSols.length, pass2: 0, pass3: 0 } };
 
   // ── 3. Skip already-acted + DNS FSCs ─────────────────────────────────
   const alreadyActed = await getAlreadyActedSols(db);
