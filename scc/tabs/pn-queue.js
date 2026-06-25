@@ -7,7 +7,7 @@
   //  When every sol is resolved the batch releases and blasts.
   // ═══════════════════════════════════════════════════════════════════════
 
-  const { createElement: h, useState, useCallback } = React;
+  const { createElement: h, useState, useCallback, useRef } = React;
 
   // ── PDF PARSING ───────────────────────────────────────────────────────
   async function parsePDFText(file) {
@@ -93,16 +93,34 @@
     }, [handlePDFFile]);
 
     const handlePaste = useCallback(function (solNum, e) {
-      var items = e.clipboardData && e.clipboardData.items;
-      if (!items) return;
-      for (var i = 0; i < items.length; i++) {
-        if (items[i].type === "application/pdf") {
-          e.preventDefault();
-          handlePDFFile(solNum, items[i].getAsFile());
-          return;
+      var cd = e.clipboardData;
+      if (!cd) return;
+      // Check files list first (copy from File Explorer)
+      if (cd.files && cd.files.length) {
+        for (var f = 0; f < cd.files.length; f++) {
+          if (cd.files[f].type === "application/pdf") {
+            e.preventDefault();
+            handlePDFFile(solNum, cd.files[f]);
+            return;
+          }
+        }
+      }
+      // Check items (browser clipboard API)
+      if (cd.items) {
+        for (var i = 0; i < cd.items.length; i++) {
+          if (cd.items[i].kind === "file") {
+            var file = cd.items[i].getAsFile();
+            if (file && file.type === "application/pdf") {
+              e.preventDefault();
+              handlePDFFile(solNum, file);
+              return;
+            }
+          }
         }
       }
     }, [handlePDFFile]);
+
+    const fileInputRefs = useRef({});
 
     const handleFileInput = useCallback(function (solNum, e) {
       handlePDFFile(solNum, e.target.files && e.target.files[0]);
@@ -267,8 +285,8 @@
               ),
             ),
 
-            // ── Right: PDF drop zone (drag + paste + click) ──
-            h("label", {
+            // ── Right: PDF drop zone (drag + paste + click-to-browse) ──
+            h("div", {
               onDragOver:  function (e) { e.preventDefault(); setDragOver(function (p) { return Object.assign({}, p, { [item.sol_number]: true }); }); },
               onDragLeave: function ()  { setDragOver(function (p) { return Object.assign({}, p, { [item.sol_number]: false }); }); },
               onDrop:      function (e) { handleDrop(item.sol_number, e); },
@@ -276,7 +294,7 @@
               tabIndex:    0,
               style: {
                 border: "1px dashed " + (
-                  item._pdfName      ? "rgba(61,214,140,.55)" :
+                  item._pdfName             ? "rgba(61,214,140,.55)" :
                   dragOver[item.sol_number] ? "rgba(201,168,76,.8)"  :
                   "rgba(201,168,76,.25)"
                 ),
@@ -285,9 +303,8 @@
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: "10px 8px",
+                padding: "8px",
                 textAlign: "center",
-                cursor: "pointer",
                 background: dragOver[item.sol_number]
                   ? "rgba(201,168,76,.07)"
                   : item._parsing
@@ -304,10 +321,26 @@
                       "✓ " + (item._pdfName.length > 18 ? item._pdfName.slice(0, 18) + "…" : item._pdfName))
                   : [
                       h("span", { key: "arrow", style: { fontSize: "18px", color: "rgba(201,168,76,.3)", lineHeight: 1 } }, "⬇"),
-                      h("span", { key: "label", style: { ...S.mono, fontSize: "8px", color: "var(--body-faint)", marginTop: "5px", lineHeight: 1.5, whiteSpace: "pre-line" } },
-                        "Drop · Paste · Click"),
+                      h("span", { key: "label", style: { ...S.mono, fontSize: "8px", color: "var(--body-faint)", marginTop: "4px", lineHeight: 1.5 } },
+                        "Drop or Paste PDF"),
                     ],
+              // Browse button — separate from the focusable zone so paste still works
+              !item._parsing && h("button", {
+                key: "browse",
+                onClick: function (e) {
+                  e.stopPropagation();
+                  fileInputRefs.current[item.sol_number] && fileInputRefs.current[item.sol_number].click();
+                },
+                style: {
+                  marginTop: "5px", padding: "2px 8px",
+                  fontFamily: "JetBrains Mono,monospace", fontSize: "8px",
+                  background: "transparent", border: "1px solid rgba(201,168,76,.25)",
+                  color: "var(--body-faint)", cursor: "pointer", borderRadius: "2px",
+                },
+              }, "browse…"),
               h("input", {
+                key: "file-input",
+                ref: function (el) { fileInputRefs.current[item.sol_number] = el; },
                 type: "file",
                 accept: ".pdf,application/pdf",
                 onChange: function (e) { handleFileInput(item.sol_number, e); },
