@@ -255,8 +255,15 @@ exports.handler = async (event) => {
   // ── enrichAll — batch enrich all distributors missing POC ──────────────
   if (action === "enrichAll") {
     const db    = await getDb();
+    // Target vendors missing POC name OR missing website
     const dists = await db.collection("distributors")
-      .find({ is_dns: { $ne: true }, poc_name: { $in: [null, undefined, ""] } })
+      .find({
+        is_dns: { $ne: true },
+        $or: [
+          { poc_name: { $in: [null, undefined, ""] } },
+          { website:  { $in: [null, undefined, ""] } },
+        ],
+      })
       .project({ id: 1, name: 1, cage_code: 1, email: 1, website: 1 })
       .limit(payload.limit || 50)
       .toArray();
