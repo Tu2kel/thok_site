@@ -7,7 +7,7 @@
   //  When every sol is resolved the batch releases and blasts.
   // ═══════════════════════════════════════════════════════════════════════
 
-  const { createElement: h, useState, useCallback, useRef } = React;
+  const { createElement: h, useState, useCallback, useEffect, useRef } = React;
 
   // ── PDF PARSING ───────────────────────────────────────────────────────
   async function parsePDFText(file) {
@@ -48,18 +48,41 @@
 
   // ── COMPONENT ─────────────────────────────────────────────────────────
   function PNQueuePanel({ queue, onRelease, onDismiss }) {
+    // Stable session key — survives tab switches and parent re-renders
+    var _sessionKey = "pnq:" + queue.records.map(function (r) { return r.sol_number; }).join(",");
+
     // items mirrors queue.records — adds UI-only fields
+    // Restored from sessionStorage on remount so PDF drops survive tab switches
     const [items, setItems] = useState(function () {
+      var saved = {};
+      try {
+        var raw = sessionStorage.getItem(_sessionKey);
+        if (raw) {
+          JSON.parse(raw).forEach(function (it) { saved[it.sol_number] = it; });
+        }
+      } catch (e) {}
       return queue.records.map(function (r) {
+        var s = saved[r.sol_number] || {};
         return Object.assign({}, r, {
-          _resolved:   null,   // null=pending | "N/A" | "confirmed-pn-string"
-          _input:      "",
-          _candidates: [],
+          _resolved:   s._resolved   !== undefined ? s._resolved : null,
+          _input:      s._input      || "",
+          _candidates: s._candidates || [],
           _parsing:    false,
-          _pdfName:    null,
+          _pdfName:    s._pdfName    || null,
         });
       });
     });
+
+    // Persist items to sessionStorage whenever they change
+    useEffect(function () {
+      try {
+        sessionStorage.setItem(_sessionKey, JSON.stringify(
+          items.map(function (it) {
+            return { sol_number: it.sol_number, _resolved: it._resolved, _input: it._input, _candidates: it._candidates, _pdfName: it._pdfName };
+          })
+        ));
+      } catch (e) {}
+    }, [items]);
 
     const updateItem = useCallback(function (solNum, patch) {
       setItems(function (prev) {
@@ -127,6 +150,10 @@
       e.target.value = "";
     }, [handlePDFFile]);
 
+    const clearSession = useCallback(function () {
+      try { sessionStorage.removeItem(_sessionKey); } catch (e) {}
+    }, []);
+
     const handleRelease = useCallback(function () {
       if (!allResolved) return;
       var resolved = items.map(function (it) {
@@ -138,7 +165,6 @@
           rec.ref_part_number = it._resolved;
           rec._pn_na = false;
         }
-        // clean up UI fields before passing back
         delete rec._resolved;
         delete rec._input;
         delete rec._candidates;
@@ -146,8 +172,9 @@
         delete rec._pdfName;
         return rec;
       });
+      clearSession();
       onRelease(resolved, queue.opts || {});
-    }, [allResolved, items, queue.opts, onRelease]);
+    }, [allResolved, items, queue.opts, onRelease, clearSession]);
 
     // ── Styles ──
     var S = {
@@ -186,7 +213,7 @@
             allResolved ? "rgba(61,214,140,.1)" : "transparent"
           ), { opacity: allResolved ? 1 : 0.4 }),
         }, "Release Batch →"),
-        h("button", { onClick: onDismiss, style: S.btn("rgba(231,76,60,.5)") }, "✕ Discard"),
+        h("button", { onClick: function () { clearSession(); onDismiss(); }, style: S.btn("rgba(231,76,60,.5)") }, "✕ Discard"),
       ),
 
       // ── Held sols ──
