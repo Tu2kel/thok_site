@@ -544,6 +544,8 @@
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
     const [liveMode, setLiveMode] = useState(false); // always starts OFF — must be explicitly enabled each session
+    const [blastCapPerFsc, setBlastCapPerFsc] = useState(3);
+    const blastCapRef = useRef(3);
     const [blasting, setBlasting] = useState(false);
     const [blastLog, setBlastLog] = useState([]);
     const [showBlastLog, setShowBlastLog] = useState(false);
@@ -555,6 +557,7 @@
     useEffect(() => { modeRef.current = mode; }, [mode]);
     const liveModeRef = useRef(liveMode);
     useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
+    useEffect(() => { blastCapRef.current = blastCapPerFsc; }, [blastCapPerFsc]);
 
     // ── Persist ──
     useEffect(() => {
@@ -592,9 +595,9 @@
         // Collect GO sol FSC codes so we only pull vendors for relevant lanes
         const goFscs = new Set(goSols.map(s => String(s.fsc || (s.nsn || "").replace(/\D/g,"").slice(0,4))).filter(Boolean));
 
-        // Per-FSC cap: pick tier-1 first, then tier-2, max 3 per lane
+        // Per-FSC cap: pick tier-1 first, then tier-2; cap is user-controlled
         const fscVendorCount = {};
-        const DB_CAP_PER_FSC = 3;
+        const DB_CAP_PER_FSC = blastCapRef.current || 3;
         const eligible = dbAll
           .filter(d => d.email && !d.is_dns && !(d.tags || []).includes("approved-manufacturer"))
           .sort((a, b) => (a.tier || 9) - (b.tier || 9));
@@ -1492,6 +1495,25 @@
                 m.toUpperCase(),
               ),
             ),
+          ),
+
+          // Vendors-per-FSC cap control
+          h("div", {
+            style: { display: "flex", alignItems: "center", gap: "6px" },
+            title: "Max vendors emailed per FSC lane. Raise if you want broader coverage from one company.",
+          },
+            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "rgba(245,240,232,.3)", letterSpacing: ".08em", textTransform: "uppercase" } }, "Cap/FSC"),
+            h("input", {
+              type: "number", min: 1, max: 20, value: blastCapPerFsc,
+              onChange: e => setBlastCapPerFsc(Math.max(1, parseInt(e.target.value) || 1)),
+              style: {
+                width: "46px", textAlign: "center", padding: "5px 4px",
+                fontFamily: "JetBrains Mono,monospace", fontSize: "12px",
+                background: "rgba(201,168,76,.08)", color: "rgba(201,168,76,.9)",
+                border: "1px solid rgba(201,168,76,.3)", borderRadius: "3px",
+                outline: "none",
+              },
+            }),
           ),
 
           // LIVE toggle — OFF = test emails only, ON = real vendor blast
