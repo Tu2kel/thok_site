@@ -89,54 +89,79 @@ async function samLookup(name, cage) {
   };
 }
 
-// SBA DSBS fallback — no API key required, returns contact name + email from certifications search
+// SBA DSBS fallback — no API key required
+// NOTE: SBA_BASE endpoint is provisional. On first run, sba_debug is returned
+// in the lookupPOC response so we can see the actual shape and correct field names.
 async function sbaLookup(name) {
   try {
-    const params = new URLSearchParams({
-      keywords: name,
-      type:     "vendor",
-      size:     "5",
-    });
-    const res  = await fetch(SBA_BASE + "?" + params.toString(), {
-      headers: { "Accept": "application/json", "User-Agent": "Mozilla/5.0" },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
+    // Try two common endpoint patterns — first one that returns JSON wins
+    const candidates = [
+      SBA_BASE + "?" + new URLSearchParams({ keywords: name, size: "5" }),
+      "https://search.certifications.sba.gov/api/search?" + new URLSearchParams({ q: name, pageSize: "5" }),
+      "https://search.certifications.sba.gov/api/businesses?" + new URLSearchParams({ keyword: name, page: "0", size: "5" }),
+    ];
 
-    // Response shape: { hits: { hits: [ { _source: { ... } } ] } }
-    const hits = data?.hits?.hits || data?.results || data?.data || [];
-    if (!hits.length) return null;
+    let data = null;
+    let usedUrl = null;
+    for (const url of candidates) {
+      try {
+        const r = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" } });
+        if (!r.ok) continue;
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("json")) continue;
+        data = await r.json();
+        usedUrl = url;
+        break;
+      } catch { continue; }
+    }
+
+    if (!data) return { _sba_debug: "all candidates failed or returned non-JSON" };
+
+    // Flatten whatever shape the API returns into a hits array
+    const hits = data?.hits?.hits
+      || data?.results
+      || data?.data
+      || data?.businesses
+      || data?.items
+      || (Array.isArray(data) ? data : []);
+
+    if (!hits.length) return { _sba_debug: "no hits", _sba_url: usedUrl, _sba_raw: JSON.stringify(data).slice(0, 500) };
 
     // Find closest name match
     const target = name.toUpperCase();
     hits.sort((a, b) => {
-      const src = h => (h._source || h);
-      const na  = (src(a).legalBusinessName || src(a).businessName || src(a).name || "").toUpperCase();
-      const nb  = (src(b).legalBusinessName || src(b).businessName || src(b).name || "").toUpperCase();
-      const da  = na === target ? 0 : na.startsWith(target.split(" ")[0]) ? 1 : 2;
-      const db  = nb === target ? 0 : nb.startsWith(target.split(" ")[0]) ? 1 : 2;
-      return da - db;
+      const getN = x => ((x._source || x).legalBusinessName || (x._source || x).businessName || (x._source || x).name || "").toUpperCase();
+      const na = getN(a), nb = getN(b);
+      const score = n => n === target ? 0 : n.startsWith(target.split(" ")[0]) ? 1 : 2;
+      return score(na) - score(nb);
     });
 
-    const src = (hits[0]._source || hits[0]);
+    const src = hits[0]._source || hits[0];
 
-    // Contact fields vary — try common keys
-    const fullName  = (src.primaryContactName || src.contactName || src.contactPerson ||
-                       [src.contactFirstName, src.contactLastName].filter(Boolean).join(" ") || "").trim();
+    const fullName  = (
+      src.primaryContactName || src.contactName || src.contactPerson ||
+      [src.contactFirstName, src.contactLastName].filter(Boolean).join(" ") ||
+      src.poc || ""
+    ).trim();
     const firstName = (src.contactFirstName || fullName.split(" ")[0] || "").trim();
-    const email     = (src.primaryContactEmail || src.contactEmail || src.email || "").trim().toLowerCase();
+    const email     = (src.primaryContactEmail || src.contactEmail || src.email || src.pocEmail || "").trim().toLowerCase();
+    const phone     = (src.primaryContactPhone || src.contactPhone || src.pocPhone || src.phone || "").trim();
 
-    if (!fullName && !email) return null;
-
-    return {
-      poc_first:   firstName  || null,
-      poc_last:    (src.contactLastName || "").trim() || null,
-      poc_name:    fullName   || null,
-      poc_email:   email      || null,
-      poc_source:  "sba",
+    // Always return debug info on first call so we can verify field names
+    const result = {
+      poc_first:  firstName || null,
+      poc_last:   (src.contactLastName || "").trim() || null,
+      poc_name:   fullName  || null,
+      poc_email:  email     || null,
+      poc_phone:  phone     || null,
+      poc_source: "sba",
+      _sba_debug: { url: usedUrl, name_field: src.legalBusinessName || src.businessName || src.name || "?", raw_keys: Object.keys(src).slice(0, 20) },
     };
-  } catch {
-    return null;
+
+    if (!fullName && !email) return { _sba_debug: result._sba_debug, _sba_raw_src: JSON.stringify(src).slice(0, 500) };
+    return result;
+  } catch (e) {
+    return { _sba_debug: "exception: " + e.message };
   }
 }
 
@@ -147,8 +172,13 @@ async function lookupPOC(name, cage) {
 
   // SAM found the entity but no POC, or nothing found — try SBA
   const sbaResult = await sbaLookup(name);
-  if (sbaResult) {
-    // Preserve any CAGE/UEI/sam_name from SAM even if POC came from SBA
+
+  // If SBA returned debug-only (endpoint probe failed), surface it
+  if (sbaResult && sbaResult._sba_debug && !sbaResult.poc_name) {
+    return { ...(samResult || {}), _sba_debug: sbaResult._sba_debug, _sba_raw: sbaResult._sba_raw_src };
+  }
+
+  if (sbaResult && (sbaResult.poc_name || sbaResult.poc_email)) {
     return {
       ...(samResult || {}),
       ...sbaResult,
