@@ -355,7 +355,7 @@
 
   // ── PENDING BLAST PANEL ───────────────────────────────────────────────
   // Shows after AUTO dry-run — lists vendors + items, requires manual approval.
-  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, sending }) {
+  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, onPipeline, sending, selectedCount }) {
     const mono  = "JetBrains Mono,monospace";
     const serif = "Cinzel,serif";
     const body  = "Cormorant Garamond,serif";
@@ -490,13 +490,16 @@
         style: { padding: "14px 28px", borderTop: "1px solid rgba(201,168,76,.15)", background: "rgba(10,8,4,.97)", flexShrink: 0, display: "flex", gap: "10px" },
       },
         h("button", {
-          onClick: function() {
-            if (window.SCC_DB && window.SCC_DB.solSave) {
-              entry.records.forEach(function(r) { window.SCC_DB.solSave({ ...r, status: "Outreach", blast_sent: new Date().toISOString().slice(0,10) }); });
-            }
+          onClick: onPipeline,
+          disabled: !selectedCount,
+          title: selectedCount ? "Push all " + selectedCount + " selected sols to pipeline + register NSNs for watch" : "No sols selected — check boxes on the analysis screen",
+          style: { ...btnBase, flex: "0 0 auto", padding: "13px 18px", fontFamily: mono, fontSize: "14px", letterSpacing: ".08em",
+            background: selectedCount ? "rgba(96,165,250,.1)" : "rgba(255,255,255,.03)",
+            color: selectedCount ? "rgba(96,165,250,.85)" : "rgba(255,255,255,.2)",
+            border: "1px solid " + (selectedCount ? "rgba(96,165,250,.35)" : "rgba(255,255,255,.1)"),
+            cursor: selectedCount ? "pointer" : "not-allowed",
           },
-          style: { ...btnBase, flex: "0 0 auto", padding: "13px 18px", fontFamily: mono, fontSize: "14px", letterSpacing: ".08em", background: "rgba(96,165,250,.08)", color: "rgba(96,165,250,.7)", border: "1px solid rgba(96,165,250,.25)" },
-        }, "→ Pipeline"),
+        }, "→ Pipeline" + (selectedCount ? " (" + selectedCount + ")" : "")),
         h("button", {
           onClick: onSend, disabled: sending,
           style: { ...btnBase, flex: 1, padding: "14px 0", fontSize: "14px", letterSpacing: ".2em",
@@ -1219,33 +1222,39 @@
       for (const rec of allRecs) {
         if (!selected.has(rec.sol_number)) continue;
         if (existingSet.has(rec.sol_number)) {
-          log_.push({
-            sol: rec.sol_number,
-            status: "skip",
-            note: "already exists",
-          });
+          log_.push({ sol: rec.sol_number, status: "skip", note: "already exists" });
           continue;
         }
         try {
           const built = buildRecord(rec);
           await dbSave(built);
           savedRecords.push(built);
-          log_.push({
-            sol: rec.sol_number,
-            status: "saved",
-            note: rec.verdict,
-          });
+          log_.push({ sol: rec.sol_number, status: "saved", note: rec.verdict });
         } catch (e) {
           log_.push({ sol: rec.sol_number, status: "err", note: e.message });
         }
       }
 
+      // NSN watch — register every pushed NSN so we can alert on re-solicitation
+      try {
+        const watchKey = "scc_nsn_watch_v1";
+        const existing_ = JSON.parse(localStorage.getItem(watchKey) || "[]");
+        const watchSet = new Set(existing_.map(w => w.nsn));
+        const today = new Date().toISOString().slice(0, 10);
+        const newWatches = savedRecords
+          .filter(r => r.nsn && !watchSet.has(r.nsn))
+          .map(r => ({ nsn: r.nsn, fsc: r.fsc, item_name: r.item_name, sol_number: r.sol_number, date_added: today }));
+        if (newWatches.length) {
+          localStorage.setItem(watchKey, JSON.stringify([...existing_, ...newWatches]));
+        }
+      } catch {}
+
       setPushLog(log_);
       setPushing(false);
       const saved_ = log_.filter((l) => l.status === "saved").length;
-      const skips = log_.filter((l) => l.status === "skip").length;
+      const skips  = log_.filter((l) => l.status === "skip").length;
       toast_(
-        "Pushed " + saved_ + " sols to pipeline" + (skips ? " · " + skips + " skipped (duplicate)" : "") + " — use BLAST GO to send RFQs",
+        "Pushed " + saved_ + " sols to pipeline" + (skips ? " · " + skips + " skipped (duplicate)" : "") + " · NSNs added to watch",
       );
       window.dispatchEvent(new CustomEvent("scc:pipeline:reload"));
     }, [selected, analysis, toast_]);
@@ -1707,14 +1716,16 @@
           },
         },
           h(PendingBlastPanel, {
-            entry:   pendingBlast.plan[pendingBlast.idx],
-            idx:     pendingBlast.idx,
-            total:   pendingBlast.plan.length,
-            isLive:  pendingBlast.isLive,
-            sending: blasting,
-            onSend:  handleSendOneBatch,
-            onSkip:  handleSkipBatch,
-            onCancel: () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
+            entry:      pendingBlast.plan[pendingBlast.idx],
+            idx:        pendingBlast.idx,
+            total:      pendingBlast.plan.length,
+            isLive:     pendingBlast.isLive,
+            sending:    blasting,
+            selectedCount: selected.size,
+            onSend:     handleSendOneBatch,
+            onSkip:     handleSkipBatch,
+            onPipeline: pushToPipeline,
+            onCancel:   () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
           }),
         ),
       ),
