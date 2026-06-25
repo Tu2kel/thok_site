@@ -54,4 +54,37 @@ async function saveSol(db, record) {
   );
 }
 
-module.exports = { getDb, getDistributors, getNsnWatchList, upsertNsnWatch, getAlreadyActedSols, saveSol };
+// ── BLAST LOG ────────────────────────────────────────────────────────────────
+
+// Save one send entry per sol+vendor pair (upsert — re-send updates timestamp)
+async function saveBlastEntry(db, { sol_number, vendor_name, vendor_email, vendor_id, status, error }) {
+  const email = (vendor_email || "").toLowerCase();
+  await db.collection("blast_log").updateOne(
+    { sol_number, vendor_email: email },
+    { $set: { sol_number, vendor_name, vendor_email: email, vendor_id: vendor_id || null, status, error: error || null, sent_at: new Date().toISOString() } },
+    { upsert: true },
+  );
+}
+
+// Returns Set of sol_numbers already sent to this vendor (status=sent only)
+async function getSentSolsForVendor(db, vendor_email, sol_numbers) {
+  if (!sol_numbers.length) return new Set();
+  const rows = await db.collection("blast_log").find({
+    vendor_email: (vendor_email || "").toLowerCase(),
+    sol_number: { $in: sol_numbers },
+    status: "sent",
+  }).toArray();
+  return new Set(rows.map(r => r.sol_number));
+}
+
+// ── DAILY BRIEFS ─────────────────────────────────────────────────────────────
+
+async function saveDailyBrief(db, brief) {
+  await db.collection("blast_briefs").insertOne({ ...brief, created_at: new Date().toISOString() });
+}
+
+async function getDailyBriefs(db, limit = 60) {
+  return db.collection("blast_briefs").find({}).sort({ created_at: -1 }).limit(limit).toArray();
+}
+
+module.exports = { getDb, getDistributors, getNsnWatchList, upsertNsnWatch, getAlreadyActedSols, saveSol, saveBlastEntry, getSentSolsForVendor, saveDailyBrief, getDailyBriefs };

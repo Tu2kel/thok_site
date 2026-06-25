@@ -74,12 +74,34 @@ function buildBlastPlan(sols, dists) {
 
 // Execute blast: send one RFQ email per plan entry
 // In test mode all emails go to FROM_ADDRESS instead
-async function runBlast(plan, { isLive = false, fromAddress } = {}) {
+// db (optional) — enables dedup check + blast_log persistence
+async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, log: [] };
 
   for (const entry of plan) {
-    const { vendor, sols } = entry;
+    const { vendor, sols: allSols } = entry;
     const to = isLive ? vendor.email : fromAddress;
+
+    // ── Dedup: skip sols already sent to this vendor ──────────────────────
+    let sols = allSols;
+    if (db && isLive) {
+      const alreadySent = await db.collection("blast_log").find({
+        vendor_email: (vendor.email || "").toLowerCase(),
+        sol_number: { $in: allSols.map(s => s.sol_number) },
+        status: "sent",
+      }).toArray().then(rows => new Set(rows.map(r => r.sol_number))).catch(() => new Set());
+
+      sols = allSols.filter(s => !alreadySent.has(s.sol_number));
+      if (!sols.length) {
+        info("⏭ " + vendor.name + " — all sols already sent, skipping");
+        results.skipped++;
+        results.log.push({ vendor: vendor.name, to, sols: 0, status: "skipped", reason: "all already sent" });
+        continue;
+      }
+      if (sols.length < allSols.length) {
+        info("⚡ " + vendor.name + ": " + (allSols.length - sols.length) + " already sent, sending " + sols.length + " new");
+      }
+    }
 
     // Build combined RFQ body (one email, all sols for this vendor)
     const firstSol = sols[0];
@@ -129,12 +151,33 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}) {
     try {
       await sendEmail({ to, subject: subject + (sols.length > 1 ? " +" + (sols.length - 1) + " more" : ""), body });
       results.sent++;
-      results.log.push({ vendor: vendor.name, to, sols: sols.length, totalExt: entry.totalExt, status: "sent" });
-      info("✓ RFQ → " + vendor.name + " (" + sols.length + " items, $" + Math.round(entry.totalExt).toLocaleString() + ")");
+      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
+      info("✓ RFQ → " + vendor.name + " (" + sols.length + " items)");
+
+      // Persist one blast_log entry per sol+vendor pair
+      if (db) {
+        for (const sol of sols) {
+          await db.collection("blast_log").updateOne(
+            { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
+            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, status: "sent", sent_at: new Date().toISOString() } },
+            { upsert: true },
+          ).catch(e => info("blast_log save err:", e.message));
+        }
+      }
     } catch (e) {
       results.failed++;
-      results.log.push({ vendor: vendor.name, to, sols: sols.length, status: "failed", error: e.message });
+      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), status: "failed", error: e.message });
       info("✗ RFQ FAILED → " + vendor.name + ": " + e.message);
+
+      if (db) {
+        for (const sol of sols) {
+          await db.collection("blast_log").updateOne(
+            { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
+            { $set: { sol_number: sol.sol_number, vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), status: "failed", error: e.message, sent_at: new Date().toISOString() } },
+            { upsert: true },
+          ).catch(() => {});
+        }
+      }
     }
 
     // Throttle to avoid Gmail rate limits

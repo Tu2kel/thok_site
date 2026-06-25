@@ -792,6 +792,7 @@
                   { id: "source", label: "Source", icon: "◆ " },
                   { id: "intel", label: "Intel", icon: "⚡ " },
                   { id: "awards", label: "Awards", icon: "🏆 " },
+                  { id: "briefs", label: "Briefs", icon: "📡 " },
                 ],
               },
               {
@@ -1128,6 +1129,11 @@
             onPrefillConsumed: () => setAwardPrefill(null),
             showToast,
           }),
+
+        tab === "briefs" &&
+          (window.SCC_TABS && window.SCC_TABS.BlastLogTab
+            ? hA(window.SCC_TABS.BlastLogTab, null)
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Briefs loading…")),
 
         tab === "memo" && hA(MemoTab, null),
 

@@ -11,7 +11,7 @@ const { screenBatch }      = require("./screener");
 const { buildBlastPlan, runBlast } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
-const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, upsertNsnWatch } = require("./db");
+const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, upsertNsnWatch, saveDailyBrief } = require("./db");
 
 const SCHEDULE  = process.env.CRON_SCHEDULE || "0 12 * * 1-5"; // 6 AM CT Mon–Fri
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
@@ -153,7 +153,7 @@ async function runPipeline() {
 
     if (plan.length) {
       log("Firing blast: " + plan.length + " vendor emails (" + (IS_LIVE ? "LIVE" : "TEST") + ")…");
-      blastResult = await runBlast(plan, { isLive: IS_LIVE, fromAddress: "anthony@ifedlog.com" });
+      blastResult = await runBlast(plan, { isLive: IS_LIVE, fromAddress: "kelley.anthonyk@gmail.com" }, db);
       log("Blast complete: " + blastResult.sent + " sent, " + blastResult.failed + " failed");
 
       // Update sol statuses in MongoDB
@@ -187,6 +187,34 @@ async function runPipeline() {
       log("Added " + newWatches.length + " new NSNs to watch list");
     }
   }
+
+  // ── 9. Save daily brief to MongoDB ───────────────────────────────────
+  await saveDailyBrief(db, {
+    run_date:     new Date().toLocaleDateString("en-US"),
+    total_sols:   rawSols.length,
+    fresh_sols:   freshSols.length,
+    go_count:     allScreened.filter(s => s.verdict === "GO").length,
+    verify_count: allScreened.filter(s => s.verdict === "VERIFY FIRST").length,
+    reject_count: allScreened.filter(s => s.verdict === "REJECT").length,
+    watch_hits:   watchHits.length,
+    blast_sent:   blastResult.sent,
+    blast_failed: blastResult.failed,
+    error_count:  errors.length,
+    sols: allScreened.map(s => ({
+      sol_number:      s.sol_number,
+      item_name:       s.item_name || "",
+      fsc:             s.fsc || "",
+      nsn:             s.nsn || "",
+      verdict:         s.verdict || "GO",
+      win_pct:         s.winProbabilityPct || 0,
+      quote_due:       s.quote_due || "",
+      quantity:        String(s.quantity || s.qty || ""),
+      ref_part_number: s.ref_part_number || "",
+      is_watched:      !!s.is_watched,
+      reason:          s.reason || s.claudeReason || "",
+    })),
+    blast_log: blastResult.log || [],
+  }).catch(e => err("saveDailyBrief:", e.message));
 
   // ── 9. Summary email ─────────────────────────────────────────────────
   log("Sending summary email…");
