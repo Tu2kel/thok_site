@@ -1236,17 +1236,25 @@
         }
       }
 
-      // NSN watch — register every pushed NSN so we can alert on re-solicitation
+      // NSN watch — register every pushed NSN to MongoDB for Railway agent to check
       try {
-        const watchKey = "scc_nsn_watch_v1";
-        const existing_ = JSON.parse(localStorage.getItem(watchKey) || "[]");
-        const watchSet = new Set(existing_.map(w => w.nsn));
         const today = new Date().toISOString().slice(0, 10);
-        const newWatches = savedRecords
-          .filter(r => r.nsn && !watchSet.has(r.nsn))
-          .map(r => ({ nsn: r.nsn, fsc: r.fsc, item_name: r.item_name, sol_number: r.sol_number, date_added: today }));
-        if (newWatches.length) {
-          localStorage.setItem(watchKey, JSON.stringify([...existing_, ...newWatches]));
+        const watchItems = savedRecords
+          .filter(r => r.nsn)
+          .map(r => ({
+            nsn:            r.nsn,
+            fsc:            r.fsc,
+            item_name:      r.item_name,
+            sol_number:     r.sol_number,
+            last_unit_price: parseFloat(r.unit_price) || null,
+            date_added:     today,
+          }));
+        if (watchItems.length) {
+          fetch("/.netlify/functions/scc-nsn-watch", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ action: "nsnWatchUpsert", payload: { items: watchItems } }),
+          }).catch(() => {});
         }
       } catch {}
 
