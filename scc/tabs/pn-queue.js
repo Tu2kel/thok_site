@@ -128,7 +128,7 @@
           }
         }
       }
-      // Check items (browser clipboard API)
+      // Check items (browser clipboard API — PDF file)
       if (cd.items) {
         for (var i = 0; i < cd.items.length; i++) {
           if (cd.items[i].kind === "file") {
@@ -141,7 +141,14 @@
           }
         }
       }
-    }, [handlePDFFile]);
+      // Fallback: plain text (user selected + copied DLA document text)
+      var text = cd.getData("text/plain");
+      if (text && text.trim().length > 20) {
+        e.preventDefault();
+        var cands = extractCandidates(text);
+        updateItem(solNum, { _candidates: cands, _pdfName: "(pasted text)" });
+      }
+    }, [handlePDFFile, updateItem]);
 
     const fileInputRefs = useRef({});
 
@@ -349,7 +356,7 @@
                   : [
                       h("span", { key: "arrow", style: { fontSize: "18px", color: "rgba(201,168,76,.3)", lineHeight: 1 } }, "⬇"),
                       h("span", { key: "label", style: { ...S.mono, fontSize: "8px", color: "var(--body-faint)", marginTop: "4px", lineHeight: 1.5 } },
-                        "Drop or Paste PDF"),
+                        "Drop PDF · paste text"),
                     ],
               // Browse button — separate from the focusable zone so paste still works
               !item._parsing && h("button", {
