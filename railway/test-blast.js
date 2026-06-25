@@ -82,7 +82,7 @@ async function main() {
   ].filter(Boolean).join("\n")).join("\n\n");
 
   const body = [
-    "Hi " + VENDOR_NAME + ",",
+    "Hi Anthony,",
     "",
     "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there's a chance it's landing in spam folders. I'm reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
     "",

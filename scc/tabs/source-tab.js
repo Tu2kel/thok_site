@@ -649,6 +649,55 @@
     const [savingCards, setSavingCards] = useState({}); // id → bool
     const [dnsPrompt, setDnsPrompt] = useState({}); // id → draft reason string
     const [dnsSaving, setDnsSaving] = useState({}); // id → bool
+    const [pocLookingUp, setPocLookingUp] = useState({}); // id → bool
+    const [enrichingAll, setEnrichingAll] = useState(false);
+
+    const handleLookupPOC = useCallback(async (d) => {
+      setPocLookingUp(prev => ({ ...prev, [d.id]: true }));
+      try {
+        const res  = await fetch("/.netlify/functions/scc-sam-lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "lookupPOC", name: d.name, cage: d.cage_code || null, distId: d.id }),
+        });
+        const data = await res.json();
+        if (data.ok && data.result?.found) {
+          await window.SCC_DIST.distReloadCache();
+          setDists([...window.SCC_DIST.DISTRIBUTORS]);
+        } else {
+          alert(data.result?.found === false ? "No SAM record found for " + d.name : (data.error || "SAM lookup failed"));
+        }
+      } catch (e) {
+        alert("SAM lookup error: " + e.message);
+      } finally {
+        setPocLookingUp(prev => ({ ...prev, [d.id]: false }));
+      }
+    }, []);
+
+    const handleEnrichAll = useCallback(async () => {
+      if (!confirm("Run SAM.gov POC lookup on all vendors missing a POC name? This may take up to 30 seconds.")) return;
+      setEnrichingAll(true);
+      try {
+        const res  = await fetch("/.netlify/functions/scc-sam-lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "enrichAll", limit: 50 }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          const r = data.result;
+          alert("SAM Enrich done — " + r.enriched + " enriched, " + r.not_found + " not found, " + r.failed + " failed out of " + r.total);
+          await window.SCC_DIST.distReloadCache();
+          setDists([...window.SCC_DIST.DISTRIBUTORS]);
+        } else {
+          alert("Enrich failed: " + data.error);
+        }
+      } catch (e) {
+        alert("Enrich error: " + e.message);
+      } finally {
+        setEnrichingAll(false);
+      }
+    }, []);
 
     const startEdit = (d) =>
       setEditingCards((prev) => ({
@@ -930,21 +979,41 @@
             })(),
           ),
         ),
-        h("input", {
-          value: search,
-          onChange: (e) => setSearch(e.target.value),
-          placeholder: "Filter by name, FSC, tag…",
-          style: {
-            padding: "7px 12px",
-            background: "var(--inset-bg)",
-            border: "1px solid rgba(201,168,76,.2)",
-            color: "var(--alabaster)",
-            fontFamily: "JetBrains Mono,monospace",
-            fontSize: "12px",
-            borderRadius: "4px",
-            width: "220px",
-          },
-        }),
+        h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } },
+          h("input", {
+            value: search,
+            onChange: (e) => setSearch(e.target.value),
+            placeholder: "Filter by name, FSC, tag…",
+            style: {
+              padding: "7px 12px",
+              background: "var(--inset-bg)",
+              border: "1px solid rgba(201,168,76,.2)",
+              color: "var(--alabaster)",
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "12px",
+              borderRadius: "4px",
+              width: "220px",
+            },
+          }),
+          h("button", {
+            onClick: handleEnrichAll,
+            disabled: enrichingAll,
+            title: "Run SAM.gov POC lookup on all vendors missing a contact name",
+            style: {
+              padding: "6px 12px",
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "10px",
+              letterSpacing: ".05em",
+              background: enrichingAll ? "rgba(56,189,248,.06)" : "rgba(56,189,248,.12)",
+              border: "1px solid rgba(56,189,248,.35)",
+              color: "rgba(56,189,248,.9)",
+              borderRadius: "4px",
+              cursor: enrichingAll ? "wait" : "pointer",
+              whiteSpace: "nowrap",
+              opacity: enrichingAll ? 0.6 : 1,
+            },
+          }, enrichingAll ? "SAM Enriching…" : "Enrich All POC"),
+        ),
       ),
 
       // ── Seed panel ──
@@ -1592,6 +1661,22 @@
                     d.name,
                   ),
 
+                // POC name under company name (view mode only)
+                !isEditing && d.poc_name &&
+                  h("div", {
+                    style: {
+                      fontFamily: "JetBrains Mono,monospace",
+                      fontSize: "9px",
+                      color: "rgba(161,228,255,.7)",
+                      marginTop: "2px",
+                      letterSpacing: ".04em",
+                    },
+                  },
+                    d.poc_title
+                      ? d.poc_name + " · " + d.poc_title
+                      : d.poc_name
+                  ),
+
               // Right cluster: status badges + toggle btns + edit/delete
               h(
                 "div",
@@ -1770,6 +1855,30 @@
                       },
                     },
                     hasJcp ? "MFR · JCP" : "MFR",
+                  ),
+
+                // POC Lookup button (view mode)
+                !isEditing &&
+                  h(
+                    "button",
+                    {
+                      onClick: () => handleLookupPOC(d),
+                      disabled: !!pocLookingUp[d.id],
+                      title: "Look up SAM.gov POC for this vendor",
+                      style: {
+                        padding: "2px 8px",
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "8px",
+                        letterSpacing: ".06em",
+                        background: d.poc_name ? "rgba(56,189,248,.08)" : "rgba(56,189,248,.14)",
+                        border: "1px solid rgba(56,189,248,.3)",
+                        color: "rgba(56,189,248,.85)",
+                        borderRadius: "3px",
+                        cursor: pocLookingUp[d.id] ? "wait" : "pointer",
+                        opacity: pocLookingUp[d.id] ? 0.6 : 1,
+                      },
+                    },
+                    pocLookingUp[d.id] ? "SAM…" : d.poc_name ? "POC✓" : "POC",
                   ),
 
                 // Edit / Save / Cancel

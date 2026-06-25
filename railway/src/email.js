@@ -70,8 +70,9 @@ function buildRFQBody(dist, record) {
   const del  = record.delivery_days ? record.delivery_days + " days ARO" : "—";
   const needBy = dayBefore(record.quote_due);
 
+  const greeting = dist.poc_first || dist.poc_name || dist.name || dist.company_name;
   const lines = [
-    "Hi " + (dist.name || dist.company_name) + ",",
+    "Hi " + greeting + ",",
     "",
     "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there's a chance it's landing in spam. I'm reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders and reply to either address.",
     "",

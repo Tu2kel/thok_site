@@ -71,7 +71,8 @@ function dayBefore(raw) {
   return (d.getMonth()+1).toString().padStart(2,"0") + "/" + d.getDate().toString().padStart(2,"0") + "/" + d.getFullYear();
 }
 
-function buildRFQBody(vendorName, sols) {
+function buildRFQBody(vendor, sols) {
+  const vendorName = (typeof vendor === "string") ? vendor : (vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name);
   const itemLines = sols.map((s, i) => [
     "Item " + (i + 1) + ": " + (s.item_name || "—"),
     s.ref_part_number ? "  Part Number:  " + s.ref_part_number : null,
@@ -188,7 +189,7 @@ exports.handler = async (event) => {
         }
 
         try {
-          const { subject, body } = buildRFQBody(vendor.name, [sol]);
+          const { subject, body } = buildRFQBody(vendor, [sol]);
           await gmailSend(vendor.email, subject, body);
 
           await db.collection("blast_log").updateOne(
