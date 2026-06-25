@@ -1,6 +1,6 @@
 // src/email.js — Gmail OAuth2 sender
-const FROM_ADDRESS = "anthony@ifedlog.com";
-const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
+const FROM_ADDRESS = "kelley.anthonyk@gmail.com";
+const FROM_NAME    = "Anthony Kelley | Imperio Federal Logistics";
 const TOKEN_URL    = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND   = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
@@ -65,9 +65,9 @@ function buildRFQBody(dist, record) {
   const lines = [
     "Hi " + (dist.name || dist.company_name) + ",",
     "",
-    "My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have an active government procurement need in your lane.",
+    "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there's a chance it's landing in spam. I'm reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders and reply to either address.",
     "",
-    "I need pricing and availability on the following item:",
+    "I have an active DLA procurement need in your lane and need pricing and availability on the following:",
     "",
     "  Item:            " + item,
     record.nsn             ? "  NSN:             " + record.nsn             : null,
@@ -85,13 +85,13 @@ function buildRFQBody(dist, record) {
     "- Shipping: FOB Destination required",
     "- Condition: New/unused only. No substitutions without prior approval.",
     "",
-    "Please provide unit price, lead time, and confirm country of origin. We issue POs immediately upon award.",
+    "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
     "",
-    "Thank you,",
+    "Thank you for your time,",
     "Anthony K Kelley | Founder & CEO",
     "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
-    "SDVOSB | VetHUB",
-    FROM_ADDRESS + " | ifedlog.com | (254) 226-5216",
+    "SDVOSB | VetHUB | (254) 226-5216",
+    "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
   ];
 
   const subject = "RFQ – " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
