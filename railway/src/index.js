@@ -5,7 +5,8 @@
 // Pass --run-now as CLI arg to fire immediately (for testing / manual trigger).
 
 const cron = require("node-cron");
-const { scrape }           = require("./scraper");
+const { fetchDibbsSols }   = require("./gmail-watcher");
+const { fetchAllSolDetails } = require("./dibbs-fetcher");
 const { screenBatch }      = require("./screener");
 const { buildBlastPlan, runBlast } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
@@ -37,33 +38,30 @@ async function runPipeline() {
     return;
   }
 
-  // ── 2. Scrape ─────────────────────────────────────────────────────────
-  const username  = process.env.NAVIGATOR_USERNAME;
-  const password  = process.env.NAVIGATOR_PASSWORD;
-  const fscLanes  = (process.env.NAVIGATOR_FSC_LANES || "5305,5310,5315,5320,5340,4730,4940,2540,5360,5306").split(",").map(f => f.trim());
-  const minPrice  = parseFloat(process.env.NAVIGATOR_MIN_EXT_PRICE || "1000");
+  // ── 2. Parse DLA email + fetch PDFs ──────────────────────────────────
+  log("Checking Gmail for DLA solicitation emails…");
+  let emailSols = [];
+  try {
+    emailSols = await fetchDibbsSols({ lookbackHours: 26 });
+  } catch (e) {
+    err("Gmail fetch failed:", e.message);
+    errors.push("Gmail: " + e.message);
+  }
 
-  log("Scraping DIBBS Navigator…");
-  const scrapeResult = await scrape({ username, password, fscLanes, minPrice });
-
-  if (!scrapeResult.ok || !scrapeResult.sols.length) {
-    err("Scrape failed or no sols:", scrapeResult.error || "0 results");
-    errors.push("Scrape: " + (scrapeResult.error || "0 sols returned"));
-    try {
-      await sendSummary({
-        scrape:    { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } },
-        screen:    [],
-        blast:     { sent: 0, failed: 0 },
-        watchHits: [],
-        errors,
-        runDate,
-      });
-    } catch {}
+  if (!emailSols.length) {
+    log("No DLA solicitation emails found in last 26h — sending summary");
+    await sendSummary({
+      scrape: { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } },
+      screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate,
+    });
     return;
   }
 
-  const rawSols = scrapeResult.sols;
-  log("Scraped " + rawSols.length + " sols");
+  log("Found " + emailSols.length + " sols from email — fetching PDFs…");
+  const rawSols = await fetchAllSolDetails(emailSols);
+  log("PDF fetch complete — " + rawSols.filter(s => s.pdf_parsed).length + "/" + rawSols.length + " PDFs parsed");
+
+  const scrapeResult = { counts: { total: rawSols.length, pass1: emailSols.length, pass2: 0, pass3: 0 } };
 
   // ── 3. Skip already-acted sols ────────────────────────────────────────
   const alreadyActed = await getAlreadyActedSols(db);
