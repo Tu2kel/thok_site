@@ -360,8 +360,8 @@
     const serif = "Cinzel,serif";
     const body  = "Cormorant Garamond,serif";
 
-    const GRID = "150px 50px 1fr 130px 60px 90px 100px 56px 90px";
-    const GAP  = "0 12px";
+    const GRID = "150px 50px 120px 1fr 120px 55px 85px 95px 54px 85px";
+    const GAP  = "0 10px";
     const PAD  = "0 28px";
 
     const totalExt = entry.records.reduce(function (s, r) {
@@ -455,7 +455,7 @@
       h("div", { style: { padding: "0 28px 12px", overflowY: "auto", flex: 1, minHeight: 0 } },
         // Header
         h("div", { style: { display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "10px 0 6px", borderBottom: "1px solid rgba(201,168,76,.12)", marginBottom: "2px" } },
-          ["Sol #", "FSC", "Item", "Part #", "Qty", "Unit $", "Ext $", "Win%", "Due"].map(function(h_) {
+          ["Sol #", "FSC", "NSN", "Item", "Part #", "Qty", "Unit $", "Ext $", "Win%", "Due"].map(function(h_) {
             return h("div", { key: h_, style: { fontFamily: mono, fontSize: "14px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase" } }, h_);
           }),
         ),
@@ -467,6 +467,7 @@
           return h("div", { key: r.sol_number, style: { display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,.04)", background: ext >= 50000 ? "rgba(61,214,140,.06)" : "transparent", alignItems: "center" } },
             h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(201,168,76,.7)", letterSpacing: ".03em" } }, r.sol_number),
             h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(201,168,76,.6)", background: "rgba(201,168,76,.08)", border: "1px solid rgba(201,168,76,.2)", padding: "2px 5px", borderRadius: "2px" } }, r.fsc || "—"),
+            h("span", { style: { fontFamily: mono, fontSize: "12px", color: "rgba(96,165,250,.7)", letterSpacing: ".02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.nsn || "—"),
             h("span", { style: { fontFamily: body, fontSize: "15px", color: "rgba(245,240,232,.88)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.item_name || "—"),
             h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(61,214,140,.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.ref_part_number || "—"),
             h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(245,240,232,.65)", textAlign: "right" } }, r.quantity || "—"),
@@ -479,7 +480,7 @@
         }),
         // Total
         h("div", { style: { display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "12px 0 0", borderTop: "1px solid rgba(201,168,76,.18)", marginTop: "4px" } },
-          h("span", { style: { gridColumn: "1 / 8", fontFamily: mono, fontSize: "14px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
+          h("span", { style: { gridColumn: "1 / 9", fontFamily: mono, fontSize: "14px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
           h("span", { style: { fontFamily: serif, fontSize: "16px", color: winColor, textAlign: "right", letterSpacing: ".04em" } },
             "$" + totalExt.toLocaleString(undefined, { maximumFractionDigits: 0 })),
         ),
