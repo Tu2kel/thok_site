@@ -73,53 +73,26 @@
       });
     });
 
-    // Auto-fetch P/N candidates from local DIBBS agent on mount
+    // Auto-fetch P/N candidates from DIBBS via Netlify function on mount
     useEffect(function () {
-      var agent = window.SCC_AGENT;
-      if (!agent || typeof agent.fetchSol !== "function") return;
-
       items.forEach(function (item) {
         if (item._resolved !== null || item._candidates.length || item._pdfName) return;
 
         updateItem(item.sol_number, { _parsing: true });
 
-        agent.fetchSol(item.sol_number).then(function (data) {
-          if (!data.ok) { updateItem(item.sol_number, { _parsing: false }); return; }
-
-          // 1. Supplier PNs from HTML (fastest — no PDF needed)
-          var supplierPNs = ((data.sol && data.sol.suppliers) || [])
-            .map(function (s) { return (s.pn || "").trim(); })
-            .filter(function (pn) { return pn && pn.length > 1 && pn.length < 30; });
-
-          if (supplierPNs.length) {
-            updateItem(item.sol_number, { _parsing: false, _candidates: supplierPNs, _pdfName: "(auto)" });
+        fetch("/.netlify/functions/scc-dibbs-pn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sol_number: item.sol_number }),
+        }).then(function (r) { return r.json(); }).then(function (data) {
+          if (!data.ok || !data.candidates || !data.candidates.length) {
+            updateItem(item.sol_number, { _parsing: false });
             return;
           }
-
-          // 2. Fall back to PDF base64 → PDF.js parse
-          if (data.pdf_base64 && window.pdfjsLib) {
-            try {
-              var bytes = Uint8Array.from(atob(data.pdf_base64), function (c) { return c.charCodeAt(0); });
-              window.pdfjsLib.getDocument({ data: bytes }).promise.then(function (pdf) {
-                var pages = [];
-                for (var i = 1; i <= pdf.numPages; i++) pages.push(i);
-                return Promise.all(pages.map(function (n) {
-                  return pdf.getPage(n).then(function (p) {
-                    return p.getTextContent().then(function (ct) {
-                      return ct.items.map(function (it) { return it.str; }).join(" ");
-                    });
-                  });
-                }));
-              }).then(function (pageTexts) {
-                var cands = extractCandidates(pageTexts.join("\n"));
-                updateItem(item.sol_number, { _parsing: false, _candidates: cands, _pdfName: "(auto)" });
-              }).catch(function () { updateItem(item.sol_number, { _parsing: false }); });
-            } catch (e) { updateItem(item.sol_number, { _parsing: false }); }
-            return;
-          }
-
+          updateItem(item.sol_number, { _parsing: false, _candidates: data.candidates, _pdfName: "(auto)" });
+        }).catch(function () {
           updateItem(item.sol_number, { _parsing: false });
-        }).catch(function () { updateItem(item.sol_number, { _parsing: false }); });
+        });
       });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
