@@ -141,7 +141,8 @@ function selectVendors(record, dists) {
 
   const add = (d, reason) => {
     if (!d || seenIds.has(d._id?.toString() || d.name)) return;
-    if (!d.email) return;
+    if (!d.email)  return;
+    if (d.is_dns)  return;
     seenIds.add(d._id?.toString() || d.name);
     selected.push({ dist: d, reason });
   };

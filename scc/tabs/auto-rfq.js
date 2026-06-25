@@ -110,6 +110,8 @@
       const solNSN = (record.nsn || "").replace(/\D/g, "");
       if (solNSN && (d.known_nsns || []).some(n => n.replace(/\D/g, "") === solNSN)) {
         // NSN exact match — bypass keyword filter, vendor has won this part before
+      } else if (pnPrefix && d.is_manufacturer && d.has_jcp) {
+        // AN/MS/NAS mil-spec prefix + JCP cert — keyword filter bypassed; JCP authorizes these parts
       } else if (d.item_keywords && d.item_keywords.length > 0) {
         const iname = (record.item_name || "").toLowerCase();
         if (!d.item_keywords.some(kw => iname.includes(kw.toLowerCase()))) return;
