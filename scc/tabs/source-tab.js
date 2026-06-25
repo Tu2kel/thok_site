@@ -663,6 +663,8 @@
           tags: (d.tags || []).filter((t) => t !== "preferred-alt").join(", "),
           item_keywords: (d.item_keywords || []).join(", "),
           is_manufacturer: !!d.is_manufacturer,
+          drop_ship_lead_days: d.drop_ship_lead_days != null ? String(d.drop_ship_lead_days) : "",
+          mil_std_level: d.mil_std_level || "",
         },
       }));
 
@@ -703,6 +705,8 @@
           ],
           item_keywords: parseCsv(draft.item_keywords).map((k) => k.toLowerCase()),
           is_manufacturer: !!draft.is_manufacturer,
+          drop_ship_lead_days: draft.drop_ship_lead_days ? (parseInt(draft.drop_ship_lead_days) || null) : null,
+          mil_std_level: (draft.mil_std_level || "").trim().toUpperCase() || null,
         };
         await window.SCC_DIST.distSave(updated);
         await window.SCC_DIST.distReloadCache();
@@ -1951,6 +1955,24 @@
                   "#38bdf8",
                   "#bae6fd",
                 ),
+                toggleBtn(
+                  !!d.drop_ship,
+                  "DROP",
+                  d.drop_ship ? "Clear: drop ship" : "Mark: can drop ship direct to gov delivery address",
+                  "drop_ship",
+                  "rgba(34,197,94,.25)",
+                  "#22c55e",
+                  "#86efac",
+                ),
+                toggleBtn(
+                  !!d.fob_destination,
+                  "FOB→",
+                  d.fob_destination ? "Clear: FOB Destination" : "Mark: covers freight to delivery address (FOB Destination)",
+                  "fob_destination",
+                  "rgba(168,85,247,.25)",
+                  "#a855f7",
+                  "#e9d5ff",
+                ),
               ),
 
             // ════ VIEW MODE ════════════════════════════════════════════════
@@ -2217,6 +2239,22 @@
                       ),
                 ),
 
+                // Drop ship / MIL-STD level info
+                (d.drop_ship || d.fob_destination || d.drop_ship_lead_days || d.mil_std_level) &&
+                  h(
+                    "div",
+                    { style: { display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "2px" } },
+                    d.drop_ship && h("span", {
+                      style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "#86efac", background: "rgba(34,197,94,.1)", border: "1px solid rgba(34,197,94,.3)", borderRadius: "3px", padding: "1px 5px" },
+                    }, "🚚 Drop Ship" + (d.drop_ship_lead_days ? " " + d.drop_ship_lead_days + "d" : "")),
+                    d.fob_destination && h("span", {
+                      style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "#e9d5ff", background: "rgba(168,85,247,.1)", border: "1px solid rgba(168,85,247,.3)", borderRadius: "3px", padding: "1px 5px" },
+                    }, "FOB→ Dest"),
+                    d.has_mil_std_pack && d.mil_std_level && h("span", {
+                      style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "#bae6fd", background: "rgba(96,165,250,.1)", border: "1px solid rgba(96,165,250,.3)", borderRadius: "3px", padding: "1px 5px" },
+                    }, "MIL-STD-2073 Lvl " + d.mil_std_level),
+                  ),
+
                 // Notes
                 d.notes &&
                   h(
@@ -2228,7 +2266,7 @@
                         fontSize: "12px",
                         color: "var(--body-dim)",
                         lineHeight: 1.4,
-                        borderTop: "1px solid rgba(201,168,76,.06)",
+                        borderTop: "1px solid rgba(201,168,74,.06)",
                         paddingTop: "6px",
                         marginTop: "2px",
                       },
@@ -2328,6 +2366,37 @@
                     placeholder: "bolt, screw, nut, stud",
                     title: "Only send RFQs where item name contains one of these keywords (comma-separated). Leave blank to match all items in covered FSCs.",
                     style: inputStyle,
+                  }),
+                ),
+
+                // Drop Ship Lead Days
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("DS Days"),
+                  h("input", {
+                    type: "number",
+                    min: "1",
+                    max: "365",
+                    value: draft.drop_ship_lead_days,
+                    onChange: (e) => patchDraft(d.id, "drop_ship_lead_days", e.target.value),
+                    placeholder: "e.g. 5",
+                    title: "Drop ship lead time in days (requires DROP toggle on)",
+                    style: { ...inputStyle, maxWidth: "80px" },
+                  }),
+                ),
+
+                // MIL-STD Packaging Level
+                h(
+                  "div",
+                  { style: rowStyle },
+                  fieldLabel("MIL Lvl"),
+                  h("input", {
+                    value: draft.mil_std_level,
+                    onChange: (e) => patchDraft(d.id, "mil_std_level", e.target.value),
+                    placeholder: "A, B, or C",
+                    title: "MIL-STD-2073 packaging level (A=most protective, C=commercial). Requires MIL≡ toggle on.",
+                    style: { ...inputStyle, maxWidth: "80px", textTransform: "uppercase" },
                   }),
                 ),
 
