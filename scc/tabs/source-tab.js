@@ -1685,22 +1685,16 @@
                       },
                     },
                     d.name,
-                  ),
-
-                // POC name under company name (view mode only)
-                !isEditing && d.poc_name &&
-                  h("div", {
-                    style: {
-                      fontFamily: "JetBrains Mono,monospace",
-                      fontSize: "9px",
-                      color: "rgba(161,228,255,.7)",
-                      marginTop: "2px",
-                      letterSpacing: ".04em",
-                    },
-                  },
-                    d.poc_title
-                      ? d.poc_name + " · " + d.poc_title
-                      : d.poc_name
+                    d.poc_name && h("div", {
+                      style: {
+                        fontFamily: "JetBrains Mono,monospace",
+                        fontSize: "9px",
+                        color: "rgba(161,228,255,.65)",
+                        marginTop: "3px",
+                        letterSpacing: ".03em",
+                        fontWeight: "normal",
+                      },
+                    }, d.poc_title ? d.poc_name + " · " + d.poc_title : d.poc_name),
                   ),
 
               // Right cluster: status badges + toggle btns + edit/delete
