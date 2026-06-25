@@ -73,6 +73,56 @@
       });
     });
 
+    // Auto-fetch P/N candidates from local DIBBS agent on mount
+    useEffect(function () {
+      var agent = window.SCC_AGENT;
+      if (!agent || typeof agent.fetchSol !== "function") return;
+
+      items.forEach(function (item) {
+        if (item._resolved !== null || item._candidates.length || item._pdfName) return;
+
+        updateItem(item.sol_number, { _parsing: true });
+
+        agent.fetchSol(item.sol_number).then(function (data) {
+          if (!data.ok) { updateItem(item.sol_number, { _parsing: false }); return; }
+
+          // 1. Supplier PNs from HTML (fastest — no PDF needed)
+          var supplierPNs = ((data.sol && data.sol.suppliers) || [])
+            .map(function (s) { return (s.pn || "").trim(); })
+            .filter(function (pn) { return pn && pn.length > 1 && pn.length < 30; });
+
+          if (supplierPNs.length) {
+            updateItem(item.sol_number, { _parsing: false, _candidates: supplierPNs, _pdfName: "(auto)" });
+            return;
+          }
+
+          // 2. Fall back to PDF base64 → PDF.js parse
+          if (data.pdf_base64 && window.pdfjsLib) {
+            try {
+              var bytes = Uint8Array.from(atob(data.pdf_base64), function (c) { return c.charCodeAt(0); });
+              window.pdfjsLib.getDocument({ data: bytes }).promise.then(function (pdf) {
+                var pages = [];
+                for (var i = 1; i <= pdf.numPages; i++) pages.push(i);
+                return Promise.all(pages.map(function (n) {
+                  return pdf.getPage(n).then(function (p) {
+                    return p.getTextContent().then(function (ct) {
+                      return ct.items.map(function (it) { return it.str; }).join(" ");
+                    });
+                  });
+                }));
+              }).then(function (pageTexts) {
+                var cands = extractCandidates(pageTexts.join("\n"));
+                updateItem(item.sol_number, { _parsing: false, _candidates: cands, _pdfName: "(auto)" });
+              }).catch(function () { updateItem(item.sol_number, { _parsing: false }); });
+            } catch (e) { updateItem(item.sol_number, { _parsing: false }); }
+            return;
+          }
+
+          updateItem(item.sol_number, { _parsing: false });
+        }).catch(function () { updateItem(item.sol_number, { _parsing: false }); });
+      });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Persist items to sessionStorage whenever they change
     useEffect(function () {
       try {
@@ -262,17 +312,9 @@
               pending && h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "6px" } },
                 h("input", {
                   type: "text",
-                  placeholder: "Type or paste P/N…",
+                  placeholder: "Type part number…",
                   value: item._input,
                   onChange: function (e) { updateItem(item.sol_number, { _input: e.target.value }); },
-                  onPaste: function (e) {
-                    var text = e.clipboardData && e.clipboardData.getData("text/plain");
-                    if (text && text.trim().length > 80) {
-                      e.preventDefault();
-                      var cands = extractCandidates(text);
-                      updateItem(item.sol_number, { _candidates: cands, _pdfName: "(pasted text)" });
-                    }
-                  },
                   onKeyDown: function (e) {
                     if (e.key === "Enter" && item._input.trim()) {
                       updateItem(item.sol_number, { _resolved: item._input.trim() });
@@ -357,7 +399,7 @@
               },
             },
               item._parsing
-                ? h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--gold-dim)" } }, "⟳ parsing…")
+                ? h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--gold-dim)" } }, "⟳ fetching…")
                 : item._pdfName
                   ? h("span", { style: { ...S.mono, fontSize: "8px", color: "var(--accent-green)", wordBreak: "break-all" } },
                       "✓ " + (item._pdfName.length > 18 ? item._pdfName.slice(0, 18) + "…" : item._pdfName))
