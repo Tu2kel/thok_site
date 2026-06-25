@@ -686,7 +686,7 @@
         const data = await res.json();
         if (data.ok) {
           const r = data.result;
-          alert("SAM Enrich done — " + r.enriched + " enriched, " + r.not_found + " not found, " + r.failed + " failed out of " + r.total);
+          alert("SAM Enrich done — " + r.enriched + " enriched, " + (r.emails_filled || 0) + " emails auto-filled, " + r.not_found + " not found, " + r.failed + " failed out of " + r.total);
           await window.SCC_DIST.distReloadCache();
           setDists([...window.SCC_DIST.DISTRIBUTORS]);
         } else {

@@ -201,6 +201,29 @@ exports.handler = async (event) => {
 
   if (!SAM_KEY) return fail("SAM_API_KEY not set in Netlify env vars");
 
+  // ── Shared: build $set and conditionally auto-fill email ─────────────────
+  async function applyPocToDb(db, distId, result, existingEmail, existingCage) {
+    const set = {
+      poc_name:        result.poc_name   || null,
+      poc_first:       result.poc_first  || null,
+      poc_last:        result.poc_last   || null,
+      poc_title:       result.poc_title  || null,
+      poc_email:       result.poc_email  || null,
+      poc_phone:       result.poc_phone  || null,
+      poc_source:      result.poc_source || null,
+      cage_code:       result.cage_code  || existingCage || null,
+      uei:             result.uei        || null,
+      sam_name:        result.sam_name   || null,
+      sam_enriched_at: new Date().toISOString(),
+    };
+    // Auto-fill the blast TO address if the card has no email yet
+    if (result.poc_email && !existingEmail) {
+      set.email = result.poc_email;
+    }
+    await db.collection("distributors").updateOne({ id: distId }, { $set: set });
+    return set;
+  }
+
   // ── lookupPOC — single vendor ──────────────────────────────────────────
   if (action === "lookupPOC") {
     const { name, cage, distId } = payload;
@@ -210,24 +233,14 @@ exports.handler = async (event) => {
       const result = await lookupPOC(name, cage);
       if (!result) return ok({ found: false });
 
-      // Save to MongoDB if distId provided
       if (distId) {
         const db = await getDb();
-        await db.collection("distributors").updateOne(
-          { id: distId },
-          { $set: {
-            poc_name:  result.poc_name  || null,
-            poc_first: result.poc_first || null,
-            poc_last:  result.poc_last  || null,
-            poc_title: result.poc_title || null,
-            poc_email: result.poc_email || null,
-            poc_phone: result.poc_phone || null,
-            cage_code: result.cage_code || null,
-            uei:       result.uei       || null,
-            sam_name:  result.sam_name  || null,
-            sam_enriched_at: new Date().toISOString(),
-          }},
+        // Fetch existing doc so we know whether email is already set
+        const existing = await db.collection("distributors").findOne(
+          { id: distId }, { projection: { email: 1, cage_code: 1 } }
         );
+        const saved = await applyPocToDb(db, distId, result, existing?.email || null, existing?.cage_code || null);
+        return ok({ found: true, email_autofilled: !!saved.email, ...result });
       }
 
       return ok({ found: true, ...result });
@@ -241,39 +254,26 @@ exports.handler = async (event) => {
     const db    = await getDb();
     const dists = await db.collection("distributors")
       .find({ is_dns: { $ne: true }, poc_name: { $in: [null, undefined, ""] } })
-      .project({ id: 1, name: 1, cage_code: 1 })
+      .project({ id: 1, name: 1, cage_code: 1, email: 1 })
       .limit(payload.limit || 50)
       .toArray();
 
-    const results = { enriched: 0, not_found: 0, failed: 0, total: dists.length };
+    const results = { enriched: 0, not_found: 0, failed: 0, total: dists.length, emails_filled: 0 };
 
     for (const d of dists) {
       try {
         const result = await lookupPOC(d.name, d.cage_code);
         if (result) {
-          await db.collection("distributors").updateOne(
-            { id: d.id },
-            { $set: {
-              poc_name:  result.poc_name  || null,
-              poc_first: result.poc_first || null,
-              poc_last:  result.poc_last  || null,
-              poc_title: result.poc_title || null,
-              poc_email: result.poc_email || null,
-              poc_phone: result.poc_phone || null,
-              cage_code: result.cage_code || d.cage_code || null,
-              uei:       result.uei       || null,
-              sam_name:  result.sam_name  || null,
-              sam_enriched_at: new Date().toISOString(),
-            }},
-          );
+          const saved = await applyPocToDb(db, d.id, result, d.email || null, d.cage_code || null);
           results.enriched++;
+          if (saved.email && !d.email) results.emails_filled++;
         } else {
           results.not_found++;
         }
       } catch {
         results.failed++;
       }
-      await sleep(120); // ~8 req/sec — under the 10/sec limit
+      await sleep(120);
     }
 
     return ok(results);
