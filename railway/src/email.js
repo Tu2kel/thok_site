@@ -82,7 +82,7 @@ function buildRFQBody(dist, record) {
     "  Quantity:      " + qty,
     "  Delivery:      " + del,
     needBy                 ? "  Need By:      " + needBy                  : null,
-    "  Solicitation:  " + record.sol_number,
+    "  Ref #:         " + record.sol_number,
     "",
     "Requirements:",
     "- Destination: Government delivery address (continental US)",

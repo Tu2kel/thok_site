@@ -98,7 +98,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}) {
       s.ref_part_number ? "  Part Number:  " + s.ref_part_number : null,
       "  Quantity:     " + (s.quantity || s.qty || "—"),
       "  Need By:      " + (dayBefore(s.quote_due) || "—"),
-      "  Solicitation: " + s.sol_number,
+      "  Ref #:         " + s.sol_number,
     ].filter(Boolean).join("\n")).join("\n\n");
 
     const body = [
