@@ -154,17 +154,20 @@ async function sbaLookup(name) {
 
     if (!fullName && !email) return null;
 
+    const website = (r.website || r.additional_website || "").trim() || null;
+
     return {
-      poc_first:  firstName,
-      poc_last:   lastName,
-      poc_name:   fullName  || null,
-      poc_title:  title,
-      poc_email:  email,
-      poc_phone:  phone,
-      cage_code:  r.cage_code || null,
-      uei:        r.uei       || null,
-      sam_name:   r.legal_business_name || null,
-      poc_source: "sba",
+      poc_first:   firstName,
+      poc_last:    lastName,
+      poc_name:    fullName  || null,
+      poc_title:   title,
+      poc_email:   email,
+      poc_phone:   phone,
+      sba_website: website,
+      cage_code:   r.cage_code || null,
+      uei:         r.uei       || null,
+      sam_name:    r.legal_business_name || null,
+      poc_source:  "sba",
     };
   } catch {
     return null;
@@ -202,7 +205,7 @@ exports.handler = async (event) => {
   if (!SAM_KEY) return fail("SAM_API_KEY not set in Netlify env vars");
 
   // ── Shared: build $set and conditionally auto-fill email ─────────────────
-  async function applyPocToDb(db, distId, result, existingEmail, existingCage) {
+  async function applyPocToDb(db, distId, result, existing = {}) {
     const set = {
       poc_name:        result.poc_name   || null,
       poc_first:       result.poc_first  || null,
@@ -211,15 +214,15 @@ exports.handler = async (event) => {
       poc_email:       result.poc_email  || null,
       poc_phone:       result.poc_phone  || null,
       poc_source:      result.poc_source || null,
-      cage_code:       result.cage_code  || existingCage || null,
+      cage_code:       result.cage_code  || existing.cage_code || null,
       uei:             result.uei        || null,
       sam_name:        result.sam_name   || null,
       sam_enriched_at: new Date().toISOString(),
     };
-    // Auto-fill the blast TO address if the card has no email yet
-    if (result.poc_email && !existingEmail) {
-      set.email = result.poc_email;
-    }
+    // Auto-fill email if card has none
+    if (result.poc_email && !existing.email) set.email = result.poc_email;
+    // Auto-fill website if card has none
+    if (result.sba_website && !existing.website) set.website = result.sba_website;
     await db.collection("distributors").updateOne({ id: distId }, { $set: set });
     return set;
   }
@@ -235,11 +238,11 @@ exports.handler = async (event) => {
 
       if (distId) {
         const db = await getDb();
-        // Fetch existing doc so we know whether email is already set
+        // Fetch existing doc so we know what's already set
         const existing = await db.collection("distributors").findOne(
-          { id: distId }, { projection: { email: 1, cage_code: 1 } }
+          { id: distId }, { projection: { email: 1, website: 1, cage_code: 1 } }
         );
-        const saved = await applyPocToDb(db, distId, result, existing?.email || null, existing?.cage_code || null);
+        const saved = await applyPocToDb(db, distId, result, existing || {});
         return ok({ found: true, email_autofilled: !!saved.email, ...result });
       }
 
@@ -254,7 +257,7 @@ exports.handler = async (event) => {
     const db    = await getDb();
     const dists = await db.collection("distributors")
       .find({ is_dns: { $ne: true }, poc_name: { $in: [null, undefined, ""] } })
-      .project({ id: 1, name: 1, cage_code: 1, email: 1 })
+      .project({ id: 1, name: 1, cage_code: 1, email: 1, website: 1 })
       .limit(payload.limit || 50)
       .toArray();
 
@@ -264,9 +267,10 @@ exports.handler = async (event) => {
       try {
         const result = await lookupPOC(d.name, d.cage_code);
         if (result) {
-          const saved = await applyPocToDb(db, d.id, result, d.email || null, d.cage_code || null);
+          const saved = await applyPocToDb(db, d.id, result, d);
           results.enriched++;
-          if (saved.email && !d.email) results.emails_filled++;
+          if (saved.email   && !d.email)   results.emails_filled++;
+          if (saved.website && !d.website) results.websites_filled = (results.websites_filled || 0) + 1;
         } else {
           results.not_found++;
         }
