@@ -262,9 +262,17 @@
               pending && h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "6px" } },
                 h("input", {
                   type: "text",
-                  placeholder: "Type part number…",
+                  placeholder: "Type or paste P/N…",
                   value: item._input,
                   onChange: function (e) { updateItem(item.sol_number, { _input: e.target.value }); },
+                  onPaste: function (e) {
+                    var text = e.clipboardData && e.clipboardData.getData("text/plain");
+                    if (text && text.trim().length > 80) {
+                      e.preventDefault();
+                      var cands = extractCandidates(text);
+                      updateItem(item.sol_number, { _candidates: cands, _pdfName: "(pasted text)" });
+                    }
+                  },
                   onKeyDown: function (e) {
                     if (e.key === "Enter" && item._input.trim()) {
                       updateItem(item.sol_number, { _resolved: item._input.trim() });
