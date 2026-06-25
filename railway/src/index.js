@@ -15,6 +15,11 @@ const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, u
 
 const SCHEDULE  = process.env.CRON_SCHEDULE || "0 12 * * 1-5"; // 6 AM CT Mon–Fri
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
+// Comma-separated FSC codes to skip entirely (over hist price, too competitive, etc.)
+// Default: aerospace fasteners — AN/MS/NAS parts consistently beat hist price
+const SKIP_FSCS = new Set(
+  (process.env.SKIP_FSCS || "5305,5306,5307,5310,5315,5320,5325,5330").split(",").map(s => s.trim()).filter(Boolean)
+);
 
 function log(...a)  { console.log("[scc-agent]", new Date().toISOString().slice(11, 19), ...a); }
 function err(...a)  { console.error("[scc-agent] ❌", ...a); }
@@ -63,10 +68,17 @@ async function runPipeline() {
 
   const scrapeResult = { counts: { total: rawSols.length, pass1: emailSols.length, pass2: 0, pass3: 0 } };
 
-  // ── 3. Skip already-acted sols ────────────────────────────────────────
+  // ── 3. Skip already-acted + DNS FSCs ─────────────────────────────────
   const alreadyActed = await getAlreadyActedSols(db);
-  const freshSols    = rawSols.filter(s => !alreadyActed.has(s.sol_number));
-  const skipped      = rawSols.length - freshSols.length;
+  const dnsFscFiltered = rawSols.filter(s => {
+    const fsc = String(s.fsc || (s.nsn || "").slice(0, 4));
+    return !SKIP_FSCS.has(fsc);
+  });
+  const dnsDrop = rawSols.length - dnsFscFiltered.length;
+  if (dnsDrop) log("Dropped " + dnsDrop + " sols in DNS FSC lanes (" + [...SKIP_FSCS].join(",") + ")");
+
+  const freshSols = dnsFscFiltered.filter(s => !alreadyActed.has(s.sol_number));
+  const skipped   = dnsFscFiltered.length - freshSols.length;
   if (skipped) log("Skipped " + skipped + " already-acted sols");
 
   if (!freshSols.length) {
