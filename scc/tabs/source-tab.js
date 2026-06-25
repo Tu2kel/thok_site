@@ -1685,16 +1685,6 @@
                       },
                     },
                     d.name,
-                    d.poc_name && h("div", {
-                      style: {
-                        fontFamily: "JetBrains Mono,monospace",
-                        fontSize: "9px",
-                        color: "rgba(161,228,255,.65)",
-                        marginTop: "3px",
-                        letterSpacing: ".03em",
-                        fontWeight: "normal",
-                      },
-                    }, d.poc_title ? d.poc_name + " · " + d.poc_title : d.poc_name),
                   ),
 
               // Right cluster: status badges + toggle btns + edit/delete
@@ -2216,6 +2206,18 @@
                     margin: "0 -2px",
                   },
                 }),
+
+                // POC contact row (shown when enriched)
+                d.poc_name && h(
+                  "div",
+                  { style: rowStyle },
+                  h("span", {
+                    style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: iconColor, flexShrink: 0 },
+                  }, "\uD83D\uDC64"),
+                  h("span", {
+                    style: { fontFamily: "JetBrains Mono,monospace", fontSize: "10px", color: "rgba(161,228,255,.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+                  }, [d.poc_name, d.poc_title].filter(Boolean).join(" \u00B7 ")),
+                ),
 
                 // Phone
                 h(
