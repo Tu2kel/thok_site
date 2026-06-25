@@ -1,11 +1,12 @@
 // netlify/functions/scc-sam-lookup.js
-// SAM.gov POC enrichment for distributor DB
+// SAM.gov POC enrichment for distributor DB — SBA DSBS fallback when SAM has no contact
 // Actions: lookupPOC (single vendor) | enrichAll (bulk, batched)
 
 const { MongoClient } = require("mongodb");
 
 const SAM_KEY    = process.env.SAM_API_KEY;
 const SAM_BASE   = "https://api.sam.gov/entity-information/v3/entities";
+const SBA_BASE   = "https://search.certifications.sba.gov/api/public/search";
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME    = "scc_db";
 
@@ -88,6 +89,75 @@ async function samLookup(name, cage) {
   };
 }
 
+// SBA DSBS fallback — no API key required, returns contact name + email from certifications search
+async function sbaLookup(name) {
+  try {
+    const params = new URLSearchParams({
+      keywords: name,
+      type:     "vendor",
+      size:     "5",
+    });
+    const res  = await fetch(SBA_BASE + "?" + params.toString(), {
+      headers: { "Accept": "application/json", "User-Agent": "Mozilla/5.0" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    // Response shape: { hits: { hits: [ { _source: { ... } } ] } }
+    const hits = data?.hits?.hits || data?.results || data?.data || [];
+    if (!hits.length) return null;
+
+    // Find closest name match
+    const target = name.toUpperCase();
+    hits.sort((a, b) => {
+      const src = h => (h._source || h);
+      const na  = (src(a).legalBusinessName || src(a).businessName || src(a).name || "").toUpperCase();
+      const nb  = (src(b).legalBusinessName || src(b).businessName || src(b).name || "").toUpperCase();
+      const da  = na === target ? 0 : na.startsWith(target.split(" ")[0]) ? 1 : 2;
+      const db  = nb === target ? 0 : nb.startsWith(target.split(" ")[0]) ? 1 : 2;
+      return da - db;
+    });
+
+    const src = (hits[0]._source || hits[0]);
+
+    // Contact fields vary — try common keys
+    const fullName  = (src.primaryContactName || src.contactName || src.contactPerson ||
+                       [src.contactFirstName, src.contactLastName].filter(Boolean).join(" ") || "").trim();
+    const firstName = (src.contactFirstName || fullName.split(" ")[0] || "").trim();
+    const email     = (src.primaryContactEmail || src.contactEmail || src.email || "").trim().toLowerCase();
+
+    if (!fullName && !email) return null;
+
+    return {
+      poc_first:   firstName  || null,
+      poc_last:    (src.contactLastName || "").trim() || null,
+      poc_name:    fullName   || null,
+      poc_email:   email      || null,
+      poc_source:  "sba",
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Full lookup: SAM.gov first, SBA DSBS fallback if no contact found
+async function lookupPOC(name, cage) {
+  const samResult = await samLookup(name, cage);
+  if (samResult && samResult.poc_name) return { ...samResult, poc_source: "sam" };
+
+  // SAM found the entity but no POC, or nothing found — try SBA
+  const sbaResult = await sbaLookup(name);
+  if (sbaResult) {
+    // Preserve any CAGE/UEI/sam_name from SAM even if POC came from SBA
+    return {
+      ...(samResult || {}),
+      ...sbaResult,
+    };
+  }
+
+  return samResult; // may be null or entity-only (no POC)
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
 
@@ -106,7 +176,7 @@ exports.handler = async (event) => {
     if (!name && !cage) return fail("name or cage required");
 
     try {
-      const result = await samLookup(name, cage);
+      const result = await lookupPOC(name, cage);
       if (!result) return ok({ found: false });
 
       // Save to MongoDB if distId provided
@@ -148,7 +218,7 @@ exports.handler = async (event) => {
 
     for (const d of dists) {
       try {
-        const result = await samLookup(d.name, d.cage_code);
+        const result = await lookupPOC(d.name, d.cage_code);
         if (result) {
           await db.collection("distributors").updateOne(
             { id: d.id },
