@@ -72,10 +72,10 @@
     const allResolved = items.every(function (it) { return it._resolved !== null; });
     const resolvedCount = items.filter(function (it) { return it._resolved !== null; }).length;
 
-    // Drop handler — parse PDF, surface candidates
-    const handleDrop = useCallback(function (solNum, e) {
-      e.preventDefault();
-      var file = e.dataTransfer.files && e.dataTransfer.files[0];
+    const [dragOver, setDragOver] = useState({}); // solNum → bool
+
+    // Shared PDF handler — called from drop, paste, or file input
+    const handlePDFFile = useCallback(function (solNum, file) {
       if (!file || file.type !== "application/pdf") return;
       updateItem(solNum, { _parsing: true, _pdfName: file.name, _candidates: [] });
       parsePDFText(file).then(function (text) {
@@ -85,6 +85,29 @@
         updateItem(solNum, { _parsing: false });
       });
     }, [updateItem]);
+
+    const handleDrop = useCallback(function (solNum, e) {
+      e.preventDefault();
+      setDragOver(function (p) { return Object.assign({}, p, { [solNum]: false }); });
+      handlePDFFile(solNum, e.dataTransfer.files && e.dataTransfer.files[0]);
+    }, [handlePDFFile]);
+
+    const handlePaste = useCallback(function (solNum, e) {
+      var items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type === "application/pdf") {
+          e.preventDefault();
+          handlePDFFile(solNum, items[i].getAsFile());
+          return;
+        }
+      }
+    }, [handlePDFFile]);
+
+    const handleFileInput = useCallback(function (solNum, e) {
+      handlePDFFile(solNum, e.target.files && e.target.files[0]);
+      e.target.value = "";
+    }, [handlePDFFile]);
 
     const handleRelease = useCallback(function () {
       if (!allResolved) return;
@@ -244,12 +267,19 @@
               ),
             ),
 
-            // ── Right: PDF drop zone ──
-            h("div", {
-              onDragOver: function (e) { e.preventDefault(); },
-              onDrop: function (e) { handleDrop(item.sol_number, e); },
+            // ── Right: PDF drop zone (drag + paste + click) ──
+            h("label", {
+              onDragOver:  function (e) { e.preventDefault(); setDragOver(function (p) { return Object.assign({}, p, { [item.sol_number]: true }); }); },
+              onDragLeave: function ()  { setDragOver(function (p) { return Object.assign({}, p, { [item.sol_number]: false }); }); },
+              onDrop:      function (e) { handleDrop(item.sol_number, e); },
+              onPaste:     function (e) { handlePaste(item.sol_number, e); },
+              tabIndex:    0,
               style: {
-                border: "1px dashed " + (item._pdfName ? "rgba(61,214,140,.4)" : "rgba(201,168,76,.25)"),
+                border: "1px dashed " + (
+                  item._pdfName      ? "rgba(61,214,140,.55)" :
+                  dragOver[item.sol_number] ? "rgba(201,168,76,.8)"  :
+                  "rgba(201,168,76,.25)"
+                ),
                 minHeight: "64px",
                 display: "flex",
                 flexDirection: "column",
@@ -257,9 +287,14 @@
                 justifyContent: "center",
                 padding: "10px 8px",
                 textAlign: "center",
-                cursor: "default",
-                background: item._parsing ? "rgba(201,168,76,.04)" : "transparent",
-                transition: "border-color .15s",
+                cursor: "pointer",
+                background: dragOver[item.sol_number]
+                  ? "rgba(201,168,76,.07)"
+                  : item._parsing
+                    ? "rgba(201,168,76,.04)"
+                    : "transparent",
+                transition: "border-color .12s, background .12s",
+                outline: "none",
               },
             },
               item._parsing
@@ -268,10 +303,16 @@
                   ? h("span", { style: { ...S.mono, fontSize: "8px", color: "var(--accent-green)", wordBreak: "break-all" } },
                       "✓ " + (item._pdfName.length > 18 ? item._pdfName.slice(0, 18) + "…" : item._pdfName))
                   : [
-                      h("span", { key: "arrow", style: { fontSize: "20px", color: "rgba(201,168,76,.25)", lineHeight: 1 } }, "⬇"),
-                      h("span", { key: "label", style: { ...S.mono, fontSize: "8px", color: "var(--body-faint)", marginTop: "5px", lineHeight: 1.4 } },
-                        "Drop DLA\nPDF here"),
+                      h("span", { key: "arrow", style: { fontSize: "18px", color: "rgba(201,168,76,.3)", lineHeight: 1 } }, "⬇"),
+                      h("span", { key: "label", style: { ...S.mono, fontSize: "8px", color: "var(--body-faint)", marginTop: "5px", lineHeight: 1.5, whiteSpace: "pre-line" } },
+                        "Drop · Paste · Click"),
                     ],
+              h("input", {
+                type: "file",
+                accept: ".pdf,application/pdf",
+                onChange: function (e) { handleFileInput(item.sol_number, e); },
+                style: { display: "none" },
+              }),
             ),
           );
         })
