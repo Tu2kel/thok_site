@@ -56,11 +56,19 @@ async function sendEmail({ to, subject, body, isHtml = false }) {
   return data;
 }
 
+function dayBefore(raw) {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  d.setDate(d.getDate() - 1);
+  return (d.getMonth()+1).toString().padStart(2,"0") + "/" + d.getDate().toString().padStart(2,"0") + "/" + d.getFullYear();
+}
+
 function buildRFQBody(dist, record) {
   const item = record.item_name || "—";
   const qty  = record.quantity || record.qty || "—";
   const del  = record.delivery_days ? record.delivery_days + " days ARO" : "—";
-  const gov  = record.unit_price ? "$" + Number(record.unit_price).toLocaleString() + " est." : "—";
+  const needBy = dayBefore(record.quote_due);
 
   const lines = [
     "Hi " + (dist.name || dist.company_name) + ",",
@@ -69,18 +77,16 @@ function buildRFQBody(dist, record) {
     "",
     "I have an active DLA procurement need in your lane and need pricing and availability on the following:",
     "",
-    "  Item:            " + item,
-    record.nsn             ? "  NSN:             " + record.nsn             : null,
-    record.ref_part_number ? "  Part Number:     " + record.ref_part_number : null,
-    "  Quantity:        " + qty,
-    "  Required Del.:   " + del,
-    "  Est. Gov. Value: " + gov,
-    "  Solicitation:    " + record.sol_number,
-    record.quote_due       ? "  Quote Due:       " + record.quote_due       : null,
+    "  Item:          " + item,
+    record.ref_part_number ? "  Part Number:  " + record.ref_part_number : null,
+    "  Quantity:      " + qty,
+    "  Delivery:      " + del,
+    needBy                 ? "  Need By:      " + needBy                  : null,
+    "  Solicitation:  " + record.sol_number,
     "",
     "Requirements:",
     "- Destination: Government delivery address (continental US)",
-    "- Payment: Immediate PO upon award — we use third-party PO funding (Factoring Express). Supplier receives direct wire payment before shipment.",
+    "- Payment: Immediate PO upon award. Supplier receives wire payment prior to shipment.",
     "- Compliance: BAA/TAA required — please confirm country of origin",
     "- Shipping: FOB Destination required",
     "- Condition: New/unused only. No substitutions without prior approval.",

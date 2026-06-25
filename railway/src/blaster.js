@@ -85,15 +85,21 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}) {
     const firstSol = sols[0];
     const { subject } = buildRFQBody(vendor, firstSol);
 
-    const itemLines = sols.map((s, i) =>
-      (i + 1) + ". " + (s.item_name || "—") +
-      (s.nsn             ? " | NSN " + s.nsn                    : "") +
-      (s.ref_part_number ? " | P/N " + s.ref_part_number        : "") +
-      " | Qty: " + (s.quantity || s.qty || "—") +
-      " | Est: $" + (parseFloat(s.unit_price || 0) * parseFloat(s.quantity || s.qty || 1) || parseFloat(s.ext_price || 0) || 0).toLocaleString() +
-      " | Sol: " + s.sol_number +
-      (s.quote_due ? " | Due: " + s.quote_due : "")
-    ).join("\n");
+    const dayBefore = (raw) => {
+      if (!raw) return null;
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return raw;
+      d.setDate(d.getDate() - 1);
+      return (d.getMonth()+1).toString().padStart(2,"0") + "/" + d.getDate().toString().padStart(2,"0") + "/" + d.getFullYear();
+    };
+
+    const itemLines = sols.map((s, i) => [
+      "Item " + (i + 1) + ": " + (s.item_name || "—"),
+      s.ref_part_number ? "  Part Number:  " + s.ref_part_number : null,
+      "  Quantity:     " + (s.quantity || s.qty || "—"),
+      "  Need By:      " + (dayBefore(s.quote_due) || "—"),
+      "  Solicitation: " + s.sol_number,
+    ].filter(Boolean).join("\n")).join("\n\n");
 
     const body = [
       "Hi " + (vendor.name || vendor.company_name) + ",",
@@ -106,7 +112,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}) {
       "",
       "Requirements:",
       "- Destination: Government delivery address (continental US)",
-      "- Payment: Immediate PO upon award — we use third-party PO funding (Factoring Express). Supplier receives direct wire payment before shipment.",
+      "- Payment: Immediate PO upon award. Supplier receives wire payment prior to shipment.",
       "- Compliance: BAA/TAA required — please confirm country of origin for each item",
       "- Shipping: FOB Destination required",
       "- Condition: New/unused only. No substitutions without prior approval.",
