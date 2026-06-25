@@ -11,9 +11,12 @@
     "@anthropic-ai/sdk": "^0.30.0",
     "mongodb": "^6.8.0",
     "node-cron": "^3.0.3",
-    "puppeteer": "^22.0.0"
+    "puppeteer-core": "^22.0.0"
   },
   "engines": {
     "node": ">=20"
+  },
+  "config": {
+    "puppeteer_skip_chromium_download": "true"
   }
 }

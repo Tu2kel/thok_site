@@ -2,7 +2,7 @@
 // Direct Puppeteer on Railway (no Browserless needed — no timeout, no cost per minute)
 // Mirrors navigator-scraper.js v3.1 logic exactly.
 
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 
 const COL = {
   sol_number: 0, nomenclature: 5, qty: 6, unit_issue: 7,
@@ -140,10 +140,16 @@ async function fscPass(page, fsc, seen, minPrice) {
 }
 
 async function scrape({ username, password, fscLanes, minPrice = 1000 }) {
-  info("Launching Chromium (headless)…");
+  // System Chromium installed by nixpacks — puppeteer-core needs explicit path
+  const executablePath =
+    process.env.CHROMIUM_PATH ||
+    "/usr/bin/chromium" ||
+    "/usr/bin/chromium-browser";
+
+  info("Launching Chromium at " + executablePath + "…");
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: process.env.CHROMIUM_PATH || undefined,
+    executablePath,
     args: [
       "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
       "--disable-notifications", "--disable-infobars", "--disable-extensions",
