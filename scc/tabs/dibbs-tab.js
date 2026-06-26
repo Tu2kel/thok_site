@@ -364,12 +364,19 @@
     const serif = "Cinzel,serif";
     const body  = "Cormorant Garamond,serif";
 
-    // Per-vendor item selection — all selected by default, resets when vendor changes
-    const [selNums, setSelNums] = useState(function() {
-      return new Set(entry.records.map(function(r) { return r.sol_number; }));
-    });
+    // Per-vendor item selection — default: only $10k+ ext value pre-checked
+    // Resets when vendor changes (Next/Prev)
+    function defaultSel(records) {
+      var high = records.filter(function(r) {
+        var ext = parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0;
+        return ext >= 10000;
+      });
+      return new Set(high.map(function(r) { return r.sol_number; }));
+    }
+
+    const [selNums, setSelNums] = useState(function() { return defaultSel(entry.records); });
     useEffect(function() {
-      setSelNums(new Set(entry.records.map(function(r) { return r.sol_number; })));
+      setSelNums(defaultSel(entry.records));
     }, [entry.dist.id || entry.dist.name || idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const allSelected = selNums.size > 0 && entry.records.every(function(r) { return selNums.has(r.sol_number); });
