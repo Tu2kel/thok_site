@@ -180,76 +180,49 @@
     return (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
   }
 
-  // ── BATCHED EMAIL BUILDER (HTML) ─────────────────────────────────────
-  // One email per vendor listing all their matched solicitations.
+  // ── BATCHED EMAIL BUILDER ─────────────────────────────────────────────
+  // One plain-text email per vendor listing all their matched solicitations.
   function buildBatchEmail(dist, records) {
     const count = records.length;
 
     const subject = count === 1
-      ? "RFQ - " + (records[0].item_name || "Item") + " | " + records[0].sol_number + " | Imperio Federal Logistics"
-      : "RFQ - " + count + " Items Needed | Imperio Federal Logistics";
+      ? "RFQ – " + (records[0].item_name || "Item") + " | " + records[0].sol_number + " | Imperio Federal Logistics"
+      : "RFQ – " + count + " Items Needed | Imperio Federal Logistics";
 
-    const itemTables = records.map(function (record, i) {
-      const item    = record.item_name || "—";
-      const qty     = record.quantity
-        ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "")
-        : "—";
-      const del     = record.delivery_days ? record.delivery_days + " days ARO" : "—";
-      const dueDate = quoteDueDisplay(record.quote_due);
-
-      const label   = count > 1 ? (i + 1) + ". Item:" : "Item:";
-      var rows = [
-        "<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>" + label + "</td><td style='padding:2px 0;'><strong>" + item + "</strong></td></tr>",
-      ];
-      if (record.ref_part_number) {
-        rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Part Number:</td><td style='padding:2px 0;'>" + record.ref_part_number + "</td></tr>");
-      }
-      rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Quantity:</td><td style='padding:2px 0;'>" + qty + "</td></tr>");
-      rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Required Del.:</td><td style='padding:2px 0;'>" + del + "</td></tr>");
-      rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Please Respond By:</td><td style='padding:2px 0;'><strong>" + (dueDate || "As soon as possible") + "</strong></td></tr>");
-      rows.push("<tr><td style='color:#666;padding:2px 14px 2px 0;white-space:nowrap;'>Ref #:</td><td style='padding:2px 0;'>" + record.sol_number + "</td></tr>");
-
-      return "<table style='border-left:3px solid #cc0000;padding-left:10px;margin:0 0 14px 0;border-spacing:0;border-collapse:collapse;'>" + rows.join("") + "</table>";
-    }).join("");
+    const itemLines = records.map(function (record, i) {
+      var lines = ["Item " + (i + 1) + ": " + (record.item_name || "—")];
+      if (record.ref_part_number) lines.push("  Part Number:  " + record.ref_part_number);
+      var qty = record.quantity ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "") : "—";
+      lines.push("  Quantity:     " + qty);
+      lines.push("  Need By:      " + (quoteDueDisplay(record.quote_due) || "—"));
+      lines.push("  Ref #:        " + record.sol_number);
+      return lines.join("\n");
+    }).join("\n\n");
 
     const body = [
-      "<!DOCTYPE html><html><body style='margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;background:#fff;'>",
-      "<div style='background:#000;padding:7px 16px;'>",
-        "<span style='color:#cc0000;font-weight:bold;font-style:italic;font-size:13px;'>Retired</span>",
-        "<span style='color:#fff;font-weight:bold;font-size:13px;'> U.S. Army Veteran</span>",
-        "<span style='color:#00aaff;font-weight:bold;font-size:13px;margin-left:20px;'>&#9733; Texas Veteran-Owned Business</span>",
-      "</div>",
-      "<div style='padding:20px 24px;'>",
-        "<p style='margin:0 0 16px 0;'>Hi " + dist.name + ",</p>",
-        "<p style='margin:0 0 16px 0;'>My name is Anthony Kelley with Imperio Federal Logistics. We are a government supply contractor supporting DLA requirements and I have " +
-          (count === 1 ? "an active government procurement need" : count + " active government procurement needs") +
-          " in your lane.</p>",
-        "<p style='margin:0 0 12px 0;'>I need pricing and availability on the following item" + (count > 1 ? "s" : "") + ":</p>",
-        itemTables,
-        "<p style='margin:0 0 6px 0;'><strong>Requirements:</strong></p>",
-        "<ul style='margin:0 0 16px 0;padding-left:20px;line-height:1.8;'>",
-          "<li>Destination: Government delivery address (continental US)</li>",
-          "<li>Compliance: BAA/TAA required — please confirm country of origin</li>",
-          "<li>Shipping: FOB Destination required</li>",
-          "<li>Condition: New/unused only. No substitutions without prior approval.</li>",
-        "</ul>",
-        "<p style='margin:0 0 20px 0;'>Please provide unit price, lead time, and confirm country of origin" + (count > 1 ? " for each item" : "") + ". We issue POs immediately upon award.</p>",
-        "<p style='margin:0 0 4px 0;'>V/R,</p>",
-        "<p style='margin:0 0 16px 0;line-height:1.9;'>",
-          "<strong>Anthony K. Kelley</strong><br>",
-          "<strong>Founder | Imperio Federal Logistics</strong><br>",
-          "<span style='color:#666;font-size:13px;'>A Division of</span><br>",
-          "The House of Kel LLC<br>",
-          "<strong>CAGE Code: 152U4</strong><br>",
-          "<a href='mailto:anthony@ifedlog.com' style='color:#0066cc;'>anthony@ifedlog.com</a> | <a href='https://www.ifedlog.com' style='color:#0066cc;'>www.ifedlog.com</a><br>",
-          "(254) 226-5216",
-        "</p>",
-        "<hr style='border:none;border-top:1px solid #ccc;margin:0 0 12px 0;'>",
-        "<p style='margin:0 0 12px 0;font-size:13px;'>SDVOSB | &#11088; | VetHUB</p>",
-        "<img src='https://thehouseofkel.com/ifl_banner.png' alt='Imperio Federal Logistics' style='max-width:420px;display:block;'>",
-      "</div>",
-      "</body></html>",
-    ].join("");
+      "Hi " + dist.name + ",",
+      "",
+      "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there’s a chance it’s landing in spam folders. I’m reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
+      "",
+      "Now to the reason I’m reaching out — I have " + count + " active DLA procurement need" + (count > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
+      "",
+      itemLines,
+      "",
+      "Requirements:",
+      "- Destination: Government delivery address (continental US)",
+      "- Payment: Immediate PO upon award. Supplier receives wire payment prior to shipment.",
+      "- Compliance: BAA/TAA required — please confirm country of origin for each item",
+      "- Shipping: FOB Destination required",
+      "- Condition: New/unused only. No substitutions without prior approval.",
+      "",
+      "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
+      "",
+      "Thank you for your time,",
+      "Anthony K Kelley | Founder & CEO",
+      "Imperio Federal Logistics \xb7 The House of Kel LLC \xb7 CAGE 152U4",
+      "SDVOSB | VetHUB | (254) 226-5216",
+      "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
+    ].join("\n");
 
     return { subject, body };
   }
