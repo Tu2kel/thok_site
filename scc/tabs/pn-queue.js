@@ -224,10 +224,12 @@
     }, [allResolved, activeItems, queue.opts, onRelease, clearSession]);
 
     const handleReleaseAnyway = useCallback(function () {
-      var pending = activeItems.filter(function (it) { return it._resolved === null; }).length;
-      if (!window.confirm("Release batch now?\n\n" + pending + " item(s) have no P/N — they will be emailed without a part number.\nResolved items will include their confirmed P/N.")) return;
+      var withPN    = activeItems.filter(function (it) { return it._resolved && it._resolved !== "N/A"; });
+      var skipped   = activeItems.filter(function (it) { return !it._resolved || it._resolved === "N/A"; }).length;
+      if (!withPN.length) { alert("No items have a confirmed P/N — nothing to release."); return; }
+      if (!window.confirm("Release " + withPN.length + " item(s) with confirmed P/Ns?\n\n" + skipped + " item(s) without P/Ns will be dropped from this blast.")) return;
       clearSession();
-      onRelease(buildReleasePayload(activeItems), queue.opts || {});
+      onRelease(buildReleasePayload(withPN), queue.opts || {});
     }, [activeItems, queue.opts, onRelease, clearSession]);
 
     const lookupPN = useCallback(function (solNum, nsn) {
@@ -331,7 +333,7 @@
         !allResolved && h("button", {
           onClick: handleReleaseAnyway,
           style: S.btn("rgba(245,158,11,.8)", "rgba(245,158,11,.08)"),
-        }, "Skip & Release →"),
+        }, "Release P/N Only →"),
         h("button", {
           onClick: handleLookupAll,
           title: "Auto-lookup P/Ns from DIBBS for all pending items",
