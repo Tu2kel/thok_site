@@ -202,7 +202,7 @@
     const body = [
       "Hi " + dist.name + ",",
       "",
-      "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). Quick heads-up: we recently went through a company restructuring and anthony@ifedlog.com is a fresh domain still building deliverability — there’s a chance this landed in your spam folder. Please add anthony@ifedlog.com to your safe senders list and feel free to reply to either address going forward.",
+      "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there’s a chance it’s landing in spam folders. I’m reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
       "",
       "Now to the reason I’m reaching out — I have " + count + " active DLA procurement need" + (count > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
       "",
@@ -221,7 +221,7 @@
       "Anthony K Kelley | Founder & CEO",
       "Imperio Federal Logistics \xb7 The House of Kel LLC \xb7 CAGE 152U4",
       "SDVOSB | VetHUB | (254) 226-5216",
-      "anthony@ifedlog.com | kelley.anthonyk@gmail.com | ifedlog.com",
+      "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
     ].join("\n");
 
     return { subject, body };
