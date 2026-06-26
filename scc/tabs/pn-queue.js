@@ -52,11 +52,11 @@
     var _sessionKey = "pnq:" + queue.records.map(function (r) { return r.sol_number; }).join(",");
 
     // items mirrors queue.records — adds UI-only fields
-    // Restored from sessionStorage on remount so PDF drops survive tab switches
+    // Restored from localStorage on remount so PDF drops survive tab switches
     const [items, setItems] = useState(function () {
       var saved = {};
       try {
-        var raw = sessionStorage.getItem(_sessionKey);
+        var raw = localStorage.getItem(_sessionKey);
         if (raw) {
           JSON.parse(raw).forEach(function (it) { saved[it.sol_number] = it; });
         }
@@ -111,10 +111,10 @@
       });
     }, []);
 
-    // Persist items to sessionStorage whenever they change
+    // Persist items to localStorage whenever they change
     useEffect(function () {
       try {
-        sessionStorage.setItem(_sessionKey, JSON.stringify(
+        localStorage.setItem(_sessionKey, JSON.stringify(
           items.map(function (it) {
             return { sol_number: it.sol_number, _resolved: it._resolved, _pns: it._pns, _input: it._input, _candidates: it._candidates, _pdfName: it._pdfName, _removed: it._removed };
           })
@@ -189,7 +189,7 @@
     }, [handlePDFFile]);
 
     const clearSession = useCallback(function () {
-      try { sessionStorage.removeItem(_sessionKey); } catch (e) {}
+      try { localStorage.removeItem(_sessionKey); } catch (e) {}
     }, []);
 
     const handleRelease = useCallback(function () {
