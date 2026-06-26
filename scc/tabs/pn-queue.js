@@ -77,6 +77,8 @@
 
     // {solNum: bool} — whether the "+ Add P/N" input is open for a resolved item
     const [addingMore, setAddingMore] = useState({});
+    // {solNum: bool} — whether DIBBS auto-lookup is in flight
+    const [lookingUp, setLookingUp] = useState({});
 
     const updateItem = useCallback(function (solNum, patch) {
       setItems(function (prev) {
@@ -228,6 +230,40 @@
       onRelease(buildReleasePayload(activeItems), queue.opts || {});
     }, [activeItems, queue.opts, onRelease, clearSession]);
 
+    const lookupPN = useCallback(function (solNum, nsn) {
+      if (!nsn) return;
+      setLookingUp(function (p) { return Object.assign({}, p, { [solNum]: true }); });
+      fetch("/.netlify/functions/lookup-pn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nsn: nsn.replace(/\D/g, "") }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          setLookingUp(function (p) { return Object.assign({}, p, { [solNum]: false }); });
+          if (data.ok && data.partNumbers && data.partNumbers.length) {
+            if (data.partNumbers.length === 1) {
+              confirmPN(solNum, data.partNumbers[0]);
+            } else {
+              updateItem(solNum, { _candidates: data.partNumbers, _pdfName: "(auto)" });
+            }
+          } else {
+            updateItem(solNum, { _candidates: ["(none found)"], _pdfName: "(auto)" });
+          }
+        })
+        .catch(function () {
+          setLookingUp(function (p) { return Object.assign({}, p, { [solNum]: false }); });
+        });
+    }, [confirmPN, updateItem]);
+
+    const handleLookupAll = useCallback(function () {
+      var pending = items.filter(function (it) { return !it._removed && it._resolved === null && it.nsn; });
+      if (!pending.length) return;
+      pending.forEach(function (it, i) {
+        setTimeout(function () { lookupPN(it.sol_number, it.nsn); }, i * 800);
+      });
+    }, [items, lookupPN]);
+
     const [bulkOpen, setBulkOpen] = useState(false);
     const [bulkText, setBulkText] = useState("");
 
@@ -296,6 +332,11 @@
           onClick: handleReleaseAnyway,
           style: S.btn("rgba(245,158,11,.8)", "rgba(245,158,11,.08)"),
         }, "Skip & Release →"),
+        h("button", {
+          onClick: handleLookupAll,
+          title: "Auto-lookup P/Ns from DIBBS for all pending items",
+          style: S.btn("rgba(96,165,250,.7)", "rgba(96,165,250,.06)"),
+        }, "🔍 Lookup All"),
         h("button", {
           onClick: function () { setBulkOpen(function (v) { return !v; }); },
           style: S.btn("rgba(201,168,76,.5)"),
@@ -438,6 +479,12 @@
                   onClick: function () { updateItem(item.sol_number, { _resolved: "N/A", _input: "", _pns: [] }); },
                   style: S.btn("var(--body-dim)"),
                 }, "N/A"),
+                item.nsn && pending && h("button", {
+                  onClick: function () { lookupPN(item.sol_number, item.nsn); },
+                  disabled: !!lookingUp[item.sol_number],
+                  title: "Auto-lookup P/N from DIBBS approved sources",
+                  style: Object.assign({}, S.btn("rgba(96,165,250,.7)", "rgba(96,165,250,.08)"), { opacity: lookingUp[item.sol_number] ? 0.5 : 1 }),
+                }, lookingUp[item.sol_number] ? "…" : "🔍 AUTO"),
                 item.nsn && pending && h("button", {
                   onClick: function () {
                     window.open("https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=" + item.nsn.replace(/\D/g,"") + "&category=&Scope=", "_blank");
