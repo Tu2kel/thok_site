@@ -1039,7 +1039,17 @@
         const go = [], verify = [], reject = [];
         for (const res of results) {
           const orig = solsToAnalyze.find((s) => s.sol_number === res.sol_number) || {};
-          const merged = { ...orig, ...res };
+          // Only pull verdict-specific fields from res — never let Claude's response
+          // overwrite sol data fields (item_name, ext_price, etc.) with empty values
+          const merged = {
+            ...orig,
+            verdict:          res.verdict,
+            reason:           res.reason           || "",
+            claudeReason:     res.reason           || "",
+            winProbabilityPct: res.winProbabilityPct != null ? res.winProbabilityPct : (orig.winProbabilityPct || 0),
+            sourcing_path:    res.sourcing_path    || "",
+            margin_flag:      res.margin_flag      || "",
+          };
           if (res.verdict === "GO")           go.push(merged);
           else if (res.verdict === "VERIFY FIRST") verify.push(merged);
           else                                reject.push(merged);
@@ -1376,7 +1386,15 @@
 
         for (const res of results) {
           const original = sols.find((s) => s.sol_number === res.sol_number) || {};
-          const merged = { ...original, ...res };
+          const merged = {
+            ...original,
+            verdict:           res.verdict,
+            reason:            res.reason            || "",
+            claudeReason:      res.reason            || "",
+            winProbabilityPct: res.winProbabilityPct != null ? res.winProbabilityPct : (original.winProbabilityPct || 0),
+            sourcing_path:     res.sourcing_path     || "",
+            margin_flag:       res.margin_flag       || "",
+          };
           if (res.verdict === "GO") go.push(merged);
           else if (res.verdict === "VERIFY FIRST") verify.push(merged);
           else reject.push(merged);
