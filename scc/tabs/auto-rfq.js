@@ -158,6 +158,32 @@
     return selected;
   }
 
+  // ── DUE-DATE DROP FILTER ─────────────────────────────────────────────
+  // Returns true if sol is still worth blasting (due 2+ days from today).
+  // Drop if due today or tomorrow — too late to get a quote back in time.
+  function solIsStillBiddable(record) {
+    const raw = record.quote_due || "";
+    if (!raw) return true;
+    let d;
+    let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    } else {
+      m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (m) {
+        const yr = parseInt(m[3]) < 100 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+        d = new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]));
+      }
+    }
+    if (!d || isNaN(d.getTime())) return true;
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    const cutoff = new Date(today0); cutoff.setDate(today0.getDate() + 2); // must be due 2+ days out
+    return d >= cutoff;
+  }
+
+  function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+  const SEND_DELAY_MS = 1500; // 1.5s between Gmail sends — avoids 454-4.7.0 login rate limit
+
   // ── QUOTE DUE HELPER — one day before DLA deadline ───────────────────
   function quoteDueDisplay(dateStr) {
     if (!dateStr) return null;
@@ -283,7 +309,13 @@
   async function runBatch(records, opts) {
     opts = opts || {};
     const addLog = opts.onLog || function () {};
-    const batch  = opts.testMode ? records.slice(0, TEST_LIMIT) : records;
+
+    // Drop sols due today or tomorrow — not enough time to get quotes
+    const biddable = records.filter(solIsStillBiddable);
+    const dropped  = records.length - biddable.length;
+    if (dropped > 0) addLog("Dropped " + dropped + " sol(s) due today/tomorrow — too late to quote.", "info");
+
+    const batch = opts.testMode ? biddable.slice(0, TEST_LIMIT) : biddable;
 
     const results = {
       go:          [],
@@ -459,6 +491,7 @@
       }
 
       batchLogEntries.push(logEntry);
+      await sleep(SEND_DELAY_MS); // pace sends to avoid Gmail 454-4.7.0 login rate limit
     }
 
     if (batchLogEntries.length > 0) {
@@ -537,8 +570,14 @@
   async function sendOneVendorBatch(entry, opts) {
     opts = opts || {};
     var testMode  = !!opts.testMode;
-    var confirmedRecs = entry.records.filter(function(r) { return r.ref_part_number && r.ref_part_number !== "N/A"; });
-    if (!confirmedRecs.length) throw new Error("Blocked — no confirmed P/N items for " + entry.dist.name);
+
+    // Drop records due today/tomorrow before sending
+    var biddableRecs = entry.records.filter(solIsStillBiddable);
+    if (biddableRecs.length < entry.records.length) {
+      console.log("[AutoRFQ] " + entry.dist.name + ": dropped " + (entry.records.length - biddableRecs.length) + " sol(s) due today/tomorrow");
+    }
+    var confirmedRecs = biddableRecs.filter(function(r) { return r.ref_part_number && r.ref_part_number !== "N/A"; });
+    if (!confirmedRecs.length) throw new Error("Blocked — no confirmed P/N items (or all expired) for " + entry.dist.name);
     var emailData = buildBatchEmail(entry.dist, confirmedRecs);
     if (!emailData) throw new Error("Blocked — buildBatchEmail returned null for " + entry.dist.name);
     var toAddr    = testMode ? TEST_EMAIL : (entry.dist.email || entry.to);

@@ -24,7 +24,9 @@
     Fragment: Frag,
   } = React;
 
-  const AGENT_URL = "http://localhost:3100";
+  // AGENT_URL: read from SCC_AGENT client (supports Railway URL via localStorage key "scc_agent_url")
+  // Set once in browser console: SCC_AGENT.setAgentUrl("https://your-app.up.railway.app")
+  function getAgentUrl() { return window.SCC_AGENT ? window.SCC_AGENT.getAgentUrl() : "http://localhost:3100"; }
   const STORE_KEY = "scc_dibbs_tab_v1";
   const CRON_KEY = "scc_dibbs_cron_v1";
 
@@ -45,10 +47,11 @@
     try {
       const data = JSON.parse(localStorage.getItem(STORE_KEY) || "null") || {};
 
-      // Auto-prune expired sols and analysis records on every load
+      // Auto-prune sols due today or sooner — no time to quote
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const isLive = (r) => { const d = parseQuoteDue(r.quote_due); return !d || d >= today; };
+      const cutoff = new Date(today); cutoff.setDate(today.getDate() + 2); // keep 2+ days out
+      const isLive = (r) => { const d = parseQuoteDue(r.quote_due); return !d || d >= cutoff; };
 
       if (data.sols) data.sols = data.sols.filter(isLive);
 
@@ -534,6 +537,7 @@
     // ── State ──
     const [mode, setMode] = useState(saved.mode || "manual");
     const [agentAlive, setAgentAlive] = useState(null); // null=unknown true/false
+    const [agentMeta, setAgentMeta]   = useState(null); // { mode, last_run, last_run_ago_min, running }
     const [running, setRunning] = useState(false);
     const [log, setLog] = useState([]);
     const [sols, setSols] = useState(saved.sols || []);
@@ -741,13 +745,15 @@
     // ── Agent health check ──
     const checkAgent = useCallback(async () => {
       try {
-        const r = await fetch(AGENT_URL + "/health", {
+        const r = await fetch(getAgentUrl() + "/health", {
           signal: AbortSignal.timeout(3000),
         });
         const d = await r.json();
         setAgentAlive(d.ok === true);
+        if (d.mode || d.last_run != null) setAgentMeta(d);
       } catch {
         setAgentAlive(false);
+        setAgentMeta(null);
       }
     }, []);
 
@@ -854,6 +860,8 @@
           addLog("✗ " + entry.dist.name + ": " + e.message, "err");
           failed++;
         }
+        // Pace sends — Gmail blocks on too many rapid SMTP logins (454-4.7.0)
+        if (i < remaining.length - 1) await new Promise(r => setTimeout(r, 1500));
       }
       refreshBlastLog();
       setPendingBlast(null);
@@ -959,19 +967,22 @@
 
       addLog("AN/MS Sweep — checking agent…", "info");
       try {
-        const hRes = await fetch(AGENT_URL + "/health", { signal: AbortSignal.timeout(4000) });
+        const hRes = await fetch(getAgentUrl() + "/health", { signal: AbortSignal.timeout(4000) });
         const hData = await hRes.json();
         if (!hData.ok) throw new Error("Agent not ready");
-        addLog("Agent online ✓", "ok");
+        if (hData.mode) setAgentMeta(hData);
+        addLog("Agent online ✓" + (hData.mode === "railway" ? " (Railway)" : " (local)"), "ok");
       } catch {
-        addLog("Agent offline — start the agent first.", "err");
+        const url = getAgentUrl();
+        const isLocal = url.includes("localhost") || url.includes("127.0.0.1");
+        addLog(isLocal ? "Local agent offline — start-agent.bat must be running." : "Railway agent unreachable — check Railway dashboard.", "err");
         setAnmsSweeping(false);
         return;
       }
 
       addLog("Launching 30-day AN + MS sweep…", "info");
       try {
-        const resp = await fetch(AGENT_URL + "/navigator/anms-sweep", {
+        const resp = await fetch(getAgentUrl() + "/navigator/anms-sweep", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
@@ -1056,17 +1067,24 @@
 
       // Health check
       try {
-        const hRes = await fetch(AGENT_URL + "/health", {
+        const hRes = await fetch(getAgentUrl() + "/health", {
           signal: AbortSignal.timeout(4000),
         });
         const hData = await hRes.json();
         if (!hData.ok) throw new Error("Agent not ready");
         setAgentAlive(true);
-        addLog("Agent online ✓", "ok");
+        if (hData.mode) setAgentMeta(hData);
+        addLog("Agent online ✓" + (hData.mode === "railway" ? " (Railway)" : " (local)"), "ok");
       } catch (e) {
         setAgentAlive(false);
-        addLog("Agent offline — run start-agent.bat on your PC first, then try again.", "err");
-        addLog("Tip: drop start-agent.bat into your Windows Startup folder to auto-launch on boot.", "info");
+        const url = getAgentUrl();
+        const isLocal = url.includes("localhost") || url.includes("127.0.0.1");
+        if (isLocal) {
+          addLog("Local agent offline — run start-agent.bat on your PC first, then try again.", "err");
+          addLog("Tip: If Railway handles your daily runs, set the Railway URL: SCC_AGENT.setAgentUrl('https://your-app.up.railway.app')", "info");
+        } else {
+          addLog("Railway agent unreachable at " + url + " — check Railway dashboard for deployment status.", "err");
+        }
         setRunning(false);
         return;
       }
@@ -1075,7 +1093,7 @@
 
       try {
         // SSE stream — agent sends progress lines then final JSON
-        const resp = await fetch(AGENT_URL + "/navigator/scrape", {
+        const resp = await fetch(getAgentUrl() + "/navigator/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ stream: true, ...(modeRef.current === "auto" && !liveModeRef.current ? { testMode: true, maxSols: 40 } : {}) }),
@@ -1433,6 +1451,7 @@
         h(
           "div",
           { style: { display: "flex", gap: "6px", alignItems: "center" } },
+          // Status pill
           h(
             "div",
             {
@@ -1456,17 +1475,28 @@
                 cursor: "pointer",
               },
               onClick: checkAgent,
-              title: "Click to recheck agent",
+              title: agentMeta
+                ? (agentMeta.mode === "railway"
+                    ? "Railway agent · Schedule: " + agentMeta.schedule + (agentMeta.last_run ? " · Last run: " + new Date(agentMeta.last_run).toLocaleString() : "")
+                    : "Local agent · Click to recheck")
+                : "Click to recheck agent",
             },
             agentAlive === true
-              ? "● Agent Online"
+              ? "● " + (agentMeta && agentMeta.mode === "railway" ? "Railway" : "Local") + " Agent Online"
+                + (agentMeta && agentMeta.running ? " · Running…" : "")
+                + (agentMeta && agentMeta.last_run_ago_min != null
+                    ? " · " + (agentMeta.last_run_ago_min < 60
+                        ? agentMeta.last_run_ago_min + "m ago"
+                        : Math.round(agentMeta.last_run_ago_min / 60) + "h ago")
+                    : "")
               : agentAlive === false
                 ? "● Agent Offline"
                 : "● Checking…",
           ),
-          agentAlive === false &&
+          // If offline and using local URL: show Start Agent button
+          agentAlive === false && (getAgentUrl().includes("localhost") || getAgentUrl().includes("127.0.0.1")) &&
             h("button", {
-              title: "Start the DIBBS agent",
+              title: "Start the local DIBBS agent",
               style: {
                 ...S.mono, fontSize: "10px",
                 background: "rgba(231,76,60,.1)",
@@ -1484,7 +1514,37 @@
                 }
               },
             }, "▶ Start Agent"),
-          agentAlive === true &&
+          // If offline and using Railway URL: show helpful tip
+          agentAlive === false && !getAgentUrl().includes("localhost") && !getAgentUrl().includes("127.0.0.1") &&
+            h("span", {
+              style: { ...S.mono, fontSize: "10px", color: "rgba(231,76,60,.7)", padding: "4px 8px" },
+            }, "Check Railway dashboard"),
+          // Trigger manual run on Railway
+          agentAlive === true && agentMeta && agentMeta.mode === "railway" &&
+            h("button", {
+              title: "Trigger pipeline now on Railway (scrape + screen + blast)",
+              disabled: agentMeta && agentMeta.running,
+              style: {
+                ...S.mono, fontSize: "10px",
+                background: "rgba(96,165,250,.1)",
+                border: "1px solid rgba(96,165,250,.3)",
+                color: "rgba(96,165,250,.85)",
+                padding: "4px 12px", cursor: "pointer",
+                opacity: agentMeta && agentMeta.running ? 0.5 : 1,
+              },
+              onClick: async () => {
+                try {
+                  const r = await fetch(getAgentUrl() + "/trigger", { method: "POST" });
+                  const d = await r.json();
+                  if (d.ok) { toast_("Railway pipeline triggered — check summary email in ~10 min."); setTimeout(checkAgent, 2000); }
+                  else toast_("Trigger failed: " + d.error, true);
+                } catch (e) {
+                  toast_("Trigger error: " + e.message, true);
+                }
+              },
+            }, agentMeta && agentMeta.running ? "⟳ Running…" : "▶ Run Now"),
+          // Restart (local only)
+          agentAlive === true && (!agentMeta || agentMeta.mode !== "railway") &&
             h("button", {
               title: "Restart agent (picks up .env changes)",
               style: {
@@ -1496,7 +1556,7 @@
               },
               onClick: async () => {
                 try {
-                  await fetch(AGENT_URL + "/restart", { method: "POST" });
+                  await fetch(getAgentUrl() + "/restart", { method: "POST" });
                   setAgentAlive(null);
                   toast_("Agent restarting…");
                   setTimeout(checkAgent, 3000);

@@ -272,19 +272,91 @@ async function runPipeline() {
   log("═".repeat(60));
 }
 
+// ── HTTP SERVER (health + manual trigger) ────────────────────────────────
+const http = require("http");
+
+let lastRunAt   = null;
+let lastRunOk   = null;
+let pipelineRunning = false;
+
+const PORT = process.env.PORT || 3100;
+
+const httpServer = http.createServer((req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+
+  const u = req.url.split("?")[0];
+
+  if (u === "/health" && req.method === "GET") {
+    const now = Date.now();
+    const msAgo = lastRunAt ? now - lastRunAt : null;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      ok: true,
+      mode: "railway",
+      schedule: SCHEDULE,
+      blast_live: IS_LIVE,
+      last_run: lastRunAt ? new Date(lastRunAt).toISOString() : null,
+      last_run_ok: lastRunOk,
+      last_run_ago_min: msAgo ? Math.round(msAgo / 60000) : null,
+      running: pipelineRunning,
+    }));
+    return;
+  }
+
+  if (u === "/trigger" && req.method === "POST") {
+    if (pipelineRunning) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Pipeline already running" }));
+      return;
+    }
+    res.writeHead(202, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, message: "Pipeline triggered" }));
+    log("Manual trigger via HTTP /trigger");
+    runPipelineTracked().catch(e => err("Triggered pipeline error:", e.message));
+    return;
+  }
+
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ ok: false, error: "Not found" }));
+});
+
+httpServer.listen(PORT, () => {
+  log("HTTP server listening on port " + PORT + " — /health and /trigger available");
+});
+
+// Wrap runPipeline to track state
+const _runPipeline = runPipeline;
+async function runPipelineTracked() {
+  pipelineRunning = true;
+  try {
+    await _runPipeline();
+    lastRunOk = true;
+  } catch (e) {
+    lastRunOk = false;
+    err("Pipeline error:", e.message);
+  } finally {
+    lastRunAt = Date.now();
+    pipelineRunning = false;
+  }
+}
+
 // ── CRON SCHEDULE ────────────────────────────────────────────────────────
 const runNow = process.argv.includes("--run-now");
 
 if (runNow) {
   log("--run-now flag detected — firing immediately");
-  runPipeline().catch(e => { err("Fatal:", e.message); process.exit(1); });
+  runPipelineTracked().catch(e => { err("Fatal:", e.message); process.exit(1); });
 } else {
   log("SCC Agent online. Cron: \"" + SCHEDULE + "\" (" + (IS_LIVE ? "LIVE" : "TEST") + " mode)");
   log("Set BLAST_LIVE=true in Railway env vars to enable real vendor emails.");
 
   cron.schedule(SCHEDULE, () => {
     log("Cron fired — starting pipeline…");
-    runPipeline().catch(e => err("Pipeline error:", e.message));
+    runPipelineTracked().catch(e => err("Pipeline error:", e.message));
   });
 
   // Keep process alive
