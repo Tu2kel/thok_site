@@ -1,16 +1,14 @@
 // netlify/functions/send-rfq.js
-// Injects seller info into Texas Resale Cert, sends email via Gmail API (Google Workspace)
+// Sends RFQ emails via Gmail SMTP using App Password
 // Env vars required:
-//   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
-//   (all scoped to anthony@ifedlog.com — Google Workspace)
+//   GMAIL_APP_PASSWORD  (generated at myaccount.google.com/apppasswords)
 
-const path = require("path");
-const fs   = require("fs");
+const path       = require("path");
+const fs         = require("fs");
+const nodemailer = require("nodemailer");
 
-const FROM_ADDRESS  = "kelley.anthonyk@gmail.com";
-const FROM_NAME     = "Anthony K Kelley | Imperio Federal Logistics";
-const TOKEN_URL     = "https://oauth2.googleapis.com/token";
-const GMAIL_SEND    = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+const FROM_ADDRESS = "kelley.anthonyk@gmail.com";
+const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
 
 // ---------------------------------------------------------------------------
 // PDF injection using pdf-lib
@@ -18,12 +16,12 @@ const GMAIL_SEND    = "https://gmail.googleapis.com/gmail/v1/users/me/messages/s
 async function buildCert(sellerName, sellerStreet, sellerCity) {
   const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 
-  const templatePath = path.join(__dirname, "../../scc/assets/Resale_Template.pdf");
+  const templatePath  = path.join(__dirname, "../../scc/assets/Resale_Template.pdf");
   const templateBytes = fs.readFileSync(templatePath);
 
   const pdfDoc = await PDFDocument.load(templateBytes);
   const page   = pdfDoc.getPages()[0];
-  const { height } = page.getSize(); // 792
+  const { height } = page.getSize();
 
   const font     = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontSize = 10;
@@ -43,98 +41,6 @@ async function buildCert(sellerName, sellerStreet, sellerCity) {
 }
 
 // ---------------------------------------------------------------------------
-// Gmail OAuth2: refresh access token
-// ---------------------------------------------------------------------------
-async function getAccessToken() {
-  const params = new URLSearchParams({
-    grant_type:    "refresh_token",
-    client_id:     process.env.GOOGLE_CLIENT_ID,
-    client_secret: process.env.GOOGLE_CLIENT_SECRET,
-    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-  });
-
-  const res  = await fetch(TOKEN_URL, {
-    method:  "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body:    params.toString(),
-  });
-  const data = await res.json();
-  if (!data.access_token) throw new Error("Google token refresh failed: " + JSON.stringify(data));
-  return data.access_token;
-}
-
-// ---------------------------------------------------------------------------
-// Build RFC 2822 MIME message, encode as base64url
-// ---------------------------------------------------------------------------
-function buildMimeMessage({ to, subject, body, pdfBytes, pdfFilename }) {
-  const boundary = "SCC_MIME_" + Date.now();
-  const CRLF     = "\r\n";
-
-  if (!pdfBytes) {
-    // HTML message
-    const msg = [
-      "From: " + FROM_NAME + " <" + FROM_ADDRESS + ">",
-      "To: " + to,
-      "Subject: " + subject,
-      "MIME-Version: 1.0",
-      "Content-Type: text/html; charset=utf-8",
-      "",
-      body,
-    ].join(CRLF);
-    return Buffer.from(msg).toString("base64url");
-  }
-
-  // Multipart with PDF attachment
-  const parts = [
-    "--" + boundary,
-    "Content-Type: text/html; charset=utf-8",
-    "",
-    body,
-    "",
-    "--" + boundary,
-    "Content-Type: application/pdf",
-    "Content-Disposition: attachment; filename=\"" + pdfFilename + "\"",
-    "Content-Transfer-Encoding: base64",
-    "",
-    Buffer.from(pdfBytes).toString("base64"),
-    "--" + boundary + "--",
-  ].join(CRLF);
-
-  const msg = [
-    "From: " + FROM_NAME + " <" + FROM_ADDRESS + ">",
-    "To: " + to,
-    "Subject: " + subject,
-    "MIME-Version: 1.0",
-    "Content-Type: multipart/mixed; boundary=\"" + boundary + "\"",
-    "",
-    parts,
-  ].join(CRLF);
-
-  return Buffer.from(msg).toString("base64url");
-}
-
-// ---------------------------------------------------------------------------
-// Send via Gmail API
-// ---------------------------------------------------------------------------
-async function sendGmailMessage({ to, subject, body, pdfBytes, pdfFilename }) {
-  const token  = await getAccessToken();
-  const raw    = buildMimeMessage({ to, subject, body, pdfBytes, pdfFilename });
-
-  const res = await fetch(GMAIL_SEND, {
-    method:  "POST",
-    headers: {
-      Authorization:  "Bearer " + token,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ raw }),
-  });
-
-  const result = await res.json();
-  if (!res.ok) throw new Error("Gmail send failed: " + JSON.stringify(result));
-  return result;
-}
-
-// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 exports.handler = async (event) => {
@@ -151,15 +57,33 @@ exports.handler = async (event) => {
   }
 
   try {
-    let pdfBytes   = null;
-    let pdfFilename = null;
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: FROM_ADDRESS,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    });
+
+    const mailOptions = {
+      from: `"${FROM_NAME}" <${FROM_ADDRESS}>`,
+      to,
+      subject,
+      text: emailBody,
+    };
 
     if (attachCert) {
-      pdfBytes    = await buildCert(sellerName || "", sellerStreet || "", sellerCity || "");
-      pdfFilename = "THOK_Resale_Certificate.pdf";
+      const pdfBytes = await buildCert(sellerName || "", sellerStreet || "", sellerCity || "");
+      mailOptions.attachments = [{
+        filename: "THOK_Resale_Certificate.pdf",
+        content:  Buffer.from(pdfBytes),
+        contentType: "application/pdf",
+      }];
     }
 
-    await sendGmailMessage({ to, subject, body: emailBody, pdfBytes, pdfFilename });
+    await transporter.sendMail(mailOptions);
 
     return {
       statusCode: 200,
