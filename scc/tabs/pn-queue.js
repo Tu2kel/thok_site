@@ -194,11 +194,10 @@
       try { localStorage.removeItem(_sessionKey); } catch (e) {}
     }, []);
 
-    const handleRelease = useCallback(function () {
-      if (!allResolved) return;
-      var resolved = activeItems.map(function (it) {
+    function buildReleasePayload(sourceItems) {
+      return sourceItems.map(function (it) {
         var rec = Object.assign({}, it);
-        if (it._resolved === "N/A") {
+        if (!it._resolved || it._resolved === "N/A") {
           rec.ref_part_number = "";
           rec._pn_na = true;
         } else {
@@ -214,9 +213,20 @@
         delete rec._removed;
         return rec;
       });
+    }
+
+    const handleRelease = useCallback(function () {
+      if (!allResolved) return;
       clearSession();
-      onRelease(resolved, queue.opts || {});
-    }, [allResolved, items, queue.opts, onRelease, clearSession]);
+      onRelease(buildReleasePayload(activeItems), queue.opts || {});
+    }, [allResolved, activeItems, queue.opts, onRelease, clearSession]);
+
+    const handleReleaseAnyway = useCallback(function () {
+      var pending = activeItems.filter(function (it) { return it._resolved === null; }).length;
+      if (!window.confirm("Release batch now?\n\n" + pending + " item(s) have no P/N — they will be emailed without a part number.\nResolved items will include their confirmed P/N.")) return;
+      clearSession();
+      onRelease(buildReleasePayload(activeItems), queue.opts || {});
+    }, [activeItems, queue.opts, onRelease, clearSession]);
 
     const [bulkOpen, setBulkOpen] = useState(false);
     const [bulkText, setBulkText] = useState("");
@@ -282,6 +292,10 @@
             allResolved ? "rgba(61,214,140,.1)" : "transparent"
           ), { opacity: allResolved ? 1 : 0.4 }),
         }, "Release Batch →"),
+        !allResolved && h("button", {
+          onClick: handleReleaseAnyway,
+          style: S.btn("rgba(245,158,11,.8)", "rgba(245,158,11,.08)"),
+        }, "Skip & Release →"),
         h("button", {
           onClick: function () { setBulkOpen(function (v) { return !v; }); },
           style: S.btn("rgba(201,168,76,.5)"),
