@@ -81,33 +81,6 @@
       });
     }, []);
 
-    // Fetch P/N from DIBBS NSN page (public, no banner)
-    const fetchDibbsPN = useCallback(function (item) {
-      if (!item.nsn) return;
-      updateItem(item.sol_number, { _parsing: true });
-      fetch("/.netlify/functions/scc-dibbs-pn", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ nsn: item.nsn, sol_number: item.sol_number }),
-      }).then(function (r) { return r.json(); }).then(function (data) {
-        if (!data.ok || !data.candidates || !data.candidates.length) {
-          updateItem(item.sol_number, { _parsing: false });
-          return;
-        }
-        updateItem(item.sol_number, { _parsing: false, _candidates: data.candidates, _pdfName: "(auto)" });
-      }).catch(function () {
-        updateItem(item.sol_number, { _parsing: false });
-      });
-    }, [updateItem]);
-
-    // Auto-fetch on mount for each unresolved item that has an NSN
-    useEffect(function () {
-      items.forEach(function (item) {
-        if (item._resolved !== null || item._candidates.length || item._pdfName || !item.nsn) return;
-        fetchDibbsPN(item);
-      });
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
     // Persist items to sessionStorage whenever they change
     useEffect(function () {
       try {
@@ -317,11 +290,12 @@
                   onClick: function () { updateItem(item.sol_number, { _resolved: "N/A", _input: "" }); },
                   style: S.btn("var(--body-dim)"),
                 }, "N/A"),
-                h("button", {
-                  onClick: function () { fetchDibbsPN(item); },
-                  disabled: !!item._parsing || !item.nsn,
-                  style: Object.assign({}, S.btn("rgba(201,168,76,.5)"), { opacity: (item._parsing || !item.nsn) ? 0.4 : 1 }),
-                }, item._parsing ? "…" : "DIBBS"),
+                item.nsn && h("button", {
+                  onClick: function () {
+                    window.open("https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=" + item.nsn.replace(/\D/g,"") + "&category=&Scope=", "_blank");
+                  },
+                  style: S.btn("rgba(201,168,76,.5)"),
+                }, "DIBBS ↗"),
               ),
 
               // Change link (when resolved)
@@ -330,22 +304,24 @@
                 style: { ...S.mono, fontSize: "9px", background: "none", border: "none", color: "rgba(201,168,76,.45)", cursor: "pointer", padding: "2px 0" },
               }, "change"),
 
-              // PDF candidates
+              // PDF / DIBBS candidates — click a chip to confirm
               item._candidates.length > 0 && pending && h("div", {
                 style: { display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginTop: "4px" },
               },
                 h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)" } },
-                  item._pdfName === "(auto)" ? "DIBBS found:" : "PDF found:"),
+                  (item._pdfName === "(auto)" ? "DIBBS" : "PDF") + " — click to confirm:"),
                 item._candidates.map(function (c) {
                   return h("button", {
                     key: c,
                     onClick: function () { updateItem(item.sol_number, { _resolved: c, _input: c }); },
+                    title: "Click to confirm this as the part number",
                     style: {
-                      ...S.mono, fontSize: "9px",
-                      background: "rgba(201,168,76,.07)",
-                      border: "1px solid rgba(201,168,76,.3)",
+                      ...S.mono, fontSize: "10px",
+                      background: "rgba(201,168,76,.12)",
+                      border: "1px solid rgba(201,168,76,.5)",
                       color: "var(--gold-solid)",
-                      padding: "2px 8px", cursor: "pointer",
+                      padding: "3px 10px", cursor: "pointer",
+                      fontWeight: "bold",
                     },
                   }, c);
                 }),
