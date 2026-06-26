@@ -73,26 +73,29 @@
       });
     });
 
-    // Auto-fetch P/N candidates from DIBBS via Netlify function on mount
+    // Fetch P/N candidates from DIBBS for one sol
+    const fetchDibbsPN = useCallback(function (solNum) {
+      updateItem(solNum, { _parsing: true });
+      fetch("/.netlify/functions/scc-dibbs-pn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sol_number: solNum }),
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        if (!data.ok || !data.candidates || !data.candidates.length) {
+          updateItem(solNum, { _parsing: false });
+          return;
+        }
+        updateItem(solNum, { _parsing: false, _candidates: data.candidates, _pdfName: "(auto)" });
+      }).catch(function () {
+        updateItem(solNum, { _parsing: false });
+      });
+    }, [updateItem]);
+
+    // Auto-fetch on mount for any item not yet resolved or enriched
     useEffect(function () {
       items.forEach(function (item) {
         if (item._resolved !== null || item._candidates.length || item._pdfName) return;
-
-        updateItem(item.sol_number, { _parsing: true });
-
-        fetch("/.netlify/functions/scc-dibbs-pn", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sol_number: item.sol_number }),
-        }).then(function (r) { return r.json(); }).then(function (data) {
-          if (!data.ok || !data.candidates || !data.candidates.length) {
-            updateItem(item.sol_number, { _parsing: false });
-            return;
-          }
-          updateItem(item.sol_number, { _parsing: false, _candidates: data.candidates, _pdfName: "(auto)" });
-        }).catch(function () {
-          updateItem(item.sol_number, { _parsing: false });
-        });
+        fetchDibbsPN(item.sol_number);
       });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -313,6 +316,11 @@
                   onClick: function () { updateItem(item.sol_number, { _resolved: "N/A", _input: "" }); },
                   style: S.btn("var(--body-dim)"),
                 }, "N/A"),
+                h("button", {
+                  onClick: function () { fetchDibbsPN(item.sol_number); },
+                  disabled: !!item._parsing,
+                  style: Object.assign({}, S.btn("rgba(201,168,76,.5)"), { opacity: item._parsing ? 0.4 : 1 }),
+                }, item._parsing ? "…" : "DIBBS"),
               ),
 
               // Change link (when resolved)
