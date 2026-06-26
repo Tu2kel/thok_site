@@ -624,6 +624,7 @@
     const [showBlastLog, setShowBlastLog] = useState(false);
     const [pnQueue, setPNQueue] = useState(null); // loaded from localStorage on mount
     const [pendingBlast, setPendingBlast] = useState(null); // { plan, records, isLive } — AUTO dry-run awaiting approval
+    const [resumeBlast, setResumeBlast] = useState(null); // saved blast from localStorage — shown as a resume banner
 
     const abortRef   = useRef(false);
     const modeRef     = useRef(mode);
@@ -632,10 +633,30 @@
     useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
     useEffect(() => { blastCapRef.current = blastCapPerFsc; }, [blastCapPerFsc]);
 
-    // ── Persist ──
+    // ── Persist sols/analysis ──
     useEffect(() => {
       storeSave({ mode, sols, scrapeDate, analysis });
     }, [mode, sols, scrapeDate, analysis]);
+
+    // ── Persist pendingBlast so a page reload doesn't lose an in-progress blast ──
+    const PENDING_BLAST_KEY = "scc_pending_blast_v1";
+    useEffect(() => {
+      if (pendingBlast) {
+        try { localStorage.setItem(PENDING_BLAST_KEY, JSON.stringify(pendingBlast)); } catch {}
+      } else {
+        try { localStorage.removeItem(PENDING_BLAST_KEY); } catch {}
+      }
+    }, [pendingBlast]);
+
+    // ── On mount: offer to resume any in-progress blast saved before the page refreshed ──
+    useEffect(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PENDING_BLAST_KEY) || "null");
+        if (saved && Array.isArray(saved.plan) && saved.plan.length && saved.idx != null) {
+          setResumeBlast(saved);
+        }
+      } catch {}
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Auto-blast trigger: intel chain fires "scc:auto_blast" window event ──
     // DibbsTab is always mounted, so we listen for the event rather than watching mount/unmount
@@ -880,10 +901,10 @@
       try {
         await window.SCC_AUTO_RFQ.sendOneVendorBatch(entryToSend, isLive ? {} : { testMode: true });
         addLog("✓ " + entry.dist.name + (isLive ? " <" + entry.dist.email + ">" : " [TEST → tu2kel.lg@gmail.com]") + " · " + entryToSend.records.length + " item(s) sent.", "ok");
-        refreshBlastLog();
       } catch (e) {
         addLog("✗ " + entry.dist.name + ": " + e.message, "err");
       }
+      refreshBlastLog(); // always refresh — catches both successes and logged failures
       const nextIdx = idx + 1;
       if (nextIdx < plan.length) {
         setPendingBlast({ plan, isLive, idx: nextIdx });
@@ -2564,6 +2585,37 @@
                 (showBlastLog ? "▲" : "▼") + " Blast Log (" + blastLog.length + ")",
               ),
           ),
+
+          // ── Resume blast banner — shown when a blast was interrupted by page refresh ──
+          resumeBlast && !pendingBlast &&
+            h("div", {
+              style: {
+                display: "flex", alignItems: "center", gap: "14px", padding: "12px 18px",
+                background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.4)",
+                borderRadius: "3px", marginBottom: "10px",
+              },
+            },
+              h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "rgba(245,158,11,.9)", letterSpacing: ".06em", flex: 1 } },
+                "⚡ Blast interrupted — " + (resumeBlast.plan.length - resumeBlast.idx) + " of " + resumeBlast.plan.length + " vendor(s) remaining (" + (resumeBlast.isLive ? "LIVE" : "TEST") + ")"),
+              h("button", {
+                onClick: () => { setPendingBlast(resumeBlast); setResumeBlast(null); },
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase",
+                  padding: "7px 18px", cursor: "pointer",
+                  background: "rgba(245,158,11,.15)", color: "rgba(245,158,11,.9)",
+                  border: "1px solid rgba(245,158,11,.5)", borderRadius: "3px",
+                },
+              }, "▶ Resume"),
+              h("button", {
+                onClick: () => { setResumeBlast(null); localStorage.removeItem("scc_pending_blast_v1"); },
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase",
+                  padding: "7px 12px", cursor: "pointer",
+                  background: "transparent", color: "rgba(245,240,232,.3)",
+                  border: "1px solid rgba(255,255,255,.1)", borderRadius: "3px",
+                },
+              }, "✕ Discard"),
+            ),
 
           // Blast log panel
           showBlastLog && blastLog.length > 0 &&
