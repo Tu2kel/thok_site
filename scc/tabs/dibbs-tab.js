@@ -558,7 +558,7 @@
     const [bwsLoading, setBwsLoading] = useState(false);
     const [rawExpanded, setRawExpanded] = useState(false);
     const [rawSearch, setRawSearch] = useState("");
-    const [liveMode, setLiveMode] = useState(false); // always starts OFF — must be explicitly enabled each session
+    const [liveMode, setLiveMode] = useState(true); // default LIVE — toggle off for test
     const [blastCapPerFsc, setBlastCapPerFsc] = useState(3);
     const blastCapRef = useRef(3);
     const [blasting, setBlasting] = useState(false);
