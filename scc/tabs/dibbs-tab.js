@@ -435,7 +435,7 @@
       },
         h("div", { style: { fontFamily: serif, fontSize: "26px", letterSpacing: ".06em", color: "rgba(245,240,232,.95)", lineHeight: 1, marginBottom: "8px" } }, entry.dist.name),
         h("div", { style: { display: "flex", gap: "14px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" } },
-          h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(201,168,76,.65)" } }, isLive ? entry.to : "→ tu2kel.lg@gmail.com"),
+          h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(201,168,76,.65)" } }, isLive ? (entry.dist.email || entry.to) : "→ tu2kel.lg@gmail.com"),
           entry.dist.cage && h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(245,240,232,.3)", letterSpacing: ".1em" } }, "CAGE " + entry.dist.cage),
           h("span", {
             style: { fontFamily: mono, fontSize: "14px", letterSpacing: ".1em", textTransform: "uppercase", padding: "2px 8px", borderRadius: "2px",
@@ -1747,7 +1747,13 @@
             onCancel:   () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
             onGoLive:   () => {
               if (!window.confirm("Switch this batch to LIVE?\n\nAll remaining sends will go to real vendor emails. This cannot be undone for emails already sent.")) return;
-              setPendingBlast(function (p) { return Object.assign({}, p, { isLive: true }); });
+              setPendingBlast(function (p) {
+                // Rewrite entry.to on every plan entry to the vendor's real email
+                var newPlan = p.plan.map(function (e) {
+                  return Object.assign({}, e, { to: e.dist.email || e.to });
+                });
+                return Object.assign({}, p, { isLive: true, plan: newPlan });
+              });
               setLiveMode(true);
               addLog("⬤ Switched to LIVE — remaining batches will send to real vendors.", "warn");
             },
