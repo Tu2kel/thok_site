@@ -1601,6 +1601,62 @@
             liveMode ? "● LIVE" : "○ TEST ONLY",
           ),
 
+          // Send test email to self
+          h("button", {
+            onClick: async () => {
+              const body = [
+                "Hi Imperio Federal Logistics,",
+                "",
+                "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there’s a chance it’s landing in spam folders. I’m reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
+                "",
+                "Now to the reason I’m reaching out — I have 2 active DLA procurement needs in your lane and need pricing and availability on the following:",
+                "",
+                "Item 1: VALVE,BUTTERFLY",
+                "  Part Number:  MS28889-1",
+                "  Quantity:     12",
+                "  Need By:      07/09/2026",
+                "  Ref #:        SPE4A726T0001T",
+                "",
+                "Item 2: COUPLING HALF,QUICK DISCONNECT",
+                "  Part Number:  52833-941-12",
+                "  Quantity:     4",
+                "  Need By:      07/12/2026",
+                "  Ref #:        SPE7M326T7015",
+                "",
+                "Requirements:",
+                "- Destination: Government delivery address (continental US)",
+                "- Payment: Immediate PO upon award. Supplier receives wire payment prior to shipment.",
+                "- Compliance: BAA/TAA required — please confirm country of origin for each item",
+                "- Shipping: FOB Destination required",
+                "- Condition: New/unused only. No substitutions without prior approval.",
+                "",
+                "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
+                "",
+                "Thank you for your time,",
+                "Anthony K Kelley | Founder & CEO",
+                "Imperio Federal Logistics \xb7 The House of Kel LLC \xb7 CAGE 152U4",
+                "SDVOSB | VetHUB | (254) 226-5216",
+                "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
+              ].join("\n");
+              try {
+                const res  = await fetch("/.netlify/functions/send-rfq", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ to: "tu2kel.lg@gmail.com", subject: "[EMAIL CHECK] RFQ Template Test | Imperio Federal Logistics", emailBody: body, attachCert: false }),
+                });
+                const data = await res.json();
+                if (data.ok) { addLog("✓ Test email sent to tu2kel.lg@gmail.com — check your inbox.", "ok"); }
+                else         { addLog("✗ Test email failed: " + (data.error || "unknown"), "err"); }
+              } catch (e)  { addLog("✗ Test email error: " + e.message, "err"); }
+            },
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em",
+              textTransform: "uppercase", padding: "7px 14px", cursor: "pointer",
+              border: "1px solid rgba(201,168,76,.4)", background: "rgba(201,168,76,.08)",
+              color: "rgba(201,168,76,.8)", transition: "all .15s",
+            },
+          }, "✉ Test Email"),
+
           // Run button
           h(
             "button",
