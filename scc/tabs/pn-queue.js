@@ -65,6 +65,7 @@
         var s = saved[r.sol_number] || {};
         return Object.assign({}, r, {
           _resolved:   s._resolved   !== undefined ? s._resolved : null,
+          _pns:        s._pns        || [],
           _input:      s._input      || "",
           _candidates: s._candidates || [],
           _parsing:    false,
@@ -74,10 +75,38 @@
       });
     });
 
+    // {solNum: bool} — whether the "+ Add P/N" input is open for a resolved item
+    const [addingMore, setAddingMore] = useState({});
+
     const updateItem = useCallback(function (solNum, patch) {
       setItems(function (prev) {
         return prev.map(function (it) {
           return it.sol_number === solNum ? Object.assign({}, it, patch) : it;
+        });
+      });
+    }, []);
+
+    // Add a P/N to a sol's confirmed list; closes addingMore mode
+    const confirmPN = useCallback(function (solNum, pn) {
+      pn = pn.trim();
+      if (!pn) return;
+      setItems(function (prev) {
+        return prev.map(function (it) {
+          if (it.sol_number !== solNum) return it;
+          var newPns = it._pns.includes(pn) ? it._pns : it._pns.concat([pn]);
+          return Object.assign({}, it, { _pns: newPns, _resolved: newPns.join(" / "), _input: "" });
+        });
+      });
+      setAddingMore(function (p) { return Object.assign({}, p, { [solNum]: false }); });
+    }, []);
+
+    // Remove one P/N from the confirmed list; resets to pending if list empties
+    const removePN = useCallback(function (solNum, pn) {
+      setItems(function (prev) {
+        return prev.map(function (it) {
+          if (it.sol_number !== solNum) return it;
+          var newPns = it._pns.filter(function (p) { return p !== pn; });
+          return Object.assign({}, it, { _pns: newPns, _resolved: newPns.length ? newPns.join(" / ") : null });
         });
       });
     }, []);
@@ -87,7 +116,7 @@
       try {
         sessionStorage.setItem(_sessionKey, JSON.stringify(
           items.map(function (it) {
-            return { sol_number: it.sol_number, _resolved: it._resolved, _input: it._input, _candidates: it._candidates, _pdfName: it._pdfName, _removed: it._removed };
+            return { sol_number: it.sol_number, _resolved: it._resolved, _pns: it._pns, _input: it._input, _candidates: it._candidates, _pdfName: it._pdfName, _removed: it._removed };
           })
         ));
       } catch (e) {}
@@ -175,6 +204,7 @@
           rec._pn_na = false;
         }
         delete rec._resolved;
+        delete rec._pns;
         delete rec._input;
         delete rec._candidates;
         delete rec._parsing;
@@ -231,9 +261,10 @@
       // ── Held sols ──
       h("div", null,
         items.map(function (item) {
-          var pending = item._resolved === null;
-          var isNA    = item._resolved === "N/A";
-          var hasPN   = item._resolved && item._resolved !== "N/A";
+          var pending    = item._resolved === null;
+          var isNA       = item._resolved === "N/A";
+          var hasPNs     = item._pns && item._pns.length > 0;
+          var showInput  = (pending || addingMore[item.sol_number]) && !item._removed;
 
           return h("div", {
             key: item.sol_number,
@@ -251,7 +282,7 @@
             // ── Left: item info + resolution controls ──
             h("div", null,
 
-              // Sol # + item name + status badge + remove button
+              // Sol # + item name + status badge
               h("div", { style: { display: "flex", gap: "10px", alignItems: "baseline", marginBottom: "6px", flexWrap: "wrap" } },
                 h("span", { style: { ...S.mono, fontSize: "10px", color: "var(--gold-dim)" } }, item.sol_number),
                 h("span", { style: { fontFamily: "Cormorant Garamond,serif", fontSize: "13px", color: item._removed ? "var(--body-faint)" : "var(--alabaster)" } },
@@ -262,12 +293,46 @@
                   ? h("span", { style: { ...S.mono, fontSize: "9px", color: "rgba(245,158,11,.85)", padding: "1px 6px", border: "1px solid rgba(245,158,11,.3)" } }, "⏸ pending")
                   : isNA
                     ? h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)", padding: "1px 6px", border: "1px solid rgba(255,255,255,.12)" } }, "N/A")
-                    : h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--accent-green)", padding: "1px 6px", border: "1px solid rgba(61,214,140,.3)" } },
-                        "P/N: " + item._resolved),
+                    : null,
               ),
 
-              // Input row (only when pending and not removed)
-              pending && !item._removed && h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "6px" } },
+              // Confirmed P/N tags (shown when resolved with actual P/Ns)
+              hasPNs && !item._removed && h("div", {
+                style: { display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px" },
+              },
+                item._pns.map(function (pn) {
+                  return h("span", {
+                    key: pn,
+                    style: {
+                      ...S.mono, fontSize: "10px",
+                      background: "rgba(61,214,140,.1)",
+                      border: "1px solid rgba(61,214,140,.4)",
+                      color: "var(--accent-green)",
+                      padding: "2px 8px",
+                      display: "inline-flex", alignItems: "center", gap: "5px",
+                    },
+                  },
+                    pn,
+                    h("button", {
+                      onClick: function () { removePN(item.sol_number, pn); },
+                      title: "Remove this P/N",
+                      style: {
+                        background: "none", border: "none",
+                        color: "rgba(61,214,140,.6)", cursor: "pointer",
+                        fontFamily: "monospace", fontSize: "11px", padding: "0 1px", lineHeight: 1,
+                      },
+                    }, "×"),
+                  );
+                }),
+                // + Add P/N button (shown when not already in add-more mode)
+                !addingMore[item.sol_number] && h("button", {
+                  onClick: function () { setAddingMore(function (p) { return Object.assign({}, p, { [item.sol_number]: true }); }); },
+                  style: Object.assign({}, S.btn("rgba(201,168,76,.5)"), { padding: "3px 10px" }),
+                }, "+ Add P/N"),
+              ),
+
+              // Input row (pending or adding more, not removed)
+              showInput && h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "6px" } },
                 h("input", {
                   type: "text",
                   placeholder: "Type part number…",
@@ -275,7 +340,7 @@
                   onChange: function (e) { updateItem(item.sol_number, { _input: e.target.value }); },
                   onKeyDown: function (e) {
                     if (e.key === "Enter" && item._input.trim()) {
-                      updateItem(item.sol_number, { _resolved: item._input.trim() });
+                      confirmPN(item.sol_number, item._input);
                     }
                   },
                   style: {
@@ -287,58 +352,63 @@
                   },
                 }),
                 h("button", {
-                  onClick: function () {
-                    var v = item._input.trim();
-                    if (v) updateItem(item.sol_number, { _resolved: v });
-                  },
+                  onClick: function () { confirmPN(item.sol_number, item._input); },
                   disabled: !item._input.trim(),
                   style: Object.assign({}, S.btn("var(--accent-green)", "rgba(61,214,140,.08)"), { opacity: item._input.trim() ? 1 : 0.4 }),
                 }, "Confirm"),
-                h("button", {
-                  onClick: function () { updateItem(item.sol_number, { _resolved: "N/A", _input: "" }); },
+                // N/A and Remove only shown when pending (not in add-more mode)
+                pending && h("button", {
+                  onClick: function () { updateItem(item.sol_number, { _resolved: "N/A", _input: "", _pns: [] }); },
                   style: S.btn("var(--body-dim)"),
                 }, "N/A"),
-                item.nsn && h("button", {
+                item.nsn && pending && h("button", {
                   onClick: function () {
                     window.open("https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=" + item.nsn.replace(/\D/g,"") + "&category=&Scope=", "_blank");
                   },
                   style: S.btn("rgba(201,168,76,.5)"),
                 }, "DIBBS ↗"),
-                h("button", {
-                  onClick: function () { updateItem(item.sol_number, { _removed: true, _resolved: null }); },
+                pending && h("button", {
+                  onClick: function () { updateItem(item.sol_number, { _removed: true, _resolved: null, _pns: [] }); },
                   style: S.btn("rgba(231,76,60,.5)"),
                 }, "✕ Remove"),
+                // Cancel for add-more mode
+                addingMore[item.sol_number] && h("button", {
+                  onClick: function () { setAddingMore(function (p) { return Object.assign({}, p, { [item.sol_number]: false }); }); },
+                  style: { ...S.mono, fontSize: "9px", background: "none", border: "none", color: "var(--body-faint)", cursor: "pointer" },
+                }, "cancel"),
               ),
 
-              // Change link (when resolved) / Undo link (when removed)
+              // Change / undo links
               item._removed
                 ? h("button", {
                     onClick: function () { updateItem(item.sol_number, { _removed: false }); },
                     style: { ...S.mono, fontSize: "9px", background: "none", border: "none", color: "rgba(201,168,76,.45)", cursor: "pointer", padding: "2px 0" },
                   }, "undo")
-                : !pending && h("button", {
-                    onClick: function () { updateItem(item.sol_number, { _resolved: null, _input: "", _candidates: [] }); },
+                : isNA && h("button", {
+                    onClick: function () { updateItem(item.sol_number, { _resolved: null, _input: "", _candidates: [], _pns: [] }); },
                     style: { ...S.mono, fontSize: "9px", background: "none", border: "none", color: "rgba(201,168,76,.45)", cursor: "pointer", padding: "2px 0" },
                   }, "change"),
 
-              // PDF / DIBBS candidates — click a chip to confirm
-              item._candidates.length > 0 && pending && h("div", {
+              // PDF / DIBBS candidates — click a chip to confirm (or add to list)
+              item._candidates.length > 0 && (pending || addingMore[item.sol_number]) && h("div", {
                 style: { display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginTop: "4px" },
               },
                 h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)" } },
                   (item._pdfName === "(auto)" ? "DIBBS" : "PDF") + " — click to confirm:"),
                 item._candidates.map(function (c) {
+                  var alreadyAdded = item._pns && item._pns.includes(c);
                   return h("button", {
                     key: c,
-                    onClick: function () { updateItem(item.sol_number, { _resolved: c, _input: c }); },
-                    title: "Click to confirm this as the part number",
+                    onClick: function () { if (!alreadyAdded) confirmPN(item.sol_number, c); },
+                    title: alreadyAdded ? "Already added" : "Click to confirm this as the part number",
                     style: {
                       ...S.mono, fontSize: "10px",
-                      background: "rgba(201,168,76,.12)",
-                      border: "1px solid rgba(201,168,76,.5)",
-                      color: "var(--gold-solid)",
-                      padding: "3px 10px", cursor: "pointer",
+                      background: alreadyAdded ? "rgba(61,214,140,.08)" : "rgba(201,168,76,.12)",
+                      border: "1px solid " + (alreadyAdded ? "rgba(61,214,140,.3)" : "rgba(201,168,76,.5)"),
+                      color: alreadyAdded ? "rgba(61,214,140,.5)" : "var(--gold-solid)",
+                      padding: "3px 10px", cursor: alreadyAdded ? "default" : "pointer",
                       fontWeight: "bold",
+                      textDecoration: alreadyAdded ? "line-through" : "none",
                     },
                   }, c);
                 }),
