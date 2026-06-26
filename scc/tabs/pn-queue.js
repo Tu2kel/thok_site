@@ -112,6 +112,7 @@
     }, []);
 
     // Persist items to localStorage whenever they change
+    const [lastSaved, setLastSaved] = useState(null);
     useEffect(function () {
       try {
         localStorage.setItem(_sessionKey, JSON.stringify(
@@ -119,6 +120,7 @@
             return { sol_number: it.sol_number, _resolved: it._resolved, _pns: it._pns, _input: it._input, _candidates: it._candidates, _pdfName: it._pdfName, _removed: it._removed };
           })
         ));
+        setLastSaved(new Date().toLocaleTimeString());
       } catch (e) {}
     }, [items]);
 
@@ -270,6 +272,7 @@
           resolvedCount + " / " + activeItems.length + " resolved" +
           (items.length > activeItems.length ? " (" + (items.length - activeItems.length) + " removed)" : "") +
           (allResolved ? " — ready to blast" : "")),
+        lastSaved && h("div", { style: { ...S.mono, fontSize: "9px", color: "rgba(61,214,140,.5)" } }, "✓ saved " + lastSaved),
         h("div", { style: { flex: 1 } }),
         h("button", {
           onClick: handleRelease,
