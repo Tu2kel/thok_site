@@ -112,7 +112,7 @@
       nsn: rec.nsn || "",
       fsc: rec.fsc || "",
       item_name: rec.item_name || "",
-      ref_part_number: rec.piece_part_no || "",
+      ref_part_number: rec.ref_part_number || rec.piece_part_no || "",
       quantity: String(rec.qty || ""),
       unit_issue: rec.unit_issue || "",
       unit_price: String(rec.unit_price || ""),
@@ -172,7 +172,7 @@
       delivery_days: s.delivery_days,
       set_aside: s.set_aside,
       supplier_restrictions: s.supplier_restrictions,
-      piece_part_no: s.piece_part_no,
+      piece_part_no: s.piece_part_no || s.ref_part_number,
       material: s.material,
       part_char: s.part_char,
       quote_due: s.quote_due,
@@ -269,13 +269,14 @@
         const oemSrc = (s.approved_sources || []).find(
           (a) => a.pn && a.pn.length > 1,
         );
+        const _piecePn = s.piece_part_no || s.ref_part_number || "";
         const partNum =
           (oemSrc
             ? oemSrc.pn +
-              (s.piece_part_no && s.piece_part_no !== oemSrc.pn
-                ? " / " + s.piece_part_no
+              (_piecePn && _piecePn !== oemSrc.pn
+                ? " / " + _piecePn
                 : "")
-            : s.piece_part_no) || "";
+            : _piecePn) || "";
         if (partNum)
           lines.push(
             "     Part #: " +
