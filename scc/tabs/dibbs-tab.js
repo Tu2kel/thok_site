@@ -560,6 +560,7 @@
     const [rawSearch, setRawSearch] = useState("");
     const [liveMode, setLiveMode] = useState(true); // default LIVE — toggle off for test
     const [blastCapPerFsc, setBlastCapPerFsc] = useState(3);
+    const [enriching, setEnriching] = useState(false);
     const blastCapRef = useRef(3);
     const [blasting, setBlasting] = useState(false);
     const [blastLog, setBlastLog] = useState([]);
@@ -1657,6 +1658,39 @@
               color: "rgba(201,168,76,.8)", transition: "all .15s",
             },
           }, "✉ Test Email"),
+
+          // Enrich vendor emails via SBA scraper
+          h("button", {
+            disabled: enriching,
+            onClick: async () => {
+              if (!window.confirm("Run SBA email enrichment?\n\nThis uses Browserless to scrape the SBA Small Business Search and fill in emails for SAM-imported vendors that have none. Takes ~30s.")) return;
+              setEnriching(true);
+              addLog("ENRICH ▶ Scraping SBA for vendor emails…", "info");
+              try {
+                const r = await fetch("/.netlify/functions/enrich-dist-emails", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({}),
+                });
+                const d = await r.json();
+                if (d.ok) {
+                  addLog("ENRICH ▶ " + d.total_scraped + " scraped · " + d.matched + " vendors updated with email.", "ok");
+                } else {
+                  addLog("ENRICH ✗ " + (d.error || "unknown error"), "err");
+                }
+              } catch (e) {
+                addLog("ENRICH ✗ " + e.message, "err");
+              }
+              setEnriching(false);
+            },
+            style: {
+              fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".1em",
+              textTransform: "uppercase", padding: "7px 14px", cursor: "pointer",
+              border: "1px solid rgba(61,214,140,.35)", background: "rgba(61,214,140,.07)",
+              color: "rgba(61,214,140,.8)", transition: "all .15s",
+              opacity: enriching ? 0.6 : 1,
+            },
+          }, enriching ? "⟳ Enriching…" : "⚡ Enrich Emails"),
 
           // Run button
           h(

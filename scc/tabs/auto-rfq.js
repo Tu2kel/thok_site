@@ -182,16 +182,20 @@
 
   // ── BATCHED EMAIL BUILDER ─────────────────────────────────────────────
   // One plain-text email per vendor listing all their matched solicitations.
+  // Only items with a confirmed ref_part_number are included — no P/N = no email line.
   function buildBatchEmail(dist, records) {
-    const count = records.length;
+    // Hard gate: never send items without a confirmed part number (No AIDC rule)
+    var withPN = records.filter(function(r) { return r.ref_part_number && r.ref_part_number !== "N/A"; });
+    if (!withPN.length) return null;
+    const count = withPN.length;
 
     const subject = count === 1
-      ? "RFQ – " + (records[0].item_name || "Item") + " | " + records[0].sol_number + " | Imperio Federal Logistics"
+      ? "RFQ – " + (withPN[0].item_name || "Item") + " | " + withPN[0].sol_number + " | Imperio Federal Logistics"
       : "RFQ – " + count + " Items Needed | Imperio Federal Logistics";
 
-    const itemLines = records.map(function (record, i) {
+    const itemLines = withPN.map(function (record, i) {
       var lines = ["Item " + (i + 1) + ": " + (record.item_name || "—")];
-      if (record.ref_part_number) lines.push("  Part Number:  " + record.ref_part_number);
+      lines.push("  Part Number:  " + record.ref_part_number);
       var qty = record.quantity ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "") : "—";
       lines.push("  Quantity:     " + qty);
       lines.push("  Need By:      " + (quoteDueDisplay(record.quote_due) || "—"));
@@ -377,10 +381,13 @@
     if (opts.dryRun) {
       var plan = [];
       for (var dre of vendorMap.values()) {
-        var dreEmail = buildBatchEmail(dre.dist, dre.records);
+        var dreRecs = dre.records.filter(function(r) { return r.ref_part_number && r.ref_part_number !== "N/A"; });
+        if (!dreRecs.length) { addLog("Skip " + dre.dist.name + " — no confirmed P/N items"); continue; }
+        var dreEmail = buildBatchEmail(dre.dist, dreRecs);
+        if (!dreEmail) continue;
         plan.push({
           dist:     dre.dist,
-          records:  dre.records,
+          records:  dreRecs,
           overflow: dre.overflow || [],
           reasons:  Array.from(dre.reasons),
           to:       opts.testMode ? TEST_EMAIL : dre.dist.email,
@@ -395,10 +402,12 @@
     for (const entry of vendorMap.values()) {
       var dist       = entry.dist;
       var reasons    = entry.reasons;
-      var vendorRecs = entry.records;
+      var vendorRecs = entry.records.filter(function(r) { return r.ref_part_number && r.ref_part_number !== "N/A"; });
+      if (!vendorRecs.length) { addLog("Skip " + dist.name + " — no confirmed P/N items"); continue; }
       var reasonStr  = Array.from(reasons).join(" · ");
 
       var emailData = buildBatchEmail(dist, vendorRecs);
+      if (!emailData) { addLog("Skip " + dist.name + " — buildBatchEmail returned null"); continue; }
       var subject   = emailData.subject;
       var body      = emailData.body;
       var toAddr    = opts.testMode ? TEST_EMAIL : dist.email;
@@ -528,7 +537,10 @@
   async function sendOneVendorBatch(entry, opts) {
     opts = opts || {};
     var testMode  = !!opts.testMode;
-    var emailData = buildBatchEmail(entry.dist, entry.records);
+    var confirmedRecs = entry.records.filter(function(r) { return r.ref_part_number && r.ref_part_number !== "N/A"; });
+    if (!confirmedRecs.length) throw new Error("Blocked — no confirmed P/N items for " + entry.dist.name);
+    var emailData = buildBatchEmail(entry.dist, confirmedRecs);
+    if (!emailData) throw new Error("Blocked — buildBatchEmail returned null for " + entry.dist.name);
     var toAddr    = testMode ? TEST_EMAIL : (entry.dist.email || entry.to);
     var subj      = testMode ? "[TEST] " + emailData.subject : emailData.subject;
     var reasonStr = Array.isArray(entry.reasons) ? entry.reasons.join(" · ") : (entry.reasons || "");
@@ -538,9 +550,9 @@
       live:        !testMode,
       vendor:      entry.dist.name,
       email:       toAddr,
-      item_count:  entry.records.length,
-      sol_numbers: entry.records.map(function (r) { return r.sol_number; }),
-      items:       entry.records.map(function (r) { return r.item_name || r.sol_number; }),
+      item_count:  confirmedRecs.length,
+      sol_numbers: confirmedRecs.map(function (r) { return r.sol_number; }),
+      items:       confirmedRecs.map(function (r) { return r.item_name || r.sol_number; }),
       subject:     subj,
       match_reason: reasonStr,
       sent:        false,
