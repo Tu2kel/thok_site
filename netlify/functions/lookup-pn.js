@@ -1,30 +1,41 @@
 // netlify/functions/lookup-pn.js
 // Looks up approved-source part numbers for a given NSN from DIBBS.
-// Handles the DoD consent banner (ASP.NET form POST) before scraping.
+// Handles DIBBS DoD consent banner (chunked ASP.NET VIEWSTATE form POST).
 
 const BASE = "https://www.dibbs.bsm.dla.mil";
 const UA   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
-function extractHidden(html, name) {
-  const re = new RegExp(
-    'name=["\']' + name + '["\'][^>]+value=["\']([^"\']*)["\']' +
-    '|value=["\']([^"\']*)["\'][^>]+name=["\']' + name + '["\']'
-  );
-  const m = html.match(re);
-  return m ? (m[1] !== undefined ? m[1] : m[2] || "") : "";
+// Extract ALL hidden inputs from a page as { name: value } map
+function extractAllHidden(html) {
+  const fields = {};
+  const re = /<input[^>]+type=["']hidden["'][^>]*>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const tag = m[0];
+    const nameM  = tag.match(/name=["']([^"']+)["']/);
+    const valueM = tag.match(/value=["']([^"']*)["']/);
+    if (nameM) fields[nameM[1]] = valueM ? valueM[1] : "";
+  }
+  return fields;
 }
 
 function mergeCookies(existing, header) {
   if (!header) return existing;
   const jar = {};
-  existing.split(";").forEach(function (c) {
-    const [k, v] = c.trim().split("=");
-    if (k && k.trim()) jar[k.trim()] = v || "";
+  (existing || "").split(";").forEach(function (c) {
+    const eq = c.indexOf("=");
+    if (eq < 0) return;
+    const k = c.slice(0, eq).trim();
+    if (k) jar[k] = c.slice(eq + 1).trim();
   });
+  // set-cookie header: multiple cookies separated by commas but values can contain commas
+  // split on ", " followed by a word+= pattern
   header.split(/,(?=\s*[A-Za-z_][^=]+=)/).forEach(function (c) {
     const kv = c.trim().split(";")[0];
-    const [k, v] = kv.split("=");
-    if (k && k.trim()) jar[k.trim()] = v || "";
+    const eq = kv.indexOf("=");
+    if (eq < 0) return;
+    const k = kv.slice(0, eq).trim();
+    if (k) jar[k] = kv.slice(eq + 1).trim();
   });
   return Object.entries(jar).map(function ([k, v]) { return k + "=" + v; }).join("; ");
 }
@@ -51,8 +62,8 @@ function parsePartNumbers(html) {
       cells.length >= 2 &&
       /^[A-Z0-9]{5}$/i.test(cells[0]) &&
       cells[1].length > 1 &&
-      cells[1].length < 50 &&
-      !/^[A-Z0-9]{5}$/i.test(cells[1]) // avoid grabbing another CAGE
+      cells[1].length < 60 &&
+      !/^[A-Z0-9]{5}$/i.test(cells[1])
     ) {
       if (!parts.includes(cells[1])) parts.push(cells[1]);
     }
@@ -77,35 +88,19 @@ exports.handler = async function (event) {
   const warningUrl = BASE + "/dodwarning.aspx?goto=" + encodeURIComponent(gotoPath);
 
   try {
-    // 1. GET warning page
-    const r1   = await fetch(warningUrl, { headers: { "User-Agent": UA }, redirect: "manual" });
+    // 1. GET warning page — collect all hidden fields + cookies
+    const r1    = await fetch(warningUrl, { headers: { "User-Agent": UA }, redirect: "manual" });
     const html1 = await r1.text();
     let cookies = mergeCookies("", r1.headers.get("set-cookie") || "");
 
-    // Extract ASP.NET hidden fields
-    const vs  = extractHidden(html1, "__VIEWSTATE");
-    const vsg = extractHidden(html1, "__VIEWSTATEGENERATOR");
-    const ev  = extractHidden(html1, "__EVENTVALIDATION");
+    // Collect ALL hidden fields (handles chunked VIEWSTATE)
+    const hidden = extractAllHidden(html1);
 
-    // Find the OK button name
-    let btnName = "btn_ok";
-    const btnPatterns = [
-      /name="([^"]+)"[^>]*value="[Oo][Kk]"/,
-      /value="[Oo][Kk]"[^>]*name="([^"]+)"/,
-      /<(?:input|button)[^>]+type="submit"[^>]*name="([^"]+)"/i,
-    ];
-    for (const pat of btnPatterns) {
-      const m = html1.match(pat);
-      if (m) { btnName = m[1]; break; }
-    }
+    // Add the OK button — actual name is "butAgree", value "OK"
+    hidden["butAgree"] = "OK";
 
-    // 2. POST consent (click OK)
-    const form = new URLSearchParams({
-      __VIEWSTATE:          vs,
-      __VIEWSTATEGENERATOR: vsg,
-      __EVENTVALIDATION:    ev,
-      [btnName]:            "Ok",
-    });
+    // 2. POST consent
+    const form = new URLSearchParams(hidden);
 
     const r2 = await fetch(warningUrl, {
       method:   "POST",
@@ -121,7 +116,9 @@ exports.handler = async function (event) {
 
     cookies = mergeCookies(cookies, r2.headers.get("set-cookie") || "");
     let loc = r2.headers.get("location") || gotoPath;
-    if (!loc.startsWith("http")) loc = BASE + (loc.startsWith("/") ? "" : "/") + loc.replace(/^\//, "");
+    if (!loc.startsWith("http")) {
+      loc = BASE + (loc.startsWith("/") ? loc : "/" + loc);
+    }
 
     // 3. GET the NSN page
     const r3      = await fetch(loc, { headers: { "User-Agent": UA, "Cookie": cookies } });
@@ -135,7 +132,7 @@ exports.handler = async function (event) {
       body: JSON.stringify({ ok: true, partNumbers, nsn: nsnClean }),
     };
   } catch (e) {
-    console.error("lookup-pn error:", e.message);
+    console.error("lookup-pn error:", e.message, e.stack);
     return { statusCode: 500, body: JSON.stringify({ ok: false, error: e.message }) };
   }
 };
