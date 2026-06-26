@@ -47,7 +47,7 @@
   }
 
   // ── COMPONENT ─────────────────────────────────────────────────────────
-  function PNQueuePanel({ queue, onRelease, onDismiss }) {
+  function PNQueuePanel({ queue, onRelease, onDismiss, autoRun }) {
     // Stable session key — survives tab switches and parent re-renders
     var _sessionKey = "pnq:" + queue.records.map(function (r) { return r.sol_number; }).join(",");
 
@@ -79,6 +79,8 @@
     const [addingMore, setAddingMore] = useState({});
     // {solNum: bool} — whether DIBBS auto-lookup is in flight
     const [lookingUp, setLookingUp] = useState({});
+    // track whether autoRun already fired so it only runs once per mount
+    const autoFired = useRef(false);
 
     const updateItem = useCallback(function (solNum, patch) {
       setItems(function (prev) {
@@ -265,6 +267,29 @@
         setTimeout(function () { lookupPN(it.sol_number, it.nsn); }, i * 800);
       });
     }, [items, lookupPN]);
+
+    // Auto-mode: fire lookup-all on mount (500ms delay lets items render first)
+    useEffect(function () {
+      if (!autoRun || autoFired.current) return;
+      autoFired.current = true;
+      var t = setTimeout(function () { handleLookupAll(); }, 500);
+      return function () { clearTimeout(t); };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Auto-mode: once all lookups settle, auto-release P/N-only items
+    useEffect(function () {
+      if (!autoRun || !autoFired.current) return;
+      var anyInFlight = Object.values(lookingUp).some(Boolean);
+      if (anyInFlight) return; // still running
+      var withPN = activeItems.filter(function (it) { return it._resolved && it._resolved !== "N/A"; });
+      if (!withPN.length) return; // nothing resolved yet (lookups not started)
+      // Give a short settle window so the last setState flushes
+      var t = setTimeout(function () {
+        clearSession();
+        onRelease(buildReleasePayload(withPN), queue.opts || {});
+      }, 1200);
+      return function () { clearTimeout(t); };
+    }, [lookingUp]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const [bulkOpen, setBulkOpen] = useState(false);
     const [bulkText, setBulkText] = useState("");

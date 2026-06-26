@@ -1785,6 +1785,7 @@
         h(window.SCC_TABS.PNQueuePanel, {
           queue:     pnQueue,
           onRelease: handleQueueRelease,
+          autoRun:   mode === "auto",
           onDismiss: () => {
             if (window.SCC_AUTO_RFQ) window.SCC_AUTO_RFQ.clearPNQueue();
             setPNQueue(null);
