@@ -216,6 +216,30 @@
       onRelease(resolved, queue.opts || {});
     }, [allResolved, items, queue.opts, onRelease, clearSession]);
 
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [bulkText, setBulkText] = useState("");
+
+    const handleBulkFill = useCallback(function () {
+      var lines = bulkText.split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+      var filled = 0;
+      lines.forEach(function (line) {
+        // Accept: "SOL_NUM: PN", "SOL_NUM PN", "SOL_NUM=PN", or just "PN" (matched by position)
+        var m = line.match(/^([A-Z0-9]+)\s*[:=\s]\s*(.+)$/i);
+        if (!m) return;
+        var sol = m[1].trim().toUpperCase();
+        var pn  = m[2].trim();
+        var match = items.find(function (it) { return it.sol_number.toUpperCase() === sol; });
+        if (!match) return;
+        var newPns = pn.toUpperCase() === "N/A" ? [] : [pn];
+        var resolved = pn.toUpperCase() === "N/A" ? "N/A" : pn;
+        updateItem(match.sol_number, { _pns: newPns, _resolved: resolved, _input: pn.toUpperCase() === "N/A" ? "" : pn });
+        filled++;
+      });
+      setBulkText("");
+      setBulkOpen(false);
+      if (filled === 0) alert("No sol numbers matched. Format: SPE7M326T7015: 52833-941-12");
+    }, [bulkText, items, updateItem]);
+
     // ── Styles ──
     var S = {
       mono: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px" },
@@ -255,7 +279,36 @@
             allResolved ? "rgba(61,214,140,.1)" : "transparent"
           ), { opacity: allResolved ? 1 : 0.4 }),
         }, "Release Batch →"),
+        h("button", {
+          onClick: function () { setBulkOpen(function (v) { return !v; }); },
+          style: S.btn("rgba(201,168,76,.5)"),
+        }, bulkOpen ? "✕ Close" : "⚡ Bulk Fill"),
         h("button", { onClick: function () { clearSession(); onDismiss(); }, style: S.btn("rgba(231,76,60,.5)") }, "✕ Discard"),
+      ),
+
+      // ── Bulk fill strip ──
+      bulkOpen && h("div", { style: { marginBottom: "14px", padding: "12px 14px", background: "rgba(201,168,76,.05)", border: "1px solid rgba(201,168,76,.2)" } },
+        h("div", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)", marginBottom: "6px" } },
+          "One line per sol — format: SOL_NUMBER: PART_NUMBER  (or N/A)"),
+        h("div", { style: { display: "flex", gap: "8px", alignItems: "flex-start" } },
+          h("textarea", {
+            value: bulkText,
+            onChange: function (e) { setBulkText(e.target.value); },
+            placeholder: items.map(function (it) { return it.sol_number + ": "; }).join("\n"),
+            rows: Math.min(items.length, 12),
+            style: {
+              flex: 1, ...S.mono, fontSize: "10px",
+              background: "var(--inset-bg)", color: "var(--alabaster)",
+              border: "1px solid rgba(201,168,76,.25)", padding: "8px 10px",
+              resize: "vertical", outline: "none", lineHeight: 1.7,
+            },
+          }),
+          h("button", {
+            onClick: handleBulkFill,
+            disabled: !bulkText.trim(),
+            style: Object.assign({}, S.btn("var(--accent-green)", "rgba(61,214,140,.08)"), { opacity: bulkText.trim() ? 1 : 0.4, alignSelf: "stretch" }),
+          }, "Apply"),
+        ),
       ),
 
       // ── Held sols ──
