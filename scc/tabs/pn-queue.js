@@ -90,12 +90,12 @@
         body: JSON.stringify({ sol_number: solNum }),
       }).then(function (r) { return r.json(); }).then(function (data) {
         if (!data.ok || !data.candidates || !data.candidates.length) {
-          updateItem(solNum, { _parsing: false });
+          updateItem(solNum, { _parsing: false, _dibbsErr: data.error || (data.debug ? "no PN found" : "no candidates") });
           return;
         }
-        updateItem(solNum, { _parsing: false, _candidates: data.candidates, _pdfName: "(auto)" });
-      }).catch(function () {
-        updateItem(solNum, { _parsing: false });
+        updateItem(solNum, { _parsing: false, _candidates: data.candidates, _pdfName: "(auto)", _dibbsErr: null });
+      }).catch(function (e) {
+        updateItem(solNum, { _parsing: false, _dibbsErr: e.message || "fetch failed" });
       });
     }, [updateItem]);
 
@@ -330,10 +330,15 @@
               }, "change"),
 
               // PDF candidates
+              item._dibbsErr && pending && h("div", {
+                style: { ...S.mono, fontSize: "9px", color: "rgba(231,76,60,.7)", marginTop: "4px" },
+              }, "DIBBS: " + item._dibbsErr),
+
               item._candidates.length > 0 && pending && h("div", {
                 style: { display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginTop: "4px" },
               },
-                h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)" } }, "PDF found:"),
+                h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)" } },
+                  item._pdfName === "(auto)" ? "DIBBS found:" : "PDF found:"),
                 item._candidates.map(function (c) {
                   return h("button", {
                     key: c,

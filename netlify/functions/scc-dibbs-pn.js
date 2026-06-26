@@ -1,71 +1,89 @@
 // netlify/functions/scc-dibbs-pn.js
 // Fetch P/N candidates for a DLA solicitation directly from DIBBS HTML.
-// Handles the DoD consent banner via plain HTTP (no Puppeteer needed).
-// Action: lookupPN — returns { candidates: string[], suppliers: [{name,cage,pn}] }
+// Handles the DoD consent banner via plain HTTP — no Puppeteer needed.
 
 const DIBBS = "https://www.dibbs.bsm.dla.mil";
 const UA    = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36";
 
-// ── Banner dance — single request chain, no persistent cookie jar ──────────
+// Safe multi-cookie extractor — uses getSetCookie() (Node 18+) when available,
+// falls back to splitting the combined header on safe boundaries.
+function parseCookieHeaders(headers) {
+  if (typeof headers.getSetCookie === "function") {
+    return headers.getSetCookie().map(c => c.split(";")[0].trim());
+  }
+  const raw = headers.get("set-cookie") || "";
+  if (!raw) return [];
+  // Split on ", " only when followed by a cookie name (word=)
+  return raw.split(/,(?=\s*[A-Za-z0-9_-]+=)/).map(c => c.split(";")[0].trim());
+}
+
+// ── Banner dance ────────────────────────────────────────────────────────────
 async function fetchWithBanner(path) {
   const bannerPath = `/dodwarning.aspx?goto=${encodeURIComponent(path)}`;
   const bannerUrl  = DIBBS + bannerPath;
+  const CONSENT    = "DodWarningAccepted=true; dodwarningaccepted=true";
 
-  // 1. GET banner page — get ASP.NET session cookie + VIEWSTATE
+  // 1. Try the sol page directly with consent cookies already set
+  const directRes = await fetch(DIBBS + path, {
+    headers: { "User-Agent": UA, Cookie: CONSENT },
+    redirect: "follow",
+    signal: AbortSignal.timeout(12000),
+  });
+  const directHtml = await directRes.text();
+
+  // If no banner, we're in
+  if (!directHtml.includes("btnOK") && directHtml.length > 500) {
+    return { ok: true, html: directHtml };
+  }
+
+  // 2. Banner is present — GET it to collect ASP.NET session cookie
   const bannerRes = await fetch(bannerUrl, {
     headers: { "User-Agent": UA },
     redirect: "follow",
+    signal: AbortSignal.timeout(10000),
   });
   const bannerHtml = await bannerRes.text();
-  const setCookies  = bannerRes.headers.get("set-cookie") || "";
+  const cookies1   = parseCookieHeaders(bannerRes.headers);
 
-  // Build cookie string from all set-cookie headers
-  // node-fetch returns a single header value; in Netlify runtime it may be csv
-  const cookieStr = setCookies.split(/,(?=\s*\w+=)/).map(c => c.split(";")[0].trim()).join("; ");
-  const cookies   = cookieStr + "; DodWarningAccepted=true; dodwarningaccepted=true";
-
-  // If already past the banner (no btnOK), just fetch the target
   if (!bannerHtml.includes("btnOK")) {
-    return fetch(DIBBS + path, {
-      headers: { "User-Agent": UA, Cookie: cookies },
+    // Banner gone after following redirect — session was set
+    const solRes  = await fetch(DIBBS + path, {
+      headers: { "User-Agent": UA, Cookie: [...cookies1, CONSENT].join("; ") },
       redirect: "follow",
+      signal: AbortSignal.timeout(12000),
     });
+    return { ok: solRes.ok, html: await solRes.text() };
   }
 
-  // 2. Extract ASP.NET hidden fields
-  const vs  = (bannerHtml.match(/id="__VIEWSTATE"\s+value="([^"]+)"/)         || [])[1] || "";
-  const vsg = (bannerHtml.match(/id="__VIEWSTATEGENERATOR"\s+value="([^"]+)"/) || [])[1] || "";
-  const ev  = (bannerHtml.match(/id="__EVENTVALIDATION"\s+value="([^"]+)"/)    || [])[1] || "";
+  // 3. Extract ASP.NET hidden fields and POST acceptance
+  const vs  = (bannerHtml.match(/id="__VIEWSTATE"\s+value="([^"]*)"/)         || [])[1] || "";
+  const vsg = (bannerHtml.match(/id="__VIEWSTATEGENERATOR"\s+value="([^"]*)"/) || [])[1] || "";
+  const ev  = (bannerHtml.match(/id="__EVENTVALIDATION"\s+value="([^"]*)"/)    || [])[1] || "";
 
-  // 3. POST to accept the banner — capture any new cookies
   const postBody = new URLSearchParams({
-    __VIEWSTATE:          vs,
-    __VIEWSTATEGENERATOR: vsg,
-    __EVENTVALIDATION:    ev,
-    __EVENTTARGET: "",
-    __EVENTARGUMENT: "",
-    btnOK: "OK",
+    __VIEWSTATE: vs, __VIEWSTATEGENERATOR: vsg, __EVENTVALIDATION: ev,
+    __EVENTTARGET: "", __EVENTARGUMENT: "", btnOK: "OK",
   }).toString();
 
+  const cookieHeader1 = [...cookies1, CONSENT].join("; ");
   const postRes = await fetch(bannerUrl, {
-    method:   "POST",
-    headers:  { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded", Cookie: cookies, Referer: bannerUrl },
-    body:     postBody,
-    redirect: "manual", // don't follow — just grab the cookies
+    method:  "POST",
+    headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded",
+               Cookie: cookieHeader1, Referer: bannerUrl },
+    body:    postBody,
+    redirect: "manual",
+    signal: AbortSignal.timeout(10000),
   });
+  const cookies2      = parseCookieHeaders(postRes.headers);
+  const cookieHeader2 = [...cookies1, ...cookies2, CONSENT].join("; ");
 
-  const postCookies = (postRes.headers.get("set-cookie") || "")
-    .split(/,(?=\s*\w+=)/)
-    .map(c => c.split(";")[0].trim())
-    .join("; ");
-
-  const finalCookies = [cookies, postCookies, "DodWarningAccepted=true"].filter(Boolean).join("; ");
-
-  // 4. Fetch the actual target page with all cookies
-  return fetch(DIBBS + path, {
-    headers: { "User-Agent": UA, Cookie: finalCookies },
+  // 4. Fetch the actual sol page
+  const solRes = await fetch(DIBBS + path, {
+    headers: { "User-Agent": UA, Cookie: cookieHeader2 },
     redirect: "follow",
+    signal: AbortSignal.timeout(12000),
   });
+  return { ok: solRes.ok, html: await solRes.text() };
 }
 
 // ── HTML helpers ──────────────────────────────────────────────────────────
@@ -98,12 +116,9 @@ function parseSuppliers(html) {
     if (cageIdx === -1) continue;
     let name, cage, pn;
     if (cageIdx === 0) {
-      cage = cells[0].trim();
-      name = cells[1] ? cells[1].trim() : "";
-      pn   = cells[2] ? cells[2].trim() : "";
+      cage = cells[0].trim(); name = cells[1] ? cells[1].trim() : ""; pn = cells[2] ? cells[2].trim() : "";
     } else {
-      name = cells.slice(0, cageIdx).join(" ").trim();
-      cage = cells[cageIdx].trim();
+      name = cells.slice(0, cageIdx).join(" ").trim(); cage = cells[cageIdx].trim();
       pn   = cells.slice(cageIdx + 1).join(" ").trim();
     }
     if (!name || name.length < 2) continue;
@@ -132,21 +147,21 @@ exports.handler = async (event) => {
 
   try {
     const solPath = `/rfq/rfqrec.aspx?sn=${encodeURIComponent(sol_number.trim().toUpperCase())}`;
-    const res = await fetchWithBanner(solPath);
+    const result = await fetchWithBanner(solPath);
 
-    if (!res.ok) return fail("DIBBS returned " + res.status);
+    if (!result.ok) return fail("DIBBS returned error status");
+    if (!result.html || result.html.length < 500) return fail("Empty DIBBS response — sol may be closed or DIBBS blocked this IP");
+    if (result.html.includes("btnOK")) return fail("DIBBS banner could not be dismissed from Netlify IP");
 
-    const html = await res.text();
-    if (html.length < 500) return fail("Empty or redirected response from DIBBS");
-
-    const suppliers = parseSuppliers(html);
+    const suppliers  = parseSuppliers(result.html);
     const candidates = [...new Set(
-      suppliers
-        .map(s => s.pn)
-        .filter(pn => pn && pn.length > 1 && pn.length < 30)
+      suppliers.map(s => s.pn).filter(pn => pn && pn.length > 1 && pn.length < 30)
     )];
 
-    return ok({ candidates, suppliers });
+    // Include a debug snippet so we can verify what DIBBS returned if empty
+    const debug = candidates.length ? undefined : result.html.slice(0, 400);
+
+    return ok({ candidates, suppliers, debug });
   } catch (e) {
     return fail("DIBBS fetch failed: " + e.message);
   }
