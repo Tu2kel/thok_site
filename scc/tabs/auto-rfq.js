@@ -327,21 +327,24 @@
     };
 
     // ── PN Gate: hold entire batch if any GO record has no part number ──
-    // Records explicitly marked N/A by the user carry _pn_na: true — they pass.
-    const missingPN = batch.filter(function (r) {
-      return r.verdict === "GO" && !r.ref_part_number && !r._pn_na;
-    });
-    if (missingPN.length > 0) {
-      var qEntry = {
-        batch_id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-        ts:       new Date().toISOString(),
-        opts:     { testMode: !!opts.testMode },
-        records:  batch,
-      };
-      savePNQueue(qEntry);
-      addLog("⏸ " + missingPN.length + " sol(s) missing part numbers — full batch held. Open PN Queue to resolve, then release.");
-      if (opts.onQueue) opts.onQueue(qEntry);
-      return { queued: true, batchId: qEntry.batch_id, pendingCount: missingPN.length };
+    // Skip in dryRun mode — the dry-run path already filters no-P/N records,
+    // so holding the batch here just blocks the blast plan from being built.
+    if (!opts.dryRun) {
+      const missingPN = batch.filter(function (r) {
+        return r.verdict === "GO" && !r.ref_part_number && !r._pn_na;
+      });
+      if (missingPN.length > 0) {
+        var qEntry = {
+          batch_id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+          ts:       new Date().toISOString(),
+          opts:     { testMode: !!opts.testMode },
+          records:  batch,
+        };
+        savePNQueue(qEntry);
+        addLog("⏸ " + missingPN.length + " sol(s) missing part numbers — full batch held. Open PN Queue to resolve, then release.");
+        if (opts.onQueue) opts.onQueue(qEntry);
+        return { queued: true, batchId: qEntry.batch_id, pendingCount: missingPN.length };
+      }
     }
 
     // ── Phase 1: categorize + map vendors ──
