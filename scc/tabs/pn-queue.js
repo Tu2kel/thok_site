@@ -69,6 +69,7 @@
           _candidates: s._candidates || [],
           _parsing:    false,
           _pdfName:    s._pdfName    || null,
+          _removed:    s._removed    || false,
         });
       });
     });
@@ -86,14 +87,15 @@
       try {
         sessionStorage.setItem(_sessionKey, JSON.stringify(
           items.map(function (it) {
-            return { sol_number: it.sol_number, _resolved: it._resolved, _input: it._input, _candidates: it._candidates, _pdfName: it._pdfName };
+            return { sol_number: it.sol_number, _resolved: it._resolved, _input: it._input, _candidates: it._candidates, _pdfName: it._pdfName, _removed: it._removed };
           })
         ));
       } catch (e) {}
     }, [items]);
 
-    const allResolved = items.every(function (it) { return it._resolved !== null; });
-    const resolvedCount = items.filter(function (it) { return it._resolved !== null; }).length;
+    const activeItems   = items.filter(function (it) { return !it._removed; });
+    const allResolved   = activeItems.every(function (it) { return it._resolved !== null; });
+    const resolvedCount = activeItems.filter(function (it) { return it._resolved !== null; }).length;
 
     const [dragOver, setDragOver] = useState({}); // solNum → bool
 
@@ -163,7 +165,7 @@
 
     const handleRelease = useCallback(function () {
       if (!allResolved) return;
-      var resolved = items.map(function (it) {
+      var resolved = activeItems.map(function (it) {
         var rec = Object.assign({}, it);
         if (it._resolved === "N/A") {
           rec.ref_part_number = "";
@@ -177,6 +179,7 @@
         delete rec._candidates;
         delete rec._parsing;
         delete rec._pdfName;
+        delete rec._removed;
         return rec;
       });
       clearSession();
@@ -210,7 +213,9 @@
         h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".14em", color: "rgba(245,158,11,.9)", textTransform: "uppercase" } },
           "⏸ PN Queue"),
         h("div", { style: { ...S.mono, fontSize: "10px", color: allResolved ? "var(--accent-green)" : "rgba(245,158,11,.8)" } },
-          resolvedCount + " / " + items.length + " resolved" + (allResolved ? " — ready to blast" : "")),
+          resolvedCount + " / " + activeItems.length + " resolved" +
+          (items.length > activeItems.length ? " (" + (items.length - activeItems.length) + " removed)" : "") +
+          (allResolved ? " — ready to blast" : "")),
         h("div", { style: { flex: 1 } }),
         h("button", {
           onClick: handleRelease,
@@ -239,18 +244,21 @@
               gridTemplateColumns: "1fr 130px",
               gap: "16px",
               alignItems: "start",
+              opacity: item._removed ? 0.35 : 1,
             },
           },
 
             // ── Left: item info + resolution controls ──
             h("div", null,
 
-              // Sol # + item name + status badge
+              // Sol # + item name + status badge + remove button
               h("div", { style: { display: "flex", gap: "10px", alignItems: "baseline", marginBottom: "6px", flexWrap: "wrap" } },
                 h("span", { style: { ...S.mono, fontSize: "10px", color: "var(--gold-dim)" } }, item.sol_number),
-                h("span", { style: { fontFamily: "Cormorant Garamond,serif", fontSize: "13px", color: "var(--alabaster)" } },
+                h("span", { style: { fontFamily: "Cormorant Garamond,serif", fontSize: "13px", color: item._removed ? "var(--body-faint)" : "var(--alabaster)" } },
                   item.item_name || "—"),
-                pending
+                item._removed
+                  ? h("span", { style: { ...S.mono, fontSize: "9px", color: "rgba(231,76,60,.6)", padding: "1px 6px", border: "1px solid rgba(231,76,60,.25)" } }, "removed")
+                  : pending
                   ? h("span", { style: { ...S.mono, fontSize: "9px", color: "rgba(245,158,11,.85)", padding: "1px 6px", border: "1px solid rgba(245,158,11,.3)" } }, "⏸ pending")
                   : isNA
                     ? h("span", { style: { ...S.mono, fontSize: "9px", color: "var(--body-faint)", padding: "1px 6px", border: "1px solid rgba(255,255,255,.12)" } }, "N/A")
@@ -258,8 +266,8 @@
                         "P/N: " + item._resolved),
               ),
 
-              // Input row (only when pending)
-              pending && h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "6px" } },
+              // Input row (only when pending and not removed)
+              pending && !item._removed && h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "6px" } },
                 h("input", {
                   type: "text",
                   placeholder: "Type part number…",
@@ -296,13 +304,22 @@
                   },
                   style: S.btn("rgba(201,168,76,.5)"),
                 }, "DIBBS ↗"),
+                h("button", {
+                  onClick: function () { updateItem(item.sol_number, { _removed: true, _resolved: null }); },
+                  style: S.btn("rgba(231,76,60,.5)"),
+                }, "✕ Remove"),
               ),
 
-              // Change link (when resolved)
-              !pending && h("button", {
-                onClick: function () { updateItem(item.sol_number, { _resolved: null, _input: "", _candidates: [] }); },
-                style: { ...S.mono, fontSize: "9px", background: "none", border: "none", color: "rgba(201,168,76,.45)", cursor: "pointer", padding: "2px 0" },
-              }, "change"),
+              // Change link (when resolved) / Undo link (when removed)
+              item._removed
+                ? h("button", {
+                    onClick: function () { updateItem(item.sol_number, { _removed: false }); },
+                    style: { ...S.mono, fontSize: "9px", background: "none", border: "none", color: "rgba(201,168,76,.45)", cursor: "pointer", padding: "2px 0" },
+                  }, "undo")
+                : !pending && h("button", {
+                    onClick: function () { updateItem(item.sol_number, { _resolved: null, _input: "", _candidates: [] }); },
+                    style: { ...S.mono, fontSize: "9px", background: "none", border: "none", color: "rgba(201,168,76,.45)", cursor: "pointer", padding: "2px 0" },
+                  }, "change"),
 
               // PDF / DIBBS candidates — click a chip to confirm
               item._candidates.length > 0 && pending && h("div", {
