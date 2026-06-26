@@ -359,12 +359,35 @@
 
   // ── PENDING BLAST PANEL ───────────────────────────────────────────────
   // Shows after AUTO dry-run — lists vendors + items, requires manual approval.
-  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, onPipeline, onGoLive, onBlastAll, sending, selectedCount }) {
+  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onPrev, onCancel, onPipeline, onGoLive, onBlastAll, sending, selectedCount }) {
     const mono  = "JetBrains Mono,monospace";
     const serif = "Cinzel,serif";
     const body  = "Cormorant Garamond,serif";
 
-    const GRID = "150px 50px 120px 1fr 120px 55px 85px 95px 54px 85px";
+    // Per-vendor item selection — all selected by default, resets when vendor changes
+    const [selNums, setSelNums] = useState(function() {
+      return new Set(entry.records.map(function(r) { return r.sol_number; }));
+    });
+    useEffect(function() {
+      setSelNums(new Set(entry.records.map(function(r) { return r.sol_number; })));
+    }, [entry.dist.id || entry.dist.name || idx]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const allSelected = selNums.size > 0 && entry.records.every(function(r) { return selNums.has(r.sol_number); });
+    const selRecs     = entry.records.filter(function(r) { return selNums.has(r.sol_number); });
+
+    function toggleAll() {
+      if (allSelected) setSelNums(new Set());
+      else setSelNums(new Set(entry.records.map(function(r) { return r.sol_number; })));
+    }
+    function toggleOne(solNum) {
+      setSelNums(function(prev) {
+        var next = new Set(prev);
+        if (next.has(solNum)) next.delete(solNum); else next.add(solNum);
+        return next;
+      });
+    }
+
+    const GRID = "28px 150px 50px 120px 1fr 120px 55px 85px 95px 54px 85px"; // added checkbox col
     const GAP  = "0 10px";
     const PAD  = "0 28px";
 
@@ -431,6 +454,7 @@
         ),
         h("button", { onClick: onBlastAll, disabled: sending, style: { ...btnBase, background: "rgba(61,214,140,.1)", color: "rgba(61,214,140,.9)", border: "1px solid rgba(61,214,140,.4)", padding: "7px 20px" } }, "⚡ Blast All Remaining"),
         h("button", { onClick: onCancel, disabled: sending, style: { ...btnBase, background: "transparent", color: "rgba(231,76,60,.6)", border: "1px solid rgba(231,76,60,.25)", padding: "7px 14px" } }, "✕ End"),
+        h("button", { onClick: onPrev, disabled: sending || idx === 0, style: { ...btnBase, background: "rgba(255,255,255,.04)", color: idx === 0 ? "rgba(245,240,232,.2)" : "rgba(245,240,232,.5)", border: "1px solid rgba(255,255,255,.1)", padding: "7px 16px", cursor: idx === 0 ? "not-allowed" : "pointer" } }, "← Prev"),
         h("button", { onClick: onSkip, disabled: sending, style: { ...btnBase, background: "rgba(255,255,255,.04)", color: "rgba(245,240,232,.5)", border: "1px solid rgba(255,255,255,.1)", padding: "7px 20px" } }, "Next →"),
       ),
 
@@ -469,17 +493,39 @@
       // ══ SOL TABLE ═══════════════════════════════════════════════════════
       h("div", { style: { padding: "0 28px 12px", overflowY: "auto", flex: 1, minHeight: 0 } },
         // Header
-        h("div", { style: { display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "10px 0 6px", borderBottom: "1px solid rgba(201,168,76,.12)", marginBottom: "2px" } },
+        h("div", { style: { display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "10px 0 6px", borderBottom: "1px solid rgba(201,168,76,.12)", marginBottom: "2px", alignItems: "center" } },
+          h("input", {
+            type: "checkbox", checked: allSelected, onChange: toggleAll,
+            title: allSelected ? "Deselect all" : "Select all",
+            style: { cursor: "pointer", accentColor: "rgba(201,168,76,.9)", width: "15px", height: "15px" },
+          }),
           ["Sol #", "FSC", "NSN", "Item", "Part #", "Qty", "Unit $", "Ext $", "Win%", "Due"].map(function(h_) {
             return h("div", { key: h_, style: { fontFamily: mono, fontSize: "14px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase" } }, h_);
           }),
         ),
         // Rows
         entry.records.map(function(r) {
-          const ext = parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0;
-          const wp  = parseFloat(r.win_probability || 0);
+          const ext     = parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0;
+          const wp      = parseFloat(r.win_probability || 0);
           const wpColor = wp >= 70 ? "rgba(61,214,140,.85)" : wp >= 50 ? "rgba(245,158,11,.75)" : "rgba(245,240,232,.3)";
-          return h("div", { key: r.sol_number, style: { display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,.04)", background: ext >= 50000 ? "rgba(61,214,140,.06)" : "transparent", alignItems: "center" } },
+          const isSel   = selNums.has(r.sol_number);
+          return h("div", {
+            key: r.sol_number,
+            onClick: function() { toggleOne(r.sol_number); },
+            style: {
+              display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "10px 0",
+              borderBottom: "1px solid rgba(255,255,255,.04)", alignItems: "center", cursor: "pointer",
+              background: !isSel ? "rgba(0,0,0,0)" : ext >= 50000 ? "rgba(61,214,140,.06)" : "rgba(201,168,76,.03)",
+              opacity: isSel ? 1 : 0.35,
+              transition: "opacity .15s, background .15s",
+            },
+          },
+            h("input", {
+              type: "checkbox", checked: isSel,
+              onChange: function(e) { e.stopPropagation(); toggleOne(r.sol_number); },
+              onClick: function(e) { e.stopPropagation(); },
+              style: { cursor: "pointer", accentColor: "rgba(201,168,76,.9)", width: "15px", height: "15px" },
+            }),
             h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(201,168,76,.7)", letterSpacing: ".03em" } }, r.sol_number),
             h("span", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(201,168,76,.6)", background: "rgba(201,168,76,.08)", border: "1px solid rgba(201,168,76,.2)", padding: "2px 5px", borderRadius: "2px" } }, r.fsc || "—"),
             h("span", { style: { fontFamily: mono, fontSize: "12px", color: "rgba(96,165,250,.7)", letterSpacing: ".02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.nsn || "—"),
@@ -495,7 +541,10 @@
         }),
         // Total
         h("div", { style: { display: "grid", gridTemplateColumns: GRID, gap: GAP, padding: "12px 0 0", borderTop: "1px solid rgba(201,168,76,.18)", marginTop: "4px" } },
-          h("span", { style: { gridColumn: "1 / 9", fontFamily: mono, fontSize: "14px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } }, "Total Opportunity"),
+          h("span", { style: { gridColumn: "1 / 10", fontFamily: mono, fontSize: "14px", letterSpacing: ".14em", color: "rgba(201,168,76,.4)", textTransform: "uppercase", textAlign: "right" } },
+            selRecs.length < entry.records.length
+              ? selRecs.length + " of " + entry.records.length + " selected"
+              : "Total Opportunity"),
           h("span", { style: { fontFamily: serif, fontSize: "16px", color: winColor, textAlign: "right", letterSpacing: ".04em" } },
             "$" + totalExt.toLocaleString(undefined, { maximumFractionDigits: 0 })),
         ),
@@ -517,13 +566,16 @@
           },
         }, "→ Pipeline" + (selectedCount ? " (" + selectedCount + ")" : "")),
         h("button", {
-          onClick: onSend, disabled: sending,
+          onClick: function() { onSend(selRecs); },
+          disabled: sending || selRecs.length === 0,
+          title: selRecs.length === 0 ? "No items selected" : null,
           style: { ...btnBase, flex: 1, padding: "14px 0", fontSize: "14px", letterSpacing: ".2em",
-            background: sending ? "rgba(61,214,140,.06)" : "rgba(61,214,140,.16)",
-            color: sending ? "rgba(61,214,140,.4)" : "rgba(61,214,140,.95)",
-            border: "1px solid " + (sending ? "rgba(61,214,140,.2)" : "rgba(61,214,140,.5)"),
-            boxShadow: sending ? "none" : "0 0 20px rgba(61,214,140,.12)" },
-        }, sending ? "Sending…" : "✓ Send Email"),
+            background: (sending || selRecs.length === 0) ? "rgba(61,214,140,.06)" : "rgba(61,214,140,.16)",
+            color: (sending || selRecs.length === 0) ? "rgba(61,214,140,.4)" : "rgba(61,214,140,.95)",
+            border: "1px solid " + ((sending || selRecs.length === 0) ? "rgba(61,214,140,.2)" : "rgba(61,214,140,.5)"),
+            boxShadow: (sending || selRecs.length === 0) ? "none" : "0 0 20px rgba(61,214,140,.12)",
+            cursor: selRecs.length === 0 ? "not-allowed" : "pointer" },
+        }, sending ? "Sending…" : "✓ Send Email" + (selRecs.length < entry.records.length ? " (" + selRecs.length + " of " + entry.records.length + ")" : "")),
       ),
     );
   }
@@ -817,15 +869,17 @@
     }, [addLog]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── SEND ONE BATCH — fires a single vendor email from the step-through panel ──
-    const handleSendOneBatch = useCallback(async () => {
+    const handleSendOneBatch = useCallback(async (selectedRecs) => {
       if (!pendingBlast || !window.SCC_AUTO_RFQ) return;
       const { plan, isLive, idx } = pendingBlast;
       const entry = plan[idx];
+      // Use caller-selected subset if provided (from panel checkboxes), else all records
+      const entryToSend = (selectedRecs && selectedRecs.length) ? { ...entry, records: selectedRecs } : entry;
       setBlasting(true);
       addLog("AUTO ▶ Sending to " + entry.dist.name + "…", "info");
       try {
-        await window.SCC_AUTO_RFQ.sendOneVendorBatch(entry, isLive ? {} : { testMode: true });
-        addLog("✓ " + entry.dist.name + (isLive ? " <" + entry.dist.email + ">" : " [TEST → tu2kel.lg@gmail.com]") + " · " + entry.records.length + " item(s) sent.", "ok");
+        await window.SCC_AUTO_RFQ.sendOneVendorBatch(entryToSend, isLive ? {} : { testMode: true });
+        addLog("✓ " + entry.dist.name + (isLive ? " <" + entry.dist.email + ">" : " [TEST → tu2kel.lg@gmail.com]") + " · " + entryToSend.records.length + " item(s) sent.", "ok");
         refreshBlastLog();
       } catch (e) {
         addLog("✗ " + entry.dist.name + ": " + e.message, "err");
@@ -840,6 +894,12 @@
       }
       setBlasting(false);
     }, [pendingBlast, addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── PREV BATCH — step back to previous vendor in the review queue ──
+    const handlePrevBatch = useCallback(() => {
+      if (!pendingBlast || pendingBlast.idx === 0) return;
+      setPendingBlast(function(prev) { return { ...prev, idx: prev.idx - 1 }; });
+    }, [pendingBlast]);
 
     // ── BLAST ALL — fires every remaining vendor email without step-through ──
     const handleBlastAll = useCallback(async () => {
@@ -1924,6 +1984,7 @@
             selectedCount: selected.size,
             onSend:     handleSendOneBatch,
             onSkip:     handleSkipBatch,
+            onPrev:     handlePrevBatch,
             onBlastAll: handleBlastAll,
             onPipeline: pushToPipeline,
             onCancel:   () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
