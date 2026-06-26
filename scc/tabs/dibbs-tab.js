@@ -355,7 +355,7 @@
 
   // ── PENDING BLAST PANEL ───────────────────────────────────────────────
   // Shows after AUTO dry-run — lists vendors + items, requires manual approval.
-  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, onPipeline, sending, selectedCount }) {
+  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, onPipeline, onGoLive, sending, selectedCount }) {
     const mono  = "JetBrains Mono,monospace";
     const serif = "Cinzel,serif";
     const body  = "Cormorant Garamond,serif";
@@ -408,6 +408,16 @@
             color: isLive ? "rgba(231,76,60,.9)" : "rgba(245,158,11,.75)",
             border: "1px solid " + (isLive ? "rgba(231,76,60,.35)" : "rgba(245,158,11,.25)") },
         }, isLive ? "⬤ LIVE" : "◯ TEST"),
+        !isLive && h("button", {
+          onClick: onGoLive,
+          disabled: sending,
+          style: {
+            fontFamily: serif, fontSize: "14px", letterSpacing: ".14em", textTransform: "uppercase",
+            padding: "5px 16px", cursor: "pointer",
+            background: "rgba(231,76,60,.12)", color: "rgba(231,76,60,.9)",
+            border: "1px solid rgba(231,76,60,.5)", borderRadius: "3px",
+          },
+        }, "⬤ Go Live"),
         h("div", { style: { flex: 1 } }),
         h("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" } },
           h("div", { style: { fontFamily: mono, fontSize: "14px", color: "rgba(245,240,232,.25)", letterSpacing: ".08em" } }, Math.round((idx / Math.max(total, 1)) * 100) + "% complete"),
@@ -1735,6 +1745,12 @@
             onSkip:     handleSkipBatch,
             onPipeline: pushToPipeline,
             onCancel:   () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
+            onGoLive:   () => {
+              if (!window.confirm("Switch this batch to LIVE?\n\nAll remaining sends will go to real vendor emails. This cannot be undone for emails already sent.")) return;
+              setPendingBlast(function (p) { return Object.assign({}, p, { isLive: true }); });
+              setLiveMode(true);
+              addLog("⬤ Switched to LIVE — remaining batches will send to real vendors.", "warn");
+            },
           }),
         ),
       ),
