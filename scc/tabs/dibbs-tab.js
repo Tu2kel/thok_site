@@ -355,7 +355,7 @@
 
   // ── PENDING BLAST PANEL ───────────────────────────────────────────────
   // Shows after AUTO dry-run — lists vendors + items, requires manual approval.
-  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, onPipeline, onGoLive, sending, selectedCount }) {
+  function PendingBlastPanel({ entry, idx, total, isLive, onSend, onSkip, onCancel, onPipeline, onGoLive, onBlastAll, sending, selectedCount }) {
     const mono  = "JetBrains Mono,monospace";
     const serif = "Cinzel,serif";
     const body  = "Cormorant Garamond,serif";
@@ -425,6 +425,7 @@
             h("div", { style: { width: (idx / Math.max(total, 1) * 100) + "%", height: "100%", background: "rgba(201,168,76,.6)", transition: "width .4s ease" } }),
           ),
         ),
+        h("button", { onClick: onBlastAll, disabled: sending, style: { ...btnBase, background: "rgba(61,214,140,.1)", color: "rgba(61,214,140,.9)", border: "1px solid rgba(61,214,140,.4)", padding: "7px 20px" } }, "⚡ Blast All Remaining"),
         h("button", { onClick: onCancel, disabled: sending, style: { ...btnBase, background: "transparent", color: "rgba(231,76,60,.6)", border: "1px solid rgba(231,76,60,.25)", padding: "7px 14px" } }, "✕ End"),
         h("button", { onClick: onSkip, disabled: sending, style: { ...btnBase, background: "rgba(255,255,255,.04)", color: "rgba(245,240,232,.5)", border: "1px solid rgba(255,255,255,.1)", padding: "7px 20px" } }, "Next →"),
       ),
@@ -830,6 +831,33 @@
       }
       setBlasting(false);
     }, [pendingBlast, addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── BLAST ALL — fires every remaining vendor email without step-through ──
+    const handleBlastAll = useCallback(async () => {
+      if (!pendingBlast || !window.SCC_AUTO_RFQ) return;
+      const { plan, isLive, idx } = pendingBlast;
+      const remaining = plan.slice(idx);
+      if (!window.confirm("Blast all " + remaining.length + " remaining vendor email(s) " + (isLive ? "LIVE" : "to test inbox") + "?\n\nThis will fire them all without individual approval.")) return;
+      setBlasting(true);
+      let sent = 0, failed = 0;
+      for (let i = 0; i < remaining.length; i++) {
+        const entry = remaining[i];
+        addLog("AUTO ▶ [" + (i + 1) + "/" + remaining.length + "] Sending to " + entry.dist.name + "…", "info");
+        try {
+          await window.SCC_AUTO_RFQ.sendOneVendorBatch(entry, isLive ? {} : { testMode: true });
+          addLog("✓ " + entry.dist.name + (isLive ? " <" + (entry.dist.email || entry.to) + ">" : " [TEST]") + " · " + entry.records.length + " item(s).", "ok");
+          sent++;
+        } catch (e) {
+          addLog("✗ " + entry.dist.name + ": " + e.message, "err");
+          failed++;
+        }
+      }
+      refreshBlastLog();
+      setPendingBlast(null);
+      setShowBlastLog(true);
+      addLog("AUTO ▶ Blast complete — " + sent + " sent, " + failed + " failed.", sent > 0 ? "ok" : "err");
+      setBlasting(false);
+    }, [pendingBlast, addLog, refreshBlastLog]);
 
     const handleSkipBatch = useCallback(() => {
       if (!pendingBlast) return;
@@ -1743,6 +1771,7 @@
             selectedCount: selected.size,
             onSend:     handleSendOneBatch,
             onSkip:     handleSkipBatch,
+            onBlastAll: handleBlastAll,
             onPipeline: pushToPipeline,
             onCancel:   () => { setPendingBlast(null); addLog("AUTO ▶ Remaining batches cancelled.", "info"); },
             onGoLive:   () => {
