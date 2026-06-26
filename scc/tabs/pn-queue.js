@@ -73,6 +73,14 @@
       });
     });
 
+    const updateItem = useCallback(function (solNum, patch) {
+      setItems(function (prev) {
+        return prev.map(function (it) {
+          return it.sol_number === solNum ? Object.assign({}, it, patch) : it;
+        });
+      });
+    }, []);
+
     // Fetch P/N candidates from DIBBS for one sol
     const fetchDibbsPN = useCallback(function (solNum) {
       updateItem(solNum, { _parsing: true });
@@ -109,14 +117,6 @@
         ));
       } catch (e) {}
     }, [items]);
-
-    const updateItem = useCallback(function (solNum, patch) {
-      setItems(function (prev) {
-        return prev.map(function (it) {
-          return it.sol_number === solNum ? Object.assign({}, it, patch) : it;
-        });
-      });
-    }, []);
 
     const allResolved = items.every(function (it) { return it._resolved !== null; });
     const resolvedCount = items.filter(function (it) { return it._resolved !== null; }).length;
