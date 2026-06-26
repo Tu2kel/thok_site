@@ -59,11 +59,16 @@ const fail = (...a) => console.error("[navigator-scraper] ❌", ...a);
 //   Material | Part Char. | Supplier Restrictions | Quote | QA |
 //   Insp. | FOB | Com.Pack | NAICS | Suppliers | NSN Info |
 //   Resell Opp. | Supplier List | Exclude NSNs
+// Column layout as of 2026-06-26 (DIBBS added "Send" col at 3 and "JCP req'd" at 15):
+// Sol | AI | Sol.Type | Send | Nomenclature | Repost | QTY | Unit Issue | Unit Price |
+// Price Hist | Ext Price | Quote Due | Del.Days | NSN | Piece Part No | JCP(req'd) |
+// Set Aside | Material | Part Char | Supplier Restrictions | Quote | Basic Drawing |
+// Insp. | FOB | Com.Pack | NAICS | Suppliers | NSN Info | Resell Opp. | SA | AMSC | ...
 const COL = {
   sol_number: 0,
   ai: 1,
   sol_type: 2,
-  nomenclature: 5,
+  nomenclature: 4,  // was 5 — DIBBS added "Send" col at 3, shifting Nomenclature left
   qty: 6,
   unit_issue: 7,
   unit_price: 8,
@@ -73,14 +78,14 @@ const COL = {
   delivery_days: 12,
   nsn: 13,
   piece_part_no: 14,
-  set_aside: 15,
-  material: 16,
-  part_char: 17,
-  supplier_restrictions: 18,
-  fob: 22,
-  com_pack: 23,
-  naics: 24,
-  supplier_list: 28,
+  set_aside: 16,    // was 15 — DIBBS added "JCP req'd" col at 15
+  material: 17,
+  part_char: 18,
+  supplier_restrictions: 19,
+  fob: 23,
+  com_pack: 24,
+  naics: 25,
+  supplier_list: 29,
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
