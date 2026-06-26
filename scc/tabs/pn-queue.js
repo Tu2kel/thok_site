@@ -81,6 +81,33 @@
       });
     }, []);
 
+    // Fetch P/N from DIBBS NSN page (public, no banner)
+    const fetchDibbsPN = useCallback(function (item) {
+      if (!item.nsn) return;
+      updateItem(item.sol_number, { _parsing: true });
+      fetch("/.netlify/functions/scc-dibbs-pn", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ nsn: item.nsn, sol_number: item.sol_number }),
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        if (!data.ok || !data.candidates || !data.candidates.length) {
+          updateItem(item.sol_number, { _parsing: false });
+          return;
+        }
+        updateItem(item.sol_number, { _parsing: false, _candidates: data.candidates, _pdfName: "(auto)" });
+      }).catch(function () {
+        updateItem(item.sol_number, { _parsing: false });
+      });
+    }, [updateItem]);
+
+    // Auto-fetch on mount for each unresolved item that has an NSN
+    useEffect(function () {
+      items.forEach(function (item) {
+        if (item._resolved !== null || item._candidates.length || item._pdfName || !item.nsn) return;
+        fetchDibbsPN(item);
+      });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Persist items to sessionStorage whenever they change
     useEffect(function () {
       try {
@@ -291,11 +318,10 @@
                   style: S.btn("var(--body-dim)"),
                 }, "N/A"),
                 h("button", {
-                  onClick: function () {
-                    window.open("https://www.dibbs.bsm.dla.mil/rfq/rfqrec.aspx?sn=" + encodeURIComponent(item.sol_number), "_blank");
-                  },
-                  style: S.btn("rgba(201,168,76,.5)"),
-                }, "DIBBS ↗"),
+                  onClick: function () { fetchDibbsPN(item); },
+                  disabled: !!item._parsing || !item.nsn,
+                  style: Object.assign({}, S.btn("rgba(201,168,76,.5)"), { opacity: (item._parsing || !item.nsn) ? 0.4 : 1 }),
+                }, item._parsing ? "…" : "DIBBS"),
               ),
 
               // Change link (when resolved)
