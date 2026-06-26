@@ -758,10 +758,11 @@
       }
     }, [checkAgent, refreshBlastLog]);
 
-    // ── Auto-run on open if not run today ──
+    // ── Auto-run on open if not run today — blocked when PN Queue is open ──
     const autoRunRef = useRef(false);
     useEffect(() => {
       if (mode !== "auto" || autoRunRef.current) return;
+      if (pnQueue) return; // never auto-run over an open PN Queue
       const today = new Date().toLocaleDateString();
       const lastDate = scrapeDate ? new Date(scrapeDate).toLocaleDateString() : "";
       if (lastDate === today) return;
@@ -771,7 +772,7 @@
         runScrape();
       }, 4000); // 4s delay — lets agent finish startup
       return () => clearTimeout(t);
-    }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [mode, pnQueue]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
     // ── SCRAPE ────────────────────────────────────────────────────────

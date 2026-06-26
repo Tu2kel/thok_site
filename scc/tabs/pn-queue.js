@@ -283,7 +283,14 @@
           onClick: function () { setBulkOpen(function (v) { return !v; }); },
           style: S.btn("rgba(201,168,76,.5)"),
         }, bulkOpen ? "✕ Close" : "⚡ Bulk Fill"),
-        h("button", { onClick: function () { clearSession(); onDismiss(); }, style: S.btn("rgba(231,76,60,.5)") }, "✕ Discard"),
+        h("button", {
+          onClick: function () {
+            if (!window.confirm("Discard the entire PN Queue?\n\nAll part numbers you've entered will be lost and the batch will be cancelled.")) return;
+            clearSession();
+            onDismiss();
+          },
+          style: S.btn("rgba(231,76,60,.5)"),
+        }, "✕ Discard"),
       ),
 
       // ── Bulk fill strip ──
