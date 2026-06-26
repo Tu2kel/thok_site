@@ -7,7 +7,7 @@
 const path = require("path");
 const fs   = require("fs");
 
-const FROM_ADDRESS  = "kelley.anthonyk@gmail.com";
+const FROM_ADDRESS  = "anthony@ifedlog.com";
 const FROM_NAME     = "Anthony K Kelley | Imperio Federal Logistics";
 const TOKEN_URL     = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND    = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
