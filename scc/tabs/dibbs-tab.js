@@ -630,7 +630,8 @@
     const [blastLog, setBlastLog] = useState([]);
     const [showBlastLog, setShowBlastLog] = useState(false);
     const [pnQueue, setPNQueue] = useState(null); // loaded from localStorage on mount
-    const [pendingBlast, setPendingBlast] = useState(null); // { plan, records, isLive } — AUTO dry-run awaiting approval
+    const [pendingBlast, setPendingBlast] = useState(null); // { plan, records, isLive } — step-through review panel
+    const [blastReady, setBlastReady]   = useState(null); // { plan, isLive } — staged, awaiting auto-blast or review choice
     const [resumeBlast, setResumeBlast] = useState(null); // saved blast from localStorage — shown as a resume banner
 
     const abortRef   = useRef(false);
@@ -802,8 +803,8 @@
         // Deprioritizes big $ with low win (OEM-locked, restricted, blockers)
         plan.sort((a, b) => b.expectedValue - a.expectedValue);
 
-        setPendingBlast({ plan, isLive, idx: 0 });
-        addLog("AUTO ▶ " + plan.length + " email draft(s) ready — review and approve below ↓", "ok");
+        setBlastReady({ plan, isLive });
+        addLog("AUTO ▶ " + plan.length + " email draft(s) ready — choose Auto-Blast or Review below ↓", "ok");
       };
 
       window.addEventListener("scc:auto_blast", handler);
@@ -958,6 +959,49 @@
       setBlasting(false);
     }, [pendingBlast, addLog, refreshBlastLog]);
 
+    // ── AUTO-BLAST ALL — fires all vendors immediately, only $10k+ items per vendor ──
+    const handleAutoBlastAll = useCallback(async function(plan, isLive) {
+      if (!window.SCC_AUTO_RFQ) return;
+      // Apply $10k+ quality filter per vendor
+      var autoFiltered = plan.map(function(entry) {
+        var qualRecs = entry.records.filter(function(r) {
+          var ext = parseFloat(r.unit_price || 0) * parseFloat(r.quantity || 1) || parseFloat(r.ext_price || 0) || 0;
+          return ext >= 10000;
+        });
+        return Object.assign({}, entry, { records: qualRecs });
+      }).filter(function(entry) { return entry.records.length > 0; });
+
+      var skipped = plan.length - autoFiltered.length;
+      if (!autoFiltered.length) {
+        addLog("AUTO-BLAST ▶ No vendors have $10k+ items — nothing queued.", "info");
+        setBlastReady(null);
+        return;
+      }
+      var skipNote = skipped ? " (" + skipped + " vendor(s) skipped — no $10k+ items)" : "";
+      if (!window.confirm("Auto-Blast " + autoFiltered.length + " vendor email(s)" + skipNote + "\n" + (isLive ? "LIVE — real emails will fire." : "TEST — emails to test inbox only."))) return;
+
+      setBlastReady(null);
+      setBlasting(true);
+      var sent = 0, failed = 0;
+      for (var i = 0; i < autoFiltered.length; i++) {
+        var entry = autoFiltered[i];
+        addLog("AUTO-BLAST ▶ [" + (i + 1) + "/" + autoFiltered.length + "] " + entry.dist.name + " · " + entry.records.length + " item(s)…", "info");
+        try {
+          await window.SCC_AUTO_RFQ.sendOneVendorBatch(entry, isLive ? {} : { testMode: true });
+          addLog("✓ " + entry.dist.name + (isLive ? " <" + (entry.dist.email || entry.to || "") + ">" : " [TEST]") + " · " + entry.records.length + " item(s).", "ok");
+          sent++;
+        } catch (e) {
+          addLog("✗ " + entry.dist.name + ": " + e.message, "err");
+          failed++;
+        }
+        if (i < autoFiltered.length - 1) await new Promise(function(r) { return setTimeout(r, 1500); });
+      }
+      refreshBlastLog();
+      setShowBlastLog(true);
+      addLog("AUTO-BLAST ▶ Done — " + sent + " sent, " + failed + " failed.", sent > 0 ? "ok" : "err");
+      setBlasting(false);
+    }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleSkipBatch = useCallback(() => {
       if (!pendingBlast) return;
       const { plan, isLive, idx } = pendingBlast;
@@ -1029,8 +1073,8 @@
             : { dryRun: true, testMode: true, onLog: (m) => addLog(m, "info"), onQueue: (q) => { setPNQueue(q); addLog("AUTO ▶ ⏸ Batch held — resolve part numbers in PN Queue below.", "info"); } })
             .then((r) => {
               if (r.dryRun && r.plan && r.plan.length > 0) {
-                setPendingBlast({ plan: r.plan, isLive, idx: 0 });
-                addLog("AUTO ▶ " + r.plan.length + " vendor email(s) staged — review below and approve to send.", "info");
+                setBlastReady({ plan: r.plan, isLive });
+                addLog("AUTO ▶ " + r.plan.length + " vendor email(s) staged — choose Auto-Blast or Review below.", "info");
               } else if (r.dryRun && (!r.plan || r.plan.length === 0)) {
                 addLog("AUTO ▶ No vendors matched any GO sols — check rolodex FSC coverage.", "info");
               } else if (!r.queued) {
@@ -2592,6 +2636,50 @@
                 (showBlastLog ? "▲" : "▼") + " Blast Log (" + blastLog.length + ")",
               ),
           ),
+
+          // ── Blast Ready banner — choose Auto-Blast (no review) or step-through panel ──
+          blastReady && !pendingBlast &&
+            h("div", {
+              style: {
+                display: "flex", alignItems: "center", gap: "10px", padding: "12px 18px",
+                background: "rgba(61,214,140,.06)", border: "1px solid rgba(61,214,140,.35)",
+                borderRadius: "3px", marginBottom: "10px", flexWrap: "wrap",
+              },
+            },
+              h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "11px", color: "rgba(61,214,140,.9)", letterSpacing: ".06em", flex: 1, minWidth: "220px" } },
+                "📋 Blast ready — " + blastReady.plan.length + " vendor(s) · " +
+                blastReady.plan.reduce(function(s, e) { return s + e.records.length; }, 0) +
+                " item(s) · " + (blastReady.isLive ? "LIVE" : "TEST")),
+              h("button", {
+                onClick: function() { handleAutoBlastAll(blastReady.plan, blastReady.isLive); },
+                disabled: blasting,
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase",
+                  padding: "7px 20px", cursor: "pointer",
+                  background: "rgba(61,214,140,.18)", color: "rgba(61,214,140,.95)",
+                  border: "1px solid rgba(61,214,140,.55)", borderRadius: "3px",
+                },
+              }, "⚡ Auto-Blast ($10k+ only)"),
+              h("button", {
+                onClick: function() { setPendingBlast({ plan: blastReady.plan, isLive: blastReady.isLive, idx: 0 }); setBlastReady(null); },
+                disabled: blasting,
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase",
+                  padding: "7px 20px", cursor: "pointer",
+                  background: "rgba(201,168,76,.1)", color: "rgba(201,168,76,.9)",
+                  border: "1px solid rgba(201,168,76,.4)", borderRadius: "3px",
+                },
+              }, "📋 Review Each Email"),
+              h("button", {
+                onClick: function() { setBlastReady(null); addLog("AUTO ▶ Blast plan discarded.", "info"); },
+                style: {
+                  fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase",
+                  padding: "7px 12px", cursor: "pointer",
+                  background: "transparent", color: "rgba(245,240,232,.3)",
+                  border: "1px solid rgba(255,255,255,.1)", borderRadius: "3px",
+                },
+              }, "✕ Discard"),
+            ),
 
           // ── Resume blast banner — shown when a blast was interrupted by page refresh ──
           resumeBlast && !pendingBlast &&
