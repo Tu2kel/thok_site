@@ -216,11 +216,12 @@
     const count = withPN.length;
 
     const subject = count === 1
-      ? "RFQ – " + (withPN[0].item_name || "Item") + " | " + withPN[0].sol_number + " | Imperio Federal Logistics"
+      ? "RFQ – " + (withPN[0].item_name || (withPN[0].nsn ? "NSN " + withPN[0].nsn : "Item")) + " | " + withPN[0].sol_number + " | Imperio Federal Logistics"
       : "RFQ – " + count + " Items Needed | Imperio Federal Logistics";
 
     const itemLines = withPN.map(function (record, i) {
-      var lines = ["Item " + (i + 1) + ": " + (record.item_name || "—")];
+      var itemDesc = record.item_name || (record.nsn ? "NSN " + record.nsn : "") || "See Sol#";
+      var lines = ["Item " + (i + 1) + ": " + itemDesc];
       lines.push("  Part Number:  " + record.ref_part_number);
       var qty = record.quantity ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "") : "—";
       lines.push("  Quantity:     " + qty);

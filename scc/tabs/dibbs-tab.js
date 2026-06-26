@@ -2679,7 +2679,7 @@
                 },
               }, "⚡ Auto-Blast ($10k+ only)"),
               h("button", {
-                onClick: function() { setPendingBlast({ plan: blastReady.plan, isLive: blastReady.isLive, idx: 0 }); setBlastReady(null); },
+                onClick: function() { setPendingBlast({ plan: blastReady.plan, isLive: blastReady.isLive, idx: 0 }); },
                 disabled: blasting,
                 style: {
                   fontFamily: "Cinzel,serif", fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase",
