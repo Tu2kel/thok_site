@@ -617,11 +617,10 @@ exports.handler = async (event) => {
     return ok(results);
   }
 
-  // ── enrichFsc — SAM → UEI/CAGE → SBA profile URL → NAICS → FSC ─────────
-  // Step 1: use cage_code already stored (from prior enrichAll), or SAM lookup
-  // Step 2: hit https://search.certifications.sba.gov/profile/{UEI}/{CAGE}
-  // Step 3: extract NAICS from page, run through FSC crosswalk
-  // 10 vendors per call; frontend loops until total < 10.
+  // ── enrichFsc — SAM NAICS → FSC crosswalk ───────────────────────────────
+  // NAICS codes are mandatory in SAM.gov registration (unlike PSC codes which
+  // are optional and usually empty). Use CAGE for precise lookup when available,
+  // fall back to name search. 10 vendors per call; frontend loops until total < 10.
   if (action === "enrichFsc") {
     try {
       const db    = await getDb();
@@ -636,74 +635,57 @@ exports.handler = async (event) => {
 
       for (const d of dists) {
         try {
-          let uei  = d.uei       || null;
-          let cage = d.cage_code || null;
+          // Always hit SAM — NAICS is mandatory there, PSC codes are not
+          // CAGE lookup is precise; name lookup is fuzzy fallback
+          const samResult = await samLookup(d.name, d.cage_code || null);
 
-          // Step 1 — get UEI + CAGE from SAM if not already stored
-          if (!uei || !cage) {
-            const samResult = await samLookup(d.name, cage);
-            if (samResult) {
-              uei  = samResult.uei       || uei;
-              cage = samResult.cage_code || cage;
-              if (uei || cage) {
-                await db.collection("distributors").updateOne(
-                  { id: d.id },
-                  { $set: { uei: uei || null, cage_code: cage || null } }
-                ).catch(() => {});
-              }
-              // If SAM itself has a NAICS list, use it directly — skip profile fetch
-              const samNaics = (samResult.naics_list || []).filter(Boolean);
-              if (samNaics.length) {
-                const fsc = naicsToFsc(samNaics);
-                if (fsc.length) {
-                  await db.collection("distributors").updateOne(
-                    { id: d.id },
-                    { $set: { fsc, fsc_source: "sam-naics", naics_list: samNaics, primary_naics: samNaics[0], sam_enriched_at: new Date().toISOString() } }
-                  );
-                  results.updated++;
-                  results.details.push({ name: d.name, status: "updated", fsc, naics: samNaics, source: "sam" });
-                  await sleep(120);
-                  continue;
-                }
-              }
-            }
-          }
-
-          // Step 2 — hit SBA profile URL using UEI + CAGE
-          if (!uei || !cage) {
+          if (!samResult) {
             results.not_found++;
-            results.details.push({ name: d.name, status: "no_ids", uei: uei || "?", cage: cage || "?" });
+            results.details.push({ name: d.name, status: "not_in_sam" });
             await sleep(120);
             continue;
           }
 
-          const naicsCodes = await sbaProfileNaics(uei, cage);
-          if (!naicsCodes || !naicsCodes.length) {
+          // Persist any newly discovered UEI/CAGE
+          const updFields = {};
+          if (samResult.uei       && !d.uei)       updFields.uei       = samResult.uei;
+          if (samResult.cage_code && !d.cage_code) updFields.cage_code = samResult.cage_code;
+          if (Object.keys(updFields).length) {
+            await db.collection("distributors").updateOne({ id: d.id }, { $set: updFields }).catch(() => {});
+          }
+
+          // Collect all NAICS codes: primary first, then the full list
+          const allNaics = [...new Set([
+            ...(samResult.primary_naics ? [String(samResult.primary_naics)] : []),
+            ...(samResult.naics_list   || []).map(String),
+          ])].filter(n => /^\d{4,6}$/.test(n));
+
+          if (!allNaics.length) {
             results.no_naics++;
-            results.details.push({ name: d.name, status: "no_naics", uei, cage });
+            results.details.push({ name: d.name, status: "no_naics_in_sam", sam_name: samResult.sam_name || "" });
             await sleep(120);
             continue;
           }
 
-          // Step 3 — crosswalk NAICS → FSC
-          const fsc = naicsToFsc(naicsCodes);
+          const fsc = naicsToFsc(allNaics);
           await db.collection("distributors").updateOne(
             { id: d.id },
             { $set: {
-                fsc:           fsc.length ? fsc : (await db.collection("distributors").findOne({ id: d.id }))?.fsc || [],
-                fsc_source:    "sba-profile-naics",
-                naics_list:    naicsCodes,
-                primary_naics: naicsCodes[0] || null,
+                naics_list:      allNaics,
+                primary_naics:   allNaics[0],
+                fsc_source:      "sam-naics",
                 sam_enriched_at: new Date().toISOString(),
+                ...(fsc.length ? { fsc } : {}),
               }
             }
           );
+
           if (fsc.length) {
             results.updated++;
-            results.details.push({ name: d.name, status: "updated", fsc, naics: naicsCodes, source: "sba-profile" });
+            results.details.push({ name: d.name, status: "updated", fsc, naics: allNaics });
           } else {
             results.no_naics++;
-            results.details.push({ name: d.name, status: "no_fsc_match", naics: naicsCodes });
+            results.details.push({ name: d.name, status: "no_fsc_match", naics: allNaics });
           }
         } catch (e) {
           results.failed++;
