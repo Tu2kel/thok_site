@@ -405,6 +405,77 @@ async function sbaLookup(name) {
   }
 }
 
+// SBA search purely for NAICS codes — no contact info required
+async function sbaSearchNaics(name) {
+  try {
+    const body = {
+      searchProfiles:          { searchTerm: name },
+      annualRevenue:           { relationOperator: "at-least", annualGrossRevenue: "" },
+      bondingLevels:           { constructionIndividual: "", constructionAggregate: "", serviceIndividual: "", serviceAggregate: "" },
+      businessSize:            { relationOperator: "at-least", numberOfEmployees: "" },
+      entityDetailId:          "",
+      keywords:                { list: [], operatorType: "Or" },
+      lastUpdated:             { date: { label: "Anytime", value: "anytime" } },
+      location:                { states: [], zipCodes: [], counties: [], districts: [], msas: [] },
+      naics:                   { codes: [], isPrimary: false, operatorType: "Or" },
+      qualityAssuranceStandards: { qas: [] },
+      samStatus:               { isActiveSAM: false },
+      sbaCertifications:       { activeCerts: [], isPreviousCert: false, operatorType: "Or" },
+      selfCertifications:      { certifications: [], operatorType: "Or" },
+    };
+    const res = await fetch(SBA_SEARCH, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Mozilla/5.0" },
+      body:    JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = data?.results || [];
+    if (!results.length) return null;
+
+    // Closest name match
+    const target = name.toUpperCase();
+    results.sort((a, b) => {
+      const na = (a.legal_business_name || "").toUpperCase();
+      const nb = (b.legal_business_name || "").toUpperCase();
+      const score = n => n === target ? 0 : n.startsWith(target.split(" ")[0]) ? 1 : 2;
+      return score(na) - score(nb);
+    });
+    const r = results[0];
+
+    // Collect NAICS codes from all plausible field names
+    const naicsList = [];
+    for (const key of ["naics_code","primary_naics","naics","naics_codes","all_naics"]) {
+      const v = r[key];
+      if (!v) continue;
+      if (typeof v === "string" && /^\d{4,6}$/.test(v)) naicsList.push(v);
+      if (Array.isArray(v)) v.forEach(n => {
+        if (typeof n === "string" && /^\d{4,6}$/.test(n)) naicsList.push(n);
+        if (n && typeof n === "object") {
+          const c = n.code || n.naics_code || n.naicsCode || "";
+          if (/^\d{4,6}$/.test(String(c))) naicsList.push(String(c));
+        }
+      });
+    }
+    const nd = r.naics_descriptions || r.naics_list || [];
+    if (Array.isArray(nd)) nd.forEach(n => {
+      const c = typeof n === "string" ? n : (n.code || n.naics_code || "");
+      if (/^\d{4,6}$/.test(String(c))) naicsList.push(String(c));
+    });
+
+    return {
+      uei:           r.uei       || null,
+      cage_code:     r.cage_code || null,
+      sam_name:      r.legal_business_name || null,
+      naics_list:    [...new Set(naicsList)],
+      primary_naics: naicsList[0] || null,
+      raw_keys:      Object.keys(r).join(","),  // debug: see all field names on first run
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Full lookup: SAM.gov first, SBA DSBS fallback if no contact found
 async function lookupPOC(name, cage) {
   const samResult = await samLookup(name, cage);
@@ -545,8 +616,8 @@ exports.handler = async (event) => {
 
       for (const d of dists) {
         try {
-          // SBA search captures NAICS from the search result
-          const sbaResult = await sbaLookup(d.name);
+          // Use NAICS-only search — doesn't require contact_person or email
+          const sbaResult = await sbaSearchNaics(d.name);
           if (!sbaResult) {
             results.not_found++;
             results.details.push({ name: d.name, status: "not_found" });
@@ -559,7 +630,7 @@ exports.handler = async (event) => {
             await db.collection("distributors").updateOne(
               { id: d.id },
               { $set: {
-                  uei:      sbaResult.uei      || d.uei      || null,
+                  uei:       sbaResult.uei       || d.uei       || null,
                   cage_code: sbaResult.cage_code || d.cage_code || null,
                 } }
             ).catch(() => {});
@@ -568,7 +639,7 @@ exports.handler = async (event) => {
           const naicsCodes = sbaResult.naics_list || [];
           if (!naicsCodes.length) {
             results.no_naics++;
-            results.details.push({ name: d.name, status: "no_naics", raw: JSON.stringify(sbaResult).slice(0, 200) });
+            results.details.push({ name: d.name, status: "no_naics", raw_keys: sbaResult.raw_keys || "", sam_name: sbaResult.sam_name || "" });
             await sleep(120);
             continue;
           }
