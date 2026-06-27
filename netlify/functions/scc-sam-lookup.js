@@ -425,13 +425,26 @@ async function sbaSearchNaics(name) {
     };
     const res = await fetch(SBA_SEARCH, {
       method:  "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Mozilla/5.0" },
-      body:    JSON.stringify(body),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Origin:  "https://search.certifications.sba.gov",
+        Referer: "https://search.certifications.sba.gov/",
+      },
+      body: JSON.stringify(body),
     });
-    if (!res.ok) return null;
+
+    if (!res.ok) {
+      const preview = (await res.text()).slice(0, 300);
+      return { _err: true, status: res.status, preview };
+    }
+
     const data = await res.json();
     const results = data?.results || [];
-    if (!results.length) return null;
+    if (!results.length) {
+      return { _err: true, status: 200, preview: "empty: " + JSON.stringify(data).slice(0, 200) };
+    }
 
     // Closest name match
     const target = name.toUpperCase();
@@ -618,9 +631,14 @@ exports.handler = async (event) => {
         try {
           // Use NAICS-only search — doesn't require contact_person or email
           const sbaResult = await sbaSearchNaics(d.name);
-          if (!sbaResult) {
+          if (!sbaResult || sbaResult._err) {
             results.not_found++;
-            results.details.push({ name: d.name, status: "not_found" });
+            results.details.push({
+              name: d.name,
+              status: "not_found",
+              http: sbaResult ? sbaResult.status : "null",
+              preview: sbaResult ? sbaResult.preview : "threw",
+            });
             await sleep(120);
             continue;
           }

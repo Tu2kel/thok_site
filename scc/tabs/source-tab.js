@@ -755,10 +755,13 @@
         }
         await window.SCC_DIST.distReloadCache();
         setDists([...window.SCC_DIST.DISTRIBUTORS]);
-        const lines = details.map(function(d) {
-          return d.status === "updated"
-            ? "✓ " + d.name + " → " + (d.fsc || []).join(",") + " (NAICS:" + (d.naics || []).join(",") + ")"
-            : d.name + " [" + d.status + "]" + (d.raw ? " raw:" + String(d.raw).slice(0, 100) : "");
+        const lines = details.slice(0, 8).map(function(d) {
+          if (d.status === "updated") return "✓ " + d.name + " → " + (d.fsc || []).join(",") + " (NAICS:" + (d.naics || []).join(",") + ")";
+          var extra = "";
+          if (d.http  != null) extra += " HTTP:" + d.http;
+          if (d.preview)       extra += " | " + String(d.preview).slice(0, 120);
+          if (d.raw_keys)      extra += " keys:" + String(d.raw_keys).slice(0, 80);
+          return d.name + " [" + d.status + "]" + extra;
         }).join("\n");
         alert(
           "FSC Enrich complete (" + pass + " passes)\n" +
