@@ -155,7 +155,12 @@ async function sbaProfileNaics(uei, cage) {
   try {
     const url = SBA_PROFILE + "/" + encodeURIComponent(uei) + "/" + encodeURIComponent(cage);
     const res = await fetch(url, {
-      headers: { Accept: "application/json, text/html, */*", "User-Agent": "Mozilla/5.0" },
+      headers: {
+        Accept: "application/json, text/html, */*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Origin:  "https://search.certifications.sba.gov",
+        Referer: "https://search.certifications.sba.gov/",
+      },
     });
     if (!res.ok) return null;
 
@@ -612,9 +617,11 @@ exports.handler = async (event) => {
     return ok(results);
   }
 
-  // ── enrichFsc — derive FSC from SBA DSBS search NAICS codes ───────────
-  // Flow per vendor: SBA search by name → NAICS fields in result → FSC crosswalk
-  // Process 10 vendors per call; frontend loops until total < 10 (same as enrichAll).
+  // ── enrichFsc — SAM → UEI/CAGE → SBA profile URL → NAICS → FSC ─────────
+  // Step 1: use cage_code already stored (from prior enrichAll), or SAM lookup
+  // Step 2: hit https://search.certifications.sba.gov/profile/{UEI}/{CAGE}
+  // Step 3: extract NAICS from page, run through FSC crosswalk
+  // 10 vendors per call; frontend loops until total < 10.
   if (action === "enrichFsc") {
     try {
       const db    = await getDb();
@@ -629,64 +636,75 @@ exports.handler = async (event) => {
 
       for (const d of dists) {
         try {
-          // Use NAICS-only search — doesn't require contact_person or email
-          const sbaResult = await sbaSearchNaics(d.name);
-          if (!sbaResult || sbaResult._err) {
+          let uei  = d.uei       || null;
+          let cage = d.cage_code || null;
+
+          // Step 1 — get UEI + CAGE from SAM if not already stored
+          if (!uei || !cage) {
+            const samResult = await samLookup(d.name, cage);
+            if (samResult) {
+              uei  = samResult.uei       || uei;
+              cage = samResult.cage_code || cage;
+              if (uei || cage) {
+                await db.collection("distributors").updateOne(
+                  { id: d.id },
+                  { $set: { uei: uei || null, cage_code: cage || null } }
+                ).catch(() => {});
+              }
+              // If SAM itself has a NAICS list, use it directly — skip profile fetch
+              const samNaics = (samResult.naics_list || []).filter(Boolean);
+              if (samNaics.length) {
+                const fsc = naicsToFsc(samNaics);
+                if (fsc.length) {
+                  await db.collection("distributors").updateOne(
+                    { id: d.id },
+                    { $set: { fsc, fsc_source: "sam-naics", naics_list: samNaics, primary_naics: samNaics[0], sam_enriched_at: new Date().toISOString() } }
+                  );
+                  results.updated++;
+                  results.details.push({ name: d.name, status: "updated", fsc, naics: samNaics, source: "sam" });
+                  await sleep(120);
+                  continue;
+                }
+              }
+            }
+          }
+
+          // Step 2 — hit SBA profile URL using UEI + CAGE
+          if (!uei || !cage) {
             results.not_found++;
-            results.details.push({
-              name: d.name,
-              status: "not_found",
-              http: sbaResult ? sbaResult.status : "null",
-              preview: sbaResult ? sbaResult.preview : "threw",
-            });
+            results.details.push({ name: d.name, status: "no_ids", uei: uei || "?", cage: cage || "?" });
             await sleep(120);
             continue;
           }
 
-          // Persist any UEI/CAGE discovered
-          if (sbaResult.uei || sbaResult.cage_code) {
-            await db.collection("distributors").updateOne(
-              { id: d.id },
-              { $set: {
-                  uei:       sbaResult.uei       || d.uei       || null,
-                  cage_code: sbaResult.cage_code || d.cage_code || null,
-                } }
-            ).catch(() => {});
-          }
-
-          const naicsCodes = sbaResult.naics_list || [];
-          if (!naicsCodes.length) {
+          const naicsCodes = await sbaProfileNaics(uei, cage);
+          if (!naicsCodes || !naicsCodes.length) {
             results.no_naics++;
-            results.details.push({ name: d.name, status: "no_naics", raw_keys: sbaResult.raw_keys || "", sam_name: sbaResult.sam_name || "" });
+            results.details.push({ name: d.name, status: "no_naics", uei, cage });
             await sleep(120);
             continue;
           }
 
+          // Step 3 — crosswalk NAICS → FSC
           const fsc = naicsToFsc(naicsCodes);
-          if (!fsc.length) {
-            results.no_naics++;
-            results.details.push({ name: d.name, status: "no_fsc_match", naics: naicsCodes });
-            await db.collection("distributors").updateOne(
-              { id: d.id },
-              { $set: { naics_list: naicsCodes, primary_naics: naicsCodes[0] || null, fsc_source: "sba-naics" } }
-            ).catch(() => {});
-            await sleep(120);
-            continue;
-          }
-
           await db.collection("distributors").updateOne(
             { id: d.id },
             { $set: {
-                fsc:           fsc,
-                fsc_source:    "sba-naics",
+                fsc:           fsc.length ? fsc : (await db.collection("distributors").findOne({ id: d.id }))?.fsc || [],
+                fsc_source:    "sba-profile-naics",
                 naics_list:    naicsCodes,
                 primary_naics: naicsCodes[0] || null,
                 sam_enriched_at: new Date().toISOString(),
               }
             }
           );
-          results.updated++;
-          results.details.push({ name: d.name, status: "updated", fsc, naics: naicsCodes });
+          if (fsc.length) {
+            results.updated++;
+            results.details.push({ name: d.name, status: "updated", fsc, naics: naicsCodes, source: "sba-profile" });
+          } else {
+            results.no_naics++;
+            results.details.push({ name: d.name, status: "no_fsc_match", naics: naicsCodes });
+          }
         } catch (e) {
           results.failed++;
           results.details.push({ name: d.name, status: "failed", error: e.message });
