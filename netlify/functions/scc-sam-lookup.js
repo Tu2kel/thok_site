@@ -364,18 +364,41 @@ async function sbaLookup(name) {
 
     const website = (r.website || r.additional_website || "").trim() || null;
 
+    // Capture NAICS codes from the search result — field names vary
+    const naicsList = [];
+    for (const key of ["naics_code","primary_naics","naics","naics_codes","all_naics"]) {
+      const v = r[key];
+      if (!v) continue;
+      if (typeof v === "string" && /^\d{4,6}$/.test(v)) naicsList.push(v);
+      if (Array.isArray(v)) v.forEach(n => {
+        if (typeof n === "string" && /^\d{4,6}$/.test(n)) naicsList.push(n);
+        if (n && typeof n === "object") {
+          const c = n.code || n.naics_code || n.naicsCode || "";
+          if (/^\d{4,6}$/.test(String(c))) naicsList.push(String(c));
+        }
+      });
+    }
+    // naics_descriptions is sometimes an array of { code, title } objects
+    const nd = r.naics_descriptions || r.naics_list || [];
+    if (Array.isArray(nd)) nd.forEach(n => {
+      const c = typeof n === "string" ? n : (n.code || n.naics_code || "");
+      if (/^\d{4,6}$/.test(String(c))) naicsList.push(String(c));
+    });
+
     return {
-      poc_first:   firstName,
-      poc_last:    lastName,
-      poc_name:    fullName  || null,
-      poc_title:   title,
-      poc_email:   email,
-      poc_phone:   phone,
-      sba_website: website,
-      cage_code:   r.cage_code || null,
-      uei:         r.uei       || null,
-      sam_name:    r.legal_business_name || null,
-      poc_source:  "sba",
+      poc_first:    firstName,
+      poc_last:     lastName,
+      poc_name:     fullName  || null,
+      poc_title:    title,
+      poc_email:    email,
+      poc_phone:    phone,
+      sba_website:  website,
+      cage_code:    r.cage_code || null,
+      uei:          r.uei       || null,
+      sam_name:     r.legal_business_name || null,
+      poc_source:   "sba",
+      naics_list:   [...new Set(naicsList)],
+      primary_naics: naicsList[0] || null,
     };
   } catch {
     return null;
@@ -505,89 +528,87 @@ exports.handler = async (event) => {
     return ok(results);
   }
 
-  // ── enrichFsc — derive FSC from SBA DSBS profile NAICS codes ──────────
-  // Flow: SAM → get UEI + CAGE → SBA profile/{UEI}/{CAGE} → NAICS codes → FSC crosswalk
+  // ── enrichFsc — derive FSC from SBA DSBS search NAICS codes ───────────
+  // Flow per vendor: SBA search by name → NAICS fields in result → FSC crosswalk
+  // Process 10 vendors per call; frontend loops until total < 10 (same as enrichAll).
   if (action === "enrichFsc") {
-    const db    = await getDb();
-    const dists = await db.collection("distributors")
-      .find({ is_dns: { $ne: true } })
-      .project({ id: 1, name: 1, cage_code: 1, uei: 1, fsc: 1, naics_list: 1, primary_naics: 1 })
-      .limit(payload.limit || 200)
-      .toArray();
+    try {
+      const db    = await getDb();
+      const dists = await db.collection("distributors")
+        .find({ is_dns: { $ne: true } })
+        .project({ id: 1, name: 1, cage_code: 1, uei: 1 })
+        .limit(payload.limit || 10)
+        .skip(payload.skip || 0)
+        .toArray();
 
-    const results = { updated: 0, no_naics: 0, not_found: 0, failed: 0, total: dists.length, details: [] };
+      const results = { updated: 0, no_naics: 0, not_found: 0, failed: 0, total: dists.length, details: [] };
 
-    for (const d of dists) {
-      try {
-        let uei  = d.uei;
-        let cage = d.cage_code;
+      for (const d of dists) {
+        try {
+          // SBA search captures NAICS from the search result
+          const sbaResult = await sbaLookup(d.name);
+          if (!sbaResult) {
+            results.not_found++;
+            results.details.push({ name: d.name, status: "not_found" });
+            await sleep(120);
+            continue;
+          }
 
-        // If we don't have UEI/CAGE yet, pull from SAM first
-        if (!uei || !cage) {
-          const samResult = await samLookup(d.name, cage);
-          if (!samResult) { results.not_found++; results.details.push({ name: d.name, status: "no_sam" }); await sleep(150); continue; }
-          uei  = uei  || samResult.uei       || null;
-          cage = cage || samResult.cage_code || null;
-          // Persist UEI/CAGE so future runs skip SAM lookup
-          if (uei || cage) {
+          // Persist any UEI/CAGE discovered
+          if (sbaResult.uei || sbaResult.cage_code) {
             await db.collection("distributors").updateOne(
               { id: d.id },
-              { $set: { uei: uei || null, cage_code: cage || null, sam_enriched_at: new Date().toISOString() } }
+              { $set: {
+                  uei:      sbaResult.uei      || d.uei      || null,
+                  cage_code: sbaResult.cage_code || d.cage_code || null,
+                } }
             ).catch(() => {});
           }
-          await sleep(150);
-        }
 
-        if (!uei || !cage) {
-          results.not_found++;
-          results.details.push({ name: d.name, status: "no_uei_cage" });
-          continue;
-        }
+          const naicsCodes = sbaResult.naics_list || [];
+          if (!naicsCodes.length) {
+            results.no_naics++;
+            results.details.push({ name: d.name, status: "no_naics", raw: JSON.stringify(sbaResult).slice(0, 200) });
+            await sleep(120);
+            continue;
+          }
 
-        // Fetch SBA DSBS profile to get NAICS codes
-        const naicsCodes = await sbaProfileNaics(uei, cage);
-        if (!naicsCodes || !naicsCodes.length) {
-          results.no_naics++;
-          results.details.push({ name: d.name, status: "no_naics", uei, cage });
-          await sleep(200);
-          continue;
-        }
+          const fsc = naicsToFsc(naicsCodes);
+          if (!fsc.length) {
+            results.no_naics++;
+            results.details.push({ name: d.name, status: "no_fsc_match", naics: naicsCodes });
+            await db.collection("distributors").updateOne(
+              { id: d.id },
+              { $set: { naics_list: naicsCodes, primary_naics: naicsCodes[0] || null, fsc_source: "sba-naics" } }
+            ).catch(() => {});
+            await sleep(120);
+            continue;
+          }
 
-        // Map NAICS → FSC
-        const fsc = naicsToFsc(naicsCodes);
-        if (!fsc.length) {
-          results.no_naics++;
-          results.details.push({ name: d.name, status: "no_fsc_match", naics: naicsCodes });
-          // Still save the NAICS codes for visibility
           await db.collection("distributors").updateOne(
             { id: d.id },
-            { $set: { naics_list: naicsCodes, primary_naics: naicsCodes[0] || null, fsc_source: "sba-naics", sam_enriched_at: new Date().toISOString() } }
-          ).catch(() => {});
-          await sleep(200);
-          continue;
-        }
-
-        await db.collection("distributors").updateOne(
-          { id: d.id },
-          { $set: {
-              fsc:           fsc,
-              fsc_source:    "sba-naics",
-              naics_list:    naicsCodes,
-              primary_naics: naicsCodes[0] || null,
-              sam_enriched_at: new Date().toISOString(),
+            { $set: {
+                fsc:           fsc,
+                fsc_source:    "sba-naics",
+                naics_list:    naicsCodes,
+                primary_naics: naicsCodes[0] || null,
+                sam_enriched_at: new Date().toISOString(),
+              }
             }
-          }
-        );
-        results.updated++;
-        results.details.push({ name: d.name, status: "updated", fsc, naics: naicsCodes });
-      } catch (e) {
-        results.failed++;
-        results.details.push({ name: d.name, status: "failed", error: e.message });
+          );
+          results.updated++;
+          results.details.push({ name: d.name, status: "updated", fsc, naics: naicsCodes });
+        } catch (e) {
+          results.failed++;
+          results.details.push({ name: d.name, status: "failed", error: e.message });
+        }
+        await sleep(120);
       }
-      await sleep(200);
-    }
 
-    return ok(results);
+      return ok(results);
+    } catch (e) {
+      return fail("enrichFsc error: " + e.message);
+    }
   }
 
   return fail("Unknown action: " + action);

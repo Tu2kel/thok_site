@@ -728,32 +728,44 @@
     }, []);
 
     const handleEnrichFsc = useCallback(async () => {
-      if (!confirm("Pull FSC codes from SAM.gov for ALL vendors?\n\nThis overwrites current FSC codes with the PSC codes each vendor self-registered in SAM. Vendors not found in SAM keep their existing codes.\n\nProceed?")) return;
+      if (!confirm("Pull NAICS → FSC codes from SBA DSBS for ALL vendors?\n\nSearches SBA by vendor name, extracts NAICS codes, maps them to FSC lanes.\nProcesses 10 vendors at a time — keep this tab open.\n\nProceed?")) return;
       setEnrichingFsc(true);
-      setEnrichFscProg("Starting…");
-      let totalUpdated = 0, totalNoPsc = 0, totalNotFound = 0, totalFailed = 0;
+      let totalUpdated = 0, totalNoNaics = 0, totalNotFound = 0, totalFailed = 0, pass = 0, skip = 0;
+      var details = [];
       try {
-        const res  = await fetch("/.netlify/functions/scc-sam-lookup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "enrichFsc", limit: 200 }),
-        });
-        const data = await res.json();
-        if (!data.ok) { alert("Enrich FSC failed: " + data.error); return; }
-        const r = data.result;
-        totalUpdated  = r.updated    || 0;
-        totalNoPsc    = r.no_psc    || 0;
-        totalNotFound = r.not_found || 0;
-        totalFailed   = r.failed    || 0;
+        while (true) {
+          pass++;
+          setEnrichFscProg("Pass " + pass + " (" + skip + " done) — " + totalUpdated + " updated…");
+          const res = await fetch("/.netlify/functions/scc-sam-lookup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "enrichFsc", limit: 10, skip }),
+          });
+          if (!res.ok) { alert("Enrich FSC: server error " + res.status); break; }
+          const data = await res.json();
+          if (!data.ok) { alert("Enrich FSC failed: " + data.error); break; }
+          const r = data.result;
+          totalUpdated  += r.updated   || 0;
+          totalNoNaics  += r.no_naics  || 0;
+          totalNotFound += r.not_found || 0;
+          totalFailed   += r.failed    || 0;
+          (r.details || []).forEach(function(d) { details.push(d); });
+          skip += (r.total || 0);
+          if ((r.total || 0) < 10) break;
+        }
         await window.SCC_DIST.distReloadCache();
         setDists([...window.SCC_DIST.DISTRIBUTORS]);
-        const detail = (r.details || []).map(d => (d.status === "updated" ? "✓ " + d.name + " → " + (d.fsc || []).join(",") : d.name + " (" + d.status + ")" )).join("\n");
+        const lines = details.map(function(d) {
+          return d.status === "updated"
+            ? "✓ " + d.name + " → " + (d.fsc || []).join(",") + " (NAICS:" + (d.naics || []).join(",") + ")"
+            : d.name + " [" + d.status + "]" + (d.raw ? " raw:" + String(d.raw).slice(0, 100) : "");
+        }).join("\n");
         alert(
-          "FSC Enrich complete\n" +
+          "FSC Enrich complete (" + pass + " passes)\n" +
           "✓ Updated: " + totalUpdated + "\n" +
-          "⚠ No PSC in SAM: " + totalNoPsc + "\n" +
+          "⚠ No NAICS: " + totalNoNaics + "\n" +
           "✗ Not found: " + totalNotFound + "\n" +
-          "✗ Failed: " + totalFailed + "\n\n" + detail
+          "✗ Failed: " + totalFailed + "\n\n" + lines
         );
       } catch (e) {
         alert("Enrich FSC error: " + e.message);
