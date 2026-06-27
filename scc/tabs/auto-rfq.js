@@ -229,11 +229,15 @@
       return lines.join("\n");
     }).join("\n\n");
 
+    var wholesalerLine = (dist.is_wholesaler || (dist.tags || []).includes("wholesaler"))
+      ? "\nImportant: Imperio Federal Logistics is a government reseller — not an end-user consumer. We purchase for resale on DLA/government contracts and are looking for your wholesale/distributor pricing, not retail. We hold a sales tax exemption certificate available upon request.\n"
+      : "";
+
     const body = [
       "Hi " + dist.name + ",",
       "",
       "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there’s a chance it’s landing in spam folders. I’m reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
-      "",
+      wholesalerLine,
       "Now to the reason I’m reaching out — I have " + count + " active DLA procurement need" + (count > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
       "",
       itemLines,

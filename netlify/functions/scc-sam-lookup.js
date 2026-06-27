@@ -494,6 +494,63 @@ async function sbaSearchNaics(name) {
   }
 }
 
+// SBA SBS /_api/v2/search — returns naics_primary + naics_all_codes in results
+// Requires Referer: .../advanced to pass the nginx/backend gate
+async function sbsSearch(name) {
+  try {
+    const body = {
+      searchProfiles:          { searchTerm: name },
+      annualRevenue:           { relationOperator: "at-least", annualGrossRevenue: "" },
+      bondingLevels:           { constructionIndividual: "", constructionAggregate: "", serviceIndividual: "", serviceAggregate: "" },
+      businessSize:            { relationOperator: "at-least", numberOfEmployees: "" },
+      entityDetailId:          "",
+      keywords:                { list: [], operatorType: "Or" },
+      lastUpdated:             { date: { label: "Anytime", value: "anytime" } },
+      location:                { states: [], zipCodes: [], counties: [], districts: [], msas: [] },
+      naics:                   { codes: [], isPrimary: false, operatorType: "Or" },
+      qualityAssuranceStandards: { qas: [] },
+      samStatus:               { isActiveSAM: false },
+      sbaCertifications:       { activeCerts: [], isPreviousCert: false, operatorType: "Or" },
+      selfCertifications:      { certifications: [], operatorType: "Or" },
+    };
+    const res = await fetch("https://search.certifications.sba.gov/_api/v2/search", {
+      method:  "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept:         "application/json",
+        "User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Origin:         "https://search.certifications.sba.gov",
+        Referer:        "https://search.certifications.sba.gov/advanced",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = (data?.results || []);
+    if (!results.length) return null;
+
+    const target = name.toUpperCase();
+    results.sort((a, b) => {
+      const score = n => {
+        const u = (n || "").toUpperCase();
+        return u === target ? 0 : u.startsWith(target.split(" ")[0]) ? 1 : 2;
+      };
+      return score(a.legal_business_name || a.contact_person) - score(b.legal_business_name || b.contact_person);
+    });
+    const r = results[0];
+    const naicsAll = [...new Set([r.naics_primary, ...(r.naics_all_codes || [])].filter(Boolean).map(String))];
+    return {
+      uei:       r.uei       || null,
+      cage_code: r.cage_code || null,
+      sam_name:  r.legal_business_name || r.contact_person || null,
+      naics_list:    naicsAll,
+      primary_naics: r.naics_primary || naicsAll[0] || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Full lookup: SAM.gov first, SBA DSBS fallback if no contact found
 async function lookupPOC(name, cage) {
   const samResult = await samLookup(name, cage);
@@ -653,14 +710,51 @@ exports.handler = async (event) => {
             }
           }
 
+          // SAM didn't return UEI/CAGE — fall back to SBA SBS search by name
+          // SBS search returns naics_primary + naics_all_codes directly in results
           if (!uei || !cage) {
-            results.not_found++;
-            results.details.push({ name: d.name, status: "no_uei_cage" });
+            const sbsResult = await sbsSearch(d.name);
+            if (!sbsResult) {
+              results.not_found++;
+              results.details.push({ name: d.name, status: "not_found" });
+              await sleep(120);
+              continue;
+            }
+            uei  = sbsResult.uei       || uei;
+            cage = sbsResult.cage_code || cage;
+            // Save UEI/CAGE and use NAICS directly from search result
+            const sbsNaics = sbsResult.naics_list || [];
+            if (uei || cage) {
+              await db.collection("distributors").updateOne(
+                { id: d.id },
+                { $set: { uei: uei || null, cage_code: cage || null } }
+              ).catch(() => {});
+            }
+            if (sbsNaics.length) {
+              const fsc = naicsToFsc(sbsNaics);
+              await db.collection("distributors").updateOne(
+                { id: d.id },
+                { $set: {
+                    naics_list:      sbsNaics,
+                    primary_naics:   sbsResult.primary_naics || sbsNaics[0],
+                    fsc_source:      "sbs-search",
+                    sam_enriched_at: new Date().toISOString(),
+                    ...(fsc.length ? { fsc } : {}),
+                  }
+                }
+              );
+              if (fsc.length) { results.updated++; results.details.push({ name: d.name, status: "updated", fsc, naics: sbsNaics, source: "sbs" }); }
+              else             { results.no_naics++; results.details.push({ name: d.name, status: "no_fsc_match", naics: sbsNaics }); }
+              await sleep(120);
+              continue;
+            }
+            results.no_naics++;
+            results.details.push({ name: d.name, status: "no_naics", source: "sbs" });
             await sleep(120);
             continue;
           }
 
-          // SBA SBS public profile API — returns naics_primary + naics_all_codes
+          // Have UEI + CAGE — hit SBA SBS profile for full NAICS list
           const profRes = await fetch(
             "https://search.certifications.sba.gov/_api/v2/profile/" +
               encodeURIComponent(uei) + "/" + encodeURIComponent(cage),
@@ -668,7 +762,7 @@ exports.handler = async (event) => {
               headers: {
                 Accept:       "application/json",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                Referer:      "https://search.certifications.sba.gov/",
+                Referer:      "https://search.certifications.sba.gov/advanced",
               },
             }
           );
