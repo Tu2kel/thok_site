@@ -650,8 +650,10 @@
     const [dnsPrompt, setDnsPrompt] = useState({}); // id → draft reason string
     const [dnsSaving, setDnsSaving] = useState({}); // id → bool
     const [pocLookingUp, setPocLookingUp] = useState({}); // id → bool
-    const [enrichingAll, setEnrichingAll] = useState(false);
+    const [enrichingAll, setEnrichingAll]   = useState(false);
     const [enrichProgress, setEnrichProgress] = useState("");
+    const [enrichingFsc, setEnrichingFsc]   = useState(false);
+    const [enrichFscProg, setEnrichFscProg] = useState("");
 
     const handleLookupPOC = useCallback(async (d) => {
       setPocLookingUp(prev => ({ ...prev, [d.id]: true }));
@@ -722,6 +724,42 @@
       } finally {
         setEnrichingAll(false);
         setEnrichProgress("");
+      }
+    }, []);
+
+    const handleEnrichFsc = useCallback(async () => {
+      if (!confirm("Pull FSC codes from SAM.gov for ALL vendors?\n\nThis overwrites current FSC codes with the PSC codes each vendor self-registered in SAM. Vendors not found in SAM keep their existing codes.\n\nProceed?")) return;
+      setEnrichingFsc(true);
+      setEnrichFscProg("Starting…");
+      let totalUpdated = 0, totalNoPsc = 0, totalNotFound = 0, totalFailed = 0;
+      try {
+        const res  = await fetch("/.netlify/functions/scc-sam-lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "enrichFsc", limit: 200 }),
+        });
+        const data = await res.json();
+        if (!data.ok) { alert("Enrich FSC failed: " + data.error); return; }
+        const r = data.result;
+        totalUpdated  = r.updated    || 0;
+        totalNoPsc    = r.no_psc    || 0;
+        totalNotFound = r.not_found || 0;
+        totalFailed   = r.failed    || 0;
+        await window.SCC_DIST.distReloadCache();
+        setDists([...window.SCC_DIST.DISTRIBUTORS]);
+        const detail = (r.details || []).map(d => (d.status === "updated" ? "✓ " + d.name + " → " + (d.fsc || []).join(",") : d.name + " (" + d.status + ")" )).join("\n");
+        alert(
+          "FSC Enrich complete\n" +
+          "✓ Updated: " + totalUpdated + "\n" +
+          "⚠ No PSC in SAM: " + totalNoPsc + "\n" +
+          "✗ Not found: " + totalNotFound + "\n" +
+          "✗ Failed: " + totalFailed + "\n\n" + detail
+        );
+      } catch (e) {
+        alert("Enrich FSC error: " + e.message);
+      } finally {
+        setEnrichingFsc(false);
+        setEnrichFscProg("");
       }
     }, []);
 
@@ -1039,6 +1077,24 @@
               opacity: enrichingAll ? 0.6 : 1,
             },
           }, enrichingAll ? (enrichProgress || "SAM Enriching…") : "Enrich All POC"),
+          h("button", {
+            onClick: handleEnrichFsc,
+            disabled: enrichingFsc,
+            title: "Pull PSC/FSC codes from SAM.gov for all vendors — overwrites current FSC codes with what each vendor registered in SAM",
+            style: {
+              padding: "6px 12px",
+              fontFamily: "JetBrains Mono,monospace",
+              fontSize: "10px",
+              letterSpacing: ".05em",
+              background: enrichingFsc ? "rgba(251,191,36,.06)" : "rgba(251,191,36,.12)",
+              border: "1px solid rgba(251,191,36,.35)",
+              color: "rgba(251,191,36,.9)",
+              borderRadius: "4px",
+              cursor: enrichingFsc ? "wait" : "pointer",
+              whiteSpace: "nowrap",
+              opacity: enrichingFsc ? 0.6 : 1,
+            },
+          }, enrichingFsc ? (enrichFscProg || "Pulling FSC…") : "Enrich FSC from SAM"),
         ),
       ),
 

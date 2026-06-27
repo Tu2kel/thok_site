@@ -25,7 +25,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function samLookup(name, cage) {
   const params = new URLSearchParams({
     api_key:          SAM_KEY,
-    includeSections:  "entityRegistration,pointsOfContact",
+    includeSections:  "entityRegistration,goodsAndServices,pointsOfContact",
     registrationStatus: "A",
   });
 
@@ -66,26 +66,45 @@ async function samLookup(name, cage) {
   const entity = entities[0];
   const reg    = entity.entityRegistration || {};
   const poc    = entity.pointsOfContact || {};
+  const g_s    = entity.goodsAndServices || {};
+
+  // PSC codes the vendor self-registered in SAM — filter to 4-digit numeric (supply FSCs only)
+  const rawPscs = (g_s.pscCodes || []).map(p => (typeof p === "string" ? p : p.pscCode || "")).filter(Boolean);
+  const fscFromSam = [...new Set(rawPscs.filter(p => /^\d{4}$/.test(p)))].sort();
+
+  // Primary NAICS for reference
+  const primaryNaics = g_s.primaryNaics || null;
+  const naicsList    = (g_s.naicsList || []).map(n => (typeof n === "string" ? n : n.naicsCode || n.code || "")).filter(Boolean);
 
   // Prefer Government Business POC, fall back to Electronic Business POC
   const contact = poc.governmentBusinessPOC || poc.electronicBusinessPOC || poc.pastPerformancePOC || null;
 
-  if (!contact) return { cage_code: reg.cageCode || null, uei: reg.ueiSAM || null, sam_name: reg.legalBusinessName || null };
+  if (!contact) return {
+    cage_code:      reg.cageCode || null,
+    uei:            reg.ueiSAM   || null,
+    sam_name:       reg.legalBusinessName || null,
+    fsc_from_sam:   fscFromSam,
+    primary_naics:  primaryNaics,
+    naics_list:     naicsList,
+  };
 
   const firstName = (contact.firstName || "").trim();
   const lastName  = (contact.lastName  || "").trim();
   const fullName  = [firstName, lastName].filter(Boolean).join(" ");
 
   return {
-    poc_first:  firstName  || null,
-    poc_last:   lastName   || null,
-    poc_name:   fullName   || null,
-    poc_title:  (contact.title || "").trim() || null,
-    poc_email:  (contact.email || "").trim().toLowerCase() || null,
-    poc_phone:  (contact.phoneNumber || "").trim() || null,
-    cage_code:  reg.cageCode     || null,
-    uei:        reg.ueiSAM       || null,
-    sam_name:   reg.legalBusinessName || null,
+    poc_first:     firstName  || null,
+    poc_last:      lastName   || null,
+    poc_name:      fullName   || null,
+    poc_title:     (contact.title || "").trim() || null,
+    poc_email:     (contact.email || "").trim().toLowerCase() || null,
+    poc_phone:     (contact.phoneNumber || "").trim() || null,
+    cage_code:     reg.cageCode     || null,
+    uei:           reg.ueiSAM       || null,
+    sam_name:      reg.legalBusinessName || null,
+    fsc_from_sam:  fscFromSam,
+    primary_naics: primaryNaics,
+    naics_list:    naicsList,
   };
 }
 
@@ -205,7 +224,7 @@ exports.handler = async (event) => {
   if (!SAM_KEY) return fail("SAM_API_KEY not set in Netlify env vars");
 
   // ── Shared: build $set and conditionally auto-fill email ─────────────────
-  async function applyPocToDb(db, distId, result, existing = {}) {
+  async function applyPocToDb(db, distId, result, existing = {}, opts = {}) {
     const set = {
       poc_name:        result.poc_name   || null,
       poc_first:       result.poc_first  || null,
@@ -217,8 +236,15 @@ exports.handler = async (event) => {
       cage_code:       result.cage_code  || existing.cage_code || null,
       uei:             result.uei        || null,
       sam_name:        result.sam_name   || null,
+      primary_naics:   result.primary_naics || existing.primary_naics || null,
+      naics_list:      result.naics_list || existing.naics_list || [],
       sam_enriched_at: new Date().toISOString(),
     };
+    // Update FSC from SAM PSC codes when found (and caller allows it)
+    if (opts.updateFsc !== false && result.fsc_from_sam && result.fsc_from_sam.length > 0) {
+      set.fsc = result.fsc_from_sam;
+      set.fsc_source = "sam-psc";
+    }
     // Auto-fill email if card has none
     if (result.poc_email && !existing.email) set.email = result.poc_email;
     // Auto-fill website if card has none
@@ -285,6 +311,58 @@ exports.handler = async (event) => {
         results.failed++;
       }
       await sleep(120);
+    }
+
+    return ok(results);
+  }
+
+  // ── enrichFsc — re-derive FSC for all vendors from SAM PSC codes ──────
+  if (action === "enrichFsc") {
+    const db    = await getDb();
+    const dists = await db.collection("distributors")
+      .find({ is_dns: { $ne: true } })
+      .project({ id: 1, name: 1, cage_code: 1, email: 1, website: 1, fsc: 1, primary_naics: 1, naics_list: 1 })
+      .limit(payload.limit || 200)
+      .toArray();
+
+    const results = { updated: 0, no_psc: 0, not_found: 0, failed: 0, total: dists.length, details: [] };
+
+    for (const d of dists) {
+      try {
+        const result = await samLookup(d.name, d.cage_code);
+        if (!result) { results.not_found++; results.details.push({ name: d.name, status: "not_found" }); continue; }
+
+        if (!result.fsc_from_sam || result.fsc_from_sam.length === 0) {
+          results.no_psc++;
+          results.details.push({ name: d.name, status: "no_psc", naics: result.primary_naics });
+          // Still save NAICS even if no PSC codes
+          await db.collection("distributors").updateOne(
+            { id: d.id },
+            { $set: { primary_naics: result.primary_naics || null, naics_list: result.naics_list || [], sam_enriched_at: new Date().toISOString() } }
+          ).catch(() => {});
+          continue;
+        }
+
+        await db.collection("distributors").updateOne(
+          { id: d.id },
+          { $set: {
+              fsc:           result.fsc_from_sam,
+              fsc_source:    "sam-psc",
+              primary_naics: result.primary_naics || null,
+              naics_list:    result.naics_list    || [],
+              sam_enriched_at: new Date().toISOString(),
+              // Also update POC if found
+              ...(result.poc_name ? { poc_name: result.poc_name, poc_first: result.poc_first, poc_last: result.poc_last, poc_email: result.poc_email, poc_phone: result.poc_phone } : {}),
+            }
+          }
+        );
+        results.updated++;
+        results.details.push({ name: d.name, status: "updated", fsc: result.fsc_from_sam, naics: result.primary_naics });
+      } catch (e) {
+        results.failed++;
+        results.details.push({ name: d.name, status: "failed", error: e.message });
+      }
+      await sleep(200); // rate-limit SAM API
     }
 
     return ok(results);
