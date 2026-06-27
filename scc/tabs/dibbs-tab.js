@@ -27,8 +27,65 @@
   // AGENT_URL: read from SCC_AGENT client (supports Railway URL via localStorage key "scc_agent_url")
   // Set once in browser console: SCC_AGENT.setAgentUrl("https://your-app.up.railway.app")
   function getAgentUrl() { return window.SCC_AGENT ? window.SCC_AGENT.getAgentUrl() : "http://localhost:3100"; }
-  const STORE_KEY = "scc_dibbs_tab_v1";
-  const CRON_KEY = "scc_dibbs_cron_v1";
+  const STORE_KEY       = "scc_dibbs_tab_v1";
+  const CRON_KEY        = "scc_dibbs_cron_v1";
+  const BLAST_LOG_FN    = "/.netlify/functions/scc-blast-log";
+
+  // Fire-and-forget: save a blast session brief to MongoDB
+  function saveBriefToMongo(plan, isLive, sent, failed) {
+    var solMap = {};
+    var blastEntries = [];
+    var nowTs = new Date().toISOString();
+    for (var i = 0; i < plan.length; i++) {
+      var entry = plan[i];
+      for (var k = 0; k < entry.records.length; k++) {
+        var rec = entry.records[k];
+        if (!solMap[rec.sol_number]) {
+          solMap[rec.sol_number] = {
+            sol_number:      rec.sol_number,
+            item_name:       rec.item_name || "",
+            fsc:             rec.fsc || (rec.nsn || "").slice(0, 4),
+            nsn:             rec.nsn || "",
+            verdict:         rec.verdict || "GO",
+            win_pct:         rec.winProbabilityPct || 0,
+            quote_due:       rec.quote_due || "",
+            quantity:        String(rec.quantity || ""),
+            ref_part_number: rec.ref_part_number || "",
+          };
+        }
+        blastEntries.push({
+          sol_number:   rec.sol_number,
+          item_name:    rec.item_name  || "",
+          fsc:          rec.fsc || (rec.nsn || "").slice(0, 4),
+          quote_due:    rec.quote_due  || "",
+          vendor_name:  entry.dist.name,
+          vendor_email: isLive ? (entry.dist.email || "") : "test@test.com",
+          vendor_id:    String(entry.dist.id || entry.dist._id || ""),
+          status:       "sent",
+          sent_at:      nowTs,
+        });
+      }
+    }
+    var solArr = Object.values(solMap);
+    fetch(BLAST_LOG_FN, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "saveBrief",
+        brief: {
+          run_date:     new Date().toLocaleDateString("en-US"),
+          total_sols:   solArr.length,
+          go_count:     solArr.filter(function(s) { return s.verdict === "GO"; }).length,
+          verify_count: solArr.filter(function(s) { return s.verdict === "VERIFY FIRST"; }).length,
+          reject_count: 0,
+          blast_sent:   sent,
+          blast_failed: failed,
+          sols:         solArr,
+        },
+        blastEntries: blastEntries,
+      }),
+    }).catch(function(e) { console.warn("[SCC] saveBrief failed:", e.message); });
+  }
 
   // ── PERSIST ──────────────────────────────────────────────────────────
   function parseQuoteDue(s) {
@@ -938,6 +995,7 @@
       if (!window.confirm("Blast all " + remaining.length + " remaining vendor email(s) " + (isLive ? "LIVE" : "to test inbox") + "?\n\nThis will fire them all without individual approval.")) return;
       setBlasting(true);
       let sent = 0, failed = 0;
+      const sentPlan = [];
       for (let i = 0; i < remaining.length; i++) {
         const entry = remaining[i];
         addLog("AUTO ▶ [" + (i + 1) + "/" + remaining.length + "] Sending to " + entry.dist.name + "…", "info");
@@ -945,6 +1003,7 @@
           await window.SCC_AUTO_RFQ.sendOneVendorBatch(entry, isLive ? {} : { testMode: true });
           addLog("✓ " + entry.dist.name + (isLive ? " <" + (entry.dist.email || entry.to) + ">" : " [TEST]") + " · " + entry.records.length + " item(s).", "ok");
           sent++;
+          sentPlan.push(entry);
         } catch (e) {
           addLog("✗ " + entry.dist.name + ": " + e.message, "err");
           failed++;
@@ -952,6 +1011,7 @@
         // Pace sends — Gmail blocks on too many rapid SMTP logins (454-4.7.0)
         if (i < remaining.length - 1) await new Promise(r => setTimeout(r, 1500));
       }
+      if (sent > 0) saveBriefToMongo(sentPlan, isLive, sent, failed);
       refreshBlastLog();
       setPendingBlast(null);
       setShowBlastLog(true);
@@ -983,6 +1043,7 @@
       setBlastReady(null);
       setBlasting(true);
       var sent = 0, failed = 0;
+      var sentPlan = [];
       for (var i = 0; i < autoFiltered.length; i++) {
         var entry = autoFiltered[i];
         addLog("AUTO-BLAST ▶ [" + (i + 1) + "/" + autoFiltered.length + "] " + entry.dist.name + " · " + entry.records.length + " item(s)…", "info");
@@ -990,12 +1051,14 @@
           await window.SCC_AUTO_RFQ.sendOneVendorBatch(entry, isLive ? {} : { testMode: true });
           addLog("✓ " + entry.dist.name + (isLive ? " <" + (entry.dist.email || entry.to || "") + ">" : " [TEST]") + " · " + entry.records.length + " item(s).", "ok");
           sent++;
+          sentPlan.push(entry);
         } catch (e) {
           addLog("✗ " + entry.dist.name + ": " + e.message, "err");
           failed++;
         }
         if (i < autoFiltered.length - 1) await new Promise(function(r) { return setTimeout(r, 1500); });
       }
+      if (sent > 0) saveBriefToMongo(sentPlan, isLive, sent, failed);
       refreshBlastLog();
       setShowBlastLog(true);
       addLog("AUTO-BLAST ▶ Done — " + sent + " sent, " + failed + " failed.", sent > 0 ? "ok" : "err");

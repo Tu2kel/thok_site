@@ -205,6 +205,51 @@ exports.handler = async (event) => {
       return ok(results);
     }
 
+    // ── saveBrief — persist a UI-triggered blast session ───────────────
+    if (action === "saveBrief") {
+      const { brief, blastEntries } = payload;
+      if (!brief) return fail("brief required");
+
+      await db.collection("blast_briefs").insertOne({
+        run_date:     brief.run_date || new Date().toLocaleDateString("en-US"),
+        source:       "ui-blast",
+        total_sols:   brief.total_sols || 0,
+        go_count:     brief.go_count  || 0,
+        verify_count: brief.verify_count || 0,
+        reject_count: brief.reject_count || 0,
+        blast_sent:   brief.blast_sent  || 0,
+        blast_failed: brief.blast_failed || 0,
+        sols:         brief.sols || [],
+        blast_log:    [],
+        created_at:   new Date().toISOString(),
+      });
+
+      // Write each sent vendor+sol combo to blast_log for re-blast dedup
+      if (blastEntries && blastEntries.length) {
+        for (const entry of blastEntries) {
+          if (!entry.sol_number || !entry.vendor_email) continue;
+          await db.collection("blast_log").updateOne(
+            { sol_number: entry.sol_number, vendor_email: entry.vendor_email.toLowerCase() },
+            { $set: {
+                sol_number:   entry.sol_number,
+                item_name:    entry.item_name  || "",
+                fsc:          entry.fsc        || "",
+                quote_due:    entry.quote_due  || "",
+                vendor_name:  entry.vendor_name,
+                vendor_email: entry.vendor_email.toLowerCase(),
+                vendor_id:    entry.vendor_id  || null,
+                status:       "sent",
+                sent_at:      entry.sent_at    || new Date().toISOString(),
+              }
+            },
+            { upsert: true },
+          ).catch(() => {});
+        }
+      }
+
+      return ok({ saved: true });
+    }
+
     return fail("Unknown action: " + action);
   } catch (e) {
     return fail(e.message);
