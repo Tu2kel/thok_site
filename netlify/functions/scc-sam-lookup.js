@@ -4,11 +4,200 @@
 
 const { MongoClient } = require("mongodb");
 
-const SAM_KEY    = process.env.SAM_API_KEY;
-const SAM_BASE   = "https://api.sam.gov/entity-information/v3/entities";
-const SBA_SEARCH = "https://search.certifications.sba.gov/search";
+const SAM_KEY     = process.env.SAM_API_KEY;
+const SAM_BASE    = "https://api.sam.gov/entity-information/v3/entities";
+const SBA_SEARCH  = "https://search.certifications.sba.gov/search";
+const SBA_PROFILE = "https://search.certifications.sba.gov/profile";
 const MONGODB_URI = process.env.MONGODB_URI;
-const DB_NAME    = "scc_db";
+const DB_NAME     = "scc_db";
+
+// ── NAICS → FSC crosswalk ────────────────────────────────────────────────────
+// Key DLA supply categories. Map NAICS 6-digit → FSC 4-digit supply codes.
+const NAICS_FSC = {
+  // Fasteners / Hardware (Mfg)
+  "332510": ["5305","5306","5307","5310","5315","5320","5325","5340"],
+  "332720": ["5305","5306","5307","5308","5310","5315","5320","5325"],
+  "332722": ["5305","5306","5307","5308","5310","5315","5320","5325"],
+  "332613": ["5360","5365"],
+  "332618": ["5340","5360","5365"],
+  "332119": ["5340","5365"],
+  "332710": ["5110","5120","5340"],
+  "332911": ["4820","4840"],
+  "332912": ["4820","4840"],
+  "332919": ["4710","4720","4730","4740","4820","4840"],
+  "332991": ["3110"],
+  "332993": ["1310","1315","1320","1325","1340","1345","1377"],
+  "332994": ["1305"],
+  "332995": ["1010","1015","1020","1025","1030","1040","1045"],
+  "332999": ["5305","5306","5307","5310","5315","5320","5325","5330","5340","5365"],
+  // Rubber / Seals
+  "326220": ["4710","4730"],
+  "326291": ["5330","5331"],
+  "326299": ["5330","5331"],
+  "325212": ["5330","5331"],
+  // Electronic Components
+  "334413": ["5961","5962"],
+  "334412": ["5905","5910","5915","5925","5930","5935"],
+  "334414": ["5905","5910","5915","5925","5930","5935"],
+  "334415": ["5905","5910","5915","5920","5925","5930"],
+  "334416": ["5905","5910","5915","5920","5925","5930","5935","5945"],
+  "334417": ["5820","5825","5830","5835","5840","5845","5850","5855","5860","5865","5895"],
+  "334418": ["5905","5910","5935","5940","5945","5960","5961","5962","5963"],
+  "334419": ["5905","5910","5915","5920","5925","5930","5935","5940","5945","5960","5961","5962","5963","5975"],
+  "334511": ["6605","6610","6615","6620","6625","6630","6635","6640","6645","6650","6660"],
+  "334515": ["6610","6620","6625","6630","6635","6640","6645","6650","6655","6660","6665"],
+  "334614": ["5905","5910","5920","5925","5930","5935","5945"],
+  // Electrical
+  "335311": ["6110","6115","6120","6125","6130"],
+  "335312": ["6110","6115","6120","6125","6130"],
+  "335313": ["6110","6115","6120","6125","6130"],
+  "335314": ["6110","6115","6120","6125","6130"],
+  "335911": ["6135","6140"],
+  "335912": ["6135"],
+  "335921": ["6145"],
+  "335929": ["6145"],
+  "335931": ["5940","5945","5970","5975"],
+  "335932": ["5940","5945","5970","5975"],
+  "335999": ["5905","5915","5920","5925","5930","5935","5940","5945","5975"],
+  // Aerospace / Aircraft
+  "336411": ["1510","1520","1540","1550"],
+  "336412": ["1550","1560","1610","1615","1620","1630","1650","1660","1670","1680"],
+  "336413": ["1550","1560","1610","1615","1620","1630","1650","1660","1670","1680","1710"],
+  // Vehicles
+  "336111": ["2310","2320","2510","2520","2530","2540","2590"],
+  "336120": ["2510","2520","2530","2540","2590"],
+  "336211": ["2510","2520","2530","2540","2590"],
+  "336310": ["2910","2920","2930","2940","2990"],
+  "336330": ["2510","2520","2530","2540","2590"],
+  "336340": ["2510","2520","2530","2540","2590"],
+  "336350": ["2510","2520","2530","2540","2590"],
+  // Industrial Machinery
+  "333911": ["4320","4330"],
+  "333912": ["4320","4330"],
+  "333996": ["4820","4840"],
+  "333991": ["5110","5120","5130","5136"],
+  "333992": ["5110","5120"],
+  "333612": ["3020","3030"],
+  "333613": ["3020","3030","3110"],
+  "333995": ["4820","4840"],
+  "333921": ["3910","3920","3930","3940","3950"],
+  "333922": ["3910","3920","3930","3940","3950"],
+  // Bearings / Gears
+  "332991": ["3110"],
+  // Chemicals / Lubricants
+  "324191": ["9150"],
+  "325110": ["6810","6830","6840","6850"],
+  "325199": ["6810","6840","6850"],
+  "325510": ["8010","8020","8030"],
+  "325520": ["8010","8020","8030"],
+  "325610": ["7930","6840"],
+  "325920": ["1370","1375"],
+  "325998": ["6810","6830","6840","6850","9150"],
+  // Materials (metals)
+  "331110": ["9510","9515","9520","9525","9530","9535","9540","9545"],
+  "331210": ["9510","9515","9520","9525","9530","9535"],
+  "331312": ["9610","9615","9620","9625","9630"],
+  "331411": ["9710","9715","9720","9725","9730"],
+  "331420": ["9710","9715","9720","9725","9730"],
+  // Medical / Surgical
+  "339113": ["6505","6510","6515","6520","6525","6530","6540","6545","6550"],
+  "339114": ["6505","6510","6515","6520","6525","6530","6540","6545","6550"],
+  // Wholesale: Hardware / Plumbing
+  "423710": ["4710","4720","4730","4740","4820","4840","5110","5120","5340"],
+  "423720": ["4710","4720","4730","4740","4820","4840","5340"],
+  "423730": ["4110","4120","4130","4140"],
+  "423740": ["4110","4120","4130","4140"],
+  // Wholesale: Industrial Machinery / Supplies
+  "423810": ["3805","3810","3815","3820","3825","3830"],
+  "423820": ["3720","3740","3750","3760"],
+  "423830": ["3110","3120","3130","4320","4330"],
+  "423840": ["4320","4330","4710","4720","4730","4820","5110","5120","5340"],
+  "423850": ["5110","5120","5130","5133","5136","5140"],
+  // Wholesale: Metal / Fasteners
+  "423510": ["5305","5306","5307","5310","5315","5320","5325","5330","5340","9510","9515","9520","9525"],
+  "423520": ["9505","9510","9515","9520","9525","9530","9535","9540","9545"],
+  // Wholesale: Electronics
+  "423610": ["6110","6115","6120","6125","6130","6135","6140","6145","6150"],
+  "423620": ["5905","5910","5915","5920","5925","5930","5935","5940","5945","5960","5961","5962","5963","5975"],
+  "423690": ["5905","5910","5915","5920","5925","5930","5935","5940","5945","5960","5961","5962","5963","5975"],
+  // Wholesale: Transportation
+  "423860": ["1550","1560","2510","2520","2530","2540","2550"],
+  "423110": ["2310","2320","2510","2520","2530","2540","2590"],
+  "423120": ["2910","2920","2930","2940","2990"],
+  // Wholesale: Medical
+  "423450": ["6505","6510","6515","6520","6525","6530","6540","6545","6550"],
+  "423460": ["6505","6510","6515","6520","6525","6530","6540","6545","6550"],
+  // Wholesale: Other
+  "423990": ["5305","5306","5307","5310","5315","5320","5325","5330","5340","5360","5365"],
+};
+
+// Map a list of NAICS codes to FSC codes
+function naicsToFsc(naicsList) {
+  const fscSet = new Set();
+  for (const raw of (naicsList || [])) {
+    const code = String(raw).replace(/\D/g, "").slice(0, 6);
+    if (NAICS_FSC[code]) {
+      NAICS_FSC[code].forEach(f => fscSet.add(f));
+    } else {
+      // 4-digit subsector fallback: match any entry whose key starts with the first 4 digits
+      const prefix4 = code.slice(0, 4);
+      for (const [k, v] of Object.entries(NAICS_FSC)) {
+        if (k.startsWith(prefix4)) v.forEach(f => fscSet.add(f));
+      }
+    }
+  }
+  return [...fscSet].sort();
+}
+
+// Fetch SBA DSBS profile page by UEI + CAGE and extract NAICS codes
+async function sbaProfileNaics(uei, cage) {
+  if (!uei || !cage) return null;
+  try {
+    const url = SBA_PROFILE + "/" + encodeURIComponent(uei) + "/" + encodeURIComponent(cage);
+    const res = await fetch(url, {
+      headers: { Accept: "application/json, text/html, */*", "User-Agent": "Mozilla/5.0" },
+    });
+    if (!res.ok) return null;
+
+    const ct = res.headers.get("content-type") || "";
+    const text = await res.text();
+
+    if (ct.includes("json")) {
+      // Parse JSON and walk for any naics-keyed fields
+      const data = JSON.parse(text);
+      const codes = [];
+      function walk(obj) {
+        if (!obj || typeof obj !== "object") return;
+        if (Array.isArray(obj)) { obj.forEach(walk); return; }
+        for (const [k, v] of Object.entries(obj)) {
+          if (/naics/i.test(k)) {
+            if (typeof v === "string" && /^\d{4,6}$/.test(v)) codes.push(v);
+            if (typeof v === "number") codes.push(String(v));
+            if (Array.isArray(v)) v.forEach(item => {
+              if (typeof item === "string" && /^\d{4,6}$/.test(item)) codes.push(item);
+              if (item && typeof item === "object") {
+                for (const [ik, iv] of Object.entries(item)) {
+                  if (/code/i.test(ik) && /^\d{4,6}$/.test(String(iv || ""))) codes.push(String(iv));
+                }
+              }
+            });
+          }
+          walk(v);
+        }
+      }
+      walk(data);
+      const unique = [...new Set(codes.filter(c => /^\d{6}$/.test(c)))];
+      return unique.length ? unique : null;
+    }
+
+    // HTML response — extract 6-digit numbers in valid NAICS sector ranges
+    const matches = text.match(/\b(?:11|21|22|23|31|32|33|42|44|45|48|49|51|52|53|54|55|56|61|62|71|72|81|92)\d{4}\b/g) || [];
+    const unique = [...new Set(matches)];
+    return unique.length ? unique : null;
+  } catch {
+    return null;
+  }
+}
 
 let _client;
 async function getDb() {
@@ -316,53 +505,86 @@ exports.handler = async (event) => {
     return ok(results);
   }
 
-  // ── enrichFsc — re-derive FSC for all vendors from SAM PSC codes ──────
+  // ── enrichFsc — derive FSC from SBA DSBS profile NAICS codes ──────────
+  // Flow: SAM → get UEI + CAGE → SBA profile/{UEI}/{CAGE} → NAICS codes → FSC crosswalk
   if (action === "enrichFsc") {
     const db    = await getDb();
     const dists = await db.collection("distributors")
       .find({ is_dns: { $ne: true } })
-      .project({ id: 1, name: 1, cage_code: 1, email: 1, website: 1, fsc: 1, primary_naics: 1, naics_list: 1 })
+      .project({ id: 1, name: 1, cage_code: 1, uei: 1, fsc: 1, naics_list: 1, primary_naics: 1 })
       .limit(payload.limit || 200)
       .toArray();
 
-    const results = { updated: 0, no_psc: 0, not_found: 0, failed: 0, total: dists.length, details: [] };
+    const results = { updated: 0, no_naics: 0, not_found: 0, failed: 0, total: dists.length, details: [] };
 
     for (const d of dists) {
       try {
-        const result = await samLookup(d.name, d.cage_code);
-        if (!result) { results.not_found++; results.details.push({ name: d.name, status: "not_found" }); continue; }
+        let uei  = d.uei;
+        let cage = d.cage_code;
 
-        if (!result.fsc_from_sam || result.fsc_from_sam.length === 0) {
-          results.no_psc++;
-          results.details.push({ name: d.name, status: "no_psc", naics: result.primary_naics });
-          // Still save NAICS even if no PSC codes
+        // If we don't have UEI/CAGE yet, pull from SAM first
+        if (!uei || !cage) {
+          const samResult = await samLookup(d.name, cage);
+          if (!samResult) { results.not_found++; results.details.push({ name: d.name, status: "no_sam" }); await sleep(150); continue; }
+          uei  = uei  || samResult.uei       || null;
+          cage = cage || samResult.cage_code || null;
+          // Persist UEI/CAGE so future runs skip SAM lookup
+          if (uei || cage) {
+            await db.collection("distributors").updateOne(
+              { id: d.id },
+              { $set: { uei: uei || null, cage_code: cage || null, sam_enriched_at: new Date().toISOString() } }
+            ).catch(() => {});
+          }
+          await sleep(150);
+        }
+
+        if (!uei || !cage) {
+          results.not_found++;
+          results.details.push({ name: d.name, status: "no_uei_cage" });
+          continue;
+        }
+
+        // Fetch SBA DSBS profile to get NAICS codes
+        const naicsCodes = await sbaProfileNaics(uei, cage);
+        if (!naicsCodes || !naicsCodes.length) {
+          results.no_naics++;
+          results.details.push({ name: d.name, status: "no_naics", uei, cage });
+          await sleep(200);
+          continue;
+        }
+
+        // Map NAICS → FSC
+        const fsc = naicsToFsc(naicsCodes);
+        if (!fsc.length) {
+          results.no_naics++;
+          results.details.push({ name: d.name, status: "no_fsc_match", naics: naicsCodes });
+          // Still save the NAICS codes for visibility
           await db.collection("distributors").updateOne(
             { id: d.id },
-            { $set: { primary_naics: result.primary_naics || null, naics_list: result.naics_list || [], sam_enriched_at: new Date().toISOString() } }
+            { $set: { naics_list: naicsCodes, primary_naics: naicsCodes[0] || null, fsc_source: "sba-naics", sam_enriched_at: new Date().toISOString() } }
           ).catch(() => {});
+          await sleep(200);
           continue;
         }
 
         await db.collection("distributors").updateOne(
           { id: d.id },
           { $set: {
-              fsc:           result.fsc_from_sam,
-              fsc_source:    "sam-psc",
-              primary_naics: result.primary_naics || null,
-              naics_list:    result.naics_list    || [],
+              fsc:           fsc,
+              fsc_source:    "sba-naics",
+              naics_list:    naicsCodes,
+              primary_naics: naicsCodes[0] || null,
               sam_enriched_at: new Date().toISOString(),
-              // Also update POC if found
-              ...(result.poc_name ? { poc_name: result.poc_name, poc_first: result.poc_first, poc_last: result.poc_last, poc_email: result.poc_email, poc_phone: result.poc_phone } : {}),
             }
           }
         );
         results.updated++;
-        results.details.push({ name: d.name, status: "updated", fsc: result.fsc_from_sam, naics: result.primary_naics });
+        results.details.push({ name: d.name, status: "updated", fsc, naics: naicsCodes });
       } catch (e) {
         results.failed++;
         results.details.push({ name: d.name, status: "failed", error: e.message });
       }
-      await sleep(200); // rate-limit SAM API
+      await sleep(200);
     }
 
     return ok(results);

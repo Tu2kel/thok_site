@@ -1080,7 +1080,7 @@
           h("button", {
             onClick: handleEnrichFsc,
             disabled: enrichingFsc,
-            title: "Pull PSC/FSC codes from SAM.gov for all vendors — overwrites current FSC codes with what each vendor registered in SAM",
+            title: "Pull NAICS codes from SBA DSBS profile (via UEI+CAGE) for all vendors → translate to FSC via crosswalk",
             style: {
               padding: "6px 12px",
               fontFamily: "JetBrains Mono,monospace",
