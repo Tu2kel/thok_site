@@ -617,10 +617,10 @@ exports.handler = async (event) => {
     return ok(results);
   }
 
-  // ── enrichFsc — SAM NAICS → FSC crosswalk ───────────────────────────────
-  // NAICS codes are mandatory in SAM.gov registration (unlike PSC codes which
-  // are optional and usually empty). Use CAGE for precise lookup when available,
-  // fall back to name search. 10 vendors per call; frontend loops until total < 10.
+  // ── enrichFsc — SAM (UEI/CAGE) → SBA SBS profile → NAICS → FSC ─────────
+  // SBA SBS /_api/v2/profile/{uei}/{cage} returns naics_primary + naics_all_codes
+  // publicly (no auth). Need UEI + CAGE — get from SAM if not already stored.
+  // 10 vendors per call; frontend loops until total < 10.
   if (action === "enrichFsc") {
     try {
       const db    = await getDb();
@@ -635,34 +635,60 @@ exports.handler = async (event) => {
 
       for (const d of dists) {
         try {
-          // Always hit SAM — NAICS is mandatory there, PSC codes are not
-          // CAGE lookup is precise; name lookup is fuzzy fallback
-          const samResult = await samLookup(d.name, d.cage_code || null);
+          let uei  = d.uei       || null;
+          let cage = d.cage_code || null;
 
-          if (!samResult) {
+          // Get UEI + CAGE from SAM if either is missing
+          if (!uei || !cage) {
+            const samResult = await samLookup(d.name, cage);
+            if (samResult) {
+              uei  = samResult.uei       || uei;
+              cage = samResult.cage_code || cage;
+              if (uei || cage) {
+                await db.collection("distributors").updateOne(
+                  { id: d.id },
+                  { $set: { uei: uei || null, cage_code: cage || null } }
+                ).catch(() => {});
+              }
+            }
+          }
+
+          if (!uei || !cage) {
             results.not_found++;
-            results.details.push({ name: d.name, status: "not_in_sam" });
+            results.details.push({ name: d.name, status: "no_uei_cage" });
             await sleep(120);
             continue;
           }
 
-          // Persist any newly discovered UEI/CAGE
-          const updFields = {};
-          if (samResult.uei       && !d.uei)       updFields.uei       = samResult.uei;
-          if (samResult.cage_code && !d.cage_code) updFields.cage_code = samResult.cage_code;
-          if (Object.keys(updFields).length) {
-            await db.collection("distributors").updateOne({ id: d.id }, { $set: updFields }).catch(() => {});
+          // SBA SBS public profile API — returns naics_primary + naics_all_codes
+          const profRes = await fetch(
+            "https://search.certifications.sba.gov/_api/v2/profile/" +
+              encodeURIComponent(uei) + "/" + encodeURIComponent(cage),
+            {
+              headers: {
+                Accept:       "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                Referer:      "https://search.certifications.sba.gov/",
+              },
+            }
+          );
+
+          if (!profRes.ok) {
+            results.not_found++;
+            results.details.push({ name: d.name, status: "sbs_" + profRes.status, uei, cage });
+            await sleep(120);
+            continue;
           }
 
-          // Collect all NAICS codes: primary first, then the full list
-          const allNaics = [...new Set([
-            ...(samResult.primary_naics ? [String(samResult.primary_naics)] : []),
-            ...(samResult.naics_list   || []).map(String),
-          ])].filter(n => /^\d{4,6}$/.test(n));
+          const profData  = await profRes.json();
+          const entity    = profData?.entity || {};
+          const primary   = entity.naics_primary   || null;
+          const allCodes  = entity.naics_all_codes  || [];
+          const allNaics  = [...new Set([primary, ...allCodes].filter(Boolean).map(String))];
 
           if (!allNaics.length) {
             results.no_naics++;
-            results.details.push({ name: d.name, status: "no_naics_in_sam", sam_name: samResult.sam_name || "" });
+            results.details.push({ name: d.name, status: "no_naics", uei, cage });
             await sleep(120);
             continue;
           }
@@ -672,8 +698,8 @@ exports.handler = async (event) => {
             { id: d.id },
             { $set: {
                 naics_list:      allNaics,
-                primary_naics:   allNaics[0],
-                fsc_source:      "sam-naics",
+                primary_naics:   primary || allNaics[0],
+                fsc_source:      "sbs-profile",
                 sam_enriched_at: new Date().toISOString(),
                 ...(fsc.length ? { fsc } : {}),
               }
