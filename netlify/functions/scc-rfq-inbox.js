@@ -1,136 +1,123 @@
 // netlify/functions/scc-rfq-inbox.js
 // Imperio SCC — Vendor RFQ Inbox Scanner
 //
-// Scans Gmail (anthony@ifedlog.com) for vendor replies forwarded from kelley.anthonyk@gmail.com.
-// Parses price, lead time, no-bid reason using Claude Haiku.
-// Compares vendor price vs. DIBBS historical unit_price stored in solicitations.
-// Calculates margin at Standard 27.5% and flags OVER/FAIR/UNDER vs. history.
-// Saves per-response records + sends email summary after each run.
+// Reads kelley.anthonyk@gmail.com via IMAP (GMAIL_APP_PASSWORD — same cred as send-rfq.js).
+// Finds Re: RFQ replies from vendors, parses price/no-bid with Claude Haiku,
+// compares vs DIBBS historical unit_price, calculates margin, saves to MongoDB,
+// sends summary email to anthony@ifedlog.com after each run.
 //
 // Actions (POST): scan | getReport | getScanLog
-// Scheduled: 4x/day via netlify.toml (8AM, 12PM, 4PM, 8PM CT)
+// Scheduled 4x/day via netlify.toml: 8AM, 12PM, 4PM, 8PM CT
 //
-// Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
-//      ANTHROPIC_API_KEY, MONGODB_URI
+// Env: GMAIL_APP_PASSWORD, ANTHROPIC_API_KEY, MONGODB_URI
 
+const { ImapFlow }   = require("imapflow");
+const nodemailer     = require("nodemailer");
 const { MongoClient } = require("mongodb");
 
-const FROM_ADDRESS = "anthony@ifedlog.com";
+const IMAP_USER    = "kelley.anthonyk@gmail.com";
+const SUMMARY_TO   = "anthony@ifedlog.com";
 const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
-const TOKEN_URL    = "https://oauth2.googleapis.com/token";
-const GMAIL_BASE   = "https://gmail.googleapis.com/gmail/v1/users/me";
 
-// Price analysis thresholds
-const HIST_OVER_THRESHOLD  =  15;  // > +15% vs historical → OVER
-const HIST_UNDER_THRESHOLD = -10;  // > -10% vs historical → UNDER
+const HIST_OVER_THRESHOLD  =  15;
+const HIST_UNDER_THRESHOLD = -10;
 const STANDARD_MARGIN      = 0.275;
 
-// ── GOOGLE AUTH ────────────────────────────────────────────────────────────
-async function getGoogleToken() {
-  const params = new URLSearchParams({
-    grant_type:    "refresh_token",
-    client_id:     process.env.GOOGLE_CLIENT_ID,
-    client_secret: process.env.GOOGLE_CLIENT_SECRET,
-    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+// ── IMAP ───────────────────────────────────────────────────────────────────
+function makeImapClient() {
+  return new ImapFlow({
+    host:   "imap.gmail.com",
+    port:   993,
+    secure: true,
+    auth:   { user: IMAP_USER, pass: process.env.GMAIL_APP_PASSWORD },
+    logger: false,
   });
-  const res  = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
-  });
-  const data = await res.json();
-  if (!data.access_token) throw new Error("Google token refresh failed: " + JSON.stringify(data));
-  return data.access_token;
 }
 
-// ── GMAIL HELPERS ──────────────────────────────────────────────────────────
-async function gmailList(token, query, maxResults) {
-  const url = GMAIL_BASE + "/messages?q=" + encodeURIComponent(query) + "&maxResults=" + (maxResults || 100);
-  const res  = await fetch(url, { headers: { Authorization: "Bearer " + token } });
-  const data = await res.json();
-  return data.messages || [];
-}
+// Pull plain text from raw RFC2822 source buffer
+function extractBody(source) {
+  const raw = source.toString("utf-8");
+  const sep = raw.indexOf("\r\n\r\n");
+  if (sep === -1) return raw.slice(0, 3000);
 
-async function gmailGet(token, id) {
-  const res = await fetch(GMAIL_BASE + "/messages/" + id + "?format=full", {
-    headers: { Authorization: "Bearer " + token },
-  });
-  return res.json();
-}
+  const hdrs = raw.slice(0, sep).toLowerCase();
+  let body   = raw.slice(sep + 4);
 
-function gmailHeader(msg, name) {
-  const hdrs = (msg.payload && msg.payload.headers) || [];
-  const h = hdrs.find((x) => x.name.toLowerCase() === name.toLowerCase());
-  return h ? h.value : "";
-}
+  const isBase64 = hdrs.includes("content-transfer-encoding: base64");
+  const isQP     = hdrs.includes("content-transfer-encoding: quoted-printable");
 
-function decodeBody(msg) {
-  function findPart(part, mime) {
-    if (!part) return null;
-    if (part.mimeType === mime && part.body && part.body.data) return part.body.data;
-    for (const p of part.parts || []) {
-      const f = findPart(p, mime);
-      if (f) return f;
+  // Multipart — find first text/plain or text/html section
+  const bmatch = hdrs.match(/boundary="?([^"\r\n;]+)"?/);
+  if (bmatch) {
+    const boundary = "--" + bmatch[1].trim();
+    const parts    = body.split(boundary);
+    let fallback   = "";
+    for (const part of parts) {
+      const pl   = part.toLowerCase();
+      const psep = part.indexOf("\r\n\r\n");
+      if (psep < 0) continue;
+      const phdr = part.slice(0, psep).toLowerCase();
+      let   pbody = part.slice(psep + 4).replace(/--$/, "").trim();
+      if (phdr.includes("base64")) {
+        try { pbody = Buffer.from(pbody.replace(/\s+/g, ""), "base64").toString("utf-8"); } catch {}
+      } else if (phdr.includes("quoted-printable")) {
+        pbody = pbody.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+      }
+      if (pl.includes("text/plain")) return pbody.slice(0, 3000);
+      if (pl.includes("text/html") && !fallback) fallback = pbody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     }
-    return null;
+    if (fallback) return fallback.slice(0, 3000);
   }
-  const b64 = findPart(msg.payload, "text/plain") || findPart(msg.payload, "text/html") || "";
-  if (!b64) return "";
-  const text = Buffer.from(b64.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
-  return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
-}
 
-async function gmailSend(token, subject, body) {
-  const CRLF = "\r\n";
-  const raw  = [
-    "From: " + FROM_NAME + " <" + FROM_ADDRESS + ">",
-    "To: " + FROM_ADDRESS,
-    "Subject: " + subject,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=utf-8",
-    "",
-    body,
-  ].join(CRLF);
-  const res = await fetch(GMAIL_BASE + "/messages/send", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ raw: Buffer.from(raw).toString("base64url") }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error("Gmail send failed: " + JSON.stringify(data));
-  return data;
+  // Single-part
+  if (isBase64) {
+    try { body = Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf-8"); } catch {}
+  } else if (isQP) {
+    body = body.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+  return body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 3000);
 }
 
 // ── SOL EXTRACTION ─────────────────────────────────────────────────────────
-// DLA sol patterns: SPE7MX-26-Q-1234, W91CRB-26-Q-1234, FA8101-26-Q-1234, etc.
-const SOL_REGEX = /\b([A-Z]{2,7}[\dA-Z]{1,5}-\d{2,4}-[A-Z]-\d{3,7})\b/g;
-
+const SOL_RE = /\b([A-Z]{2,7}[\dA-Z]{0,5}-\d{2,4}-[A-Z]-\d{3,7})\b/g;
 function extractSol(text) {
-  const matches = [...(text || "").matchAll(SOL_REGEX)];
-  return matches.length ? matches[0][1] : null;
+  const m = [...(text || "").matchAll(SOL_RE)];
+  return m.length ? m[0][1] : null;
+}
+
+// ── NODEMAILER SMTP SUMMARY ────────────────────────────────────────────────
+async function sendSummary(subject, text) {
+  const t = nodemailer.createTransport({
+    host: "smtp.gmail.com", port: 465, secure: true,
+    auth: { user: IMAP_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  });
+  await t.sendMail({
+    from: '"' + FROM_NAME + '" <' + IMAP_USER + '>',
+    to:   SUMMARY_TO,
+    subject,
+    text,
+  });
 }
 
 // ── CLAUDE PARSER ──────────────────────────────────────────────────────────
-async function claudeParse(emailBody, vendorName, subject) {
+async function claudeParse(body, vendorName, subject) {
   const prompt = [
-    "You are parsing a vendor email response to an RFQ (Request for Quote) for a US government DLA contract.",
-    "The vendor is responding to Imperio Federal Logistics.",
-    "",
-    "Return ONLY a JSON object with these fields:",
+    "Parse this vendor email response to a US government DLA RFQ (Request for Quote) from Imperio Federal Logistics.",
+    "Return ONLY a JSON object:",
     '{"type":"quote|no_bid","unit_price":number|null,"lead_time_days":number|null,"country_of_origin":"string"|null,"no_bid_reason":"string"|null,"notes":"string"|null}',
     "",
     "Rules:",
-    "- type=no_bid if vendor says: unable, cannot, no bid, NB, not available, out of stock, decline, pass, no quote, no inventory, EOL, discontinued, do not carry",
-    "- unit_price = per-unit price in USD only (ignore freight/handling totals); if range use lower",
-    "- lead_time_days: convert weeks×7, months×30; 'ARO' just means after receipt of order (keep the number)",
-    "- no_bid_reason: brief quote of their stated reason (max 80 chars)",
-    "- notes: min order qty, special terms, certification notes, or other relevant detail",
+    "- type=no_bid if vendor says: unable, cannot, no bid, NB, not available, out of stock, decline, pass, no quote, EOL, discontinued, do not carry",
+    "- unit_price = per-unit USD price only (ignore freight totals); if range, use lower end",
+    "- lead_time_days: convert weeks×7, months×30",
+    "- no_bid_reason: their stated reason, max 80 chars",
+    "- notes: MOQ, certifications, special terms",
     "",
     "Subject: " + subject,
     "From: " + vendorName,
     "",
     "Email:",
-    emailBody.slice(0, 2000),
+    body.slice(0, 2000),
   ].join("\n");
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -147,52 +134,47 @@ async function claudeParse(emailBody, vendorName, subject) {
     }),
   });
   const data = await res.json();
-  const raw  = data.content && data.content[0] && data.content[0].text;
-  if (!raw) throw new Error("No content from Claude: " + JSON.stringify(data));
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON in Claude response: " + raw.slice(0, 200));
-  return JSON.parse(jsonMatch[0]);
+  const raw  = data.content?.[0]?.text;
+  if (!raw) throw new Error("No Claude response: " + JSON.stringify(data).slice(0, 200));
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("No JSON in Claude response");
+  return JSON.parse(m[0]);
 }
 
 // ── PRICE ANALYSIS ─────────────────────────────────────────────────────────
 function analyzePrice(vendorPrice, histPrice) {
   const out = {
-    hist_price:           histPrice || null,
-    hist_deviation_pct:   null,
-    hist_flag:            histPrice ? "NO_DATA" : "NO_HIST",
-    target_bid:           null,
+    hist_price: histPrice || null,
+    hist_deviation_pct: null,
+    hist_flag: histPrice ? "NO_DATA" : "NO_HIST",
+    target_bid: null,
     margin_at_target_pct: parseFloat((STANDARD_MARGIN * 100).toFixed(1)),
-    margin_at_hist_pct:   null,
-    margin_flag:          null,
+    margin_at_hist_pct: null,
+    margin_flag: null,
   };
-
   if (!vendorPrice || vendorPrice <= 0) return out;
 
-  // Bid price at standard margin target
   out.target_bid = parseFloat((vendorPrice / (1 - STANDARD_MARGIN)).toFixed(4));
 
-  // Historical deviation
   if (histPrice && histPrice > 0) {
     const dev = ((vendorPrice - histPrice) / histPrice) * 100;
     out.hist_deviation_pct = parseFloat(dev.toFixed(1));
-    out.hist_flag = dev > HIST_OVER_THRESHOLD ? "OVER"
+    out.hist_flag = dev > HIST_OVER_THRESHOLD  ? "OVER"
                   : dev < HIST_UNDER_THRESHOLD ? "UNDER"
                   : "FAIR";
 
-    // Margin if bidding AT the historical DIBBS price (competitive target)
-    const marginAtHist = ((histPrice - vendorPrice) / histPrice) * 100;
-    out.margin_at_hist_pct = parseFloat(marginAtHist.toFixed(1));
-    out.margin_flag = marginAtHist < 0   ? "NEGATIVE"
-                    : marginAtHist < 8   ? "SQUEEZED"
-                    : marginAtHist < 15  ? "TIGHT"
-                    : marginAtHist < 27.5 ? "OK"
+    const margAtHist = ((histPrice - vendorPrice) / histPrice) * 100;
+    out.margin_at_hist_pct = parseFloat(margAtHist.toFixed(1));
+    out.margin_flag = margAtHist < 0    ? "NEGATIVE"
+                    : margAtHist < 8   ? "SQUEEZED"
+                    : margAtHist < 15  ? "TIGHT"
+                    : margAtHist < 27.5 ? "OK"
                     : "GOOD";
   }
-
   return out;
 }
 
-// ── BUILD DAILY REPORT ─────────────────────────────────────────────────────
+// ── DAILY REPORT ───────────────────────────────────────────────────────────
 async function buildDailyReport(db, dateStr) {
   const responses = await db.collection("rfq_responses")
     .find({ date: dateStr })
@@ -207,27 +189,22 @@ async function buildDailyReport(db, dateStr) {
   }
 
   const sols = Object.entries(bySol).map(([sol_number, { item_name, quotes, no_bids }]) => {
-    // Best = lowest valid price
     const best = quotes.length
       ? quotes.reduce((b, q) => (q.unit_price || Infinity) < (b.unit_price || Infinity) ? q : b, quotes[0])
       : null;
-
     return {
-      sol_number,
-      item_name,
-      quote_count:    quotes.length,
-      no_bid_count:   no_bids.length,
-      best_vendor:    best ? (best.vendor_name || best.vendor_email) : null,
-      best_price:     best ? best.unit_price : null,
-      best_hist_flag: best ? best.hist_flag : null,
-      best_margin_flag: best ? best.margin_flag : null,
-      best_target_bid:  best ? best.target_bid : null,
+      sol_number, item_name,
+      quote_count: quotes.length, no_bid_count: no_bids.length,
+      best_vendor: best ? (best.vendor_name || best.vendor_email) : null,
+      best_price:  best ? best.unit_price : null,
+      best_hist_flag:   best ? best.hist_flag   : null,
+      best_margin_flag: best ? best.margin_flag  : null,
+      best_target_bid:  best ? best.target_bid   : null,
       action: quotes.length === 0 && no_bids.length > 0 ? "ALL_NO_BID"
             : best && best.hist_flag === "OVER"          ? "REVIEW_PRICE"
             : best && best.margin_flag === "NEGATIVE"    ? "MARGIN_NEGATIVE"
             : null,
-      quotes,
-      no_bids,
+      quotes, no_bids,
     };
   }).sort((a, b) => {
     if (a.quote_count > 0 && b.quote_count === 0) return -1;
@@ -236,68 +213,59 @@ async function buildDailyReport(db, dateStr) {
   });
 
   return {
-    date:            dateStr,
+    date: dateStr,
     total_responses: responses.length,
     total_quotes:    responses.filter((r) => r.type === "quote").length,
     total_no_bids:   responses.filter((r) => r.type === "no_bid").length,
     total_sols:      sols.length,
     sols,
-    generated_at:    new Date().toISOString(),
+    generated_at: new Date().toISOString(),
   };
 }
 
-// ── EMAIL SUMMARY ──────────────────────────────────────────────────────────
-async function sendSummary(token, report, stats) {
+// ── SUMMARY EMAIL TEXT ──────────────────────────────────────────────────────
+function buildSummaryText(report, stats) {
   const ct = new Date().toLocaleString("en-US", { timeZone: "America/Chicago" });
   const lines = [
     "RFQ INBOX SCAN — " + ct + " CT",
     "═".repeat(50),
     "",
-    "Scan:  " + stats.scanned + " emails checked · " + stats.new_count + " new response(s) · " + stats.errors + " error(s)",
-    "Daily: " + report.total_quotes + " quote(s) · " + report.total_no_bids + " no-bid(s) across " + report.total_sols + " sol(s)",
+    "Scan:  " + stats.scanned + " checked · " + stats.new_count + " new · " + stats.errors + " error(s)",
+    "Daily: " + report.total_quotes + " quote(s) · " + report.total_no_bids + " no-bid(s) · " + report.total_sols + " sol(s)",
     "",
   ];
 
-  if (report.sols.length === 0) {
-    lines.push("No vendor responses in inbox today.");
+  if (!report.sols.length) {
+    lines.push("No vendor responses today.");
   } else {
     for (const sol of report.sols) {
-      const header = "SOL: " + sol.sol_number + (sol.item_name ? " — " + sol.item_name.slice(0, 40) : "");
-      lines.push(header);
-
+      lines.push("SOL: " + sol.sol_number + (sol.item_name ? " — " + sol.item_name.slice(0, 40) : ""));
       for (const q of sol.quotes) {
-        const devStr    = q.hist_deviation_pct != null ? (q.hist_deviation_pct >= 0 ? "+" : "") + q.hist_deviation_pct + "%" : "";
-        const histPart  = q.hist_flag && q.hist_flag !== "NO_HIST" ? " [" + q.hist_flag + (devStr ? " " + devStr : "") + "]" : " [NO HIST]";
-        const margPart  = q.margin_flag ? " → " + q.margin_flag : "";
-        const bidPart   = q.target_bid ? " | Bid@27.5%: $" + q.target_bid.toFixed(4) : "";
+        const dev = q.hist_deviation_pct != null ? (q.hist_deviation_pct >= 0 ? "+" : "") + q.hist_deviation_pct + "%" : "";
+        const hist = q.hist_flag && q.hist_flag !== "NO_HIST" ? " [" + q.hist_flag + (dev ? " " + dev : "") + "]" : " [NO HIST]";
+        const marg = q.margin_flag ? " → " + q.margin_flag : "";
+        const bid  = q.target_bid  ? " | Bid@27.5%: $" + q.target_bid.toFixed(4) : "";
         lines.push("  QUOTE   " + (q.vendor_name || q.vendor_email).slice(0, 28).padEnd(28) +
-          " $" + (q.unit_price != null ? q.unit_price.toFixed(4) : "?") + "/ea" +
-          histPart + margPart + bidPart);
+          " $" + (q.unit_price != null ? q.unit_price.toFixed(4) : "?") + hist + marg + bid);
       }
       for (const nb of sol.no_bids) {
         lines.push("  NO-BID  " + (nb.vendor_name || nb.vendor_email).slice(0, 28) +
           (nb.no_bid_reason ? ": " + nb.no_bid_reason : ""));
       }
-      if (sol.action === "ALL_NO_BID") lines.push("  !! ACTION: Re-blast or mark No Source");
-      if (sol.action === "REVIEW_PRICE") lines.push("  ⚠  REVIEW: Best quote is above historical price");
-      if (sol.action === "MARGIN_NEGATIVE") lines.push("  !! MARGIN NEGATIVE: Vendor price exceeds DIBBS price");
       if (sol.best_vendor && sol.quote_count > 0) {
         lines.push("  ★ BEST: " + sol.best_vendor + " @ $" + (sol.best_price || "?") +
-          (sol.best_target_bid ? " → Bid $" + sol.best_target_bid.toFixed(4) : "") +
-          (sol.best_margin_flag ? " [" + sol.best_margin_flag + "]" : ""));
+          (sol.best_target_bid   ? " → Bid $" + sol.best_target_bid.toFixed(4) : "") +
+          (sol.best_margin_flag  ? " [" + sol.best_margin_flag + "]" : ""));
       }
+      if (sol.action === "ALL_NO_BID")      lines.push("  !! Re-blast or mark No Source");
+      if (sol.action === "REVIEW_PRICE")    lines.push("  ⚠  Best quote above historical — review before bidding");
+      if (sol.action === "MARGIN_NEGATIVE") lines.push("  !! Vendor price exceeds DIBBS price — margin negative");
       lines.push("");
     }
   }
-
   lines.push("═".repeat(50));
   lines.push("Pipeline → https://thehouseofkel.com/scc/");
-
-  const subject = stats.new_count === 0
-    ? "SCC Inbox Scan: No new responses · " + ct.split(",")[0]
-    : "SCC: " + stats.new_count + " new · " + report.total_quotes + " quotes · " + report.total_no_bids + " no-bids · " + ct.split(",")[0];
-
-  await gmailSend(token, subject, lines.join("\n"));
+  return lines.join("\n");
 }
 
 // ── MONGODB ────────────────────────────────────────────────────────────────
@@ -332,145 +300,150 @@ exports.handler = async (event) => {
   };
   if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: h, body: "" };
 
-  let action = "scan";
-  let payload = {};
+  let action = "scan", payload = {};
   if (event.httpMethod === "POST" && event.body) {
     try { const b = JSON.parse(event.body); action = b.action || "scan"; payload = b; } catch {}
   }
 
   const db = await getDb();
 
-  // ── getReport ────────────────────────────────────────────────────────────
   if (action === "getReport") {
-    const todayStr = payload.date || new Date().toISOString().slice(0, 10);
-    const report   = await buildDailyReport(db, todayStr);
+    const report = await buildDailyReport(db, payload.date || new Date().toISOString().slice(0, 10));
     return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, report }) };
   }
 
-  // ── getScanLog ───────────────────────────────────────────────────────────
   if (action === "getScanLog") {
-    const logs = await db.collection("rfq_scan_log")
-      .find({})
-      .sort({ scanned_at: -1 })
-      .limit(20)
-      .toArray();
+    const logs = await db.collection("rfq_scan_log").find({}).sort({ scanned_at: -1 }).limit(20).toArray();
     return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, logs }) };
   }
 
-  // ── scan ─────────────────────────────────────────────────────────────────
-  const log     = [];
-  const addLog  = (m) => { log.push(m); console.log("[rfq-inbox]", m); };
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // ── scan ──────────────────────────────────────────────────────────────────
+  const log    = [];
+  const addLog = (m) => { log.push(m); console.log("[rfq-inbox]", m); };
+  const today  = new Date().toISOString().slice(0, 10);
 
-  let token;
-  try {
-    token = await getGoogleToken();
-    addLog("Google token OK");
-  } catch (e) {
-    return { statusCode: 500, headers: h, body: JSON.stringify({ ok: false, error: e.message }) };
-  }
-
-  // Search: replies to RFQ emails + any email mentioning SOL numbers
-  // 7-day window — dedup by processed IDs prevents double-counting
-  const query = "(subject:\"Re: RFQ\" OR subject:\"RE: RFQ\") newer_than:7d in:inbox";
-  const msgs  = await gmailList(token, query, 100);
-  addLog(msgs.length + " candidate email(s) found");
-
-  const processed = await getProcessed(db);
-  const newMsgIds = [];
+  const imap = makeImapClient();
+  let scanned = 0, errors = 0;
   const newDocs   = [];
-  let errors      = 0;
+  const newMsgIds = [];
 
-  for (const ref of msgs) {
-    if (processed.has(ref.id)) continue;
-    newMsgIds.push(ref.id);
+  try {
+    await imap.connect();
+    addLog("IMAP connected");
 
-    let msg;
-    try { msg = await gmailGet(token, ref.id); } catch (e) {
-      addLog("Fetch failed " + ref.id + ": " + e.message);
-      errors++;
-      continue;
-    }
-
-    const subject = gmailHeader(msg, "subject");
-    const from    = gmailHeader(msg, "from");
-    const dateHdr = gmailHeader(msg, "date");
-    const body    = decodeBody(msg);
-
-    // Parse From header: "Name <email>" or "email"
-    const fromParsed  = from.match(/^"?([^"<>]+?)"?\s*<([^>]+)>$/) || from.match(/^([^\s]+@[^\s]+)$/);
-    const vendorName  = fromParsed ? fromParsed[1].trim() : from;
-    const vendorEmail = fromParsed ? (fromParsed[2] || fromParsed[1]).toLowerCase().trim() : from.toLowerCase().trim();
-
-    // Skip our own addresses
-    if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(vendorEmail)) continue;
-
-    // Extract SOL from subject first, then body
-    const solNumber = extractSol(subject) || extractSol(body);
-    if (!solNumber) { addLog("No SOL in: " + subject.slice(0, 60)); continue; }
-
-    // Historical price from solicitations collection
-    const solRec   = await db.collection("solicitations").findOne({ sol_number: solNumber });
-    const histPrice = solRec
-      ? parseFloat(solRec.hist_unit_price || solRec.unit_price || 0) || null
-      : null;
-    const itemName  = solRec ? (solRec.item_name || solRec.item_description || "") : "";
-
-    // Claude parse
-    let parsed;
+    const lock = await imap.getMailboxLock("INBOX");
     try {
-      parsed = await claudeParse(body, vendorName, subject);
-      addLog(solNumber + " | " + vendorName + " → " + parsed.type + (parsed.unit_price ? " $" + parsed.unit_price : ""));
-    } catch (e) {
-      addLog("Claude failed " + ref.id + ": " + e.message);
-      errors++;
-      continue;
+      const since = new Date();
+      since.setDate(since.getDate() - 7);
+
+      // Search for any email with RFQ in subject from last 7 days
+      const uids = await imap.search({ since, subject: "RFQ" });
+      addLog(uids.length + " candidate(s) found");
+      scanned = uids.length;
+
+      if (uids.length === 0) {
+        lock.release();
+        await imap.logout();
+        const report = await buildDailyReport(db, today);
+        const stats  = { scanned: 0, new_count: 0, errors: 0, scanned_at: new Date() };
+        await db.collection("rfq_scan_log").insertOne(stats);
+        return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, stats, report, log }) };
+      }
+
+      const processed = await getProcessed(db);
+
+      for await (const msg of imap.fetch(uids, { source: true, envelope: true })) {
+        const msgId = msg.envelope.messageId || ("uid-" + msg.uid);
+
+        if (processed.has(msgId)) continue;
+        newMsgIds.push(msgId);
+
+        const subject     = msg.envelope.subject || "";
+        const fromAddr    = msg.envelope.from?.[0];
+        const vendorEmail = fromAddr ? ((fromAddr.address || (fromAddr.mailbox + "@" + fromAddr.host)) || "").toLowerCase() : "";
+        const vendorName  = fromAddr ? (fromAddr.name || vendorEmail).trim() : vendorEmail;
+        const msgDate     = msg.envelope.date;
+        const dateStr     = msgDate instanceof Date && !isNaN(msgDate)
+          ? msgDate.toISOString().slice(0, 10) : today;
+
+        // Skip our own outbound/auto emails
+        if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(vendorEmail)) continue;
+        // Must be a reply to an RFQ
+        if (!/re:\s*rfq/i.test(subject)) continue;
+
+        const body      = extractBody(msg.source);
+        const solNumber = extractSol(subject) || extractSol(body);
+        if (!solNumber) { addLog("No SOL in: " + subject.slice(0, 60)); continue; }
+
+        const solRec    = await db.collection("solicitations").findOne({ sol_number: solNumber });
+        const histPrice = solRec ? (parseFloat(solRec.hist_unit_price || solRec.unit_price || 0) || null) : null;
+        const itemName  = solRec ? (solRec.item_name || solRec.item_description || "") : "";
+
+        let parsed;
+        try {
+          parsed = await claudeParse(body, vendorName, subject);
+          addLog(solNumber + " | " + vendorName + " → " + parsed.type + (parsed.unit_price ? " $" + parsed.unit_price : ""));
+        } catch (e) {
+          addLog("Claude failed: " + e.message);
+          errors++;
+          continue;
+        }
+
+        const priceAnalysis = (parsed.type === "quote" && parsed.unit_price)
+          ? analyzePrice(parsed.unit_price, histPrice)
+          : { hist_price: histPrice, hist_flag: histPrice ? "NO_DATA" : "NO_HIST", margin_flag: null, target_bid: null, hist_deviation_pct: null, margin_at_hist_pct: null, margin_at_target_pct: null };
+
+        const doc = {
+          imap_msg_id:       msgId,
+          scanned_at:        new Date(),
+          date:              dateStr,
+          sol_number:        solNumber,
+          item_name:         itemName,
+          vendor_email:      vendorEmail,
+          vendor_name:       vendorName,
+          type:              parsed.type || "unknown",
+          unit_price:        parsed.unit_price        || null,
+          lead_time_days:    parsed.lead_time_days     || null,
+          country_of_origin: parsed.country_of_origin  || null,
+          no_bid_reason:     parsed.no_bid_reason      || null,
+          notes:             parsed.notes              || null,
+          raw_excerpt:       body.slice(0, 600),
+          ...priceAnalysis,
+        };
+
+        await db.collection("rfq_responses").updateOne(
+          { sol_number: solNumber, vendor_email: vendorEmail, date: dateStr },
+          { $set: doc },
+          { upsert: true },
+        );
+        newDocs.push(doc);
+      }
+    } finally {
+      lock.release();
     }
-
-    const msgDate = new Date(dateHdr);
-    const dateStr = isNaN(msgDate.getTime()) ? todayStr : msgDate.toISOString().slice(0, 10);
-
-    const priceAnalysis = (parsed.type === "quote" && parsed.unit_price)
-      ? analyzePrice(parsed.unit_price, histPrice)
-      : { hist_price: histPrice, hist_flag: histPrice ? "NO_DATA" : "NO_HIST", margin_flag: null, target_bid: null, hist_deviation_pct: null, margin_at_hist_pct: null, margin_at_target_pct: null };
-
-    const doc = {
-      gmail_msg_id:      ref.id,
-      scanned_at:        new Date(),
-      date:              dateStr,
-      sol_number:        solNumber,
-      item_name:         itemName,
-      vendor_email:      vendorEmail,
-      vendor_name:       vendorName,
-      type:              parsed.type || "unknown",
-      unit_price:        parsed.unit_price  || null,
-      lead_time_days:    parsed.lead_time_days || null,
-      country_of_origin: parsed.country_of_origin || null,
-      no_bid_reason:     parsed.no_bid_reason || null,
-      notes:             parsed.notes || null,
-      raw_excerpt:       body.slice(0, 600),
-      ...priceAnalysis,
-    };
-
-    // Upsert: same vendor + sol + date = update (handles re-scan of same email)
-    await db.collection("rfq_responses").updateOne(
-      { sol_number: solNumber, vendor_email: vendorEmail, date: dateStr },
-      { $set: doc },
-      { upsert: true },
-    );
-    newDocs.push(doc);
+    await imap.logout();
+    addLog("IMAP disconnected");
+  } catch (e) {
+    addLog("IMAP error: " + e.message);
+    errors++;
+    try { await imap.logout(); } catch {}
+    return { statusCode: 500, headers: h, body: JSON.stringify({ ok: false, error: e.message, log }) };
   }
 
   await markProcessed(db, newMsgIds);
 
-  const report = await buildDailyReport(db, todayStr);
-
-  const stats = { scanned: msgs.length, new_count: newDocs.length, errors, scanned_at: new Date() };
+  const report = await buildDailyReport(db, today);
+  const stats  = { scanned, new_count: newDocs.length, errors, scanned_at: new Date() };
   await db.collection("rfq_scan_log").insertOne(stats);
 
+  const summaryText    = buildSummaryText(report, stats);
+  const summarySubject = stats.new_count === 0
+    ? "SCC Inbox Scan: No new responses · " + new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago" })
+    : "SCC: " + stats.new_count + " new · " + report.total_quotes + " quotes · " + report.total_no_bids + " no-bids";
+
   try {
-    await sendSummary(token, report, stats);
-    addLog("Summary email sent");
+    await sendSummary(summarySubject, summaryText);
+    addLog("Summary sent → " + SUMMARY_TO);
   } catch (e) {
     addLog("Summary email failed: " + e.message);
   }
