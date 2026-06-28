@@ -1,7 +1,7 @@
 // netlify/functions/scc-rfq-inbox.js
 // Imperio SCC — Vendor RFQ Inbox Scanner
 //
-// Scans Gmail (kelley.anthonyk@gmail.com) for vendor replies to RFQ blasts.
+// Scans Gmail (anthony@ifedlog.com) for vendor replies forwarded from kelley.anthonyk@gmail.com.
 // Parses price, lead time, no-bid reason using Claude Haiku.
 // Compares vendor price vs. DIBBS historical unit_price stored in solicitations.
 // Calculates margin at Standard 27.5% and flags OVER/FAIR/UNDER vs. history.
@@ -15,7 +15,7 @@
 
 const { MongoClient } = require("mongodb");
 
-const FROM_ADDRESS = "kelley.anthonyk@gmail.com";
+const FROM_ADDRESS = "anthony@ifedlog.com";
 const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
 const TOKEN_URL    = "https://oauth2.googleapis.com/token";
 const GMAIL_BASE   = "https://gmail.googleapis.com/gmail/v1/users/me";
