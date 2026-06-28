@@ -13,6 +13,10 @@
   timeout = 120
   schedule = "0 14 * * *"
 
+[functions."scc-rfq-inbox"]
+  timeout = 120
+  schedule = "0 13,17,21,1 * * *"
+
 [functions."send-rfq"]
   timeout = 30
 

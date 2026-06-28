@@ -793,6 +793,7 @@
                   { id: "intel", label: "Intel", icon: "⚡ " },
                   { id: "awards", label: "Awards", icon: "🏆 " },
                   { id: "briefs", label: "Briefs", icon: "📡 " },
+                  { id: "inbox", label: "Inbox", icon: "📬 " },
                 ],
               },
               {
@@ -1134,6 +1135,11 @@
           (window.SCC_TABS && window.SCC_TABS.BlastLogTab
             ? hA(window.SCC_TABS.BlastLogTab, null)
             : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Briefs loading…")),
+
+        tab === "inbox" &&
+          (window.SCC_TABS && window.SCC_TABS.InboxTab
+            ? hA(window.SCC_TABS.InboxTab, null)
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Inbox loading…")),
 
         tab === "memo" && hA(MemoTab, null),
 
