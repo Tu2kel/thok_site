@@ -16,7 +16,7 @@ const nodemailer     = require("nodemailer");
 const { MongoClient } = require("mongodb");
 
 const IMAP_USER    = "kelley.anthonyk@gmail.com";
-const SUMMARY_TO   = "anthony@ifedlog.com";
+const SUMMARY_TO   = ["anthony@ifedlog.com", "kelley.anthonyk@gmail.com"];
 const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
 
 const HIST_OVER_THRESHOLD  =  15;
@@ -93,7 +93,7 @@ async function sendSummary(subject, text) {
   });
   await t.sendMail({
     from: '"' + FROM_NAME + '" <' + IMAP_USER + '>',
-    to:   SUMMARY_TO,
+    to:   Array.isArray(SUMMARY_TO) ? SUMMARY_TO.join(", ") : SUMMARY_TO,
     subject,
     text,
   });
@@ -447,52 +447,60 @@ exports.handler = async (event) => {
           }
 
           // 3. Distributor DB fallback — blast_log empty; find vendor by domain, use recent sols in their FSC lanes
-          if (!blastSols.length) {
+          if (!blastSols.length && domain) {
             const distRecord = await db.collection("distributors").findOne({
-              email: { $regex: "@" + (domain || "NOMATCH").replace(/\./g, "\\.") + "$", $options: "i" },
+              email: { $regex: "@" + domain.replace(/\./g, "\\.") + "$", $options: "i" },
             });
             if (distRecord && (distRecord.fsc || []).length) {
               const fscList = distRecord.fsc.map(String);
               const recentSols = await db.collection("solicitations").find({
                 fsc: { $in: fscList },
                 status: { $nin: ["No Source", "Lost", "Awarded"] },
-              }).sort({ _id: -1 }).limit(15).toArray();
+              }).sort({ _id: -1 }).limit(5).toArray();
               if (recentSols.length) {
                 blastSols = recentSols.map(s => ({ sol_number: s.sol_number, item_name: s.item_name || "" }));
-                addLog("dist FSC fallback — @" + domain + " → " + distRecord.name + ": " + blastSols.length + " active sols");
+                addLog("dist FSC fallback — @" + domain + " → " + distRecord.name + ": " + blastSols.length + " sols");
               }
             }
           }
 
           if (!blastSols.length) {
-            addLog("No SOL + no blast history + no dist match for: " + vendorEmail + " — will retry next scan");
+            addLog("No match for: " + vendorEmail + " — will retry next scan");
             continue;
           }
-          addLog("No SOL in email — blast_log match: " + blastSols.length + " sol(s) for " + vendorEmail);
+          addLog("blast_log/dist match: " + blastSols.length + " sol(s) for " + vendorEmail);
         }
 
         newMsgIds.push(msgId);
 
-        let parsed;
-        try {
-          parsed = await claudeParse(body, vendorName, subject);
-        } catch (e) {
-          addLog("Claude failed: " + e.message);
-          errors++;
-          continue;
-        }
-
-        // Build list of sol records to create responses for
+        // Build target list
         const targets = blastSols
           ? blastSols.map(b => ({ sol_number: b.sol_number, item_name: b.item_name || "" }))
           : [{ sol_number: solNumber, item_name: null }];
 
+        // Run Claude parse + batch sol lookup in parallel
+        const targetSolNums = targets.map(t => t.sol_number);
+        let parsed;
+        let solRecMap = {};
+        try {
+          const [parsedResult, solRecs] = await Promise.all([
+            claudeParse(body, vendorName, subject),
+            db.collection("solicitations").find({ sol_number: { $in: targetSolNums } }).toArray(),
+          ]);
+          parsed = parsedResult;
+          solRecMap = Object.fromEntries(solRecs.map(s => [s.sol_number, s]));
+        } catch (e) {
+          addLog("Parse failed: " + e.message);
+          errors++;
+          continue;
+        }
+
         for (const target of targets) {
-          const solRec    = await db.collection("solicitations").findOne({ sol_number: target.sol_number });
+          const solRec    = solRecMap[target.sol_number] || null;
           const histPrice = solRec ? (parseFloat(solRec.hist_unit_price || solRec.unit_price || 0) || null) : null;
           const itemName  = solRec ? (solRec.item_name || solRec.item_description || "") : (target.item_name || "");
 
-          addLog(target.sol_number + " | " + vendorName + " → " + parsed.type + (parsed.unit_price ? " $" + parsed.unit_price : "") + (blastSols ? " (blast_log)" : ""));
+          addLog(target.sol_number + " | " + vendorName + " → " + parsed.type + (parsed.unit_price ? " $" + parsed.unit_price : ""));
 
           const priceAnalysis = (parsed.type === "quote" && parsed.unit_price)
             ? analyzePrice(parsed.unit_price, histPrice)
