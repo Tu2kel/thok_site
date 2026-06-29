@@ -18,7 +18,7 @@ const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, u
 // SOL_SOURCE=email (switches to DLA Gmail after Navigator sub ends)
 const SOL_SOURCE = process.env.SOL_SOURCE || "navigator";
 
-const SCHEDULE  = process.env.CRON_SCHEDULE || "0 12 * * 1-5"; // 6 AM CT Mon–Fri
+const SCHEDULE  = process.env.CRON_SCHEDULE || "0 8,12,16,20 * * 1-5"; // 8 AM / noon / 4 PM / 8 PM CT Mon–Fri
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
 // Comma-separated FSC codes to skip entirely (over hist price, too competitive, etc.)
 // Default: aerospace fasteners — AN/MS/NAS parts consistently beat hist price
@@ -360,7 +360,7 @@ if (runNow) {
   cron.schedule(SCHEDULE, () => {
     log("Cron fired — starting pipeline…");
     runPipelineTracked().catch(e => err("Pipeline error:", e.message));
-  });
+  }, { timezone: "America/Chicago" });
 
   // Keep process alive
   process.on("SIGTERM", () => { log("SIGTERM — shutting down"); process.exit(0); });
