@@ -1053,11 +1053,12 @@
               },
             },
             (() => {
-              const mCount = dists.filter((d) => d.is_manufacturer).length;
-              const dCount = dists.length - mCount;
+              const mCount  = dists.filter((d) => d.is_manufacturer).length;
+              const active  = dists.filter((d) => !d.is_manufacturer && !d.is_dns).length;
+              const dnsed   = dists.filter((d) => !d.is_manufacturer && d.is_dns).length;
               return (
-                (mCount ? mCount + " manufacturer" + (mCount !== 1 ? "s" : "") + " · " : "") +
-                dCount + " distributor" + (dCount !== 1 ? "s" : "") +
+                (mCount ? mCount + " mfr" + (mCount !== 1 ? "s" : "") + " · " : "") +
+                active + " active · " + dnsed + " DNS'd" +
                 (needsSeed ? " — ⚠ Mongo empty, seed required" : "")
               );
             })(),
