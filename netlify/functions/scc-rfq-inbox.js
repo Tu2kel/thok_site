@@ -330,11 +330,12 @@ exports.handler = async (event) => {
     let marked = 0, noMatch = 0;
     try {
       await imap3.connect();
-      const lock3 = await imap3.getMailboxLock("INBOX");
+      // Search All Mail so Gmail delivery failures aren't missed (they often skip INBOX)
+      const lock3 = await imap3.getMailboxLock("[Gmail]/All Mail");
       try {
         const since3 = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
         const bounceUids = await imap3.search({ since: since3, from: "mailer-daemon" }).catch(() => []);
-        bounceLog.push("Found " + bounceUids.length + " bounce email(s) in last " + days + " days");
+        bounceLog.push("Found " + bounceUids.length + " bounce email(s) in last " + days + " days (All Mail)");
 
         const emailSet = new Set();
         for await (const bMsg of imap3.fetch(bounceUids, { source: true })) {
