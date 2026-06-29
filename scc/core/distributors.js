@@ -11,6 +11,7 @@
   // ── Internal cache (populated from MongoDB on load) ───────────────────
   let _cache = []; // full distributor array
   let _fscMap = {}; // fsc → [id, id, ...]  rebuilt from cache
+  let _byId = {};   // id → record  for O(1) lookup
   let _ready = false;
   let _readyCbs = [];
   let _needsSeed = false;
@@ -28,16 +29,20 @@
     _readyCbs = [];
   }
 
-  // ── Rebuild FSC_DIST_MAP from live cache ──────────────────────────────
+  // ── Rebuild lookup structures from live cache ─────────────────────────
   function _rebuildFscMap() {
     const map = {};
+    const byId = {};
     _cache.forEach((d) => {
+      byId[d.id] = d;
+      const seen = new Set();
       (d.fsc || []).forEach((code) => {
         if (!map[code]) map[code] = [];
-        if (!map[code].includes(d.id)) map[code].push(d.id);
+        if (!seen.has(code)) { map[code].push(d.id); seen.add(code); }
       });
     });
     _fscMap = map;
+    _byId = byId;
   }
 
   // ── API call helper ───────────────────────────────────────────────────
@@ -163,7 +168,7 @@
     const key = String(fsc);
     const ids = _fscMap[key] || [];
     const raw = (ids.length
-      ? ids.map((id) => _cache.find((d) => d.id === id)).filter(Boolean)
+      ? ids.map((id) => _byId[id]).filter(Boolean)
       : _cache.filter((d) => (d.fsc || []).includes(key))
     ).filter((d) => !d.is_dns);
     // Preferred-alts first, sub-sorted by priority (1=highest), then legacy
@@ -352,6 +357,7 @@
     const result = await _call("distPurge", {});
     _cache = [];
     _fscMap = {};
+    _byId = {};
     return result;
   }
 
