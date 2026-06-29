@@ -482,6 +482,7 @@ exports.handler = async (event) => {
         const targetSolNums = targets.map(t => t.sol_number);
         let parsed;
         let solRecMap = {};
+        let parseError = null;
         try {
           const [parsedResult, solRecs] = await Promise.all([
             claudeParse(body, vendorName, subject),
@@ -490,9 +491,11 @@ exports.handler = async (event) => {
           parsed = parsedResult;
           solRecMap = Object.fromEntries(solRecs.map(s => [s.sol_number, s]));
         } catch (e) {
-          addLog("Parse failed: " + e.message);
+          parseError = e.message;
+          addLog("Parse failed (" + vendorEmail + "): " + e.message + " — saving raw");
           errors++;
-          continue;
+          parsed = { type: "parse_error", unit_price: null, lead_time_days: null, country_of_origin: null, no_bid_reason: null, notes: "Claude parse failed: " + e.message };
+          solRecMap = {};
         }
 
         for (const target of targets) {

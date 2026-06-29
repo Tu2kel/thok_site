@@ -331,6 +331,21 @@
       }
     };
 
+    const [clearing, setClearing] = useState(false);
+    const handleClearProcessed = async () => {
+      if (!confirm("Clear processed ID set? Next scan will recheck all emails from the last 7 days.")) return;
+      setClearing(true);
+      setError(null);
+      try {
+        await api("clearProcessed");
+        await loadReport();
+      } catch (e) {
+        setError("Clear failed: " + e.message);
+      } finally {
+        setClearing(false);
+      }
+    };
+
     const todayStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
     return h("div", { style: { animation: "fadeUp .5s ease both", paddingBottom: "60px" } },
@@ -360,6 +375,18 @@
               fontFamily: mono, fontSize: "10px", letterSpacing: ".04em",
             },
           }, loading ? "…" : "↻ Refresh"),
+
+          // Clear Processed
+          h("button", {
+            onClick: handleClearProcessed,
+            disabled: clearing || scanning || loading,
+            title: "Unlock all email IDs — next scan rechecks everything from the last 7 days",
+            style: {
+              padding: "6px 12px", background: "transparent",
+              border: "1px solid rgba(255,80,80,.3)", color: "rgba(255,120,120,.8)",
+              cursor: "pointer", fontFamily: mono, fontSize: "10px", letterSpacing: ".04em",
+            },
+          }, clearing ? "Clearing…" : "↺ Reset"),
 
           // Scan Now
           h("button", {
