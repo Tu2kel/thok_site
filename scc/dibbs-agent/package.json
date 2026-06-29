@@ -1,0 +1,13 @@
+{
+  "name": "imperio-dibbs-agent",
+  "version": "1.0.0",
+  "description": "Imperio SCC — local DIBBS agent with Puppeteer scraper",
+  "main": "dibbs-agent.js",
+  "scripts": {
+    "start": "node dibbs-agent.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "puppeteer": "^22.0.0"
+  }
+}
