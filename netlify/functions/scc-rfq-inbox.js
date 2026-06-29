@@ -357,13 +357,13 @@ exports.handler = async (event) => {
         }
         bounceLog.push("Extracted " + emailSet.size + " unique bounced address(es)");
 
-        // Bulk update distributors
+        // Bulk update distributors — DNS them so they're out of active list (revisit later)
         for (const email of emailSet) {
           const r = await db.collection("distributors").updateOne(
             { email },
-            { $set: { email_invalid: true, email_bounced_at: new Date().toISOString() } },
+            { $set: { email_invalid: true, email_bounced_at: new Date().toISOString(), is_dns: true, dns_reason: "Email bounced — stale SAM.gov contact. Revisit when updated." } },
           );
-          if (r.modifiedCount) { marked++; bounceLog.push("✓ marked invalid: " + email); }
+          if (r.modifiedCount) { marked++; bounceLog.push("✓ DNS'd: " + email); }
           else { noMatch++; }
         }
       } finally { lock3.release(); }
