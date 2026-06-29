@@ -450,24 +450,25 @@ exports.handler = async (event) => {
             const distRecord = await db.collection("distributors").findOne({
               email: { $regex: "@" + domain.replace(/\./g, "\\.") + "$", $options: "i" },
             });
-            if (distRecord && (distRecord.fsc || []).length) {
-              const fscList = distRecord.fsc.map(String);
-              const recentSols = await db.collection("solicitations").find({
-                fsc: { $in: fscList },
-                status: { $nin: ["No Source", "Lost", "Awarded"] },
-              }).sort({ _id: -1 }).limit(5).toArray();
+            if (distRecord) {
+              const fscList = (distRecord.fsc || []).map(String);
+              const solQuery = fscList.length
+                ? { fsc: { $in: fscList }, status: { $nin: ["No Source", "Lost", "Awarded"] } }
+                : { status: { $nin: ["No Source", "Lost", "Awarded"] } };
+              const recentSols = await db.collection("solicitations").find(solQuery).sort({ _id: -1 }).limit(5).toArray();
               if (recentSols.length) {
                 blastSols = recentSols.map(s => ({ sol_number: s.sol_number, item_name: s.item_name || "" }));
-                addLog("dist FSC fallback — @" + domain + " → " + distRecord.name + ": " + blastSols.length + " sols");
+                addLog("dist fallback — @" + domain + " → " + distRecord.name + (fscList.length ? " (FSC)" : " (recent)") + ": " + blastSols.length + " sols");
               }
             }
           }
 
+          // Level 4: known vendor reply, no sol match — save as UNMATCHED so nothing is lost
           if (!blastSols.length) {
-            addLog("No match for: " + vendorEmail + " — will retry next scan");
-            continue;
+            blastSols = [{ sol_number: "UNMATCHED", item_name: "" }];
+            addLog("Level 4 UNMATCHED — saving reply from " + vendorEmail + " for manual review");
           }
-          addLog("blast_log/dist match: " + blastSols.length + " sol(s) for " + vendorEmail);
+          addLog("match: " + blastSols.length + " target(s) for " + vendorEmail);
         }
 
         newMsgIds.push(msgId);
