@@ -807,6 +807,7 @@
                   { id: "archive", label: "Archive", icon: "⬇ " },
                   { id: "backup", label: "Backup", icon: "↓ " },
                   { id: "manual", label: "Manual", icon: "📋 " },
+                  { id: "sbaimport", label: "SBA Import", icon: "📥 " },
                 ],
               },
             ];
@@ -1140,6 +1141,11 @@
           (window.SCC_TABS && window.SCC_TABS.InboxTab
             ? hA(window.SCC_TABS.InboxTab, null)
             : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "Inbox loading…")),
+
+        tab === "sbaimport" &&
+          (window.SCC_TABS && window.SCC_TABS.SbaImportTab
+            ? hA(window.SCC_TABS.SbaImportTab, null)
+            : hA("div", { style: { padding: "20px", color: "var(--body-dim)" } }, "SBA Import loading…")),
 
         tab === "memo" && hA(MemoTab, null),
 

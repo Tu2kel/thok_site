@@ -17,6 +17,9 @@
   timeout = 120
   schedule = "0 13,17,21,1 * * *"
 
+[functions."scc-sba-import"]
+  timeout = 30
+
 [functions."send-rfq"]
   timeout = 30
 
