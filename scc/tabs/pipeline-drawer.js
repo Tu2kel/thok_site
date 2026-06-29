@@ -317,6 +317,7 @@ Imperio Talent Solutions | CAGE 152U4<br>
       ["quotes", "Quote History"],
       ["nsn", "NSN Intel"],
       ["awards_intel", "⬡ Awards Intel"],
+      ["market_intel", "📊 Market"],
       ["mfg_ref", "◆ MFG Quotes"],
       ["source", "◆ Source"],
       ["email", "Email"],
@@ -458,6 +459,17 @@ Imperio Talent Solutions | CAGE 152U4<br>
                   },
                   "Awards Intel loading...",
                 ),
+          ),
+
+        dtab === "market_intel" &&
+          hP(PFrag, null,
+            hP("div", {
+              className: "drawer-section-title",
+              style: { color: "var(--gold-solid)", borderColor: "rgba(201,168,76,.25)", fontSize: "13px" },
+            }, "📊 Market Intel — FSC " + (record.fsc || (record.nsn ? record.nsn.replace(/-/g,"").slice(0,4) : "—"))),
+            window.SCC_TABS && window.SCC_TABS.MarketIntelPanel
+              ? hP(window.SCC_TABS.MarketIntelPanel, { record })
+              : hP("div", { style: { padding: "20px", fontFamily: "JetBrains Mono,monospace", fontSize: "12px", color: "var(--body-dim)" } }, "Market Intel loading…"),
           ),
 
         dtab === "supplier" &&

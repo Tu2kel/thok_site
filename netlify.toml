@@ -20,6 +20,9 @@
 [functions."scc-sba-import"]
   timeout = 30
 
+[functions."scc-usaspending"]
+  timeout = 30
+
 [functions."send-rfq"]
   timeout = 30
 
