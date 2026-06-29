@@ -10,7 +10,7 @@
 
 (function () {
   const AGENT_URL_KEY = "scc_agent_url";
-  const DEFAULT_URL = "http://localhost:3100";
+  const DEFAULT_URL = "https://scc-production-4464.up.railway.app";
 
   function getAgentUrl() {
     return localStorage.getItem(AGENT_URL_KEY) || DEFAULT_URL;
