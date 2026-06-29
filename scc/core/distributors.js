@@ -57,48 +57,58 @@
     return data.result;
   }
 
-  // ── Paginated full-load helper ────────────────────────────────────────
-  // Loads sequentially until server says no more pages.
-  async function _loadAllPages(pageSize = 5000) {
-    const all = [];
-    let page = 1;
-    while (true) {
-      const data = await _call("distGetAll", { page, pageSize });
-      if (Array.isArray(data)) return data; // backward compat with old shape
-      all.push(...(data.records || []));
-      if (!data.hasMore) break;
-      page++;
-      if (page > 50) break; // safety cap
-    }
-    return all;
-  }
-
-  // ── Initialize: load all from Mongo into cache ────────────────────────
-  //  Source of truth is MongoDB.
-  //  Seed via SCC Source tab → Distributor DB → paste dist-seed.json → Load
+  // ── Initialize: load page 1 → render app → stream remaining pages ───────
   async function _init() {
+    const pageSize = 5000;
     try {
-      const records = await _loadAllPages();
-      if (Array.isArray(records) && records.length > 0) {
-        _cache = records;
+      const first = await _call("distGetAll", { page: 1, pageSize });
+      const firstRecords = Array.isArray(first) ? first : (first.records || []);
+      if (firstRecords.length > 0) {
+        _cache = firstRecords;
         _rebuildFscMap();
-        console.log(
-          `[SCC_DIST] Loaded ${_cache.length} distributors from MongoDB.`,
-        );
+        console.log(`[SCC_DIST] Page 1 ready — ${_cache.length} distributors`);
       } else {
         _needsSeed = true;
-        console.warn(
-          "[SCC_DIST] Distributor DB empty — seed required. Use Source tab → Distributor DB.",
-        );
       }
     } catch (err) {
       _needsSeed = true;
-      console.warn(
-        "[SCC_DIST] MongoDB unavailable (Live Server?) — seed required.",
-        err.message,
-      );
+      console.warn("[SCC_DIST] MongoDB unavailable:", err.message);
     }
-    _setReady();
+
+    _setReady(); // App renders now — no more blank page
+
+    // Stream remaining pages in background without blocking UI
+    if (!_needsSeed) {
+      (async () => {
+        let page = 2;
+        while (page <= 50) {
+          try {
+            const data = await _call("distGetAll", { page, pageSize });
+            if (Array.isArray(data)) break;
+            if (!data.records?.length) break;
+            _cache.push(...data.records);
+            _rebuildFscMap();
+            console.log(`[SCC_DIST] +${data.records.length} — total ${_cache.length}`);
+            if (!data.hasMore) break;
+          } catch { break; }
+          page++;
+        }
+      })();
+    }
+  }
+
+  // ── Reload used after mutations — loads all pages ─────────────────────
+  async function _loadAllPages(pageSize = 5000) {
+    const all = [];
+    let page = 1;
+    while (page <= 50) {
+      const data = await _call("distGetAll", { page, pageSize });
+      if (Array.isArray(data)) return data;
+      all.push(...(data.records || []));
+      if (!data.hasMore) break;
+      page++;
+    }
+    return all;
   }
 
   // ── FSC lane labels ───────────────────────────────────────────────────
