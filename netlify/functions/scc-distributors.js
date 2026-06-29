@@ -75,12 +75,12 @@ exports.handler = async (event) => {
     switch (action) {
       // ── Get all distributors ──
       case "distGetAll": {
-        const { page = 1, pageSize = 5000 } = payload || {};
+        const { page = 1, pageSize = 8000 } = payload || {};
         const skip = (page - 1) * pageSize;
-        // Fetch one extra to detect hasMore without a countDocuments scan
+        // No sort — natural order avoids a full 29K in-memory sort on every page fetch
         const raw = await dist.find({}, {
           projection: { _id: 0, known_nsns: 0, part_prefixes: 0, my_notes: 0 },
-        }).sort({ tier: 1, name: 1 }).skip(skip).limit(pageSize + 1).toArray();
+        }).skip(skip).limit(pageSize + 1).toArray();
         const hasMore = raw.length > pageSize;
         if (hasMore) raw.pop();
         const records = raw.map((d) => {
