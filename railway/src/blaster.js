@@ -23,9 +23,9 @@ function buildBlastPlan(sols, dists) {
   const fscVendorCount = {};
   const seenNames = new Set();
 
-  // Eligible DB vendors: has email, not DNS, not approved-manufacturer, sorted tier-1 first
+  // Eligible DB vendors: has email, not DNS, not bounced, not approved-manufacturer, sorted tier-1 first
   const eligible = dists
-    .filter(d => d.email && !d.is_dns && !(d.tags || []).includes("approved-manufacturer"))
+    .filter(d => d.email && !d.is_dns && !d.email_invalid && !(d.tags || []).includes("approved-manufacturer"))
     .sort((a, b) => (a.tier || 9) - (b.tier || 9));
 
   const vendorFscMap = []; // [{ vendor, matchedFscs }]
@@ -72,15 +72,56 @@ function buildBlastPlan(sols, dists) {
   return plan;
 }
 
+const DAILY_SEND_LIMIT = parseInt(process.env.BLAST_DAILY_LIMIT || "400");
+const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS    || "2000");
+
+// Check kill switch + daily limit. Returns "ok" | "paused" | "limit"
+async function blastGate(db) {
+  if (!db) return "ok";
+  const [ctrl, daily] = await Promise.all([
+    db.collection("_meta").findOne({ _id: "blast_control" }),
+    db.collection("_meta").findOne({ _id: "blast_daily" }),
+  ]);
+  if (ctrl && ctrl.paused) return "paused";
+  const today = new Date().toISOString().slice(0, 10);
+  if (daily && daily.date === today && daily.count >= DAILY_SEND_LIMIT) return "limit";
+  return "ok";
+}
+
+async function incrementDailyCount(db) {
+  if (!db) return;
+  const today = new Date().toISOString().slice(0, 10);
+  await db.collection("_meta").updateOne(
+    { _id: "blast_daily" },
+    { $inc: { count: 1 }, $set: { date: today }, $setOnInsert: { _id: "blast_daily" } },
+    { upsert: true },
+  ).catch(() => {});
+}
+
 // Execute blast: send one RFQ email per plan entry
 // In test mode all emails go to FROM_ADDRESS instead
 // db (optional) — enables dedup check + blast_log persistence
 async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
-  const results = { sent: 0, failed: 0, skipped: 0, log: [] };
+  const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
 
   for (const entry of plan) {
     const { vendor, sols: allSols } = entry;
     const to = isLive ? vendor.email : fromAddress;
+
+    // ── Kill switch + daily limit check before every send ─────────────────
+    const gate = await blastGate(db);
+    if (gate === "paused") {
+      info("⏸ Blast paused via kill switch — stopping");
+      results.paused = true;
+      results.log.push({ status: "paused", reason: "kill switch" });
+      break;
+    }
+    if (gate === "limit") {
+      info("🛑 Daily send limit (" + DAILY_SEND_LIMIT + ") reached — stopping. Resume tomorrow.");
+      results.daily_limit = true;
+      results.log.push({ status: "stopped", reason: "daily_limit", limit: DAILY_SEND_LIMIT });
+      break;
+    }
 
     // ── Dedup: skip sols already sent to this vendor ──────────────────────
     let sols = allSols;
@@ -153,6 +194,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       results.sent++;
       results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
       info("✓ RFQ → " + vendor.name + " (" + sols.length + " items)");
+      await incrementDailyCount(db);
 
       // Persist one blast_log entry per sol+vendor pair
       if (db) {
@@ -181,7 +223,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
     }
 
     // Throttle to avoid Gmail rate limits
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, SEND_DELAY_MS));
   }
 
   return results;

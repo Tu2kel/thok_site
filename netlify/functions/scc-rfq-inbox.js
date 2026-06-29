@@ -372,7 +372,34 @@ exports.handler = async (event) => {
       const since = new Date();
       since.setDate(since.getDate() - 7);
 
-      // Search for any email with RFQ in subject from last 7 days
+      // ── Bounce scan: mark invalid emails in distributors ──────────────────
+    const bounceSince = new Date();
+    bounceSince.setDate(bounceSince.getDate() - 3);
+    const bounceUids = await imap.search({ since: bounceSince, from: "mailer-daemon" }).catch(() => []);
+    if (bounceUids.length) {
+      addLog(bounceUids.length + " bounce(s) to process");
+      for await (const bMsg of imap.fetch(bounceUids, { source: true })) {
+        try {
+          const raw = bMsg.source ? bMsg.source.toString() : "";
+          // Extract the original recipient from bounce body
+          const recipMatch = raw.match(/Final-Recipient:[^\n]*;\s*([^\s\n]+)/i)
+            || raw.match(/Original-Recipient:[^\n]*;\s*([^\s\n]+)/i)
+            || raw.match(/failed to reach\s+([^\s\n<>]+@[^\s\n<>]+)/i)
+            || raw.match(/<([^>]+@[^>]+)>.*?(?:does not exist|address not found|user unknown)/si);
+          const bouncedEmail = recipMatch ? recipMatch[1].replace(/^mailto:/i, "").trim().toLowerCase() : null;
+          if (bouncedEmail && bouncedEmail.includes("@")) {
+            const updated = await db.collection("distributors").updateOne(
+              { email: bouncedEmail },
+              { $set: { email_invalid: true, email_bounced_at: new Date().toISOString() } },
+            );
+            if (updated.modifiedCount) addLog("BOUNCE marked invalid: " + bouncedEmail);
+            else addLog("BOUNCE no dist match: " + bouncedEmail);
+          }
+        } catch {}
+      }
+    }
+
+    // Search for any email with RFQ in subject from last 7 days
       const uids = await imap.search({ since, subject: "RFQ" });
       addLog(uids.length + " candidate(s) found");
       scanned = uids.length;

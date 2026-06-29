@@ -1761,6 +1761,29 @@
                 }
               },
             }, agentMeta && agentMeta.running ? "⟳ Running…" : "▶ Run Now"),
+          // Pause / Resume blast kill switch
+          agentAlive === true && agentMeta && agentMeta.mode === "railway" &&
+            h("button", {
+              title: agentMeta.blast_paused ? "Resume blast — allow emails to send" : "Pause blast — stop between sends, resume later",
+              style: {
+                ...S.mono, fontSize: "10px",
+                background: agentMeta.blast_paused ? "rgba(61,214,140,.1)" : "rgba(239,83,80,.1)",
+                border: "1px solid " + (agentMeta.blast_paused ? "rgba(61,214,140,.35)" : "rgba(239,83,80,.35)"),
+                color: agentMeta.blast_paused ? "rgba(61,214,140,.9)" : "rgba(239,83,80,.9)",
+                padding: "4px 12px", cursor: "pointer",
+              },
+              onClick: async () => {
+                const endpoint = agentMeta.blast_paused ? "/resume-blast" : "/pause-blast";
+                try {
+                  const r = await fetch(getAgentUrl() + endpoint, { method: "POST" });
+                  const d = await r.json();
+                  if (d.ok) { toast_(agentMeta.blast_paused ? "Blast resumed ✓" : "Blast paused — will stop after current send"); setTimeout(checkAgent, 1000); }
+                  else toast_("Failed: " + d.error, true);
+                } catch (e) {
+                  toast_("Error: " + e.message, true);
+                }
+              },
+            }, agentMeta.blast_paused ? "▶ Resume Blast" : "⏸ Pause Blast"),
           // Restart (local only)
           agentAlive === true && (!agentMeta || agentMeta.mode !== "railway") &&
             h("button", {
