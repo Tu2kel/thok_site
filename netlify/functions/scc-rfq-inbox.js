@@ -341,7 +341,8 @@ exports.handler = async (event) => {
           let skip = null;
           if (processed2.has(msgId)) skip = "already_processed";
           else if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(from)) skip = "own_email";
-          else if (!/re:\s*rfq/i.test(subject)) skip = "subject_no_re_rfq";
+          else if (/automatic reply|out of office|autoreply/i.test(subject)) skip = "auto_reply";
+          else if (!/(?:re|fw[d]?):\s*rfq/i.test(subject)) skip = "subject_no_re_rfq";
           rows.push({ from, subject, msgId: msgId.slice(0, 40), skip: skip || "WOULD_PROCESS" });
         }
       } finally { lock2.release(); }
@@ -406,8 +407,14 @@ exports.handler = async (event) => {
           newMsgIds.push(msgId);
           continue;
         }
-        // Must be a reply to an RFQ
-        if (!/re:\s*rfq/i.test(subject)) {
+        // Skip auto-replies and out-of-office
+        if (/automatic reply|out of office|autoreply/i.test(subject)) {
+          addLog("SKIP auto_reply: " + vendorEmail + " | " + subject.slice(0, 50));
+          newMsgIds.push(msgId);
+          continue;
+        }
+        // Must be a reply or forward of an RFQ
+        if (!/(?:re|fw[d]?):\s*rfq/i.test(subject)) {
           addLog("SKIP no_re_rfq: " + vendorEmail + " | " + subject.slice(0, 50));
           newMsgIds.push(msgId);
           continue;
