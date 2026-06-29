@@ -161,7 +161,6 @@ exports.handler = async (event) => {
         const allMatches = [...ueiMatches, ...nameMatches];
 
         competitor_matches = allMatches.map(v => {
-          // Find the USASpending recipient that matched
           let usaR = rawRecipients.find(r => r.code && r.code === v.uei);
           if (!usaR) usaR = rawRecipients.find(r => normName(r.name) === normName(v.name));
           return {
@@ -173,8 +172,17 @@ exports.handler = async (event) => {
             usa_code:   usaR ? (usaR.code  || "") : "",
           };
         });
+
+        // Auto-flag all matches as DNS immediately — no user action needed
+        if (allMatches.length > 0) {
+          const ids = allMatches.map(v => v.id);
+          const reason = `USASpending: DLA top award recipient in FSC ${fsc} — direct competitor, will not quote`;
+          await dist.updateMany(
+            { id: { $in: ids } },
+            { $set: { is_dns: true, dns_reason: reason } }
+          );
+        }
       } catch (dbErr) {
-        // DB cross-ref is best-effort — don't fail the whole call
         console.error("competitor cross-ref error:", dbErr.message);
       }
 

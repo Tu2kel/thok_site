@@ -3,8 +3,7 @@
   const hA = window.React.createElement;
   const { useState, useEffect } = window.React;
 
-  const FN     = "/.netlify/functions/scc-usaspending";
-  const FN_DIST = "/.netlify/functions/scc-distributors";
+  const FN = "/.netlify/functions/scc-usaspending";
 
   function fmt$(n) {
     if (!n) return "$0";
@@ -211,23 +210,6 @@
     const [lane, setLane]               = useState(null);
     const [totalAwards, setTotalAwards] = useState(0);
     const [competitors, setCompetitors] = useState([]);
-    const [flagging, setFlagging]       = useState({});  // id → true while in-flight
-    const [flagged, setFlagged]         = useState({});  // id → true when done
-
-    async function flagDns(c) {
-      const reason = `USASpending: DLA top award recipient in FSC ${fsc} — direct competitor, will not quote`;
-      setFlagging(f => ({ ...f, [c.db_id]: true }));
-      try {
-        await fetch(FN_DIST, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "distSetDns", id: c.db_id, reason }),
-        });
-        setFlagged(f => ({ ...f, [c.db_id]: true }));
-      } finally {
-        setFlagging(f => { const n = { ...f }; delete n[c.db_id]; return n; });
-      }
-    }
 
     async function load() {
       if (!fsc) return;
@@ -254,7 +236,6 @@
         if (laneRes.ok) {
           setLane(laneRes.result);
           setCompetitors(laneRes.result.competitor_matches || []);
-          setFlagged({});
         }
         if (!awardsRes.ok && !laneRes.ok) throw new Error(awardsRes.error || laneRes.error);
 
@@ -330,25 +311,19 @@
         ),
       ),
 
-      // ── Competitors in Your DB ──────────────────────────────────────
+      // ── Auto-flagged Competitors ─────────────────────────────────────
       loaded && competitors.length > 0 && hA("div", { style: S.competitorSection },
         hA("div", { style: S.competitorTitle },
-          `⚠ ${competitors.length} competitor${competitors.length > 1 ? "s" : ""} found in your DB — FSC ${fsc}`
+          `🚫 ${competitors.length} competitor${competitors.length > 1 ? "s" : ""} auto-flagged DNS — FSC ${fsc}`
         ),
         hA("div", null,
-          ...competitors.map((c, i) => {
-            const isDone    = !!flagged[c.db_id];
-            const isWorking = !!flagging[c.db_id];
-            return hA("div", { key: c.db_id, style: { ...S.competitorRow, borderBottom: i < competitors.length - 1 ? "1px solid rgba(207,90,90,0.10)" : "none" } },
+          ...competitors.map((c, i) =>
+            hA("div", { key: c.db_id, style: { ...S.competitorRow, borderBottom: i < competitors.length - 1 ? "1px solid rgba(207,90,90,0.10)" : "none" } },
               hA("span", { style: S.competitorName, title: c.db_name }, c.db_name),
               hA("span", { style: S.competitorAmt }, fmt$(c.usa_amount)),
-              hA("button", {
-                style: S.dnsBtn(isDone),
-                disabled: isDone || isWorking,
-                onClick: () => !isDone && !isWorking && flagDns(c),
-              }, isDone ? "✓ DNS Set" : isWorking ? "…" : "🚫 Flag DNS"),
-            );
-          })
+              hA("span", { style: { ...S.dnsBtn(true), cursor: "default" } }, "✓ DNS"),
+            )
+          )
         ),
       ),
 
