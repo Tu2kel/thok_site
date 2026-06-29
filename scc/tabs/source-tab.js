@@ -976,7 +976,7 @@
       [distReloadCache],
     );
 
-    const filtered = dists.filter((d) => {
+    const allFiltered = dists.filter((d) => {
       const q = search.toLowerCase();
       return (
         !q ||
@@ -986,6 +986,11 @@
         (d.fsc || []).some((f) => f.includes(q))
       );
     });
+    const DISPLAY_CAP = 500;
+    const filtered = search ? allFiltered : allFiltered.slice(0, DISPLAY_CAP);
+    const cappedMsg = !search && allFiltered.length > DISPLAY_CAP
+      ? `Showing ${DISPLAY_CAP} of ${allFiltered.length.toLocaleString()} — search or filter to narrow`
+      : null;
 
     const card = {
       background: "var(--surface-inset)",
@@ -1348,6 +1353,20 @@
 
       // ── USASpending Intel Feed ──
       h(USASpendingIntel, { dists, onRefresh: refresh }),
+
+      // -- Display cap banner --
+      cappedMsg && h("div", {
+        style: {
+          fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
+          fontSize: "10px",
+          color: "var(--body-dim)",
+          padding: "6px 12px",
+          background: "rgba(201,168,76,0.05)",
+          border: "1px solid rgba(201,168,76,0.15)",
+          borderRadius: "4px",
+          marginBottom: "8px",
+        }
+      }, "⚡ " + cappedMsg),
 
       // -- Tiered card grid --
       (() => {
