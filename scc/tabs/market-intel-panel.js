@@ -3,7 +3,8 @@
   const hA = window.React.createElement;
   const { useState, useEffect } = window.React;
 
-  const FN = "/.netlify/functions/scc-usaspending";
+  const FN     = "/.netlify/functions/scc-usaspending";
+  const FN_DIST = "/.netlify/functions/scc-distributors";
 
   function fmt$(n) {
     if (!n) return "$0";
@@ -132,6 +133,54 @@
       fontWeight: "bold",
       whiteSpace: "nowrap",
     }),
+    competitorSection: {
+      background: "rgba(207,90,90,0.06)",
+      border: "1px solid rgba(207,90,90,0.25)",
+      borderRadius: "4px",
+      padding: "10px 12px",
+    },
+    competitorTitle: {
+      fontFamily: "Cinzel,serif",
+      fontSize: "9px",
+      letterSpacing: "0.12em",
+      color: "#cf8e8e",
+      textTransform: "uppercase",
+      marginBottom: "8px",
+    },
+    competitorRow: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "4px 0",
+      borderBottom: "1px solid rgba(207,90,90,0.10)",
+    },
+    competitorName: {
+      fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
+      fontSize: "10px",
+      color: "#cf8e8e",
+      flex: 1,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    },
+    competitorAmt: {
+      fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
+      fontSize: "10px",
+      color: "var(--body-dim)",
+      flexShrink: 0,
+    },
+    dnsBtn: (done) => ({
+      fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
+      fontSize: "9px",
+      padding: "3px 8px",
+      border: done ? "1px solid rgba(100,180,100,0.4)" : "1px solid rgba(207,90,90,0.4)",
+      background: done ? "rgba(100,180,100,0.08)" : "rgba(207,90,90,0.10)",
+      color: done ? "#80c080" : "#cf8e8e",
+      borderRadius: "3px",
+      cursor: done ? "default" : "pointer",
+      flexShrink: 0,
+      letterSpacing: "0.04em",
+    }),
     errorMsg: {
       fontFamily: "var(--font-mono,'JetBrains Mono',monospace)",
       fontSize: "10px",
@@ -155,12 +204,30 @@
   function MarketIntelPanel({ record }) {
     const fsc = record.fsc || (record.nsn ? record.nsn.replace(/-/g, "").slice(0, 4) : null);
 
-    const [loaded, setLoaded]       = useState(false);
-    const [loading, setLoading]     = useState(false);
-    const [error, setError]         = useState(null);
-    const [awards, setAwards]       = useState([]);
-    const [lane, setLane]           = useState(null);
+    const [loaded, setLoaded]           = useState(false);
+    const [loading, setLoading]         = useState(false);
+    const [error, setError]             = useState(null);
+    const [awards, setAwards]           = useState([]);
+    const [lane, setLane]               = useState(null);
     const [totalAwards, setTotalAwards] = useState(0);
+    const [competitors, setCompetitors] = useState([]);
+    const [flagging, setFlagging]       = useState({});  // id → true while in-flight
+    const [flagged, setFlagged]         = useState({});  // id → true when done
+
+    async function flagDns(c) {
+      const reason = `USASpending: DLA top award recipient in FSC ${fsc} — direct competitor, will not quote`;
+      setFlagging(f => ({ ...f, [c.db_id]: true }));
+      try {
+        await fetch(FN_DIST, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "distSetDns", id: c.db_id, reason }),
+        });
+        setFlagged(f => ({ ...f, [c.db_id]: true }));
+      } finally {
+        setFlagging(f => { const n = { ...f }; delete n[c.db_id]; return n; });
+      }
+    }
 
     async function load() {
       if (!fsc) return;
@@ -184,7 +251,11 @@
           setAwards(awardsRes.result.awards || []);
           setTotalAwards(awardsRes.result.total || 0);
         }
-        if (laneRes.ok) setLane(laneRes.result);
+        if (laneRes.ok) {
+          setLane(laneRes.result);
+          setCompetitors(laneRes.result.competitor_matches || []);
+          setFlagged({});
+        }
         if (!awardsRes.ok && !laneRes.ok) throw new Error(awardsRes.error || laneRes.error);
 
         setLoaded(true);
@@ -256,6 +327,28 @@
               hA("span", { style: S.recipientAmt }, fmt$(r.amount)),
             )
           )
+        ),
+      ),
+
+      // ── Competitors in Your DB ──────────────────────────────────────
+      loaded && competitors.length > 0 && hA("div", { style: S.competitorSection },
+        hA("div", { style: S.competitorTitle },
+          `⚠ ${competitors.length} competitor${competitors.length > 1 ? "s" : ""} found in your DB — FSC ${fsc}`
+        ),
+        hA("div", null,
+          ...competitors.map((c, i) => {
+            const isDone    = !!flagged[c.db_id];
+            const isWorking = !!flagging[c.db_id];
+            return hA("div", { key: c.db_id, style: { ...S.competitorRow, borderBottom: i < competitors.length - 1 ? "1px solid rgba(207,90,90,0.10)" : "none" } },
+              hA("span", { style: S.competitorName, title: c.db_name }, c.db_name),
+              hA("span", { style: S.competitorAmt }, fmt$(c.usa_amount)),
+              hA("button", {
+                style: S.dnsBtn(isDone),
+                disabled: isDone || isWorking,
+                onClick: () => !isDone && !isWorking && flagDns(c),
+              }, isDone ? "✓ DNS Set" : isWorking ? "…" : "🚫 Flag DNS"),
+            );
+          })
         ),
       ),
 

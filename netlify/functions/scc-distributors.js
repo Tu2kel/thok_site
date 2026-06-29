@@ -355,6 +355,20 @@ exports.handler = async (event) => {
         break;
       }
 
+      // ── Flag a vendor as Do Not Send ──
+      case "distSetDns": {
+        const { id, reason } = payload;
+        if (!id) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: "id required" }) };
+        }
+        const res = await dist.updateOne(
+          { id },
+          { $set: { is_dns: true, dns_reason: reason || "Flagged as competitor" } }
+        );
+        result = { updated: res.modifiedCount, id };
+        break;
+      }
+
       default:
         return {
           statusCode: 400,
