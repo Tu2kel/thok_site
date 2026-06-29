@@ -317,6 +317,11 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, logs }) };
   }
 
+  if (action === "clearProcessed") {
+    await db.collection("_meta").deleteOne({ _id: "rfq_inbox_processed" });
+    return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, message: "Processed IDs cleared — next scan will recheck all emails from the last 7 days" }) };
+  }
+
   // ── scan ──────────────────────────────────────────────────────────────────
   const log    = [];
   const addLog = (m) => { log.push(m); console.log("[rfq-inbox]", m); };
@@ -356,7 +361,6 @@ exports.handler = async (event) => {
         const msgId = msg.envelope.messageId || ("uid-" + msg.uid);
 
         if (processed.has(msgId)) continue;
-        newMsgIds.push(msgId);
 
         const subject     = msg.envelope.subject || "";
         const fromAddr    = msg.envelope.from?.[0];
@@ -367,56 +371,88 @@ exports.handler = async (event) => {
           ? msgDate.toISOString().slice(0, 10) : today;
 
         // Skip our own outbound/auto emails
-        if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(vendorEmail)) continue;
+        if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(vendorEmail)) {
+          newMsgIds.push(msgId);
+          continue;
+        }
         // Must be a reply to an RFQ
-        if (!/re:\s*rfq/i.test(subject)) continue;
+        if (!/re:\s*rfq/i.test(subject)) {
+          newMsgIds.push(msgId);
+          continue;
+        }
 
         const body      = extractBody(msg.source);
-        const solNumber = extractSol(subject) || extractSol(body);
-        if (!solNumber) { addLog("No SOL in: " + subject.slice(0, 60)); continue; }
+        let solNumber   = extractSol(subject) || extractSol(body);
 
-        const solRec    = await db.collection("solicitations").findOne({ sol_number: solNumber });
-        const histPrice = solRec ? (parseFloat(solRec.hist_unit_price || solRec.unit_price || 0) || null) : null;
-        const itemName  = solRec ? (solRec.item_name || solRec.item_description || "") : "";
+        // Fallback: no sol in email — look up via blast_log for this vendor
+        let blastSols = null;
+        if (!solNumber) {
+          const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          blastSols = await db.collection("blast_log").find({
+            vendor_email: vendorEmail,
+            status: "sent",
+            sent_at: { $gte: cutoff },
+          }).toArray();
+          if (!blastSols.length) {
+            addLog("No SOL + no blast history for: " + vendorEmail);
+            newMsgIds.push(msgId);
+            continue;
+          }
+          addLog("No SOL in email — blast_log fallback: " + blastSols.length + " sol(s) for " + vendorEmail);
+        }
+
+        newMsgIds.push(msgId);
 
         let parsed;
         try {
           parsed = await claudeParse(body, vendorName, subject);
-          addLog(solNumber + " | " + vendorName + " → " + parsed.type + (parsed.unit_price ? " $" + parsed.unit_price : ""));
         } catch (e) {
           addLog("Claude failed: " + e.message);
           errors++;
           continue;
         }
 
-        const priceAnalysis = (parsed.type === "quote" && parsed.unit_price)
-          ? analyzePrice(parsed.unit_price, histPrice)
-          : { hist_price: histPrice, hist_flag: histPrice ? "NO_DATA" : "NO_HIST", margin_flag: null, target_bid: null, hist_deviation_pct: null, margin_at_hist_pct: null, margin_at_target_pct: null };
+        // Build list of sol records to create responses for
+        const targets = blastSols
+          ? blastSols.map(b => ({ sol_number: b.sol_number, item_name: b.item_name || "" }))
+          : [{ sol_number: solNumber, item_name: null }];
 
-        const doc = {
-          imap_msg_id:       msgId,
-          scanned_at:        new Date(),
-          date:              dateStr,
-          sol_number:        solNumber,
-          item_name:         itemName,
-          vendor_email:      vendorEmail,
-          vendor_name:       vendorName,
-          type:              parsed.type || "unknown",
-          unit_price:        parsed.unit_price        || null,
-          lead_time_days:    parsed.lead_time_days     || null,
-          country_of_origin: parsed.country_of_origin  || null,
-          no_bid_reason:     parsed.no_bid_reason      || null,
-          notes:             parsed.notes              || null,
-          raw_excerpt:       body.slice(0, 600),
-          ...priceAnalysis,
-        };
+        for (const target of targets) {
+          const solRec    = await db.collection("solicitations").findOne({ sol_number: target.sol_number });
+          const histPrice = solRec ? (parseFloat(solRec.hist_unit_price || solRec.unit_price || 0) || null) : null;
+          const itemName  = solRec ? (solRec.item_name || solRec.item_description || "") : (target.item_name || "");
 
-        await db.collection("rfq_responses").updateOne(
-          { sol_number: solNumber, vendor_email: vendorEmail, date: dateStr },
-          { $set: doc },
-          { upsert: true },
-        );
-        newDocs.push(doc);
+          addLog(target.sol_number + " | " + vendorName + " → " + parsed.type + (parsed.unit_price ? " $" + parsed.unit_price : "") + (blastSols ? " (blast_log)" : ""));
+
+          const priceAnalysis = (parsed.type === "quote" && parsed.unit_price)
+            ? analyzePrice(parsed.unit_price, histPrice)
+            : { hist_price: histPrice, hist_flag: histPrice ? "NO_DATA" : "NO_HIST", margin_flag: null, target_bid: null, hist_deviation_pct: null, margin_at_hist_pct: null, margin_at_target_pct: null };
+
+          const doc = {
+            imap_msg_id:       msgId,
+            scanned_at:        new Date(),
+            date:              dateStr,
+            sol_number:        target.sol_number,
+            item_name:         itemName,
+            vendor_email:      vendorEmail,
+            vendor_name:       vendorName,
+            type:              parsed.type || "unknown",
+            unit_price:        parsed.unit_price        || null,
+            lead_time_days:    parsed.lead_time_days     || null,
+            country_of_origin: parsed.country_of_origin  || null,
+            no_bid_reason:     parsed.no_bid_reason      || null,
+            notes:             parsed.notes              || null,
+            raw_excerpt:       body.slice(0, 600),
+            ...priceAnalysis,
+          };
+
+          await db.collection("rfq_responses").updateOne(
+            { sol_number: target.sol_number, vendor_email: vendorEmail, date: dateStr },
+            { $set: doc },
+            { upsert: true },
+          );
+          newDocs.push(doc);
+        }
       }
     } finally {
       lock.release();
