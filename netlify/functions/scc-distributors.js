@@ -362,6 +362,14 @@ exports.handler = async (event) => {
         break;
       }
 
+      // ── Purge only SBA-imported records, keep curated ──
+      case "distPurgeSBA": {
+        const del = await dist.deleteMany({ source: "sba_sbs" });
+        const remaining = await dist.countDocuments({});
+        result = { purged: del.deletedCount, remaining };
+        break;
+      }
+
       // ── Flag a vendor as Do Not Send ──
       case "distSetDns": {
         const { id, reason } = payload;

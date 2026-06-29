@@ -326,6 +326,8 @@ function naicsToFsc(naicsList) {
   const fscSet = new Set();
   for (const raw of (naicsList || [])) {
     const code = String(raw).replace(/\D/g, "").slice(0, 6);
+    // Only wholesale/distribution NAICS (42xxxx) — manufacturers (32/33xxxx) are excluded
+    if (!code.startsWith("42")) continue;
     if (NAICS_FSC[code]) {
       NAICS_FSC[code].forEach(f => fscSet.add(f));
     } else {

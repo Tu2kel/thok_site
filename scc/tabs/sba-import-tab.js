@@ -104,9 +104,11 @@
           ? "linear-gradient(180deg,#c8a84b 0%,#a07830 100%)"
           : variant === "green"
           ? "linear-gradient(180deg,#2d6a2d 0%,#1a421a 100%)"
+          : variant === "danger"
+          ? "linear-gradient(180deg,#8b2020 0%,#5c1414 100%)"
           : "transparent",
       color: variant === "ghost" ? "var(--body-dim)" : "#fff",
-      border: variant === "ghost" ? "1px solid var(--accent-warm)" : "none",
+      border: variant === "ghost" ? "1px solid var(--accent-warm)" : variant === "danger" ? "1px solid rgba(207,90,90,0.4)" : "none",
       opacity: 1,
     }),
     statsGrid: {
@@ -169,8 +171,9 @@
     const [rowCount, setRowCount]           = useState(0);
     const [preview, setPreview]             = useState(null);
     const [importResult, setImportResult]   = useState(null);
-    const [loading, setLoading]             = useState(null); // "preview" | "import" | null
+    const [loading, setLoading]             = useState(null); // "preview" | "import" | "purge_sba" | null
     const [error, setError]                 = useState(null);
+    const [purgeResult, setPurgeResult]     = useState(null);
 
     // Load current DB count on mount
     useEffect(() => {
@@ -246,6 +249,31 @@
       }
     }, [csvText, preview]);
 
+    const handlePurgeSBA = useCallback(async () => {
+      if (!window.confirm("Delete all SBA-imported vendors (source: sba_sbs)? Your curated vendors stay. This cannot be undone.")) return;
+      setLoading("purge_sba");
+      setPurgeResult(null);
+      setError(null);
+      try {
+        const res = await fetch("/.netlify/functions/scc-distributors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "distPurgeSBA", payload: {} }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setPurgeResult(data.result);
+          setCurrentCount(data.result.remaining);
+        } else {
+          setError(data.error || "Purge failed");
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(null);
+      }
+    }, []);
+
     // ── Render ──────────────────────────────────────────────────────────────
     return hA("div", { style: S.wrap },
 
@@ -254,6 +282,16 @@
         hA("div", { style: S.titleBlock },
           hA("h2", { style: S.title }, "SBA DSBS VENDOR IMPORT"),
           currentCount !== null && hA("span", { style: S.badge }, `DB: ${currentCount.toLocaleString()} vendors`),
+        ),
+        hA("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" } },
+          hA("button", {
+            style: { ...S.btn("danger"), fontSize: "10px", padding: "5px 12px", opacity: loading === "purge_sba" ? 0.6 : 1 },
+            disabled: loading === "purge_sba",
+            onClick: handlePurgeSBA,
+          }, loading === "purge_sba" ? "Purging…" : "🗑 Purge SBA Imports"),
+          purgeResult && hA("span", { style: { fontFamily: "var(--font-mono)", fontSize: "9px", color: "#cf8e8e" } },
+            `Removed ${purgeResult.purged.toLocaleString()} — ${purgeResult.remaining.toLocaleString()} remaining`
+          ),
         ),
       ),
 
