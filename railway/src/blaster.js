@@ -65,8 +65,19 @@ function buildBlastPlan(sols, dists) {
     plan.push({ vendor, sols: matchedSols, totalExt, fscs });
   }
 
-  // Sort by expected value descending
-  plan.sort((a, b) => b.totalExt - a.totalExt);
+  const PERSONAL_DOMAINS = /gmail\.com|yahoo\.com|aol\.com|hotmail\.com|outlook\.com|icloud\.com/i;
+  const hasCage    = d => !!(d.cage_code || d.cage);
+  const hasCorp    = d => !PERSONAL_DOMAINS.test(d.email || "");
+
+  // Sort: totalExt desc → sol count desc → CAGE present → corporate email
+  plan.sort((a, b) => {
+    if (b.totalExt !== a.totalExt) return b.totalExt - a.totalExt;
+    if (b.sols.length !== a.sols.length) return b.sols.length - a.sols.length;
+    const cageA = hasCage(a.vendor) ? 1 : 0, cageB = hasCage(b.vendor) ? 1 : 0;
+    if (cageB !== cageA) return cageB - cageA;
+    const corpA = hasCorp(a.vendor) ? 1 : 0, corpB = hasCorp(b.vendor) ? 1 : 0;
+    return corpB - corpA;
+  });
 
   info("Blast plan: " + plan.length + " vendors, " + sols.length + " sols across " + goFscs.size + " FSC lanes");
   return plan;

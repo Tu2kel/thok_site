@@ -322,6 +322,58 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, message: "Processed IDs cleared — next scan will recheck all emails from the last 7 days" }) };
   }
 
+  // processBounces: bulk-scan all mailer-daemon emails, mark distributors email_invalid
+  if (action === "processBounces") {
+    const days = payload.days || 30;
+    const imap3 = makeImapClient();
+    const bounceLog = [];
+    let marked = 0, noMatch = 0;
+    try {
+      await imap3.connect();
+      const lock3 = await imap3.getMailboxLock("INBOX");
+      try {
+        const since3 = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        const bounceUids = await imap3.search({ since: since3, from: "mailer-daemon" }).catch(() => []);
+        bounceLog.push("Found " + bounceUids.length + " bounce email(s) in last " + days + " days");
+
+        const emailSet = new Set();
+        for await (const bMsg of imap3.fetch(bounceUids, { source: true })) {
+          try {
+            const raw = bMsg.source ? bMsg.source.toString() : "";
+            const patterns = [
+              /Final-Recipient:[^\n]*;\s*([^\s\n]+)/i,
+              /Original-Recipient:[^\n]*;\s*([^\s\n]+)/i,
+              /Your message.*?couldn't be delivered to\s+([^\s\n.]+@[^\s\n.]+\.[^\s\n]+)/i,
+              /wasn't delivered to\s+([^\s\n]+@[^\s\n]+)/i,
+            ];
+            for (const pat of patterns) {
+              const m = raw.match(pat);
+              if (m) {
+                const email = m[1].replace(/^mailto:/i, "").trim().toLowerCase();
+                if (email.includes("@")) { emailSet.add(email); break; }
+              }
+            }
+          } catch {}
+        }
+        bounceLog.push("Extracted " + emailSet.size + " unique bounced address(es)");
+
+        // Bulk update distributors
+        for (const email of emailSet) {
+          const r = await db.collection("distributors").updateOne(
+            { email },
+            { $set: { email_invalid: true, email_bounced_at: new Date().toISOString() } },
+          );
+          if (r.modifiedCount) { marked++; bounceLog.push("✓ marked invalid: " + email); }
+          else { noMatch++; }
+        }
+      } finally { lock3.release(); }
+      await imap3.logout();
+    } catch (e) {
+      bounceLog.push("Error: " + e.message);
+    }
+    return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, marked, noMatch, log: bounceLog }) };
+  }
+
   // debugScan: show raw from/subject/skip-reason for every email, no Claude, no DB writes
   if (action === "debugScan") {
     const imap2 = makeImapClient();

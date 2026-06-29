@@ -331,6 +331,21 @@
       }
     };
 
+    const [bouncing, setBouncing] = useState(false);
+    const handleProcessBounces = async () => {
+      setBouncing(true);
+      setError(null);
+      try {
+        const d = await api("processBounces", { days: 30 });
+        alert("Bounce cleanup: " + d.marked + " addresses marked invalid, " + d.noMatch + " unmatched.\n\n" + (d.log || []).join("\n"));
+        await loadReport();
+      } catch (e) {
+        setError("Bounce process failed: " + e.message);
+      } finally {
+        setBouncing(false);
+      }
+    };
+
     const [clearing, setClearing] = useState(false);
     const handleClearProcessed = async () => {
       if (!confirm("Clear processed ID set? Next scan will recheck all emails from the last 7 days.")) return;
@@ -375,6 +390,18 @@
               fontFamily: mono, fontSize: "10px", letterSpacing: ".04em",
             },
           }, loading ? "…" : "↻ Refresh"),
+
+          // Process Bounces
+          h("button", {
+            onClick: handleProcessBounces,
+            disabled: bouncing || scanning,
+            title: "Scan last 30 days of MAILER-DAEMON emails, mark all bounced addresses email_invalid",
+            style: {
+              padding: "6px 12px", background: "transparent",
+              border: "1px solid rgba(255,140,0,.35)", color: "rgba(255,160,40,.85)",
+              cursor: "pointer", fontFamily: mono, fontSize: "10px", letterSpacing: ".04em",
+            },
+          }, bouncing ? "Scanning…" : "⚠ Process Bounces"),
 
           // Clear Processed
           h("button", {

@@ -278,9 +278,27 @@ async function runPipeline() {
 // ── HTTP SERVER (health + manual trigger) ────────────────────────────────
 const http = require("http");
 
-let lastRunAt   = null;
-let lastRunOk   = null;
+let lastRunAt       = null;
+let lastRunOk       = null;
 let pipelineRunning = false;
+
+// Cached blast state — refreshed every 30s so health checks don't open new DB connections
+let _blastState = { paused: false, daily_sent: 0, daily_limit: parseInt(process.env.BLAST_DAILY_LIMIT || "400"), cached_at: 0 };
+async function refreshBlastState() {
+  try {
+    const db = await getDb();
+    const today = new Date().toISOString().slice(0, 10);
+    const [ctrl, daily] = await Promise.all([
+      db.collection("_meta").findOne({ _id: "blast_control" }),
+      db.collection("_meta").findOne({ _id: "blast_daily" }),
+    ]);
+    _blastState.paused     = !!(ctrl && ctrl.paused);
+    _blastState.daily_sent = (daily && daily.date === today) ? (daily.count || 0) : 0;
+    _blastState.cached_at  = Date.now();
+  } catch {}
+}
+// Refresh every 30 seconds
+setInterval(() => refreshBlastState().catch(() => {}), 30000);
 
 const PORT = process.env.PORT || 3100;
 
@@ -296,29 +314,15 @@ const httpServer = http.createServer((req, res) => {
   if (u === "/health" && req.method === "GET") {
     const now = Date.now();
     const msAgo = lastRunAt ? now - lastRunAt : null;
-    // Read blast_control + daily count async, fall back gracefully
-    let blastPaused = false, dailySent = 0, dailyLimit = parseInt(process.env.BLAST_DAILY_LIMIT || "400");
-    try {
-      const client = await require("mongodb").MongoClient.connect(process.env.MONGODB_URI);
-      const mdb = client.db("scc_db");
-      const today = new Date().toISOString().slice(0, 10);
-      const [ctrl, daily] = await Promise.all([
-        mdb.collection("_meta").findOne({ _id: "blast_control" }),
-        mdb.collection("_meta").findOne({ _id: "blast_daily" }),
-      ]);
-      blastPaused = !!(ctrl && ctrl.paused);
-      dailySent   = (daily && daily.date === today) ? (daily.count || 0) : 0;
-      await client.close();
-    } catch {}
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       ok: true,
       mode: "railway",
       schedule: SCHEDULE,
       blast_live: IS_LIVE,
-      blast_paused: blastPaused,
-      daily_sent: dailySent,
-      daily_limit: dailyLimit,
+      blast_paused:  _blastState.paused,
+      daily_sent:    _blastState.daily_sent,
+      daily_limit:   _blastState.daily_limit,
       last_run: lastRunAt ? new Date(lastRunAt).toISOString() : null,
       last_run_ok: lastRunOk,
       last_run_ago_min: msAgo ? Math.round(msAgo / 60000) : null,
@@ -329,22 +333,20 @@ const httpServer = http.createServer((req, res) => {
 
   if ((u === "/pause-blast" || u === "/resume-blast") && req.method === "POST") {
     const paused = u === "/pause-blast";
-    try {
-      const client = await require("mongodb").MongoClient.connect(process.env.MONGODB_URI);
-      const mdb = client.db("scc_db");
+    getDb().then(async (mdb) => {
       await mdb.collection("_meta").updateOne(
         { _id: "blast_control" },
         { $set: { paused, updated_at: new Date().toISOString() } },
         { upsert: true },
       );
-      await client.close();
+      _blastState.paused = paused;
       log("Blast " + (paused ? "PAUSED" : "RESUMED") + " via HTTP");
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, paused }));
-    } catch (e) {
+    }).catch(e => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: e.message }));
-    }
+    });
     return;
   }
 
