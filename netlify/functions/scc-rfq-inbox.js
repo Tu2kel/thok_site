@@ -322,6 +322,36 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, message: "Processed IDs cleared — next scan will recheck all emails from the last 7 days" }) };
   }
 
+  // debugScan: show raw from/subject/skip-reason for every email, no Claude, no DB writes
+  if (action === "debugScan") {
+    const imap2 = makeImapClient();
+    const rows = [];
+    try {
+      await imap2.connect();
+      const lock2 = await imap2.getMailboxLock("INBOX");
+      try {
+        const since2 = new Date(); since2.setDate(since2.getDate() - 7);
+        const uids2 = await imap2.search({ since: since2, subject: "RFQ" });
+        const processed2 = await getProcessed(db);
+        for await (const msg of imap2.fetch(uids2, { envelope: true })) {
+          const msgId = msg.envelope.messageId || ("uid-" + msg.uid);
+          const subject = msg.envelope.subject || "";
+          const fromAddr = msg.envelope.from?.[0];
+          const from = fromAddr ? ((fromAddr.address || (fromAddr.mailbox + "@" + fromAddr.host)) || "") : "";
+          let skip = null;
+          if (processed2.has(msgId)) skip = "already_processed";
+          else if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(from)) skip = "own_email";
+          else if (!/re:\s*rfq/i.test(subject)) skip = "subject_no_re_rfq";
+          rows.push({ from, subject, msgId: msgId.slice(0, 40), skip: skip || "WOULD_PROCESS" });
+        }
+      } finally { lock2.release(); }
+      await imap2.logout();
+    } catch (e) {
+      return { statusCode: 500, headers: h, body: JSON.stringify({ ok: false, error: e.message }) };
+    }
+    return { statusCode: 200, headers: h, body: JSON.stringify({ ok: true, total: rows.length, rows }) };
+  }
+
   // ── scan ──────────────────────────────────────────────────────────────────
   const log    = [];
   const addLog = (m) => { log.push(m); console.log("[rfq-inbox]", m); };
@@ -360,7 +390,7 @@ exports.handler = async (event) => {
       for await (const msg of imap.fetch(uids, { source: true, envelope: true })) {
         const msgId = msg.envelope.messageId || ("uid-" + msg.uid);
 
-        if (processed.has(msgId)) continue;
+        if (processed.has(msgId)) { addLog("SKIP already_processed: " + msgId.slice(0, 30)); continue; }
 
         const subject     = msg.envelope.subject || "";
         const fromAddr    = msg.envelope.from?.[0];
@@ -372,11 +402,13 @@ exports.handler = async (event) => {
 
         // Skip our own outbound/auto emails
         if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(vendorEmail)) {
+          addLog("SKIP own_email: " + vendorEmail + " | " + subject.slice(0, 50));
           newMsgIds.push(msgId);
           continue;
         }
         // Must be a reply to an RFQ
         if (!/re:\s*rfq/i.test(subject)) {
+          addLog("SKIP no_re_rfq: " + vendorEmail + " | " + subject.slice(0, 50));
           newMsgIds.push(msgId);
           continue;
         }
