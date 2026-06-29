@@ -53,18 +53,17 @@
   }
 
   // ── Paginated full-load helper ────────────────────────────────────────
-  // Fetches page 1 first, then all remaining pages in parallel.
-  async function _loadAllPages(pageSize = 3000) {
-    const first = await _call("distGetAll", { page: 1, pageSize });
-    if (Array.isArray(first)) return first; // backward compat with old shape
-    const all = [...first.records];
-    if (first.pages > 1) {
-      const rest = await Promise.all(
-        Array.from({ length: first.pages - 1 }, (_, i) =>
-          _call("distGetAll", { page: i + 2, pageSize })
-        )
-      );
-      rest.forEach((p) => all.push(...(Array.isArray(p) ? p : (p.records || []))));
+  // Loads sequentially until server says no more pages.
+  async function _loadAllPages(pageSize = 5000) {
+    const all = [];
+    let page = 1;
+    while (true) {
+      const data = await _call("distGetAll", { page, pageSize });
+      if (Array.isArray(data)) return data; // backward compat with old shape
+      all.push(...(data.records || []));
+      if (!data.hasMore) break;
+      page++;
+      if (page > 50) break; // safety cap
     }
     return all;
   }

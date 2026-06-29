@@ -75,18 +75,20 @@ exports.handler = async (event) => {
     switch (action) {
       // ── Get all distributors ──
       case "distGetAll": {
-        const { page = 1, pageSize = 3000 } = payload;
+        const { page = 1, pageSize = 5000 } = payload || {};
         const skip = (page - 1) * pageSize;
-        const total = await dist.countDocuments({});
-        const all = await dist.find({}, {
+        // Fetch one extra to detect hasMore without a countDocuments scan
+        const raw = await dist.find({}, {
           projection: { _id: 0, known_nsns: 0, part_prefixes: 0, my_notes: 0 },
-        }).sort({ tier: 1, name: 1 }).skip(skip).limit(pageSize).toArray();
-        const records = all.map((d) => {
+        }).sort({ tier: 1, name: 1 }).skip(skip).limit(pageSize + 1).toArray();
+        const hasMore = raw.length > pageSize;
+        if (hasMore) raw.pop();
+        const records = raw.map((d) => {
           if (!d.fsc && d.fsc_codes) d.fsc = d.fsc_codes;
           if (!d.fsc) d.fsc = [];
           return d;
         });
-        result = { records, total, page, pages: Math.ceil(total / pageSize) };
+        result = { records, hasMore, page };
         break;
       }
 
