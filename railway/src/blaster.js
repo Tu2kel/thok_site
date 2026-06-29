@@ -114,7 +114,6 @@ async function incrementDailyCount(db) {
 // db (optional) — enables dedup check + blast_log persistence
 async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
-
   for (const entry of plan) {
     const { vendor, sols: allSols } = entry;
     const to = isLive ? vendor.email : fromAddress;

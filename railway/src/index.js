@@ -286,7 +286,7 @@ let pipelineRunning = false;
 let _blastState = { paused: false, daily_sent: 0, daily_limit: parseInt(process.env.BLAST_DAILY_LIMIT || "400"), cached_at: 0 };
 async function refreshBlastState() {
   try {
-    const db = await getDb();
+    const db    = await getDb();
     const today = new Date().toISOString().slice(0, 10);
     const [ctrl, daily] = await Promise.all([
       db.collection("_meta").findOne({ _id: "blast_control" }),
