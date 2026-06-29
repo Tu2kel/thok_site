@@ -427,17 +427,31 @@ exports.handler = async (event) => {
         let blastSols = null;
         if (!solNumber) {
           const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+          // 1. Exact email match
           blastSols = await db.collection("blast_log").find({
-            vendor_email: vendorEmail,
-            status: "sent",
-            sent_at: { $gte: cutoff },
+            vendor_email: vendorEmail, status: "sent", sent_at: { $gte: cutoff },
           }).toArray();
+
+          // 2. Domain match — vendor may reply from different address than we sent to
           if (!blastSols.length) {
-            addLog("No SOL + no blast history for: " + vendorEmail);
-            newMsgIds.push(msgId);
+            const domain = vendorEmail.split("@")[1];
+            if (domain) {
+              blastSols = await db.collection("blast_log").find({
+                vendor_email: { $regex: "@" + domain.replace(/\./g, "\\.") + "$", $options: "i" },
+                status: "sent",
+                sent_at: { $gte: cutoff },
+              }).toArray();
+              if (blastSols.length) addLog("No SOL — domain match @" + domain + ": " + blastSols.length + " sol(s)");
+            }
+          }
+
+          if (!blastSols.length) {
+            // Don't permanently mark processed — leave open for retry if new blasts go out
+            addLog("No SOL + no blast history for: " + vendorEmail + " — will retry next scan");
             continue;
           }
-          addLog("No SOL in email — blast_log fallback: " + blastSols.length + " sol(s) for " + vendorEmail);
+          addLog("No SOL in email — blast_log match: " + blastSols.length + " sol(s) for " + vendorEmail);
         }
 
         newMsgIds.push(msgId);
