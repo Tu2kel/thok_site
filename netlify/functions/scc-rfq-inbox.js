@@ -546,7 +546,7 @@ exports.handler = async (event) => {
   await markProcessed(db, newMsgIds);
 
   const report = await buildDailyReport(db, today);
-  const stats  = { scanned, new_count: newDocs.length, errors, scanned_at: new Date() };
+  const stats  = { scanned, new_count: newDocs.length, errors, scanned_at: new Date(), log };
   await db.collection("rfq_scan_log").insertOne(stats);
 
   const summaryText    = buildSummaryText(report, stats);
