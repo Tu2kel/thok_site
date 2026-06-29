@@ -32,7 +32,7 @@
   const BLAST_LOG_FN    = "/.netlify/functions/scc-blast-log";
 
   // Fire-and-forget: save a blast session brief to MongoDB
-  function saveBriefToMongo(plan, isLive, sent, failed) {
+  async function saveBriefToMongo(plan, isLive, sent, failed) {
     var solMap = {};
     var blastEntries = [];
     var nowTs = new Date().toISOString();
@@ -67,24 +67,29 @@
       }
     }
     var solArr = Object.values(solMap);
-    fetch(BLAST_LOG_FN, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "saveBrief",
-        brief: {
-          run_date:     new Date().toLocaleDateString("en-US"),
-          total_sols:   solArr.length,
-          go_count:     solArr.filter(function(s) { return s.verdict === "GO"; }).length,
-          verify_count: solArr.filter(function(s) { return s.verdict === "VERIFY FIRST"; }).length,
-          reject_count: 0,
-          blast_sent:   sent,
-          blast_failed: failed,
-          sols:         solArr,
-        },
-        blastEntries: blastEntries,
-      }),
-    }).catch(function(e) { console.warn("[SCC] saveBrief failed:", e.message); });
+    try {
+      const res = await fetch(BLAST_LOG_FN, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "saveBrief",
+          brief: {
+            run_date:     new Date().toLocaleDateString("en-US"),
+            total_sols:   solArr.length,
+            go_count:     solArr.filter(function(s) { return s.verdict === "GO"; }).length,
+            verify_count: solArr.filter(function(s) { return s.verdict === "VERIFY FIRST"; }).length,
+            reject_count: 0,
+            blast_sent:   sent,
+            blast_failed: failed,
+            sols:         solArr,
+          },
+          blastEntries: blastEntries,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) console.warn("[SCC] saveBrief error:", data.error);
+      else console.log("[SCC] saveBrief saved — " + blastEntries.length + " blast_log entries written");
+    } catch (e) { console.warn("[SCC] saveBrief failed:", e.message); }
   }
 
   // ── PERSIST ──────────────────────────────────────────────────────────
@@ -1011,7 +1016,7 @@
         // Pace sends — Gmail blocks on too many rapid SMTP logins (454-4.7.0)
         if (i < remaining.length - 1) await new Promise(r => setTimeout(r, 1500));
       }
-      if (sent > 0) saveBriefToMongo(sentPlan, isLive, sent, failed);
+      if (sent > 0) await saveBriefToMongo(sentPlan, isLive, sent, failed);
       refreshBlastLog();
       setPendingBlast(null);
       setShowBlastLog(true);
@@ -1058,7 +1063,7 @@
         }
         if (i < autoFiltered.length - 1) await new Promise(function(r) { return setTimeout(r, 1500); });
       }
-      if (sent > 0) saveBriefToMongo(sentPlan, isLive, sent, failed);
+      if (sent > 0) await saveBriefToMongo(sentPlan, isLive, sent, failed);
       refreshBlastLog();
       setShowBlastLog(true);
       addLog("AUTO-BLAST ▶ Done — " + sent + " sent, " + failed + " failed.", sent > 0 ? "ok" : "err");

@@ -446,9 +446,26 @@ exports.handler = async (event) => {
             }
           }
 
+          // 3. Distributor DB fallback — blast_log empty; find vendor by domain, use recent sols in their FSC lanes
           if (!blastSols.length) {
-            // Don't permanently mark processed — leave open for retry if new blasts go out
-            addLog("No SOL + no blast history for: " + vendorEmail + " — will retry next scan");
+            const distRecord = await db.collection("distributors").findOne({
+              email: { $regex: "@" + (domain || "NOMATCH").replace(/\./g, "\\.") + "$", $options: "i" },
+            });
+            if (distRecord && (distRecord.fsc || []).length) {
+              const fscList = distRecord.fsc.map(String);
+              const recentSols = await db.collection("solicitations").find({
+                fsc: { $in: fscList },
+                status: { $nin: ["No Source", "Lost", "Awarded"] },
+              }).sort({ _id: -1 }).limit(15).toArray();
+              if (recentSols.length) {
+                blastSols = recentSols.map(s => ({ sol_number: s.sol_number, item_name: s.item_name || "" }));
+                addLog("dist FSC fallback — @" + domain + " → " + distRecord.name + ": " + blastSols.length + " active sols");
+              }
+            }
+          }
+
+          if (!blastSols.length) {
+            addLog("No SOL + no blast history + no dist match for: " + vendorEmail + " — will retry next scan");
             continue;
           }
           addLog("No SOL in email — blast_log match: " + blastSols.length + " sol(s) for " + vendorEmail);
