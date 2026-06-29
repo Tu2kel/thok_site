@@ -64,6 +64,7 @@ async function runPipeline() {
     }
     if (!emailSols.length) {
       log("No DLA solicitation emails found in last 26h — sending summary");
+      await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: 0, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: "No DLA emails found", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
       await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
       return;
     }
@@ -85,6 +86,7 @@ async function runPipeline() {
     if (!result.ok || !result.sols.length) {
       err("Navigator scrape failed or returned 0 sols:", result.error || "no sols");
       errors.push("Scraper: " + (result.error || "0 sols"));
+      await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: 0, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: result.error || "Scrape returned 0 sols", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
       await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
       return;
     }
@@ -108,6 +110,7 @@ async function runPipeline() {
 
   if (!freshSols.length) {
     log("No new sols — sending summary");
+    await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: rawSols.length, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: "All sols already acted on", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
     await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, errors, runDate });
     return;
   }

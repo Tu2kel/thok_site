@@ -325,6 +325,7 @@
           brief.reject_count > 0 && h("span", { style: { fontFamily: mono, fontSize: "10px", color: "rgba(239,68,68,.7)" } }, brief.reject_count + " REJECT"),
           h("span", { style: { fontFamily: mono, fontSize: "10px", color: blue + ".8)" } }, brief.blast_sent + " emails sent"),
           brief.blast_failed > 0 && h("span", { style: { fontFamily: mono, fontSize: "10px", color: "rgba(239,68,68,.8)" } }, brief.blast_failed + " failed"),
+          brief.notes && h("span", { style: { fontFamily: mono, fontSize: "10px", color: "var(--body-faint)", fontStyle: "italic" } }, brief.notes),
         ),
 
         openSols.length > 0 && h(Chip, { label: openSols.length + " open", color: "#fbbf24", bg: "rgba(251,191,36,.1)", border: "rgba(251,191,36,.3)" }),
