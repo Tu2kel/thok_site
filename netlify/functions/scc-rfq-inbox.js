@@ -433,17 +433,16 @@ exports.handler = async (event) => {
             vendor_email: vendorEmail, status: "sent", sent_at: { $gte: cutoff },
           }).toArray();
 
+          const domain = vendorEmail.split("@")[1] || null;
+
           // 2. Domain match — vendor may reply from different address than we sent to
-          if (!blastSols.length) {
-            const domain = vendorEmail.split("@")[1];
-            if (domain) {
-              blastSols = await db.collection("blast_log").find({
-                vendor_email: { $regex: "@" + domain.replace(/\./g, "\\.") + "$", $options: "i" },
-                status: "sent",
-                sent_at: { $gte: cutoff },
-              }).toArray();
-              if (blastSols.length) addLog("No SOL — domain match @" + domain + ": " + blastSols.length + " sol(s)");
-            }
+          if (!blastSols.length && domain) {
+            blastSols = await db.collection("blast_log").find({
+              vendor_email: { $regex: "@" + domain.replace(/\./g, "\\.") + "$", $options: "i" },
+              status: "sent",
+              sent_at: { $gte: cutoff },
+            }).toArray();
+            if (blastSols.length) addLog("No SOL — domain match @" + domain + ": " + blastSols.length + " sol(s)");
           }
 
           // 3. Distributor DB fallback — blast_log empty; find vendor by domain, use recent sols in their FSC lanes
