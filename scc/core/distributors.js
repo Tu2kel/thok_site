@@ -52,12 +52,29 @@
     return data.result;
   }
 
+  // ── Paginated full-load helper ────────────────────────────────────────
+  // Fetches page 1 first, then all remaining pages in parallel.
+  async function _loadAllPages(pageSize = 3000) {
+    const first = await _call("distGetAll", { page: 1, pageSize });
+    if (Array.isArray(first)) return first; // backward compat with old shape
+    const all = [...first.records];
+    if (first.pages > 1) {
+      const rest = await Promise.all(
+        Array.from({ length: first.pages - 1 }, (_, i) =>
+          _call("distGetAll", { page: i + 2, pageSize })
+        )
+      );
+      rest.forEach((p) => all.push(...(Array.isArray(p) ? p : (p.records || []))));
+    }
+    return all;
+  }
+
   // ── Initialize: load all from Mongo into cache ────────────────────────
   //  Source of truth is MongoDB.
   //  Seed via SCC Source tab → Distributor DB → paste dist-seed.json → Load
   async function _init() {
     try {
-      const records = await _call("distGetAll");
+      const records = await _loadAllPages();
       if (Array.isArray(records) && records.length > 0) {
         _cache = records;
         _rebuildFscMap();
@@ -282,12 +299,8 @@
 
   async function distBatch(records) {
     const result = await _call("distBatch", { records });
-    // Reload cache from Mongo after batch
-    const fresh = await _call("distGetAll");
-    if (Array.isArray(fresh)) {
-      _cache = fresh;
-      _rebuildFscMap();
-    }
+    const fresh = await _loadAllPages();
+    if (Array.isArray(fresh)) { _cache = fresh; _rebuildFscMap(); }
     return result;
   }
 
@@ -331,11 +344,8 @@
   }
 
   async function distReloadCache() {
-    const fresh = await _call("distGetAll");
-    if (Array.isArray(fresh)) {
-      _cache = fresh;
-      _rebuildFscMap();
-    }
+    const fresh = await _loadAllPages();
+    if (Array.isArray(fresh)) { _cache = fresh; _rebuildFscMap(); }
     return _cache;
   }
 

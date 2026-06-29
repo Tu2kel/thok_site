@@ -75,13 +75,18 @@ exports.handler = async (event) => {
     switch (action) {
       // ── Get all distributors ──
       case "distGetAll": {
-        const all = await dist.find({}).sort({ tier: 1, name: 1 }).toArray();
-        // Normalize: if record uses 'fsc_codes' (solGo schema), copy to 'fsc'
-        result = all.map((d) => {
+        const { page = 1, pageSize = 3000 } = payload;
+        const skip = (page - 1) * pageSize;
+        const total = await dist.countDocuments({});
+        const all = await dist.find({}, {
+          projection: { _id: 0, known_nsns: 0, part_prefixes: 0, my_notes: 0 },
+        }).sort({ tier: 1, name: 1 }).skip(skip).limit(pageSize).toArray();
+        const records = all.map((d) => {
           if (!d.fsc && d.fsc_codes) d.fsc = d.fsc_codes;
           if (!d.fsc) d.fsc = [];
           return d;
         });
+        result = { records, total, page, pages: Math.ceil(total / pageSize) };
         break;
       }
 
