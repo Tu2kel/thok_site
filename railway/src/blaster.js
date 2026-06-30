@@ -168,16 +168,18 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
 
     const itemLines = sols.map((s, i) => [
       "Item " + (i + 1) + ": " + (s.item_name || "—"),
-      s.ref_part_number ? "  Part Number:  " + s.ref_part_number : null,
-      "  Quantity:     " + (s.quantity || s.qty || "—"),
-      "  Need By:      " + (dayBefore(s.quote_due) || "—"),
+      s.ref_part_number ? "  Part Number:   " + s.ref_part_number : null,
+      "  Quantity:      " + (s.quantity || s.qty || "—"),
+      dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       "  Ref #:         " + s.sol_number,
     ].filter(Boolean).join("\n")).join("\n\n");
 
     const body = [
       "Hi " + (vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name) + ",",
       "",
-      "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). I have " + sols.length + " active DLA procurement need" + (sols.length > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
+      "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). We are a DLA-registered reseller and defense supply chain partner. As a reseller, we qualify for distributor-level pricing and can provide a sales tax exemption certificate upon request.",
+      "",
+      "I have " + sols.length + " active DLA procurement need" + (sols.length > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
       "",
       itemLines,
       "",
@@ -191,7 +193,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
       "",
       "Thank you for your time,",
-      "Anthony K Kelley | Founder & CEO",
+      "Anthony K Kelley | Founder and CEO",
       "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
       "SDVOSB | VetHUB | (254) 226-5216",
       "anthony@ifedlog.com | ifedlog.com",

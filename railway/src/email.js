@@ -41,13 +41,15 @@ function buildRFQBody(dist, record) {
   const lines = [
     "Hi " + greeting + ",",
     "",
-    "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). I have an active DLA procurement need in your lane and need pricing and availability on the following:",
+    "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). We are a DLA-registered reseller and defense supply chain partner. As a reseller, we qualify for distributor-level pricing and can provide a sales tax exemption certificate upon request.",
+    "",
+    "I have an active DLA procurement need in your lane and need pricing and availability on the following:",
     "",
     "  Item:          " + item,
-    record.ref_part_number ? "  Part Number:  " + record.ref_part_number : null,
+    record.ref_part_number ? "  Part Number:   " + record.ref_part_number : null,
     "  Quantity:      " + qty,
     "  Delivery:      " + del,
-    needBy                 ? "  Need By:      " + needBy                  : null,
+    needBy                 ? "  Response Due:  " + needBy                  : null,
     "  Ref #:         " + record.sol_number,
     "",
     "Requirements:",
@@ -60,13 +62,13 @@ function buildRFQBody(dist, record) {
     "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
     "",
     "Thank you for your time,",
-    "Anthony K Kelley | Founder & CEO",
+    "Anthony K Kelley | Founder and CEO",
     "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
     "SDVOSB | VetHUB | (254) 226-5216",
     "anthony@ifedlog.com | ifedlog.com",
   ];
 
-  const subject = "RFQ – " + item + " | " + record.sol_number + " | Imperio Federal Logistics";
+  const subject = "RFQ | " + record.sol_number + " | Imperio Federal Logistics";
   return { subject, body: lines.filter(l => l !== null).join("\n") };
 }
 
