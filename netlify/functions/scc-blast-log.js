@@ -207,10 +207,10 @@ exports.handler = async (event) => {
 
     // ── saveBrief — persist a UI-triggered blast session ───────────────
     if (action === "saveBrief") {
-      const { brief, blastEntries } = payload;
+      const { brief, blastEntries, sessionId } = payload;
       if (!brief) return fail("brief required");
 
-      await db.collection("blast_briefs").insertOne({
+      const doc = {
         run_date:     brief.run_date || new Date().toLocaleDateString("en-US"),
         source:       "ui-blast",
         total_sols:   brief.total_sols || 0,
@@ -221,8 +221,19 @@ exports.handler = async (event) => {
         blast_failed: brief.blast_failed || 0,
         sols:         brief.sols || [],
         blast_log:    [],
-        created_at:   new Date().toISOString(),
-      });
+        updated_at:   new Date().toISOString(),
+      };
+
+      if (sessionId) {
+        // Upsert — safe for periodic mid-blast saves and page-reload recovery
+        await db.collection("blast_briefs").updateOne(
+          { session_id: sessionId },
+          { $set: doc, $setOnInsert: { session_id: sessionId, created_at: new Date().toISOString() } },
+          { upsert: true },
+        );
+      } else {
+        await db.collection("blast_briefs").insertOne({ ...doc, created_at: new Date().toISOString() });
+      }
 
       // Write each sent vendor+sol combo to blast_log for re-blast dedup
       if (blastEntries && blastEntries.length) {

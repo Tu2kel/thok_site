@@ -32,7 +32,7 @@
   const BLAST_LOG_FN    = "/.netlify/functions/scc-blast-log";
 
   // Fire-and-forget: save a blast session brief to MongoDB
-  async function saveBriefToMongo(plan, isLive, sent, failed) {
+  async function saveBriefToMongo(plan, isLive, sent, failed, sessionId) {
     var solMap = {};
     var blastEntries = [];
     var nowTs = new Date().toISOString();
@@ -73,6 +73,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "saveBrief",
+          sessionId: sessionId || null,
           brief: {
             run_date:     new Date().toLocaleDateString("en-US"),
             total_sols:   solArr.length,
@@ -1051,6 +1052,7 @@
       setBlasting(true);
       var sent = 0, failed = 0;
       var sentPlan = [];
+      var sessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       for (var i = 0; i < autoFiltered.length; i++) {
         if (stopBlastRef.current) {
           addLog("⏹ Blast stopped by user at " + (i + 1) + "/" + autoFiltered.length + ".", "info");
@@ -1063,13 +1065,14 @@
           addLog("✓ " + entry.dist.name + (isLive ? " <" + (entry.dist.email || entry.to || "") + ">" : " [TEST]") + " · " + entry.records.length + " item(s).", "ok");
           sent++;
           sentPlan.push(entry);
+          if (sent % 25 === 0) saveBriefToMongo(sentPlan, isLive, sent, failed, sessionId);
         } catch (e) {
           addLog("✗ " + entry.dist.name + ": " + e.message, "err");
           failed++;
         }
         if (i < autoFiltered.length - 1) await new Promise(function(r) { return setTimeout(r, 1500); });
       }
-      if (sent > 0) await saveBriefToMongo(sentPlan, isLive, sent, failed);
+      if (sent > 0) await saveBriefToMongo(sentPlan, isLive, sent, failed, sessionId);
       refreshBlastLog();
       setShowBlastLog(true);
       addLog("AUTO-BLAST ▶ Done — " + sent + " sent, " + failed + " failed.", sent > 0 ? "ok" : "err");
