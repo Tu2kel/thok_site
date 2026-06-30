@@ -688,6 +688,7 @@
     const [blastCapPerFsc, setBlastCapPerFsc] = useState(3);
     const [enriching, setEnriching] = useState(false);
     const blastCapRef = useRef(3);
+    const stopBlastRef = useRef(false);
     const [blasting, setBlasting] = useState(false);
     const [blastLog, setBlastLog] = useState([]);
     const [showBlastLog, setShowBlastLog] = useState(false);
@@ -1046,10 +1047,15 @@
       if (!window.confirm("Auto-Blast " + autoFiltered.length + " vendor email(s)" + skipNote + "\n" + (isLive ? "LIVE — real emails will fire." : "TEST — emails to test inbox only."))) return;
 
       setBlastReady(null);
+      stopBlastRef.current = false;
       setBlasting(true);
       var sent = 0, failed = 0;
       var sentPlan = [];
       for (var i = 0; i < autoFiltered.length; i++) {
+        if (stopBlastRef.current) {
+          addLog("⏹ Blast stopped by user at " + (i + 1) + "/" + autoFiltered.length + ".", "info");
+          break;
+        }
         var entry = autoFiltered[i];
         addLog("AUTO-BLAST ▶ [" + (i + 1) + "/" + autoFiltered.length + "] " + entry.dist.name + " · " + entry.records.length + " item(s)…", "info");
         try {
@@ -1067,6 +1073,7 @@
       refreshBlastLog();
       setShowBlastLog(true);
       addLog("AUTO-BLAST ▶ Done — " + sent + " sent, " + failed + " failed.", sent > 0 ? "ok" : "err");
+      stopBlastRef.current = false;
       setBlasting(false);
     }, [addLog, refreshBlastLog]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2728,6 +2735,13 @@
                 },
                 blasting ? "⟳ Blasting…" : (liveModeRef.current ? "BLAST GO [LIVE]" : "BLAST GO [TEST]") + " (" + analysis.go.length + ")",
               ),
+
+            // STOP BLAST — only visible while blasting
+            blasting &&
+              h("button", {
+                onClick: function() { stopBlastRef.current = true; addLog("⏹ Stop requested — finishing current send…", "info"); },
+                style: { ...S.btn("#e74c3c", "rgba(231,76,60,.12)"), border: "1px solid rgba(231,76,60,.5)", fontWeight: 700 },
+              }, "⏹ STOP BLAST"),
 
             // Blast log toggle
             mode !== "auto" && blastLog.length > 0 &&
