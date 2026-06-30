@@ -1,8 +1,11 @@
 // src/blaster.js — vendor selection + RFQ email blast
-// Mirrors the browser blast logic: FSC-cap, tier-1 first, no OEM tags, $1k min
-const { sendEmail, buildRFQBody } = require("./email");
+// Auto-sender: Gmail (450/day) first → Resend (150/day) fallback
+const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
-const CAP = parseInt(process.env.BLAST_CAP_PER_FSC || "3");
+const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "3");
+const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "450");
+const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "150");
+const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
 
 function info(...a) { console.log("[blaster]", ...a); }
 
@@ -15,20 +18,17 @@ function detectPNPrefix(pn) {
 }
 
 // Select vendors for a set of sols, respecting FSC cap + tier ordering
-// dists = MongoDB distributors array
-// sols  = array of screened, GO/VERIFY sol records
 function buildBlastPlan(sols, dists) {
   const goFscs = new Set(sols.map(s => String(s.fsc || (s.nsn || "").slice(0, 4))).filter(Boolean));
 
   const fscVendorCount = {};
   const seenNames = new Set();
 
-  // Eligible DB vendors: has email, not DNS, not bounced, not approved-manufacturer, sorted tier-1 first
   const eligible = dists
     .filter(d => d.email && !d.is_dns && !d.email_invalid && !(d.tags || []).includes("approved-manufacturer"))
     .sort((a, b) => (a.tier || 9) - (b.tier || 9));
 
-  const vendorFscMap = []; // [{ vendor, matchedFscs }]
+  const vendorFscMap = [];
 
   for (const d of eligible) {
     const dFscs = (d.fsc || []).map(String).filter(f => goFscs.has(f));
@@ -42,14 +42,13 @@ function buildBlastPlan(sols, dists) {
     vendorFscMap.push({ vendor: d, fscs: dFscs });
   }
 
-  // Build plan: each entry = one email to one vendor with all matching sols
   const plan = [];
 
   for (const { vendor, fscs } of vendorFscMap) {
     const vendorFscSet = new Set(fscs.map(String));
     const matchedSols = sols.filter(sol => {
-      const solFsc = String(sol.fsc || (sol.nsn || "").slice(0, 4));
-      const solNsn = (sol.nsn || "").replace(/\D/g, "");
+      const solFsc  = String(sol.fsc || (sol.nsn || "").slice(0, 4));
+      const solNsn  = (sol.nsn || "").replace(/\D/g, "");
       const vendorNsns = new Set((vendor.known_nsns || []).map(n => n.replace(/\D/g, "")));
       return vendorFscSet.has(solFsc) || (solNsn && vendorNsns.has(solNsn));
     });
@@ -66,10 +65,9 @@ function buildBlastPlan(sols, dists) {
   }
 
   const PERSONAL_DOMAINS = /gmail\.com|yahoo\.com|aol\.com|hotmail\.com|outlook\.com|icloud\.com/i;
-  const hasCage    = d => !!(d.cage_code || d.cage);
-  const hasCorp    = d => !PERSONAL_DOMAINS.test(d.email || "");
+  const hasCage = d => !!(d.cage_code || d.cage);
+  const hasCorp = d => !PERSONAL_DOMAINS.test(d.email || "");
 
-  // Sort: totalExt desc → sol count desc → CAGE present → corporate email
   plan.sort((a, b) => {
     if (b.totalExt !== a.totalExt) return b.totalExt - a.totalExt;
     if (b.sols.length !== a.sols.length) return b.sols.length - a.sols.length;
@@ -83,63 +81,71 @@ function buildBlastPlan(sols, dists) {
   return plan;
 }
 
-const DAILY_SEND_LIMIT = parseInt(process.env.BLAST_DAILY_LIMIT || "400");
-const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS    || "2000");
+// ── Sender routing ────────────────────────────────────────────────────────────
+// Returns: "gmail" | "resend" | "paused" | "limit"
+async function pickSender(db) {
+  if (!db) return "gmail";
 
-// Check kill switch + daily limit. Returns "ok" | "paused" | "limit"
-async function blastGate(db) {
-  if (!db) return "ok";
-  const [ctrl, daily] = await Promise.all([
-    db.collection("_meta").findOne({ _id: "blast_control" }),
-    db.collection("_meta").findOne({ _id: "blast_daily" }),
-  ]);
-  if (ctrl && ctrl.paused) return "paused";
   const today = new Date().toISOString().slice(0, 10);
-  if (daily && daily.date === today && daily.count >= DAILY_SEND_LIMIT) return "limit";
-  return "ok";
+  const [ctrl, gmailDoc, resendDoc] = await Promise.all([
+    db.collection("_meta").findOne({ _id: "blast_control" }),
+    db.collection("_meta").findOne({ _id: "gmail_daily"  }),
+    db.collection("_meta").findOne({ _id: "resend_daily" }),
+  ]);
+
+  if (ctrl && ctrl.paused) return "paused";
+
+  const gmailCount  = (gmailDoc  && gmailDoc.date  === today) ? (gmailDoc.count  || 0) : 0;
+  const resendCount = (resendDoc && resendDoc.date === today) ? (resendDoc.count || 0) : 0;
+
+  if (gmailCount  < GMAIL_LIMIT)  return "gmail";
+  if (resendCount < RESEND_LIMIT) return "resend";
+  return "limit";
 }
 
-async function incrementDailyCount(db) {
+async function incrementSenderCount(db, sender) {
   if (!db) return;
   const today = new Date().toISOString().slice(0, 10);
+  const id    = sender === "gmail" ? "gmail_daily" : "resend_daily";
   await db.collection("_meta").updateOne(
-    { _id: "blast_daily" },
-    { $inc: { count: 1 }, $set: { date: today }, $setOnInsert: { _id: "blast_daily" } },
+    { _id: id },
+    { $inc: { count: 1 }, $set: { date: today }, $setOnInsert: { _id: id } },
     { upsert: true },
   ).catch(() => {});
 }
 
-// Execute blast: send one RFQ email per plan entry
-// In test mode all emails go to FROM_ADDRESS instead
-// db (optional) — enables dedup check + blast_log persistence
+// ── Blast runner ──────────────────────────────────────────────────────────────
 async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
+
   for (const entry of plan) {
     const { vendor, sols: allSols } = entry;
-    const to = isLive ? vendor.email : fromAddress;
 
-    // ── Kill switch + daily limit check before every send ─────────────────
-    const gate = await blastGate(db);
-    if (gate === "paused") {
+    // Pick sender before each email (auto-switches when Gmail cap is hit)
+    const sender = await pickSender(db);
+
+    if (sender === "paused") {
       info("⏸ Blast paused via kill switch — stopping");
       results.paused = true;
       results.log.push({ status: "paused", reason: "kill switch" });
       break;
     }
-    if (gate === "limit") {
-      info("🛑 Daily send limit (" + DAILY_SEND_LIMIT + ") reached — stopping. Resume tomorrow.");
+    if (sender === "limit") {
+      info("🛑 Both senders at daily limit (Gmail " + GMAIL_LIMIT + " + Resend " + RESEND_LIMIT + ") — stopping. Resume tomorrow.");
       results.daily_limit = true;
-      results.log.push({ status: "stopped", reason: "daily_limit", limit: DAILY_SEND_LIMIT });
+      results.log.push({ status: "stopped", reason: "daily_limit", gmail_limit: GMAIL_LIMIT, resend_limit: RESEND_LIMIT });
       break;
     }
 
-    // ── Dedup: skip sols already sent to this vendor ──────────────────────
+    const to = isLive ? vendor.email : fromAddress;
+
+    // Dedup: skip sols already sent to this vendor
     let sols = allSols;
     if (db && isLive) {
       const alreadySent = await db.collection("blast_log").find({
         vendor_email: (vendor.email || "").toLowerCase(),
-        sol_number: { $in: allSols.map(s => s.sol_number) },
-        status: "sent",
+        sol_number:   { $in: allSols.map(s => s.sol_number) },
+        status:       "sent",
       }).toArray().then(rows => new Set(rows.map(r => r.sol_number))).catch(() => new Set());
 
       sols = allSols.filter(s => !alreadySent.has(s.sol_number));
@@ -154,85 +160,49 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       }
     }
 
-    // Build combined RFQ body (one email, all sols for this vendor)
+    // Build subject + body for chosen sender
     const firstSol = sols[0];
-    const { subject } = buildRFQBody(vendor, firstSol);
-
-    const dayBefore = (raw) => {
-      if (!raw) return null;
-      const d = new Date(raw);
-      if (isNaN(d.getTime())) return raw;
-      d.setDate(d.getDate() - 1);
-      return (d.getMonth()+1).toString().padStart(2,"0") + "/" + d.getDate().toString().padStart(2,"0") + "/" + d.getFullYear();
-    };
-
-    const itemLines = sols.map((s, i) => [
-      "Item " + (i + 1) + ": " + (s.item_name || "—"),
-      s.ref_part_number ? "  Part Number:   " + s.ref_part_number : null,
-      "  Quantity:      " + (s.quantity || s.qty || "—"),
-      dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
-      "  Ref #:         " + s.sol_number,
-    ].filter(Boolean).join("\n")).join("\n\n");
-
-    const body = [
-      "Hi " + (vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name) + ",",
-      "",
-      "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). We are a DLA-registered reseller and defense supply chain partner. As a reseller, we qualify for distributor-level pricing and can provide a sales tax exemption certificate upon request.",
-      "",
-      "I have " + sols.length + " active DLA procurement need" + (sols.length > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
-      "",
-      itemLines,
-      "",
-      "Requirements:",
-      "- Destination: Government delivery address (continental US)",
-      "- Payment: Immediate PO upon award. Supplier receives wire payment prior to shipment.",
-      "- Compliance: BAA/TAA required — please confirm country of origin for each item",
-      "- Shipping: FOB Destination required",
-      "- Condition: New/unused only. No substitutions without prior approval.",
-      "",
-      "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
-      "",
-      "Thank you for your time,",
-      "Anthony K Kelley | Founder and CEO",
-      "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
-      "SDVOSB | VetHUB | (254) 226-5216",
-      "anthony@ifedlog.com | ifedlog.com",
-    ].join("\n");
+    const { subject: baseSubject } = buildRFQBody(vendor, firstSol);
+    const subject = baseSubject + (sols.length > 1 ? " +" + (sols.length - 1) + " more" : "");
+    const body    = buildBodyForSender(vendor, sols, sender);
 
     try {
-      await sendEmail({ to, subject: subject + (sols.length > 1 ? " +" + (sols.length - 1) + " more" : ""), body });
-      results.sent++;
-      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
-      info("✓ RFQ → " + vendor.name + " (" + sols.length + " items)");
-      await incrementDailyCount(db);
+      if (sender === "gmail") {
+        await sendEmailGmail({ to, subject, body });
+      } else {
+        await sendEmailResend({ to, subject, body });
+      }
 
-      // Persist one blast_log entry per sol+vendor pair
+      results.sent++;
+      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
+      info("✓ [" + sender.toUpperCase() + "] RFQ → " + vendor.name + " (" + sols.length + " items)");
+      await incrementSenderCount(db, sender);
+
       if (db) {
         for (const sol of sols) {
           await db.collection("blast_log").updateOne(
             { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
-            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, status: "sent", sent_at: new Date().toISOString() } },
+            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, sender, status: "sent", sent_at: new Date().toISOString() } },
             { upsert: true },
           ).catch(e => info("blast_log save err:", e.message));
         }
       }
     } catch (e) {
       results.failed++;
-      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), status: "failed", error: e.message });
-      info("✗ RFQ FAILED → " + vendor.name + ": " + e.message);
+      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), status: "failed", error: e.message });
+      info("✗ [" + sender.toUpperCase() + "] RFQ FAILED → " + vendor.name + ": " + e.message);
 
       if (db) {
         for (const sol of sols) {
           await db.collection("blast_log").updateOne(
             { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
-            { $set: { sol_number: sol.sol_number, vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), status: "failed", error: e.message, sent_at: new Date().toISOString() } },
+            { $set: { sol_number: sol.sol_number, vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), sender, status: "failed", error: e.message, sent_at: new Date().toISOString() } },
             { upsert: true },
           ).catch(() => {});
         }
       }
     }
 
-    // Throttle to avoid Gmail rate limits
     await new Promise(r => setTimeout(r, SEND_DELAY_MS));
   }
 
