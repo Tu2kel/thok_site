@@ -216,29 +216,26 @@
     const count = withPN.length;
 
     const subject = count === 1
-      ? "RFQ – " + (withPN[0].item_name || "Item") + " | " + withPN[0].sol_number + " | Imperio Federal Logistics"
-      : "RFQ – " + count + " Items Needed | Imperio Federal Logistics";
+      ? "RFQ | " + withPN[0].sol_number + " | Imperio Federal Logistics"
+      : "RFQ | " + count + " Items Needed | Imperio Federal Logistics";
 
     const itemLines = withPN.map(function (record, i) {
       var lines = ["Item " + (i + 1) + ": " + (record.item_name || "—")];
-      lines.push("  Part Number:  " + record.ref_part_number);
+      lines.push("  Part Number:   " + record.ref_part_number);
       var qty = record.quantity ? record.quantity + (record.unit_of_issue ? " " + record.unit_of_issue : "") : "—";
-      lines.push("  Quantity:     " + qty);
-      lines.push("  Need By:      " + (quoteDueDisplay(record.quote_due) || "—"));
-      lines.push("  Ref #:        " + record.sol_number);
+      lines.push("  Quantity:      " + qty);
+      var due = quoteDueDisplay(record.quote_due);
+      if (due) lines.push("  Response Due:  " + due);
+      lines.push("  Ref #:         " + record.sol_number);
       return lines.join("\n");
     }).join("\n\n");
-
-    var wholesalerLine = (dist.is_wholesaler || (dist.tags || []).includes("wholesaler"))
-      ? "\nImportant: Imperio Federal Logistics is a government reseller — not an end-user consumer. We purchase for resale on DLA/government contracts and are looking for your wholesale/distributor pricing, not retail. We hold a sales tax exemption certificate available upon request.\n"
-      : "";
 
     const body = [
       "Hi " + dist.name + ",",
       "",
-      "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there’s a chance it’s landing in spam folders. I’m reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
-      wholesalerLine,
-      "Now to the reason I’m reaching out — I have " + count + " active DLA procurement need" + (count > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
+      "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). We are a DLA-registered reseller and defense supply chain partner. As a reseller, we qualify for distributor-level pricing and can provide a sales tax exemption certificate upon request.",
+      "",
+      "I have " + count + " active DLA procurement need" + (count > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
       "",
       itemLines,
       "",
@@ -252,10 +249,10 @@
       "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
       "",
       "Thank you for your time,",
-      "Anthony K Kelley | Founder & CEO",
+      "Anthony K Kelley | Founder and CEO",
       "Imperio Federal Logistics \xb7 The House of Kel LLC \xb7 CAGE 152U4",
       "SDVOSB | VetHUB | (254) 226-5216",
-      "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
+      "anthony@ifedlog.com | ifedlog.com",
     ].join("\n");
 
     return { subject, body };

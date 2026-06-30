@@ -1,14 +1,14 @@
 // netlify/functions/send-rfq.js
-// Sends RFQ emails via Gmail SMTP using App Password
+// Sends RFQ emails via Resend API
 // Env vars required:
-//   GMAIL_APP_PASSWORD  (generated at myaccount.google.com/apppasswords)
+//   RESEND_API_KEY
 
-const path       = require("path");
-const fs         = require("fs");
-const nodemailer = require("nodemailer");
+const path = require("path");
+const fs   = require("fs");
 
-const FROM_ADDRESS = "kelley.anthonyk@gmail.com";
+const FROM_ADDRESS = "anthony@ifedlog.com";
 const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
+const FROM         = FROM_NAME + " <" + FROM_ADDRESS + ">";
 
 // ---------------------------------------------------------------------------
 // PDF injection using pdf-lib
@@ -57,33 +57,26 @@ exports.handler = async (event) => {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: FROM_ADDRESS,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) throw new Error("RESEND_API_KEY not set");
 
-    const mailOptions = {
-      from: `"${FROM_NAME}" <${FROM_ADDRESS}>`,
-      to,
-      subject,
-      text: emailBody,
-    };
+    const payload = { from: FROM, to: [to], subject, text: emailBody };
 
     if (attachCert) {
       const pdfBytes = await buildCert(sellerName || "", sellerStreet || "", sellerCity || "");
-      mailOptions.attachments = [{
-        filename: "THOK_Resale_Certificate.pdf",
-        content:  Buffer.from(pdfBytes),
-        contentType: "application/pdf",
+      payload.attachments = [{
+        filename:    "THOK_Resale_Certificate.pdf",
+        content:     Buffer.from(pdfBytes).toString("base64"),
       }];
     }
 
-    await transporter.sendMail(mailOptions);
+    const res  = await fetch("https://api.resend.com/emails", {
+      method:  "POST",
+      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+      body:    JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error("Resend error: " + JSON.stringify(data));
 
     return {
       statusCode: 200,
