@@ -177,9 +177,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
     const body = [
       "Hi " + (vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name) + ",",
       "",
-      "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). Before I get into the ask, a quick heads-up: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there's a chance it's landing in spam folders. I'm reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
-      "",
-      "Now to the reason I'm reaching out — I have " + sols.length + " active DLA procurement need" + (sols.length > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
+      "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). I have " + sols.length + " active DLA procurement need" + (sols.length > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
       "",
       itemLines,
       "",
@@ -196,7 +194,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       "Anthony K Kelley | Founder & CEO",
       "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
       "SDVOSB | VetHUB | (254) 226-5216",
-      "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
+      "anthony@ifedlog.com | ifedlog.com",
     ].join("\n");
 
     try {
