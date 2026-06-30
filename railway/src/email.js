@@ -11,9 +11,9 @@ async function sendEmailGmail({ to, subject, body }) {
     auth: {
       type:         "OAuth2",
       user:         GMAIL_ADDRESS,
-      clientId:     process.env.GMAIL_CLIENT_ID,
-      clientSecret: process.env.GMAIL_CLIENT_SECRET,
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+      clientId:     process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
     },
   });
   await transport.sendMail({ from: GMAIL_FROM, to, subject, text: body });
