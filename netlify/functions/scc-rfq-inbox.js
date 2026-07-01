@@ -337,10 +337,23 @@ exports.handler = async (event) => {
         const bounceUids = await imap3.search({ since: since3, from: "mailer-daemon" }).catch(() => []);
         bounceLog.push("Found " + bounceUids.length + " bounce email(s) in last " + days + " days (All Mail)");
 
+        // Permanent-bounce indicators — SMTP 5xx or "no such user" class errors
+        // Soft bounces (4xx, timed out, connection refused, "will retry") are skipped
+        const PERM_BOUNCE = /\bStatus:\s*5\.\d+\.\d+|\b55[012345]\s|\bno such (user|mailbox|address)\b|user (not found|does not exist|unknown)\b|mailbox (not found|does not exist|unavailable)\b|account.*does not exist|invalid (address|mailbox)\b/i;
+        const SOFT_BOUNCE = /\bStatus:\s*4\.\d+\.\d+|\btemporary\b|timed?\s*out|connection (refused|reset|failed|could not)|will retry|Delivery incomplete|retry for/i;
+
         const emailSet = new Set();
+        let softSkipped = 0;
         for await (const bMsg of imap3.fetch(bounceUids, { source: true })) {
           try {
             const raw = bMsg.source ? bMsg.source.toString() : "";
+
+            // Skip soft/temporary bounces — don't DNS vendors that just had a server hiccup
+            if (SOFT_BOUNCE.test(raw) && !PERM_BOUNCE.test(raw)) {
+              softSkipped++;
+              continue;
+            }
+
             const patterns = [
               /Final-Recipient:[^\n]*;\s*([^\s\n]+)/i,
               /Original-Recipient:[^\n]*;\s*([^\s\n]+)/i,
@@ -356,7 +369,8 @@ exports.handler = async (event) => {
             }
           } catch {}
         }
-        bounceLog.push("Extracted " + emailSet.size + " unique bounced address(es)");
+        if (softSkipped) bounceLog.push("Skipped " + softSkipped + " soft/temporary bounce(s) — server will retry");
+        bounceLog.push("Extracted " + emailSet.size + " permanent bounced address(es)");
 
         // Bulk update distributors — DNS them so they're out of active list (revisit later)
         for (const email of emailSet) {
