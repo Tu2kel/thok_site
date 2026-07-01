@@ -136,7 +136,27 @@ async function incrementSenderCount(db, sender) {
 async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
 
-  for (const entry of plan) {
+  // Round-robin rotation — bridge until AWS SES / Workspace at full capacity.
+  // Stores last sent vendor in _meta.blast_cursor so each run picks up where
+  // yesterday stopped. 600/day (Gmail 450 + Resend 150) across 2,400 = 4-day cycle.
+  let rotatedPlan = plan;
+  if (db && plan.length > 1) {
+    const cursorDoc = await db.collection("_meta").findOne({ _id: "blast_cursor" }).catch(() => null);
+    const lastId = cursorDoc && cursorDoc.last_vendor_id;
+    if (lastId) {
+      const idx = plan.findIndex(e => (e.vendor.id || e.vendor.name) === lastId);
+      if (idx >= 0 && idx < plan.length - 1) {
+        rotatedPlan = [...plan.slice(idx + 1), ...plan.slice(0, idx + 1)];
+        info("Round-robin: resuming after \"" + plan[idx].vendor.name + "\" (pos " + (idx + 1) + "/" + plan.length + ")");
+      } else {
+        info("Round-robin: full cycle complete — wrapping to start");
+      }
+    }
+  }
+
+  let lastSentVendorId = null;
+
+  for (const entry of rotatedPlan) {
     const { vendor, sols: allSols } = entry;
 
     // Pick sender before each email (auto-switches when Gmail cap is hit)
@@ -192,6 +212,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       }
 
       results.sent++;
+      lastSentVendorId = vendor.id || vendor.name;
       results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
       info("✓ [" + sender.toUpperCase() + "] RFQ → " + vendor.name + " (" + sols.length + " items)");
       await incrementSenderCount(db, sender);
@@ -222,6 +243,16 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
     }
 
     await new Promise(r => setTimeout(r, SEND_DELAY_MS));
+  }
+
+  // Save round-robin cursor so tomorrow picks up where today stopped
+  if (db && lastSentVendorId) {
+    await db.collection("_meta").updateOne(
+      { _id: "blast_cursor" },
+      { $set: { last_vendor_id: lastSentVendorId, updated_at: new Date().toISOString() } },
+      { upsert: true },
+    ).catch(() => {});
+    info("Round-robin cursor saved: \"" + lastSentVendorId + "\"");
   }
 
   return results;
