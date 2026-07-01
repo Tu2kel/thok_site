@@ -59,13 +59,35 @@ function buildBodyForSender(vendor, sols, sender) {
   const greeting = vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name;
   const isMulti  = sols.length > 1;
 
-  const itemLines = sols.map((s, i) => [
-    (isMulti ? "Item " + (i + 1) + ": " : "  Item:          ") + (s.item_name || "—"),
-    s.ref_part_number ? "  Part Number:   " + s.ref_part_number : null,
-    "  Quantity:      " + (s.quantity || s.qty || "—"),
-    dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
-    "  Ref #:         " + s.sol_number,
-  ].filter(Boolean).join("\n")).join("\n\n");
+  // Build item lines — distros don't know NSNs, never include price
+  const itemLines = sols.map((s, i) => {
+    const shipTo = [s.ship_to_name, s.ship_to_street, s.ship_to_csz].filter(Boolean).join(", ");
+    const fob    = (s.fob || "").toUpperCase();
+    const fobStr = fob === "ORIGIN"
+      ? "FOB Origin — government-arranged transport (FDT). Pack per MIL-STD-129, we coordinate pickup."
+      : fob === "DESTINATION"
+      ? "FOB Destination — deliver to: " + (shipTo || "government depot (details on PO)")
+      : shipTo ? "Ship to: " + shipTo : null;
+
+    return [
+      isMulti ? ("Item " + (i + 1) + ":") : null,
+      "  Item:          " + (s.item_name || "—"),
+      s.ref_part_number
+        ? "  Part Number:   " + s.ref_part_number + (s.manufacturer_cage ? "  (Mfr CAGE: " + s.manufacturer_cage + ")" : "")
+        : null,
+      "  Quantity:      " + (s.quantity || s.qty || "—"),
+      s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
+      dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
+      fobStr             ? "  Shipping:      " + fobStr : null,
+      "  Ref #:         " + s.sol_number,
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
+
+  // Packaging question — only raised if sol requires Mil-Spec; otherwise assume commercial
+  const needsMilSpec = sols.some(s => s.packaging_type === "Mil-Spec");
+  const packagingLine = needsMilSpec
+    ? "- Packaging: This requirement calls for MIL-STD-2073 military specification packaging. Are you able to comply?"
+    : null;
 
   const sig = sender === "gmail"
     ? [
@@ -85,22 +107,21 @@ function buildBodyForSender(vendor, sols, sender) {
     "",
     "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). We are a DLA-registered reseller and defense supply chain partner. As a reseller, we qualify for distributor-level pricing and can provide a sales tax exemption certificate upon request.",
     "",
-    "I have " + sols.length + " active DLA procurement need" + (sols.length > 1 ? "s" : "") + " in your lane and need pricing and availability on the following:",
+    "I have active government procurement needs in your lane and need pricing and availability on the following:",
     "",
     itemLines,
     "",
     "Requirements:",
-    "- Destination: Government delivery address (continental US)",
-    "- Payment: Immediate PO upon award. Supplier receives wire payment prior to shipment.",
+    packagingLine,
+    "- Payment: Immediate PO upon award. Wire payment prior to shipment.",
     "- Compliance: BAA/TAA required — please confirm country of origin" + (isMulti ? " for each item" : ""),
-    "- Shipping: FOB Destination required",
     "- Condition: New/unused only. No substitutions without prior approval.",
     "",
-    "Please provide unit price, lead time, and country of origin. We issue POs immediately upon award and move fast.",
+    "Please provide unit price, lead time, and country of origin. We move fast.",
     "",
     "Thank you for your time,",
     ...sig,
-  ].join("\n");
+  ].filter(line => line !== null).join("\n");
 }
 
 // Single-sol helper (used for subject extraction in older call sites)

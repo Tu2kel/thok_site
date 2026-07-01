@@ -106,74 +106,170 @@ async function fetchPdfBuffer(sol_number) {
 }
 
 // Parse key fields from DIBBS solicitation PDF text
+// Calibrated against real DLA SF-18 / continuation sheet format
 function parsePdfText(text, sol_number, nsn, fsc) {
   const t = text.replace(/\s+/g, " ");
 
-  // Helper: extract value after a label
-  const after = (label, len = 80) => {
-    const idx = t.indexOf(label);
-    if (idx === -1) return null;
-    return t.slice(idx + label.length, idx + label.length + len).trim();
-  };
-
   const extract = (pattern) => {
     const m = t.match(pattern);
-    return m ? m[1]?.trim() : null;
+    return m ? (m[1] || "").trim() : null;
   };
 
-  // Unit price — look for "$X.XX" or "UNIT PRICE" patterns
-  const unitPrice = extract(/UNIT PRICE[:\s]+\$?([\d,]+\.?\d*)/i)
-    || extract(/EST(?:IMATED)? PRICE[:\s]+\$?([\d,]+\.?\d*)/i)
-    || extract(/\$\s*([\d,]+\.\d{2})(?:\s|\/)/);
+  // ── Item name ──────────────────────────────────────────────────────────
+  // DLA NSN names use commas not spaces (SCREW,MACHINE / VALVE,CHECK).
+  // DLA prints the name twice: compact then spaced-out ("SCREW, MACHINE").
+  // Stopping at the first space captures only the compact form — no dedup needed.
+  const itemName = extract(/ITEM DESCRIPTION\s+([A-Z][A-Z0-9,\-\.\/]+)/i)
+    || extract(/NOMENCLATURE[:\s]+([A-Z][A-Z0-9,\-]+)/i)
+    || extract(/ITEM NAME[:\s]+([A-Z][A-Z0-9,\-]+)/i);
 
-  // Quantity
-  const qty = extract(/QUANTITY[:\s]+([\d,]+)/i)
-    || extract(/QTY[:\s]+([\d,]+)/i);
+  // ── Quantity ───────────────────────────────────────────────────────────
+  // CLIN table: "UI QUANTITY UNIT PRICE ... EA 1.000"
+  const qty = extract(/\bEA\s+([\d,]+)(?:\.\d+)?\s/i)
+    || extract(/\bQUANTITY[:\s]+([\d,]+)/i)
+    || extract(/\bQTY[:\s]+([\d,]+)/i);
 
-  // Delivery days
-  const deliveryDays = extract(/DELIVER(?:Y)?\s+(?:WITHIN\s+)?([\d]+)\s+DAYS?/i)
+  // ── Unit price — blank on RFQs, fall back to proc history ─────────────
+  const unitPrice = extract(/UNIT PRICE[:\s]+\$?([\d,]+\.\d+)/i)
+    || extract(/EST(?:IMATED)? PRICE[:\s]+\$?([\d,]+\.\d+)/i);
+
+  // Procurement history — first (most recent) "Qty  UnitCost  AWDDate  [NY]"
+  // e.g. "10.000 2827.03000 20181023 N"
+  const histPrice = extract(/\b\d+\.\d{3}\s+([\d,]+\.\d+)\s+\d{8}\s+[NY]/);
+
+  // ── Delivery days ──────────────────────────────────────────────────────
+  // "DELIVERY (IN DAYS):0005"
+  const deliveryDays = extract(/DELIVERY\s*\(IN DAYS\)[:\s]*(\d+)/i)
+    || extract(/DELIVER(?:Y)?\s+(?:WITHIN\s+)?(\d+)\s+DAYS?/i)
     || extract(/(\d+)\s+DAYS?\s+ARO/i);
 
-  // Quote / return by date
-  const quoteDue = extract(/RETURN BY[:\s]+([\d\-\/]+)/i)
+  // ── Quote due ──────────────────────────────────────────────────────────
+  // SF-18 block 10 close-of-business date: "2026 JUL 08"
+  const rawDate = extract(/BEFORE CLOSE OF BUSINESS[^]*?(\d{4}\s+[A-Z]{3}\s+\d{1,2})/i)
+    || extract(/RETURN BY[:\s]+([\d\-\/]+)/i)
     || extract(/QUOTE DUE[:\s]+([\d\-\/]+)/i)
     || extract(/OFFERS DUE[:\s]+([\d\-\/]+)/i);
 
-  // Part numbers
-  const partNum = extract(/(?:PART NO|PIECE PART|P\/N)[.:\s]+([A-Z0-9\-\/]+)/i);
+  let quoteDue = rawDate;
+  if (rawDate) {
+    const m = rawDate.match(/(\d{4})\s+([A-Z]{3})\s+(\d{1,2})/i);
+    if (m) {
+      const mo = { JAN:"01",FEB:"02",MAR:"03",APR:"04",MAY:"05",JUN:"06",
+                   JUL:"07",AUG:"08",SEP:"09",OCT:"10",NOV:"11",DEC:"12" };
+      quoteDue = m[1] + "-" + (mo[m[2].toUpperCase()] || "00") + "-" + m[3].padStart(2,"0");
+    }
+  }
 
-  // Set-aside
-  const setAside = extract(/SET[ -]ASIDE[:\s]+([A-Z\s]+?)(?:\s{2}|$)/i)
-    || (t.match(/SMALL BUSINESS SET-ASIDE/i) ? "Small Business Set-Aside" : null)
-    || (t.match(/SDVOSB/i) ? "SDVOSB" : null)
-    || (t.match(/WOSB/i) ? "WOSB" : null);
+  // ── Part number ────────────────────────────────────────────────────────
+  const partNum = extract(/\bP\/N\s+([A-Z0-9][\w\-\/\.]+)/i)
+    || extract(/(?:PART NO|PIECE PART)[.:\s]+([A-Z0-9][\w\-\/]+)/i);
 
-  // Supplier restrictions / source control
-  const supplierRestrictions = t.match(/SOURCE CONTROL/i) ? "Source Control"
-    : t.match(/SOLE SOURCE/i) ? "Sole Source"
-    : t.match(/APPROVED SOURCE/i) ? "Approved Source"
+  // ── Manufacturer CAGE (approved source: "BOEING 76301 P/N 68A550811") ─
+  const mfrCage = extract(/\b([0-9A-Z]{5})\s+P\/N\s+[A-Z0-9][\w\-\/]+/i);
+
+  // ── Set-aside — use FAR clause citations (unambiguous) ────────────────
+  // The SF-18 header always prints both "IS" and "IS NOT" as form labels,
+  // so keyword-matching the header checkbox is unreliable.
+  // FAR section citations in Section A are definitive.
+  let setAside = null;
+  if      (/52\.219-27\b/i.test(t))  setAside = "SDVOSB";
+  else if (/52\.219-30\b/i.test(t))  setAside = "WOSB";
+  else if (/52\.219-29\b/i.test(t))  setAside = "EDWOSB";
+  else if (/52\.219-3\b/i.test(t))   setAside = "HUBZone";
+  else if (/52\.219-18\b/i.test(t))  setAside = "8(a)";
+  else if (/52\.219-6\b/i.test(t))   setAside = "Small Business Set-Aside";
+
+  // ── Supplier restrictions ──────────────────────────────────────────────
+  // "APPROVED SOURCE" header OR implicit approval list (CAGE P/N pattern without "IS NOT")
+  const hasApprovedSourceHeader = /APPROVED SOURCE/i.test(t);
+  const hasImplicitApprovalList = /\b[0-9A-Z]{5}\s+P\/N\s+[A-Z0-9][\w\-\/]+/i.test(t)
+    && !/IS NOT.*APPROVED SOURCE/i.test(t);
+  const supplierRestrictions = t.match(/CRITICAL APPLICATION ITEM/i) ? "Critical Application Item"
+    : t.match(/SOURCE CONTROL/i) ? "Source Control"
+    : t.match(/SOLE SOURCE/i)    ? "Sole Source"
+    : (hasApprovedSourceHeader || hasImplicitApprovalList) ? "Approved Source"
     : null;
 
-  // Item name — usually near "NOMENCLATURE" or "DESCRIPTION"
-  const itemName = extract(/NOMENCLATURE[:\s]+([A-Z][A-Z ,\-]+?)(?:\s{2}|\n|NSN)/i)
-    || extract(/ITEM DESCRIPTION[:\s]+([^\n]{3,60})/i);
+  // ── FOB ────────────────────────────────────────────────────────────────
+  const fob = extract(/DELIVER FOB[:\s]+([A-Z]+)/i)
+    || extract(/FOB\s+(DESTINATION|ORIGIN)/i);
 
-  // FOB
-  const fob = extract(/FOB[:\s]+([A-Z]+)/i);
+  // ── Buyer info ─────────────────────────────────────────────────────────
+  const buyerEmail = extract(/Email:\s*([\w.\-]+@[\w.\-]+)/i);
+  const buyerName  = extract(/Name:\s*([A-Z][a-zA-Z\s]+?)(?:\s+Buyer Code)/i);
+
+  // ── Ship-to (full address) ─────────────────────────────────────────────
+  // DLA address block (normalized to single spaces):
+  // "PARCEL POST ADDRESS: SW3211 DLA DISTRIBUTION DEPOT OKLAHOMA 3301 F AVE BLDG 506 TINKER AFB OK 73145-8000 US"
+  // Groups: (1) DoDAAC  (2) facility name  (3) street  (4) city/state/zip
+  const _shm = t.match(/(?:PARCEL POST|FREIGHT SHIPPING) ADDRESS[:\s]+([A-Z0-9]{6})\s+([A-Z][A-Z0-9 ]*?)(?=\s\d)\s+(\d+[A-Z0-9 ]+?)\s+([A-Z][A-Z ]+\s[A-Z]{2}\s\d{5}(?:-\d{4})?)\s+US\b/i);
+  const shipToDodaac = _shm ? _shm[1] : null;
+  const shipToName   = _shm ? _shm[2].trim() : null;
+  const shipToStreet = _shm ? _shm[3].trim() : null;
+  const shipToCsz    = _shm ? _shm[4].trim() : null;
+
+  const _mdy = (d) => {
+    if (!d) return null;
+    const m = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    return m ? m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0") : d;
+  };
+  const needShipDate  = _mdy(extract(/Need Ship Date[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})/i));
+  const reqDelivDate  = _mdy(extract(/(?:Original )?Required Delivery Date[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})/i));
+
+  // ── Packaging ──────────────────────────────────────────────────────────
+  // ASTM D3951 = commercial (easy for most distros)
+  // MIL-STD-2073 = mil-spec packaging (harder, needs special capability)
+  // MIL-STD-129  = standard marking/labeling (required by virtually all DLA contracts)
+  const packagingSpec  = extract(/(?:PACKAGED?|PACKAGING)\s+IN ACCORDANCE WITH\s+((?:ASTM|MIL-STD|MIL-P|PPP)[\s\-][\w\-\.]+)/i);
+  const packagingQup   = extract(/(?:PKGING DATA-)?QUP[:\s]*(\d+)/i);
+  const packagingType  = /MIL-STD-2073/i.test(t) ? "Mil-Spec"
+    : /ASTM D3951/i.test(t) ? "Commercial"
+    : /BEST COMMERCIAL PRACTICE|COMMERCIAL PACKAGING/i.test(t) ? "Commercial"
+    : null;
+  const packagingLabel = /MIL-STD-129/i.test(t) ? "MIL-STD-129" : null;
+
+  // ── CMMC / Cyber ───────────────────────────────────────────────────────
+  // 252.240-7997 = NIST SP 800-171 DoD Assessment Requirements (SPRS score needed)
+  // 252.204-7012 = Safeguarding CDI (on virtually all DLA contracts, lower bar)
+  const requiresNistAssessment = /252\.240-7997|NIST SP 800-171 DOD ASSESSMENT/i.test(t);
+
+  // ── Resolve pricing ────────────────────────────────────────────────────
+  const unitPriceNum = unitPrice ? parseFloat(unitPrice.replace(/,/g, "")) || null : null;
+  const histPriceNum = histPrice ? parseFloat(histPrice.replace(/,/g, "")) || null : null;
+  // RFQ PDFs always have a blank CLIN unit price — plug hist_price in so unit_price is never null
+  const effectivePrice = unitPriceNum || histPriceNum;
+  const qtyNum  = qty ? parseInt(qty.replace(/,/g, "")) || null : null;
+  const extPrice = (effectivePrice && qtyNum) ? effectivePrice * qtyNum : null;
 
   return {
     sol_number,
     nsn,
-    fsc: fsc || (nsn || "").replace(/-/g, "").slice(0, 4),
+    fsc:                   fsc || (nsn || "").replace(/-/g, "").slice(0, 4),
     item_name:             itemName || null,
     ref_part_number:       partNum || null,
-    quantity:              qty ? qty.replace(/,/g, "") : null,
-    unit_price:            unitPrice ? parseFloat(unitPrice.replace(/,/g, "")) || null : null,
+    manufacturer_cage:     mfrCage || null,
+    quantity:              qtyNum ? String(qtyNum) : null,
+    unit_price:            effectivePrice,
+    hist_price:            histPriceNum,
+    ext_price:             extPrice,
     quote_due:             quoteDue || null,
     delivery_days:         deliveryDays ? parseInt(deliveryDays) : null,
-    set_aside:             setAside || null,
+    set_aside:             setAside,
     supplier_restrictions: supplierRestrictions || null,
     fob:                   fob || null,
+    buyer_email:           buyerEmail || null,
+    buyer_name:            buyerName || null,
+    ship_to_dodaac:        shipToDodaac || null,
+    ship_to_name:          shipToName || null,
+    ship_to_street:        shipToStreet || null,
+    ship_to_csz:           shipToCsz || null,
+    need_ship_date:        needShipDate || null,
+    required_delivery_date: reqDelivDate || null,
+    packaging_spec:        packagingSpec || null,
+    packaging_type:        packagingType || null,
+    packaging_label:       packagingLabel || null,
+    packaging_qup:         packagingQup || null,
+    requires_nist_assessment: requiresNistAssessment,
     pdf_parsed:            true,
   };
 }
