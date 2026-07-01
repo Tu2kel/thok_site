@@ -139,6 +139,8 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
   // Round-robin rotation — bridge until AWS SES / Workspace at full capacity.
   // Stores last sent vendor in _meta.blast_cursor so each run picks up where
   // yesterday stopped. 600/day (Gmail 450 + Resend 150) across 2,400 = 4-day cycle.
+  // BLAST_START_INDEX env var sets the initial offset when no cursor exists yet.
+  const START_INDEX = parseInt(process.env.BLAST_START_INDEX || "0");
   let rotatedPlan = plan;
   if (db && plan.length > 1) {
     const cursorDoc = await db.collection("_meta").findOne({ _id: "blast_cursor" }).catch(() => null);
@@ -151,6 +153,10 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       } else {
         info("Round-robin: full cycle complete — wrapping to start");
       }
+    } else if (START_INDEX > 0) {
+      const offset = Math.min(START_INDEX, plan.length - 1);
+      rotatedPlan = [...plan.slice(offset), ...plan.slice(0, offset)];
+      info("Round-robin: cold start at position " + offset + " (BLAST_START_INDEX=" + START_INDEX + ")");
     }
   }
 
