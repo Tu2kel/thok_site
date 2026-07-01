@@ -136,7 +136,11 @@
       }
     }
 
-    // AN/MS/NAS prefix — route through MFR+JCP chain (no G-Fast override)
+    // AN/MS prefix → G-Fast gets daily batch of these (NAS stays in normal chain)
+    if (pnPrefix === "AN" || pnPrefix === "MS") {
+      const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name));
+      if (gfast) addDist(gfast, "P/N prefix " + pnPrefix + " → G-Fast");
+    }
 
     for (const d of dists) {
       if (d.is_manufacturer && d.has_jcp)  addDist(d, "MFR · JCP");

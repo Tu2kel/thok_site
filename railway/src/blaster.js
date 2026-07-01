@@ -64,6 +64,24 @@ function buildBlastPlan(sols, dists) {
     plan.push({ vendor, sols: matchedSols, totalExt, fscs });
   }
 
+  // G-Fast: inject daily batch of AN/MS sols (not in normal FSC chain)
+  const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name) && d.email && !d.is_dns && !d.email_invalid);
+  if (gfast && !seenNames.has((gfast.name || "").toUpperCase().trim())) {
+    const anmsSols = sols.filter(s => {
+      const prefix = detectPNPrefix(s.ref_part_number);
+      return prefix === "AN" || prefix === "MS";
+    });
+    if (anmsSols.length) {
+      const totalExt = anmsSols.reduce((s, r) => {
+        return s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1) || parseFloat(r.ext_price || 0) || 0);
+      }, 0);
+      if (totalExt >= 1000) {
+        plan.push({ vendor: gfast, sols: anmsSols, totalExt, fscs: [...goFscs] });
+        info("G-Fast → " + anmsSols.length + " AN/MS sol(s) queued");
+      }
+    }
+  }
+
   const PERSONAL_DOMAINS = /gmail\.com|yahoo\.com|aol\.com|hotmail\.com|outlook\.com|icloud\.com/i;
   const hasCage = d => !!(d.cage_code || d.cage);
   const hasCorp = d => !PERSONAL_DOMAINS.test(d.email || "");
