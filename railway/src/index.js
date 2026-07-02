@@ -13,6 +13,7 @@ const { buildBlastPlan, runBlast } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
 const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, upsertNsnWatch, saveDailyBrief } = require("./db");
+const { runHealthCheck } = require("./health-check");
 
 // SOL_SOURCE=navigator (default, uses DIBBS Navigator scraper)
 // SOL_SOURCE=email (switches to DLA Gmail after Navigator sub ends)
@@ -363,6 +364,18 @@ const httpServer = http.createServer((req, res) => {
 
   const u = req.url.split("?")[0];
 
+  if (u === "/health-check" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const result = await runHealthCheck(mdb, { emailOnFailure: false });
+      res.writeHead(result.ok ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
   if (u === "/health" && req.method === "GET") {
     const now = Date.now();
     const msAgo = lastRunAt ? now - lastRunAt : null;
@@ -452,6 +465,12 @@ if (runNow) {
   cron.schedule(SCHEDULE, () => {
     log("Cron fired — starting pipeline…");
     runPipelineTracked().catch(e => err("Pipeline error:", e.message));
+  }, { timezone: "America/Chicago" });
+
+  // Health check every 6 hours — emails anthony@ifedlog.com if anything is red
+  cron.schedule("0 6,12,18,0 * * *", () => {
+    log("Health check cron firing…");
+    getDb().then(db => runHealthCheck(db, { emailOnFailure: true })).catch(e => err("Health check failed:", e.message));
   }, { timezone: "America/Chicago" });
 
   // Keep process alive
