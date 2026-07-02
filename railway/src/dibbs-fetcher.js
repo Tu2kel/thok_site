@@ -53,53 +53,77 @@ function mergeCookies(base, incoming) {
   return [...map.values()].join("; ");
 }
 
+// Follow a URL manually through redirects, accumulating Set-Cookie at every hop.
+// Node.js fetch auto-follow loses cookies set on intermediate 30x responses.
+async function fetchManual(startUrl, opts = {}, maxRedirects = 8) {
+  let url     = startUrl;
+  let cookies = opts.cookies || "";
+  let lastRes = null;
+  let html    = null;
+
+  for (let i = 0; i <= maxRedirects; i++) {
+    const res = await ft(url, {
+      ...opts,
+      headers: { ...(opts.headers || {}), Cookie: cookies },
+      redirect: "manual",
+    });
+    cookies = mergeCookies(cookies, parseCookies(res));
+    lastRes = res;
+
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location") || "";
+      url = loc.startsWith("http") ? loc : DIBBS2_BASE + loc;
+      continue;
+    }
+    // Non-redirect: read body if text response
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("text") || ct.includes("html")) html = await res.text();
+    break;
+  }
+
+  return { res: lastRes, cookies, html };
+}
+
 // Accept DoD banner via plain fetch — no browser required.
-// GET dodwarning.aspx to get VIEWSTATE, POST butAgree=OK with redirect:manual
-// to capture the session cookie set on the 302 response (lost if we auto-follow).
+// Uses manual redirect following so Set-Cookie on every 30x hop is captured.
+// VIEWSTATE from the GET must be sent back in the POST with the SAME session cookie.
 async function acceptBannerAndGetCookie(targetPdfUrl) {
   info("Accepting DoD banner via fetch (no browser)…");
 
-  // dodwarning.aspx?goto= is the DIBBS2 banner form page — use original-case path
   const pdfPath   = new URL(targetPdfUrl).pathname;
   const bannerUrl = DIBBS2_BASE + "/dodwarning.aspx?goto=" + encodeURIComponent(pdfPath);
 
-  // Step 1: GET banner form — follow redirects to get final HTML
-  const res1 = await ft(bannerUrl, {
+  // Step 1: GET banner form — manual redirects to capture session cookie on every hop
+  const { cookies: getCookies, html: bannerHtml } = await fetchManual(bannerUrl, {
     headers: { "User-Agent": UA, Accept: "text/html,*/*" },
-    redirect: "follow",
   });
-  let cookies = parseCookies(res1);
-  const bannerHtml = await res1.text();
 
-  info("Banner HTML: " + bannerHtml.length + " chars | hasForm: " + bannerHtml.includes("<form") + " | hasVS: " + bannerHtml.includes("__VIEWSTATE"));
+  const hasForm = (bannerHtml || "").includes("__VIEWSTATE");
+  info("Banner HTML: " + (bannerHtml || "").length + " chars | hasVS: " + hasForm + " | GET cookies: " + getCookies.length);
 
-  if (!bannerHtml.includes("__VIEWSTATE")) {
-    info("No VIEWSTATE — sol may not exist on DIBBS2, skipping banner");
-    return cookies || "";
+  if (!hasForm) {
+    info("No VIEWSTATE in banner — sol may not exist on DIBBS2");
+    return getCookies;
   }
 
   const qs = (id) => {
-    const m = bannerHtml.match(new RegExp('id="' + id + '"[^>]*value="([^"]*)"', "i"))
-           || bannerHtml.match(new RegExp('name="' + id + '"[^>]*value="([^"]*)"', "i"))
-           || bannerHtml.match(new RegExp('value="([^"]*)"[^>]*(?:id|name)="' + id + '"', "i"));
+    const m = (bannerHtml || "").match(new RegExp('id="' + id + '"[^>]*value="([^"]*)"', "i"))
+           || (bannerHtml || "").match(new RegExp('name="' + id + '"[^>]*value="([^"]*)"', "i"))
+           || (bannerHtml || "").match(new RegExp('value="([^"]*)"[^>]*(?:id|name)="' + id + '"', "i"));
     return m ? m[1] : "";
   };
   const viewstate = qs("__VIEWSTATE");
   const vsgen     = qs("__VIEWSTATEGENERATOR");
   const evval     = qs("__EVENTVALIDATION");
+  info("VIEWSTATE: " + viewstate.length + "chars | sending GET session in POST");
 
-  info("VIEWSTATE: " + viewstate.length + "chars");
-
-  // Step 2: POST butAgree=OK — redirect:manual so we capture the 302 Set-Cookie
-  // Auto-follow would give us the PDF response headers (no Set-Cookie), losing the session marker
-  const res2 = await ft(bannerUrl, {
-    method:   "POST",
-    redirect: "manual",
+  // Step 2: POST butAgree=OK — send SAME session cookie from GET so VIEWSTATE validates
+  const { res: postRes, cookies: finalCookies } = await fetchManual(bannerUrl, {
+    method:  "POST",
     headers: {
       "User-Agent":   UA,
       "Content-Type": "application/x-www-form-urlencoded",
       "Referer":      bannerUrl,
-      Cookie:         cookies,
     },
     body: new URLSearchParams({
       __VIEWSTATE:          viewstate,
@@ -109,28 +133,12 @@ async function acceptBannerAndGetCookie(targetPdfUrl) {
       __EVENTARGUMENT:      "",
       butAgree:             "OK",
     }).toString(),
+    cookies: getCookies, // fetchManual merges this into every hop
   });
 
-  const postCookies = parseCookies(res2);
-  cookies = mergeCookies(cookies, postCookies);
-  info("POST status: " + res2.status + " | session cookie chars: " + cookies.length);
-
-  // If POST redirected (expected 302 → PDF), follow manually to pick up any extra cookies
-  if (res2.status >= 300 && res2.status < 400) {
-    const loc = res2.headers.get("location");
-    if (loc) {
-      const absLoc = loc.startsWith("http") ? loc : DIBBS2_BASE + loc;
-      info("POST → redirect: " + absLoc);
-      const res3 = await ft(absLoc, {
-        headers: { "User-Agent": UA, Cookie: cookies },
-        redirect: "manual",
-      });
-      cookies = mergeCookies(cookies, parseCookies(res3));
-    }
-  }
-
-  info("✅ DoD banner accepted — " + cookies.length + " cookie chars");
-  return cookies;
+  info("POST status: " + (postRes && postRes.status) + " | final cookies: " + finalCookies.length + " chars");
+  info("✅ DoD banner accepted — session ready");
+  return finalCookies;
 }
 
 // Ensure we have a valid session cookie — pass the real PDF URL so banner
