@@ -410,13 +410,48 @@ function parsePdfText(text, sol_number, nsn, fsc) {
   };
 }
 
+// Try downloading a PDF directly from SAM.gov resource links (captured from API response).
+// Many modern DLA solicitations store their PDFs on SAM.gov, not DIBBS2.
+async function fetchSamPdf(sol) {
+  const links = sol.sam_resource_links || [];
+  if (!links.length) return null;
+
+  const apiKey = process.env.SAM_API_KEY || "";
+  for (const link of links) {
+    try {
+      const sep = link.includes("?") ? "&" : "?";
+      const url = link + sep + "api_key=" + encodeURIComponent(apiKey);
+      info("Trying SAM resource: " + link);
+      const res = await ft(url, {
+        headers: { "User-Agent": UA, Accept: "application/pdf,*/*" },
+      }, 30000);
+      if (!res.ok) { info("SAM resource → HTTP " + res.status); continue; }
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("pdf") && !ct.includes("octet")) { info("SAM resource not PDF (content-type: " + ct + ")"); continue; }
+      info("✅ SAM resource PDF for " + sol.sol_number);
+      return Buffer.from(await res.arrayBuffer());
+    } catch (e) {
+      info("SAM resource failed: " + e.message);
+    }
+  }
+  return null;
+}
+
 // Full fetch + parse for one sol
 async function fetchSolDetails(sol) {
   const { sol_number, nsn, fsc } = sol;
   info("Fetching PDF: " + sol_number);
 
   try {
-    const buffer = await fetchPdfBuffer(sol_number);
+    // Try SAM.gov resource links first (modern DLA RFQs attach PDFs to SAM opp directly)
+    let buffer = null;
+    if (sol.sam_resource_links && sol.sam_resource_links.length) {
+      buffer = await fetchSamPdf(sol);
+    }
+    // Fall back to DIBBS2 (legacy / older solicitations)
+    if (!buffer) {
+      buffer = await fetchPdfBuffer(sol_number);
+    }
     const parsed = await pdfParse(buffer);
     const fields = parsePdfText(parsed.text, sol_number, nsn, fsc);
     info("✅ " + sol_number + " — " + (fields.item_name || "no item name") + " | $" + (fields.unit_price || "?") + " | qty " + (fields.quantity || "?"));

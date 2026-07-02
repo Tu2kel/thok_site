@@ -87,13 +87,15 @@ function mapOpp(opp) {
   const quoteDue = dueRaw ? dueRaw.slice(0, 10) : ""; // ISO → YYYY-MM-DD
 
   return {
-    sol_number: solNum,
-    nsn:        nsn || "",
-    fsc:        fsc || "",
-    item_name:  title.replace(/\s+NSN\s+[\d-]+/i, "").trim() || title,
-    quote_due:  quoteDue,
-    sol_url:    opp.uiLink || ("https://sam.gov/opp/" + (opp.noticeId || "") + "/view"),
-    source:     "sam-api",
+    sol_number:         solNum,
+    nsn:                nsn || "",
+    fsc:                fsc || "",
+    item_name:          title.replace(/\s+NSN\s+[\d-]+/i, "").trim() || title,
+    quote_due:          quoteDue,
+    sol_url:            opp.uiLink || ("https://sam.gov/opp/" + (opp.noticeId || "") + "/view"),
+    notice_id:          opp.noticeId || "",
+    sam_resource_links: Array.isArray(opp.resourceLinks) ? opp.resourceLinks : [],
+    source:             "sam-api",
   };
 }
 
@@ -121,6 +123,12 @@ async function fetchSamSols({ lookbackDays = 3, fscLanes = [] } = {}) {
   info("Querying SAM — single broad query, " + (fscLanes.length ? fscLanes.length + " target FSCs" : "all FSCs") + " …");
   const rawOpps = await fetchAllPages(apiKey, baseParams);
   info("SAM returned " + rawOpps.length + " total record(s) — filtering for target FSCs…");
+  if (rawOpps.length) {
+    const firstKeys = Object.keys(rawOpps[0]).join(", ");
+    const firstLinks = rawOpps[0].resourceLinks;
+    info("First opp fields: " + firstKeys);
+    info("First opp resourceLinks: " + JSON.stringify(firstLinks));
+  }
 
   // Deduplicate, map, filter nulls + apply FSC whitelist
   const seen = new Set();
