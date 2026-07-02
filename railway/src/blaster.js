@@ -1,12 +1,11 @@
 // src/blaster.js — vendor selection + RFQ email blast
-// Auto-sender: Gmail (450/day) first → Resend (150/day) when Gmail hits daily cap.
-// If Gmail SMTP is unreachable (Railway blocks port 587/465), Resend is used as
-// an immediate network-level fallback without consuming Gmail quota.
+// Gmail SMTP is blocked on Railway (port 587/465 firewalled) — all sends go through Resend.
+// Resend free plan: 100/day, 3,000/month.
 const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
-const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "600");
-const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "450");
-const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "150");
+const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "100");
+const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "0");   // effectively 0 — Railway blocks SMTP
+const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "100"); // Resend free plan: 100/day
 const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
 
 function info(...a) { console.log("[blaster]", ...a); }
@@ -182,9 +181,9 @@ async function incrementSenderCount(db, sender) {
 async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
 
-  // Round-robin rotation — bridge until AWS SES / Workspace at full capacity.
+  // Round-robin rotation across all vendors in the blast plan.
   // Stores last sent vendor in _meta.blast_cursor so each run picks up where
-  // yesterday stopped. 600/day (Gmail 450 + Resend 150) across 2,400 = 4-day cycle.
+  // yesterday stopped. 100/day (Resend free) across 2,481 vendors = 25-day cycle.
   // BLAST_START_INDEX env var sets the initial offset when no cursor exists yet.
   const START_INDEX = parseInt(process.env.BLAST_START_INDEX || "0");
   let rotatedPlan = plan;
