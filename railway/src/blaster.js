@@ -25,7 +25,7 @@ function buildBlastPlan(sols, dists) {
   const seenNames = new Set();
 
   const eligible = dists
-    .filter(d => d.email && !d.is_dns && !d.email_invalid && !(d.tags || []).includes("approved-manufacturer"))
+    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_manufacturer)
     .sort((a, b) => (a.tier || 9) - (b.tier || 9));
 
   const vendorFscMap = [];
@@ -71,7 +71,7 @@ function buildBlastPlan(sols, dists) {
   });
   if (anmsNasSols.length) {
     const approvedMfrs = dists.filter(d =>
-      (d.tags || []).includes("approved-manufacturer") &&
+      d.is_manufacturer &&
       d.email && !d.is_dns && !d.email_invalid,
     );
     for (const mfr of approvedMfrs) {
