@@ -292,7 +292,7 @@ async function runPipeline() {
     const missing = [];
     if (!s.quantity)                   missing.push("quantity");
     if (!s.quote_due)                  missing.push("quote_due");
-    if (!s.item_name && !s.nsn)        missing.push("item_name/nsn");
+    if (!s.item_name)                  missing.push("item_name");
     if (missing.length) {
       log("⛔ " + s.sol_number + " held — missing: " + missing.join(", "));
       return false;
