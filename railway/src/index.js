@@ -5,7 +5,6 @@
 // Pass --run-now as CLI arg to fire immediately (for testing / manual trigger).
 
 const cron = require("node-cron");
-const { scrape }           = require("./scraper");
 const { fetchDibbsSols }   = require("./gmail-watcher");
 const { fetchAllSolDetails } = require("./dibbs-fetcher");
 const { fetchSamSols }     = require("./sam-fetcher");
@@ -99,6 +98,7 @@ async function runPipeline() {
   } else {
     // Navigator scraper (active until Navigator sub ends)
     log("Scraping DIBBS Navigator…");
+    const { scrape } = require("./scraper");
     const fscLanes = (process.env.NAVIGATOR_FSC_LANES || "").split(",").map(s => s.trim()).filter(Boolean);
     const result = await scrape({
       username:  process.env.NAVIGATOR_USERNAME,
