@@ -1813,6 +1813,28 @@
                 }
               },
             }, agentMeta.blast_paused ? "▶ Resume Blast" : "⏸ Pause Blast"),
+          // Fetch + parse PDFs for stored sols that don't have PDF data yet (Railway only)
+          agentAlive === true && agentMeta && agentMeta.mode === "railway" &&
+            h("button", {
+              title: "Fetch DIBBS PDFs for stored sols that haven't been enriched yet (runs in background)",
+              style: {
+                ...S.mono, fontSize: "10px",
+                background: "rgba(100,181,246,.08)",
+                border: "1px solid rgba(100,181,246,.3)",
+                color: "rgba(100,181,246,.85)",
+                padding: "4px 10px", cursor: "pointer",
+              },
+              onClick: async () => {
+                try {
+                  const r = await fetch(getAgentUrl() + "/enrich-pdfs", { method: "POST" });
+                  const d = await r.json();
+                  if (d.ok) { toast_("PDF enrichment started — check Railway logs for progress"); }
+                  else toast_("Failed: " + (d.error || "unknown error"), true);
+                } catch (e) {
+                  toast_("Error: " + e.message, true);
+                }
+              },
+            }, "⬇ Enrich PDFs"),
           // Restart (local only)
           agentAlive === true && (!agentMeta || agentMeta.mode !== "railway") &&
             h("button", {

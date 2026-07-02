@@ -58,15 +58,22 @@ async function runPipeline() {
   let scrapeResult = { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } };
 
   if (SOL_SOURCE === "sam") {
-    // SAM.gov Opportunities API → DLA RFQ sol list → DIBBS PDF parse
+    // SAM.gov Opportunities API → DLA RFQ sol list
+    // PDF enrichment is intentionally deferred — runs in background after blast
+    // so DIBBS2 latency/banner issues never block vendor emails from going out.
     log("Fetching DLA solicitations from SAM.gov API…");
     const fscLanes = (process.env.NAVIGATOR_FSC_LANES || process.env.SAM_FSC_LANES || "").split(",").map(s => s.trim()).filter(Boolean);
     let samSols = [];
-    try {
-      samSols = await fetchSamSols({ lookbackDays: 3, fscLanes });
-    } catch (e) {
-      err("SAM fetch failed:", e.message);
-      errors.push("SAM: " + e.message);
+    // Retry up to 3 times — SAM.gov can be slow under load
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        samSols = await fetchSamSols({ lookbackDays: 3, fscLanes });
+        break;
+      } catch (e) {
+        err("SAM fetch attempt " + attempt + "/3:", e.message);
+        if (attempt === 3) { errors.push("SAM: " + e.message); }
+        else { await new Promise(r => setTimeout(r, 10000 * attempt)); }
+      }
     }
     if (!samSols.length) {
       log("No DLA solicitations from SAM — sending summary");
@@ -74,9 +81,8 @@ async function runPipeline() {
       await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
       return;
     }
-    log("SAM returned " + samSols.length + " sols — fetching DIBBS PDFs…");
-    rawSols = await fetchAllSolDetails(samSols);
-    log("PDF fetch complete — " + rawSols.filter(s => s.pdf_parsed).length + "/" + rawSols.length + " parsed");
+    log("SAM returned " + samSols.length + " sols — using SAM metadata for blast (PDFs enriched async)");
+    rawSols = samSols; // blast uses SAM stubs; PDFs are fetched in background after emails go out
     scrapeResult = { counts: { total: rawSols.length, pass1: samSols.length, pass2: 0, pass3: 0 } };
 
   } else if (SOL_SOURCE === "email") {
@@ -267,6 +273,57 @@ async function runPipeline() {
     }
   }
 
+  // ── 7b. Background PDF enrichment (SAM mode only) ────────────────────
+  // Blast is done — now go fetch the PDFs. This runs in the background so it
+  // doesn't delay the summary email or block the next pipeline cron.
+  if (SOL_SOURCE === "sam" && allScreened.length) {
+    const toEnrich = allScreened.filter(s => !s.pdf_parsed);
+    if (toEnrich.length) {
+      setImmediate(async () => {
+        log("Background PDF enrichment: " + toEnrich.length + " sols…");
+        try {
+          const enriched = await fetchAllSolDetails(toEnrich);
+          let updated = 0;
+          for (const sol of enriched.filter(s => s.pdf_parsed)) {
+            await saveSol(db, {
+              sol_number:            sol.sol_number,
+              item_name:             sol.item_name || "",
+              ref_part_number:       sol.ref_part_number || "",
+              manufacturer_cage:     sol.manufacturer_cage || "",
+              quantity:              String(sol.quantity || ""),
+              unit_price:            sol.unit_price || null,
+              hist_price:            sol.hist_price || null,
+              ext_price:             sol.ext_price || null,
+              quote_due:             sol.quote_due || "",
+              delivery_days:         String(sol.delivery_days || ""),
+              set_aside:             sol.set_aside || "",
+              fob:                   sol.fob || "",
+              supplier_restrictions: sol.supplier_restrictions || "",
+              buyer_email:           sol.buyer_email || "",
+              buyer_name:            sol.buyer_name || "",
+              ship_to_dodaac:        sol.ship_to_dodaac || "",
+              ship_to_name:          sol.ship_to_name || "",
+              ship_to_street:        sol.ship_to_street || "",
+              ship_to_csz:           sol.ship_to_csz || "",
+              need_ship_date:        sol.need_ship_date || "",
+              required_delivery_date: sol.required_delivery_date || "",
+              packaging_spec:        sol.packaging_spec || "",
+              packaging_type:        sol.packaging_type || "",
+              packaging_label:       sol.packaging_label || "",
+              packaging_qup:         sol.packaging_qup || "",
+              requires_nist_assessment: sol.requires_nist_assessment || false,
+              pdf_parsed:            true,
+            }).catch(e => err("PDF enrichment saveSol " + sol.sol_number + ":", e.message));
+            updated++;
+          }
+          log("Background PDF enrichment done: " + updated + "/" + toEnrich.length + " PDFs parsed");
+        } catch (e) {
+          err("Background PDF enrichment failed:", e.message);
+        }
+      });
+    }
+  }
+
   // ── 8. Update NSN watch records with latest pricing ───────────────────
   if (watchHits.length) {
     await updateWatchHits(db, watchHits).catch(e => err("updateWatchHits:", e.message));
@@ -436,6 +493,70 @@ const httpServer = http.createServer((req, res) => {
       } finally {
         lastRunAt = Date.now();
         pipelineRunning = false;
+      }
+    })();
+    return;
+  }
+
+  // Manually fetch + parse PDFs for stored sols that haven't been enriched yet.
+  // Called from SCC UI or after a SAM run to backfill PDF data.
+  if (u === "/enrich-pdfs" && req.method === "POST") {
+    res.writeHead(202, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, message: "PDF enrichment triggered" }));
+    log("PDF enrichment triggered via HTTP");
+
+    (async () => {
+      try {
+        const db = await getDb();
+        const unenriched = await db.collection("solicitations").find({
+          pdf_parsed: { $ne: true },
+          source:     "railway-agent",
+          status:     { $nin: ["Lost", "Awarded", "No Source"] },
+        }).limit(50).toArray();
+
+        if (!unenriched.length) {
+          log("Enrich-PDFs: no un-enriched sols found");
+          return;
+        }
+
+        log("Enrich-PDFs: fetching " + unenriched.length + " PDFs…");
+        const enriched = await fetchAllSolDetails(unenriched);
+        let updated = 0;
+        for (const sol of enriched.filter(s => s.pdf_parsed)) {
+          await saveSol(db, {
+            sol_number:            sol.sol_number,
+            item_name:             sol.item_name || "",
+            ref_part_number:       sol.ref_part_number || "",
+            manufacturer_cage:     sol.manufacturer_cage || "",
+            quantity:              String(sol.quantity || ""),
+            unit_price:            sol.unit_price || null,
+            hist_price:            sol.hist_price || null,
+            ext_price:             sol.ext_price || null,
+            quote_due:             sol.quote_due || "",
+            delivery_days:         String(sol.delivery_days || ""),
+            set_aside:             sol.set_aside || "",
+            fob:                   sol.fob || "",
+            supplier_restrictions: sol.supplier_restrictions || "",
+            buyer_email:           sol.buyer_email || "",
+            buyer_name:            sol.buyer_name || "",
+            ship_to_dodaac:        sol.ship_to_dodaac || "",
+            ship_to_name:          sol.ship_to_name || "",
+            ship_to_street:        sol.ship_to_street || "",
+            ship_to_csz:           sol.ship_to_csz || "",
+            need_ship_date:        sol.need_ship_date || "",
+            required_delivery_date: sol.required_delivery_date || "",
+            packaging_spec:        sol.packaging_spec || "",
+            packaging_type:        sol.packaging_type || "",
+            packaging_label:       sol.packaging_label || "",
+            packaging_qup:         sol.packaging_qup || "",
+            requires_nist_assessment: sol.requires_nist_assessment || false,
+            pdf_parsed:            true,
+          }).catch(() => {});
+          updated++;
+        }
+        log("Enrich-PDFs complete: " + updated + "/" + unenriched.length + " PDFs parsed");
+      } catch (e) {
+        err("Enrich-PDFs error:", e.message);
       }
     })();
     return;
