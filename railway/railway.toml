@@ -1,9 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install imapflow && npm install"
-
-[build.nixpacksPlan.phases.setup]
-aptPkgs = ["chromium", "chromium-driver", "fonts-liberation", "libatk-bridge2.0-0", "libdrm2", "libxkbcommon0", "libxss1", "libasound2", "ca-certificates"]
+buildCommand = "npm install"
 
 [deploy]
 startCommand = "node src/index.js"

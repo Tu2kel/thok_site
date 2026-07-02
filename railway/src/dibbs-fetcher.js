@@ -1,12 +1,12 @@
 // src/dibbs-fetcher.js — DIBBS PDF fetcher + parser
-// 1. Puppeteer accepts DoD banner once → captures session cookie
-// 2. plain fetch downloads each PDF using that cookie
+// 1. Plain fetch POSTs the DoD banner agreement (no browser/Puppeteer needed)
+// 2. Plain fetch downloads each PDF using the captured session cookie
 // 3. pdf-parse extracts all procurement fields
 
-const puppeteer = require("puppeteer-core");
-const pdfParse  = require("pdf-parse");
+const pdfParse = require("pdf-parse");
 
 const DIBBS2_BASE = "https://dibbs2.bsm.dla.mil";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 let _sessionCookie = null;
 
@@ -19,52 +19,92 @@ function pdfUrl(sol_number) {
   return DIBBS2_BASE + "/Downloads/RFQ/" + lastChar + "/" + sol_number + ".PDF";
 }
 
-// Accept DoD banner with Puppeteer, return session cookie string
-async function acceptBannerAndGetCookie() {
-  const executablePath = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
-  info("Launching browser to accept DoD banner…");
+// fetch with AbortController timeout
+async function ft(url, opts = {}, timeoutMs = 30000) {
+  const ctrl = new AbortController();
+  const t    = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...opts, signal: ctrl.signal });
+    clearTimeout(t);
+    return r;
+  } catch (e) {
+    clearTimeout(t);
+    throw new Error(e.name === "AbortError" ? "fetch timeout (" + timeoutMs + "ms): " + url : e.message);
+  }
+}
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    executablePath,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+// Parse all Set-Cookie headers into a flat cookie string
+function parseCookies(res) {
+  const raw = res.headers.get("set-cookie");
+  if (!raw) return "";
+  return raw.split(/,(?=\s*[A-Za-z_][A-Za-z0-9_-]+=)/)
+    .map(c => c.split(";")[0].trim())
+    .filter(Boolean)
+    .join("; ");
+}
+
+// Accept DoD banner via plain fetch — no browser required
+// DIBBS2 is ASP.NET WebForms: GET banner page → POST #butAgree form → session cookie
+async function acceptBannerAndGetCookie() {
+  info("Accepting DoD banner via fetch (no browser)…");
+  const testUrl = pdfUrl("SPE4A726T529C");
+
+  // Step 1: hit PDF URL — DIBBS2 redirects to the DoD warning banner
+  const res1 = await ft(testUrl, {
+    headers: { "User-Agent": UA, Accept: "text/html,application/pdf,*/*" },
+  });
+  const ct1 = res1.headers.get("content-type") || "";
+  // If PDF came back directly, no banner needed
+  if (ct1.includes("pdf")) {
+    info("PDF accessible directly — no banner");
+    return parseCookies(res1);
+  }
+
+  let cookies = parseCookies(res1);
+  const bannerHtml = await res1.text();
+  const bannerUrl  = res1.url || testUrl;
+
+  // Parse ASP.NET WebForms hidden fields
+  const qs = (id) => {
+    const m = bannerHtml.match(new RegExp('id="' + id + '"[^>]*value="([^"]*)"', "i"))
+           || bannerHtml.match(new RegExp('name="' + id + '"[^>]*value="([^"]*)"', "i"));
+    return m ? m[1] : "";
+  };
+  const viewstate    = qs("__VIEWSTATE");
+  const vsgen        = qs("__VIEWSTATEGENERATOR");
+  const evval        = qs("__EVENTVALIDATION");
+  const formActionM  = bannerHtml.match(/<form[^>]+action="([^"]+)"/i);
+  const formAction   = formActionM ? formActionM[1] : bannerUrl;
+  const absAction    = formAction.startsWith("http") ? formAction : new URL(formAction, DIBBS2_BASE).href;
+
+  info("Banner at: " + bannerUrl + " → posting agreement to " + absAction);
+
+  // Step 2: POST #butAgree (ASP.NET submit button — name=butAgree included in body)
+  const body = new URLSearchParams({
+    __VIEWSTATE:          viewstate,
+    __VIEWSTATEGENERATOR: vsgen,
+    __EVENTVALIDATION:    evval,
+    __EVENTTARGET:        "",
+    __EVENTARGUMENT:      "",
+    butAgree:             "I Agree",
   });
 
-  try {
-    const page = await browser.newPage();
-    page.setDefaultTimeout(60000);
+  const res2 = await ft(absAction, {
+    method:  "POST",
+    headers: {
+      "User-Agent":   UA,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Referer":      bannerUrl,
+      Cookie:         cookies,
+    },
+    body: body.toString(),
+  });
 
-    // Hit a known PDF URL — this triggers the banner redirect
-    const testSol = "SPE4A726T529C";
-    const url = pdfUrl(testSol);
-    info("Navigating to trigger banner: " + url);
+  const moreCookies = parseCookies(res2);
+  if (moreCookies) cookies = [cookies, moreCookies].filter(Boolean).join("; ");
 
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-
-    // Accept the DoD banner
-    try {
-      await page.waitForSelector("#butAgree", { timeout: 10000 });
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {}),
-        page.click("#butAgree"),
-      ]);
-      info("✅ DoD banner accepted");
-      await new Promise(r => setTimeout(r, 2000));
-    } catch {
-      info("No banner found — session may already be active");
-    }
-
-    // Grab cookies
-    const cookies = await page.cookies();
-    const cookieStr = cookies.map(c => c.name + "=" + c.value).join("; ");
-    info("Captured " + cookies.length + " cookie(s) from dibbs2");
-
-    await browser.close();
-    return cookieStr;
-  } catch (e) {
-    try { await browser.close(); } catch {}
-    throw e;
-  }
+  info("✅ DoD banner accepted via fetch — " + cookies.split(";").length + " cookie(s)");
+  return cookies;
 }
 
 // Ensure we have a valid session cookie
