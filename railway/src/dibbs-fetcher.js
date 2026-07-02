@@ -43,46 +43,39 @@ function parseCookies(res) {
     .join("; ");
 }
 
-// Accept DoD banner via plain fetch — no browser required
-// DIBBS2 is ASP.NET WebForms: GET banner page → POST #butAgree form → session cookie
-async function acceptBannerAndGetCookie() {
+// Accept DoD banner via plain fetch — no browser required.
+// Strategy: hit dodwarning.aspx directly (the known banner form page) to get a
+// fresh VIEWSTATE, then POST butAgree=OK. Never relies on the PDF URL returning
+// the form inline (that page's HTML structure varies and can omit the form).
+async function acceptBannerAndGetCookie(targetPdfUrl) {
   info("Accepting DoD banner via fetch (no browser)…");
-  const testUrl = pdfUrl("SPE4A726T529C");
 
-  // Step 1: hit PDF URL — DIBBS2 redirects to the DoD warning banner
-  const res1 = await ft(testUrl, {
-    headers: { "User-Agent": UA, Accept: "text/html,application/pdf,*/*" },
-  });
-  const ct1 = res1.headers.get("content-type") || "";
-  // If PDF came back directly, no banner needed
-  if (ct1.includes("pdf")) {
-    info("PDF accessible directly — no banner");
-    return parseCookies(res1);
-  }
+  // Build the dodwarning.aspx URL for this PDF path.
+  // Form action confirmed from live HTML: /dodwarning.aspx?goto=<pdfPath>
+  const pdfPath    = new URL(targetPdfUrl).pathname; // e.g. /Downloads/RFQ/C/SPE4A726T529C.PDF
+  const bannerUrl  = DIBBS2_BASE + "/dodwarning.aspx?goto=" + encodeURIComponent(pdfPath.toLowerCase());
 
+  // Step 1: GET the banner form page directly
+  const res1 = await ft(bannerUrl, { headers: { "User-Agent": UA, Accept: "text/html,*/*" } });
   let cookies = parseCookies(res1);
   const bannerHtml = await res1.text();
-  const bannerUrl  = res1.url || testUrl;
+
+  info("Banner HTML: " + bannerHtml.length + " chars | hasForm: " + bannerHtml.includes("<form") + " | hasVS: " + bannerHtml.includes("__VIEWSTATE"));
 
   // Parse ASP.NET WebForms hidden fields
   const qs = (id) => {
     const m = bannerHtml.match(new RegExp('id="' + id + '"[^>]*value="([^"]*)"', "i"))
-           || bannerHtml.match(new RegExp('name="' + id + '"[^>]*value="([^"]*)"', "i"));
+           || bannerHtml.match(new RegExp('name="' + id + '"[^>]*value="([^"]*)"', "i"))
+           || bannerHtml.match(new RegExp('value="([^"]*)"[^>]*id="' + id + '"', "i"));
     return m ? m[1] : "";
   };
-  const viewstate    = qs("__VIEWSTATE");
-  const vsgen        = qs("__VIEWSTATEGENERATOR");
-  const evval        = qs("__EVENTVALIDATION");
-  const formActionM  = bannerHtml.match(/<form[^>]+action="([^"]+)"/i);
-  const formAction   = formActionM ? formActionM[1] : bannerUrl;
-  // Resolve relative form action against the actual banner page URL (not just host root)
-  const absAction = formAction.startsWith("http")
-    ? formAction
-    : new URL(formAction, bannerUrl).href;
+  const viewstate = qs("__VIEWSTATE");
+  const vsgen     = qs("__VIEWSTATEGENERATOR");
+  const evval     = qs("__EVENTVALIDATION");
 
-  info("Parsed — formAction: [" + formAction + "] absAction: " + absAction + " VIEWSTATE: " + viewstate.length + "chars");
+  info("VIEWSTATE: " + viewstate.length + "chars | POST target: " + bannerUrl);
 
-  // Step 2: POST #butAgree — button value="OK" (verified from live HTML, NOT "I Agree")
+  // Step 2: POST butAgree=OK back to the same dodwarning.aspx URL
   const body = new URLSearchParams({
     __VIEWSTATE:          viewstate,
     __VIEWSTATEGENERATOR: vsgen,
@@ -92,7 +85,7 @@ async function acceptBannerAndGetCookie() {
     butAgree:             "OK",
   });
 
-  const res2 = await ft(absAction, {
+  const res2 = await ft(bannerUrl, {
     method:  "POST",
     headers: {
       "User-Agent":   UA,
@@ -106,43 +99,45 @@ async function acceptBannerAndGetCookie() {
   const moreCookies = parseCookies(res2);
   if (moreCookies) cookies = [cookies, moreCookies].filter(Boolean).join("; ");
 
-  info("POST response: " + res2.status + " | cookies after: " + cookies.slice(0, 200));
-  info("✅ DoD banner accepted via fetch — " + cookies.split(";").length + " cookie(s)");
+  info("POST response: " + res2.status + " | cookie chars: " + cookies.length);
+  info("✅ DoD banner accepted — session ready");
   return cookies;
 }
 
-// Ensure we have a valid session cookie
-async function ensureSession() {
+// Ensure we have a valid session cookie — pass the real PDF URL so banner
+// acceptance uses the correct dodwarning.aspx?goto= path
+async function ensureSession(targetUrl) {
   if (!_sessionCookie) {
-    _sessionCookie = await acceptBannerAndGetCookie();
+    _sessionCookie = await acceptBannerAndGetCookie(targetUrl);
   }
   return _sessionCookie;
 }
 
 // Download PDF buffer for a sol number
 async function fetchPdfBuffer(sol_number) {
-  const cookie = await ensureSession();
-  const url = pdfUrl(sol_number);
+  const url    = pdfUrl(sol_number);
+  const cookie = await ensureSession(url);
 
   const res = await fetch(url, {
     headers: {
-      Cookie: cookie,
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      Accept: "application/pdf,*/*",
+      Cookie:       cookie,
+      "User-Agent": UA,
+      Accept:       "application/pdf,*/*",
     },
     redirect: "follow",
   });
 
-  // If we get redirected to banner again, re-accept and retry once
-  if (!res.ok || res.headers.get("content-type")?.includes("text/html")) {
-    info("Session expired — re-accepting banner…");
+  // HTML response = banner not yet accepted for this session; retry once
+  if (!res.ok || (res.headers.get("content-type") || "").includes("text/html")) {
+    info("Banner still active — re-accepting for " + sol_number);
     _sessionCookie = null;
-    const cookie2 = await ensureSession();
+    const cookie2 = await ensureSession(url);
     const res2 = await fetch(url, {
-      headers: { Cookie: cookie2, "User-Agent": "Mozilla/5.0", Accept: "application/pdf,*/*" },
+      headers: { Cookie: cookie2, "User-Agent": UA, Accept: "application/pdf,*/*" },
       redirect: "follow",
     });
-    if (!res2.ok) throw new Error("PDF fetch failed: " + res2.status + " for " + sol_number);
+    const ct2 = (res2.headers.get("content-type") || "");
+    if (!res2.ok || ct2.includes("text/html")) throw new Error("PDF still returning HTML after re-accept for " + sol_number);
     return Buffer.from(await res2.arrayBuffer());
   }
 
