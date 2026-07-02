@@ -5,9 +5,10 @@
 // Pass --run-now as CLI arg to fire immediately (for testing / manual trigger).
 
 const cron = require("node-cron");
-const { fetchDibbsSols }   = require("./gmail-watcher");
-const { fetchAllSolDetails } = require("./dibbs-fetcher");
-const { fetchSamSols }     = require("./sam-fetcher");
+const { fetchDibbsSols }       = require("./gmail-watcher");
+const { fetchAllSolDetails }   = require("./dibbs-fetcher");
+const { fetchSamSols }         = require("./sam-fetcher");
+const { fetchDibbsDailySols }  = require("./dibbs-daily-fetcher");
 const { screenBatch }      = require("./screener");
 const { buildBlastPlan, runBlast } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
@@ -57,7 +58,30 @@ async function runPipeline() {
   let rawSols = [];
   let scrapeResult = { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } };
 
-  if (SOL_SOURCE === "sam") {
+  if (SOL_SOURCE === "dibbs") {
+    // DIBBS daily listing — scrapes www.dibbs.bsm.dla.mil/RFQ/RfqRecs.aspx?category=issue&TypeSrch=dt&Value=MM-DD-YYYY
+    // Each row has a direct href to the dibbs2 PDF — no URL guessing, no SAM API dependency.
+    log("Fetching DLA solicitations from DIBBS daily listing…");
+    let dibbsDailySols = [];
+    try {
+      dibbsDailySols = await fetchDibbsDailySols({ lookbackDays: 3 });
+    } catch (e) {
+      err("DIBBS daily fetch failed:", e.message);
+      errors.push("DIBBS daily: " + e.message);
+    }
+    if (!dibbsDailySols.length) {
+      log("No solicitations from DIBBS daily listing — sending summary");
+      await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: 0, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: "No DIBBS daily results", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
+      await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
+      return;
+    }
+    log("DIBBS daily: " + dibbsDailySols.length + " sols — fetching PDFs…");
+    rawSols = await fetchAllSolDetails(dibbsDailySols);
+    const pdfOk = rawSols.filter(s => s.pdf_parsed).length;
+    log("PDF fetch complete — " + pdfOk + "/" + rawSols.length + " parsed");
+    scrapeResult = { counts: { total: rawSols.length, pass1: dibbsDailySols.length, pass2: pdfOk, pass3: 0 } };
+
+  } else if (SOL_SOURCE === "sam") {
     // SAM.gov Opportunities API → DLA RFQ sol list
     // PDF enrichment is intentionally deferred — runs in background after blast
     // so DIBBS2 latency/banner issues never block vendor emails from going out.

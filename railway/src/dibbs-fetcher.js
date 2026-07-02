@@ -434,6 +434,36 @@ function parsePdfText(text, sol_number, nsn, fsc) {
   };
 }
 
+// Download a PDF from a known dibbs2 URL (e.g. from the daily listing).
+// Tries direct GET with Referer first; falls back to full banner acceptance.
+async function fetchPdfFromUrl(pdfLink, sol_number) {
+  const referer = DIBBS2_BASE.replace("dibbs2", "www.dibbs") + "/RFQ/RFQRec.aspx?sn=" + sol_number;
+
+  const res1 = await ft(pdfLink, {
+    headers: { "User-Agent": UA, Accept: "application/pdf,*/*", Referer: referer },
+    redirect: "follow",
+  }, 30000);
+  const ct1 = res1.headers.get("content-type") || "";
+  if (res1.ok && !ct1.includes("text/html")) {
+    info("✅ PDF direct (no banner) for " + sol_number);
+    return Buffer.from(await res1.arrayBuffer());
+  }
+
+  info("Direct → " + res1.status + " (" + ct1 + ") — accepting dibbs2 banner for " + sol_number);
+  const cookie = await ensureSession(pdfLink);
+  const res2 = await fetch(pdfLink, {
+    headers: { Cookie: cookie, "User-Agent": UA, Accept: "application/pdf,*/*", Referer: referer },
+    redirect: "follow",
+  });
+  const ct2 = res2.headers.get("content-type") || "";
+  if (!res2.ok || ct2.includes("text/html")) {
+    _sessionCookie = null;
+    _sessionPromise = null;
+    throw new Error("PDF returning HTML after banner for " + sol_number);
+  }
+  return Buffer.from(await res2.arrayBuffer());
+}
+
 // Try downloading a PDF directly from SAM.gov resource links (captured from API response).
 // Many modern DLA solicitations store their PDFs on SAM.gov, not DIBBS2.
 async function fetchSamPdf(sol) {
@@ -467,12 +497,19 @@ async function fetchSolDetails(sol) {
   info("Fetching PDF: " + sol_number);
 
   try {
-    // Try SAM.gov resource links first (modern DLA RFQs attach PDFs to SAM opp directly)
     let buffer = null;
-    if (sol.sam_resource_links && sol.sam_resource_links.length) {
+
+    // Path 1: DIBBS daily listing already gave us the exact PDF URL — use it directly
+    if (sol.pdf_direct_url) {
+      buffer = await fetchPdfFromUrl(sol.pdf_direct_url, sol_number);
+    }
+
+    // Path 2: SAM.gov resource links (captured from SAM API response)
+    if (!buffer && sol.sam_resource_links && sol.sam_resource_links.length) {
       buffer = await fetchSamPdf(sol);
     }
-    // Fall back to DIBBS2 (legacy / older solicitations)
+
+    // Path 3: Discover URL via public DIBBS record page + dibbs2 banner
     if (!buffer) {
       buffer = await fetchPdfBuffer(sol_number);
     }
