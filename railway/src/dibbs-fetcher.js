@@ -77,7 +77,9 @@ async function acceptBannerAndGetCookie() {
   const formAction   = formActionM ? formActionM[1] : bannerUrl;
   const absAction    = formAction.startsWith("http") ? formAction : new URL(formAction, DIBBS2_BASE).href;
 
-  info("Banner at: " + bannerUrl + " → posting agreement to " + absAction);
+  // Debug: log banner structure so we can see real form action + button names
+  info("Banner snippet: " + bannerHtml.slice(0, 800).replace(/\s+/g, " "));
+  info("Parsed — formAction: [" + formAction + "] absAction: " + absAction + " VIEWSTATE: " + viewstate.length + "chars EVVAL: " + evval.length + "chars");
 
   // Step 2: POST #butAgree (ASP.NET submit button — name=butAgree included in body)
   const body = new URLSearchParams({
@@ -103,6 +105,7 @@ async function acceptBannerAndGetCookie() {
   const moreCookies = parseCookies(res2);
   if (moreCookies) cookies = [cookies, moreCookies].filter(Boolean).join("; ");
 
+  info("POST response: " + res2.status + " | cookies after: " + cookies.slice(0, 200));
   info("✅ DoD banner accepted via fetch — " + cookies.split(";").length + " cookie(s)");
   return cookies;
 }
