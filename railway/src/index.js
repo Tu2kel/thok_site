@@ -9,6 +9,7 @@ const { fetchDibbsSols }       = require("./gmail-watcher");
 const { fetchAllSolDetails }   = require("./dibbs-fetcher");
 const { fetchSamSols }         = require("./sam-fetcher");
 const { fetchDibbsDailySols }  = require("./dibbs-daily-fetcher");
+const { fetchDibbsDailySols: fetchDibbsPuppet } = require("./dibbs-puppet-fetcher");
 const { screenBatch }      = require("./screener");
 const { buildBlastPlan, runBlast } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
@@ -61,7 +62,25 @@ async function runPipeline() {
   let rawSols = [];
   let scrapeResult = { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } };
 
-  if (SOL_SOURCE === "dibbs") {
+  if (SOL_SOURCE === "dibbs-puppet") {
+    // Puppeteer-based DIBBS scraper — real Chrome browser to bypass WAF TLS/JS blocks
+    log("Fetching DLA solicitations via Puppeteer (Chrome) from DIBBS daily listing…");
+    try {
+      rawSols = await fetchDibbsPuppet({ lookbackDays: 1 });
+    } catch (e) {
+      err("Puppeteer DIBBS fetch failed:", e.message);
+      errors.push("DIBBS puppet: " + e.message);
+    }
+    if (!rawSols.length) {
+      log("No sols from Puppeteer DIBBS — sending summary");
+      await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: 0, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: "No Puppeteer DIBBS results", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
+      await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
+      return;
+    }
+    const pdfOk = rawSols.filter(s => s.pdf_parsed).length;
+    scrapeResult = { counts: { total: rawSols.length, pass1: rawSols.length, pass2: pdfOk, pass3: 0 } };
+
+  } else if (SOL_SOURCE === "dibbs") {
     // DIBBS daily listing — scrapes www.dibbs.bsm.dla.mil/RFQ/RfqRecs.aspx?category=issue&TypeSrch=dt&Value=MM-DD-YYYY
     // Each row has a direct href to the dibbs2 PDF — no URL guessing, no SAM API dependency.
     log("Fetching DLA solicitations from DIBBS daily listing…");
