@@ -26,7 +26,7 @@
 
   // AGENT_URL: read from SCC_AGENT client (supports Railway URL via localStorage key "scc_agent_url")
   // Set once in browser console: SCC_AGENT.setAgentUrl("https://your-app.up.railway.app")
-  function getAgentUrl() { return window.SCC_AGENT ? window.SCC_AGENT.getAgentUrl() : "http://localhost:3100"; }
+  function getAgentUrl() { return window.SCC_AGENT ? window.SCC_AGENT.getAgentUrl() : (localStorage.getItem("scc_agent_url") || "http://localhost:3100"); }
   const STORE_KEY       = "scc_dibbs_tab_v1";
   const CRON_KEY        = "scc_dibbs_cron_v1";
   const BLAST_LOG_FN    = "/.netlify/functions/scc-blast-log";
