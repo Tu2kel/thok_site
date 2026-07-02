@@ -2,7 +2,7 @@
 // Uses a real Chrome browser to bypass WAF TLS/JS-challenge blocks.
 // Set SOL_SOURCE=dibbs-puppet in Railway env to activate.
 
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const pdfParse  = require("pdf-parse");
 
 const DIBBS_WWW  = "https://www.dibbs.bsm.dla.mil";
@@ -115,8 +115,10 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
   const seen = new Set();
 
   try {
-    info("Launching Chrome...");
-    browser = await puppeteer.launch({ headless: "new", args: LAUNCH_ARGS });
+    // Use system Chromium installed via nixpacks — puppeteer-core doesn't bundle its own
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || "chromium";
+    info("Launching Chrome: " + executablePath);
+    browser = await puppeteer.launch({ executablePath, headless: "new", args: LAUNCH_ARGS });
     const page = await browser.newPage();
     page.setDefaultTimeout(30000);
 
