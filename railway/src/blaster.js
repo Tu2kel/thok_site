@@ -31,18 +31,28 @@ function buildBlastPlan(sols, dists) {
   const vendorFscMap = [];
 
   for (const d of eligible) {
-    // Vendors with no FSC codes assigned are treated as all-FSC distributors
     const assignedFscs = (d.fsc || []).map(String).filter(Boolean);
-    const dFscs = assignedFscs.length
-      ? assignedFscs.filter(f => goFscs.has(f))
-      : [...goFscs]; // no FSC set → match all active lanes
+    const isMissingFsc = !assignedFscs.length;
+    const dFscs = isMissingFsc
+      ? [...goFscs] // no FSC set → match all active lanes
+      : assignedFscs.filter(f => goFscs.has(f));
     if (!dFscs.length) continue;
-    const underCap = dFscs.some(f => (fscVendorCount[f] || 0) < CAP);
-    if (!underCap) continue;
+
+    // Fix #5: no-FSC vendors use their own cap bucket so they don't consume
+    // lane-specific slots and block FSC-assigned vendors from entering.
+    if (isMissingFsc) {
+      const nofscCount = fscVendorCount["__NOFSC__"] || 0;
+      if (nofscCount >= CAP) continue;
+      fscVendorCount["__NOFSC__"] = nofscCount + 1;
+    } else {
+      const underCap = dFscs.some(f => (fscVendorCount[f] || 0) < CAP);
+      if (!underCap) continue;
+      dFscs.forEach(f => { fscVendorCount[f] = (fscVendorCount[f] || 0) + 1; });
+    }
+
     const key = (d.name || "").toUpperCase().trim();
     if (seenNames.has(key)) continue;
     seenNames.add(key);
-    dFscs.forEach(f => { fscVendorCount[f] = (fscVendorCount[f] || 0) + 1; });
     vendorFscMap.push({ vendor: d, fscs: dFscs });
   }
 
@@ -63,8 +73,8 @@ function buildBlastPlan(sols, dists) {
       return s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1) || parseFloat(r.ext_price || 0) || 0);
     }, 0);
 
-    // Only skip when price is known AND below threshold — don't skip unknowns (PDF not parsed yet)
-    const priceKnown = matchedSols.some(r => r.unit_price || r.ext_price || r.hist_price);
+    // Fix #7: use != null so price=0 is treated as "known" (not as missing)
+    const priceKnown = matchedSols.some(r => r.unit_price != null || r.ext_price != null || r.hist_price != null);
     if (priceKnown && totalExt < 1000) continue;
 
     plan.push({ vendor, sols: matchedSols, totalExt, fscs });

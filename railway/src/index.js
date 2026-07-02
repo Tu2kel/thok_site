@@ -27,6 +27,10 @@ const SKIP_FSCS = new Set(
   (process.env.SKIP_FSCS || "5305,5306,5307,5310,5315,5320,5325,5330").split(",").map(s => s.trim()).filter(Boolean)
 );
 
+// Fix #6: hoisted to module scope so runPipeline and blast-existing stay in sync
+const SKIP_SET_ASIDES   = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
+const SKIP_RESTRICTIONS = new Set(["Sole Source", "Source Control"]);
+
 function log(...a)  { console.log("[scc-agent]", new Date().toISOString().slice(11, 19), ...a); }
 function err(...a)  { console.error("[scc-agent] ❌", ...a); }
 
@@ -132,8 +136,6 @@ async function runPipeline() {
   if (dnsDrop) log("Dropped " + dnsDrop + " sols in DNS FSC lanes (" + [...SKIP_FSCS].join(",") + ")");
 
   // Hard-skip: set-aside categories IFL can't bid on, and locked supplier restrictions
-  const SKIP_SET_ASIDES    = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
-  const SKIP_RESTRICTIONS  = new Set(["Sole Source", "Source Control"]);
   const bidableFiltered = dnsFscFiltered.filter(s => {
     if (s.set_aside        && SKIP_SET_ASIDES.has(s.set_aside))        return false;
     if (s.supplier_restrictions && SKIP_RESTRICTIONS.has(s.supplier_restrictions)) return false;
@@ -249,10 +251,15 @@ async function runPipeline() {
       blastResult = await runBlast(plan, { isLive: IS_LIVE, fromAddress: "kelley.anthonyk@gmail.com" }, db);
       log("Blast complete: " + blastResult.sent + " sent, " + blastResult.failed + " failed");
 
-      // Update sol statuses in MongoDB
+      // Only mark sols whose emails were actually confirmed sent
+      const sentSolNums = new Set(
+        blastResult.log.filter(e => e.status === "sent").flatMap(e => e.sol_numbers || [])
+      );
       for (const entry of plan) {
         for (const sol of entry.sols) {
-          await saveSol(db, { sol_number: sol.sol_number, status: "Awaiting Quotes" }).catch(() => {});
+          if (sentSolNums.has(sol.sol_number)) {
+            await saveSol(db, { sol_number: sol.sol_number, status: "Awaiting Quotes" }).catch(() => {});
+          }
         }
       }
     } else {
@@ -384,8 +391,6 @@ const httpServer = http.createServer((req, res) => {
         log("Blast-existing: distributor DB — " + dists.length + " vendors");
 
         // Pull GO/VERIFY sols not yet blasted (status = New or screened but unsent)
-        const SKIP_SET_ASIDES   = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
-        const SKIP_RESTRICTIONS = new Set(["Sole Source", "Source Control"]);
         const existing = await db.collection("solicitations").find({
           status:  { $nin: ["Awaiting Quotes", "Bid Submitted", "Awarded", "Lost", "Outreach"] },
           verdict: { $in: ["GO", "VERIFY FIRST", null, ""] },
@@ -411,9 +416,16 @@ const httpServer = http.createServer((req, res) => {
         if (plan.length) {
           const result = await runBlast(plan, { isLive: IS_LIVE, fromAddress: "kelley.anthonyk@gmail.com" }, db);
           log("Blast-existing complete: " + result.sent + " sent, " + result.failed + " failed");
+          // Fix #2: only mark sols whose emails were actually sent — don't blackhole
+          // unsent sols when runBlast stopped early at the daily limit
+          const sentSolNums = new Set(
+            result.log.filter(e => e.status === "sent").flatMap(e => e.sol_numbers || [])
+          );
           for (const entry of plan) {
             for (const sol of entry.sols) {
-              await saveSol(db, { sol_number: sol.sol_number, status: "Awaiting Quotes" }).catch(() => {});
+              if (sentSolNums.has(sol.sol_number)) {
+                await saveSol(db, { sol_number: sol.sol_number, status: "Awaiting Quotes" }).catch(() => {});
+              }
             }
           }
         }

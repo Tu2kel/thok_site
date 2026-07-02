@@ -9,6 +9,7 @@ const DIBBS2_BASE = "https://dibbs2.bsm.dla.mil";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 let _sessionCookie = null;
+let _sessionPromise = null; // in-flight promise so concurrent fetchers await the same acceptance
 
 function info(...a) { console.log("[dibbs-fetcher]", ...a); }
 function fail(...a) { console.error("[dibbs-fetcher] ❌", ...a); }
@@ -55,16 +56,18 @@ function mergeCookies(base, incoming) {
 
 // Follow a URL manually through redirects, accumulating Set-Cookie at every hop.
 // Node.js fetch auto-follow loses cookies set on intermediate 30x responses.
+// POST-Redirect-GET: 302/303 after a POST becomes a GET (no body) per HTTP spec.
 async function fetchManual(startUrl, opts = {}, maxRedirects = 8) {
   let url     = startUrl;
   let cookies = opts.cookies || "";
+  let reqOpts = { ...opts };
   let lastRes = null;
   let html    = null;
 
   for (let i = 0; i <= maxRedirects; i++) {
     const res = await ft(url, {
-      ...opts,
-      headers: { ...(opts.headers || {}), Cookie: cookies },
+      ...reqOpts,
+      headers: { ...(reqOpts.headers || {}), Cookie: cookies },
       redirect: "manual",
     });
     cookies = mergeCookies(cookies, parseCookies(res));
@@ -73,6 +76,11 @@ async function fetchManual(startUrl, opts = {}, maxRedirects = 8) {
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.get("location") || "";
       url = loc.startsWith("http") ? loc : DIBBS2_BASE + loc;
+      // POST-Redirect-GET: 302/303 after POST must become GET (body cleared)
+      if ((res.status === 302 || res.status === 303) && reqOpts.method === "POST") {
+        reqOpts = { ...reqOpts, method: "GET" };
+        delete reqOpts.body;
+      }
       continue;
     }
     // Non-redirect: read body if text response
@@ -81,12 +89,18 @@ async function fetchManual(startUrl, opts = {}, maxRedirects = 8) {
     break;
   }
 
+  // Fix #4: throw on redirect exhaustion instead of silently returning incomplete state
+  if (lastRes && lastRes.status >= 300 && lastRes.status < 400) {
+    throw new Error("fetchManual: too many redirects (" + maxRedirects + ") starting at " + startUrl);
+  }
+
   return { res: lastRes, cookies, html };
 }
 
 // Accept DoD banner via plain fetch — no browser required.
 // Uses manual redirect following so Set-Cookie on every 30x hop is captured.
-// VIEWSTATE from the GET must be sent back in the POST with the SAME session cookie.
+// Extracts ALL hidden fields (handles chunked VIEWSTATE like __VIEWSTATE_0).
+// POSTs to the form's own action URL (not assumed to be the same as the GET URL).
 async function acceptBannerAndGetCookie(targetPdfUrl) {
   info("Accepting DoD banner via fetch (no browser)…");
 
@@ -106,48 +120,72 @@ async function acceptBannerAndGetCookie(targetPdfUrl) {
     return getCookies;
   }
 
-  const qs = (id) => {
-    const m = (bannerHtml || "").match(new RegExp('id="' + id + '"[^>]*value="([^"]*)"', "i"))
-           || (bannerHtml || "").match(new RegExp('name="' + id + '"[^>]*value="([^"]*)"', "i"))
-           || (bannerHtml || "").match(new RegExp('value="([^"]*)"[^>]*(?:id|name)="' + id + '"', "i"));
-    return m ? m[1] : "";
-  };
-  const viewstate = qs("__VIEWSTATE");
-  const vsgen     = qs("__VIEWSTATEGENERATOR");
-  const evval     = qs("__EVENTVALIDATION");
-  info("VIEWSTATE: " + viewstate.length + "chars | sending GET session in POST");
+  // Extract ALL hidden input fields — handles chunked VIEWSTATE (__VIEWSTATE_0 etc.)
+  // and any extra ASP.NET fields we might otherwise miss.
+  const hiddenFields = {};
+  const hiddenRe = /<input[^>]+\btype\s*=\s*["']?hidden["']?[^>]*>/gi;
+  let hm;
+  while ((hm = hiddenRe.exec(bannerHtml || "")) !== null) {
+    const nameM  = hm[0].match(/\bname\s*=\s*["']([^"']*)["']/i);
+    const valueM = hm[0].match(/\bvalue\s*=\s*["']([^"']*)["']/i);
+    if (nameM) hiddenFields[nameM[1]] = valueM ? valueM[1] : "";
+  }
+  info("Hidden fields found: " + Object.keys(hiddenFields).join(", "));
+  info("VIEWSTATE: " + (hiddenFields["__VIEWSTATE"] || "").length + "chars | sending GET session in POST");
 
-  // Step 2: POST butAgree=OK — send SAME session cookie from GET so VIEWSTATE validates
-  const { res: postRes, cookies: finalCookies } = await fetchManual(bannerUrl, {
+  // Determine POST target from form's action attribute (may differ from bannerUrl)
+  const formActionMatch = (bannerHtml || "").match(/<form[^>]+\baction\s*=\s*["']([^"']+)["']/i);
+  let postUrl = bannerUrl;
+  if (formActionMatch) {
+    const action = formActionMatch[1];
+    postUrl = action.startsWith("http") ? action
+            : action.startsWith("/")    ? DIBBS2_BASE + action
+            : DIBBS2_BASE + "/" + action;
+  }
+  info("POST target: " + postUrl);
+
+  // Step 2: POST all hidden fields + butAgree=OK with the GET session cookie
+  const formBody = new URLSearchParams({
+    ...hiddenFields,
+    __EVENTTARGET:   "",
+    __EVENTARGUMENT: "",
+    butAgree:        "OK",
+  }).toString();
+
+  const { res: postRes, cookies: finalCookies, html: postHtml } = await fetchManual(postUrl, {
     method:  "POST",
     headers: {
       "User-Agent":   UA,
       "Content-Type": "application/x-www-form-urlencoded",
       "Referer":      bannerUrl,
     },
-    body: new URLSearchParams({
-      __VIEWSTATE:          viewstate,
-      __VIEWSTATEGENERATOR: vsgen,
-      __EVENTVALIDATION:    evval,
-      __EVENTTARGET:        "",
-      __EVENTARGUMENT:      "",
-      butAgree:             "OK",
-    }).toString(),
-    cookies: getCookies, // fetchManual merges this into every hop
+    body: formBody,
+    cookies: getCookies,
   });
 
   info("POST status: " + (postRes && postRes.status) + " | final cookies: " + finalCookies.length + " chars");
-  info("✅ DoD banner accepted — session ready");
+
+  // Detect failure: if POST response still contains the banner form, VIEWSTATE was rejected
+  if (postHtml && postHtml.includes("__VIEWSTATE")) {
+    info("⚠️  Banner POST returned form again — VIEWSTATE rejected. Body[0:300]: " + postHtml.slice(0, 300));
+  } else {
+    info("✅ DoD banner accepted — session ready");
+  }
+
   return finalCookies;
 }
 
-// Ensure we have a valid session cookie — pass the real PDF URL so banner
-// acceptance uses the correct dodwarning.aspx?goto= path
+// Ensure we have a valid session cookie.
+// Fix #1: Promise-based mutex — concurrent callers await the same acceptance request
+// instead of each firing their own, which would cause a race on _sessionCookie.
 async function ensureSession(targetUrl) {
-  if (!_sessionCookie) {
-    _sessionCookie = await acceptBannerAndGetCookie(targetUrl);
+  if (_sessionCookie) return _sessionCookie;
+  if (!_sessionPromise) {
+    _sessionPromise = acceptBannerAndGetCookie(targetUrl)
+      .then(c  => { _sessionCookie = c; _sessionPromise = null; return c; })
+      .catch(e => { _sessionPromise = null; throw e; });
   }
-  return _sessionCookie;
+  return _sessionPromise;
 }
 
 // Download PDF buffer for a sol number
@@ -164,16 +202,24 @@ async function fetchPdfBuffer(sol_number) {
     redirect: "follow",
   });
 
+  const ct = res.headers.get("content-type") || "";
+
+  // Fix #3: real HTTP errors (404, 500…) don't mean the banner is stale — don't null the session
+  if (!res.ok && !ct.includes("text/html")) {
+    throw new Error("PDF fetch HTTP " + res.status + " for " + sol_number);
+  }
+
   // HTML response = banner not yet accepted for this session; retry once
-  if (!res.ok || (res.headers.get("content-type") || "").includes("text/html")) {
+  if (!res.ok || ct.includes("text/html")) {
     info("Banner still active — re-accepting for " + sol_number);
     _sessionCookie = null;
+    _sessionPromise = null;
     const cookie2 = await ensureSession(url);
     const res2 = await fetch(url, {
       headers: { Cookie: cookie2, "User-Agent": UA, Accept: "application/pdf,*/*" },
       redirect: "follow",
     });
-    const ct2 = (res2.headers.get("content-type") || "");
+    const ct2 = res2.headers.get("content-type") || "";
     if (!res2.ok || ct2.includes("text/html")) throw new Error("PDF still returning HTML after re-accept for " + sol_number);
     return Buffer.from(await res2.arrayBuffer());
   }
