@@ -281,15 +281,35 @@ async function runPipeline() {
 
   // ── 7. Blast — only GO + VERIFY sols ─────────────────────────────────
   const blastSols = allScreened.filter(s => s.verdict !== "REJECT" && s.winProbabilityPct >= 50);
-  log("Blast-eligible: " + blastSols.length + " sols");
+  log("Blast-eligible (pre-gate): " + blastSols.length + " sols");
+
+  // Quality gate: block any sol missing data vendors need to actually quote.
+  // Sending a vague RFQ with no item name or quantity is worse than not sending.
+  // quantity   — vendors must know how many units to price
+  // quote_due  — vendors must know the deadline
+  // item_name or nsn — at least one identifier so they know what they're quoting
+  const readySols = blastSols.filter(s => {
+    const missing = [];
+    if (!s.quantity)                   missing.push("quantity");
+    if (!s.quote_due)                  missing.push("quote_due");
+    if (!s.item_name && !s.nsn)        missing.push("item_name/nsn");
+    if (missing.length) {
+      log("⛔ " + s.sol_number + " held — missing: " + missing.join(", "));
+      return false;
+    }
+    return true;
+  });
+  const heldCount = blastSols.length - readySols.length;
+  if (heldCount) log("Held " + heldCount + " sol(s) from blast — incomplete data");
+  log("Blast-ready: " + readySols.length + " sols");
 
   let blastResult = { sent: 0, failed: 0, log: [] };
 
-  if (blastSols.length) {
+  if (readySols.length) {
     const dists = await getDistributors(db);
     log("Distributor DB: " + dists.length + " vendors");
 
-    const plan = buildBlastPlan(blastSols, dists);
+    const plan = buildBlastPlan(readySols, dists);
 
     if (plan.length) {
       log("Firing blast: " + plan.length + " vendor emails (" + (IS_LIVE ? "LIVE" : "TEST") + ")…");
@@ -368,7 +388,7 @@ async function runPipeline() {
     await updateWatchHits(db, watchHits).catch(e => err("updateWatchHits:", e.message));
 
     // Also register any new NSNs from GO sols into the watch list
-    const newWatches = blastSols
+    const newWatches = readySols
       .filter(s => s.nsn && !watchList.find(w => w.nsn === s.nsn))
       .map(s => ({
         nsn:            s.nsn,
