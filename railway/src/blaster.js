@@ -2,7 +2,7 @@
 // Auto-sender: Gmail (450/day) first → Resend (150/day) fallback
 const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
-const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "3");
+const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "600");
 const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "450");
 const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "150");
 const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
@@ -31,7 +31,11 @@ function buildBlastPlan(sols, dists) {
   const vendorFscMap = [];
 
   for (const d of eligible) {
-    const dFscs = (d.fsc || []).map(String).filter(f => goFscs.has(f));
+    // Vendors with no FSC codes assigned are treated as all-FSC distributors
+    const assignedFscs = (d.fsc || []).map(String).filter(Boolean);
+    const dFscs = assignedFscs.length
+      ? assignedFscs.filter(f => goFscs.has(f))
+      : [...goFscs]; // no FSC set → match all active lanes
     if (!dFscs.length) continue;
     const underCap = dFscs.some(f => (fscVendorCount[f] || 0) < CAP);
     if (!underCap) continue;
@@ -59,7 +63,9 @@ function buildBlastPlan(sols, dists) {
       return s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1) || parseFloat(r.ext_price || 0) || 0);
     }, 0);
 
-    if (totalExt < 1000) continue;
+    // Only skip when price is known AND below threshold — don't skip unknowns (PDF not parsed yet)
+    const priceKnown = matchedSols.some(r => r.unit_price || r.ext_price || r.hist_price);
+    if (priceKnown && totalExt < 1000) continue;
 
     plan.push({ vendor, sols: matchedSols, totalExt, fscs });
   }
