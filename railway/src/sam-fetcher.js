@@ -110,32 +110,21 @@ async function fetchSamSols({ lookbackDays = 3, fscLanes = [] } = {}) {
     postedTo:   samDate(now),
   };
 
-  let rawOpps = [];
+  // Single broad query — no FSC filter. Filter locally by target FSCs and SP sol prefix.
+  // Per-FSC approach requires 50 sequential API calls and times out on many FSC codes.
+  // One paginated query is faster overall even across multiple pages.
+  const targetFscSet = new Set(fscLanes);
+  info("Querying SAM — single broad query, " + (fscLanes.length ? fscLanes.length + " target FSCs" : "all FSCs") + " …");
+  const rawOpps = await fetchAllPages(apiKey, baseParams);
+  info("SAM returned " + rawOpps.length + " total record(s) — filtering for target FSCs…");
 
-  if (fscLanes.length) {
-    for (const fsc of fscLanes) {
-      info("Querying SAM — FSC " + fsc + " …");
-      try {
-        const opps = await fetchAllPages(apiKey, { ...baseParams, classificationCode: fsc });
-        info("FSC " + fsc + ": " + opps.length + " record(s)");
-        rawOpps.push(...opps);
-      } catch (e) {
-        fail("FSC " + fsc + " failed: " + e.message);
-      }
-      await new Promise(r => setTimeout(r, DELAY_MS));
-    }
-  } else {
-    info("Querying SAM — all DLA (no FSC filter)…");
-    rawOpps = await fetchAllPages(apiKey, baseParams);
-    info("All DLA: " + rawOpps.length + " record(s)");
-  }
-
-  // Deduplicate, map, filter nulls
+  // Deduplicate, map, filter nulls + apply FSC whitelist
   const seen = new Set();
   const sols = [];
   for (const opp of rawOpps) {
     const stub = mapOpp(opp);
     if (!stub || seen.has(stub.sol_number)) continue;
+    if (targetFscSet.size && stub.fsc && !targetFscSet.has(stub.fsc)) continue;
     seen.add(stub.sol_number);
     sols.push(stub);
   }
