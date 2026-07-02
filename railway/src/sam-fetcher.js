@@ -22,14 +22,33 @@ function extractNsn(text) {
 // One SAM API page — returns { opps[], total }
 async function fetchPage(apiKey, queryParams, offset = 0) {
   const p = new URLSearchParams({ ...queryParams, api_key: apiKey, limit: "1000", offset: String(offset) });
-  const res = await fetch(SAM_API + "?" + p.toString(), {
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error("SAM API " + res.status + ": " + body.slice(0, 200));
+  const url = SAM_API + "?" + p.toString();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    throw new Error(e.name === "AbortError" ? "SAM API timeout (30s)" : e.message);
   }
-  const data = await res.json();
+  clearTimeout(timer);
+
+  const body = await res.text();
+  if (!res.ok) throw new Error("SAM API " + res.status + ": " + body.slice(0, 300));
+
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new Error("SAM API non-JSON response: " + body.slice(0, 200));
+  }
+
   return {
     opps:  data.opportunitiesData || [],
     total: data.totalRecords      || 0,
@@ -84,9 +103,8 @@ async function fetchSamSols({ lookbackDays = 3, fscLanes = [] } = {}) {
   from.setDate(from.getDate() - lookbackDays);
 
   const baseParams = {
-    ptype:      "o,k",   // o=Solicitation, k=Combined Synopsis/Solicitation
     active:     "Yes",
-    deptname:   "Defense Logistics Agency",
+    organizationName: "DEFENSE LOGISTICS AGENCY",
     postedFrom: samDate(from),
     postedTo:   samDate(now),
   };
