@@ -547,17 +547,21 @@ async function fetchSolDetails(sol) {
       buffer = await fetchSamPdf(sol);
     }
 
-    // Path 2: DIBBS daily listing already gave us the exact PDF URL — use it directly
-    // Only reached if not running on Railway or DIBBS becomes accessible
+    // Path 2: DIBBS daily listing gave us the exact PDF URL
+    // (Only reached when SOL_SOURCE=dibbs and DIBBS is not WAF-blocked)
     if (!buffer && sol.pdf_direct_url) {
       buffer = await fetchPdfFromUrl(sol.pdf_direct_url, sol_number);
     }
 
-    // Path 3: Last resort — public DIBBS record page + dibbs2 banner
+    // If no PDF found from any source, skip gracefully
     if (!buffer) {
-      buffer = await fetchPdfBuffer(sol_number);
+      info(sol_number + " — no PDF from any source, using SAM metadata only");
+      return { ...sol, pdf_parsed: false };
     }
+
     const parsed = await pdfParse(buffer);
+    // Dump first 400 chars of extracted text so we can tune field regexes if needed
+    info(sol_number + " PDF text[0:400]: " + (parsed.text || "").replace(/\s+/g, " ").slice(0, 400));
     const fields = parsePdfText(parsed.text, sol_number, nsn, fsc);
     info("✅ " + sol_number + " — " + (fields.item_name || "no item name") + " | $" + (fields.unit_price || "?") + " | qty " + (fields.quantity || "?"));
     return { ...sol, ...fields };
