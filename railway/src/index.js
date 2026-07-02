@@ -288,19 +288,20 @@ async function runPipeline() {
   // quantity   — vendors must know how many units to price
   // quote_due  — vendors must know the deadline
   // item_name or nsn — at least one identifier so they know what they're quoting
+  const heldSols  = [];
   const readySols = blastSols.filter(s => {
     const missing = [];
-    if (!s.quantity)                   missing.push("quantity");
-    if (!s.quote_due)                  missing.push("quote_due");
-    if (!s.item_name)                  missing.push("item_name");
+    if (!s.quantity)  missing.push("quantity");
+    if (!s.quote_due) missing.push("quote_due");
+    if (!s.item_name) missing.push("item_name");
     if (missing.length) {
       log("⛔ " + s.sol_number + " held — missing: " + missing.join(", "));
+      heldSols.push({ ...s, _missing: missing });
       return false;
     }
     return true;
   });
-  const heldCount = blastSols.length - readySols.length;
-  if (heldCount) log("Held " + heldCount + " sol(s) from blast — incomplete data");
+  if (heldSols.length) log("Held " + heldSols.length + " sol(s) from blast — incomplete data");
   log("Blast-ready: " + readySols.length + " sols");
 
   let blastResult = { sent: 0, failed: 0, log: [] };
@@ -442,6 +443,7 @@ async function runPipeline() {
       watchHits,
       errors,
       runDate,
+      heldSols,
     });
   } catch (e) {
     err("Summary email failed:", e.message);
