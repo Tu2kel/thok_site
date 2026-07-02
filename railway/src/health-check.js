@@ -81,16 +81,18 @@ async function checkAnthropic() {
 async function checkResend() {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { ok: false, msg: "RESEND_API_KEY not set" };
+  if (!key.startsWith("re_")) return { ok: false, msg: "Key format invalid (expected re_...)" };
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 10000);
-    const res = await fetch("https://api.resend.com/domains", {
+    // /emails endpoint works with send-only keys; /domains requires domain permissions
+    const res = await fetch("https://api.resend.com/emails?limit=1", {
       headers: { Authorization: "Bearer " + key },
       signal: ctrl.signal,
     });
     clearTimeout(t);
-    if (res.status === 401) return { ok: false, msg: "API key invalid" };
-    return res.ok ? { ok: true, msg: "Key valid" } : { ok: false, msg: "HTTP " + res.status };
+    if (res.status === 401 || res.status === 403) return { ok: false, msg: "API key invalid or unauthorized" };
+    return (res.ok || res.status === 200) ? { ok: true, msg: "Key valid" } : { ok: false, msg: "HTTP " + res.status };
   } catch (e) {
     return { ok: false, msg: e.name === "AbortError" ? "Timeout (10s)" : e.message };
   }
