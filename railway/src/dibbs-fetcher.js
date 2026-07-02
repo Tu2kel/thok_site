@@ -116,8 +116,13 @@ async function acceptBannerAndGetCookie(targetPdfUrl) {
   info("Banner HTML: " + (bannerHtml || "").length + " chars | hasVS: " + hasForm + " | GET cookies: " + getCookies.length);
 
   if (!hasForm) {
-    info("No VIEWSTATE in banner — sol may not exist on DIBBS2");
-    return getCookies;
+    // DIBBS2 returned a tiny error page (~245 chars) instead of the warning banner.
+    // This means the PDF path doesn't exist on DIBBS2 — not a session issue.
+    // Throw a typed error so fetchSolDetails can skip silently without retrying.
+    info("No VIEWSTATE (" + (bannerHtml || "").length + " chars) — PDF not on DIBBS2, skipping");
+    const e = new Error("PDF_NOT_ON_DIBBS2");
+    e.notOnDibbs = true;
+    throw e;
   }
 
   // Extract ALL hidden input fields — handles chunked VIEWSTATE (__VIEWSTATE_0 etc.)
@@ -185,7 +190,16 @@ async function ensureSession(targetUrl) {
       .then(c  => { _sessionCookie = c; _sessionPromise = null; return c; })
       .catch(e => { _sessionPromise = null; throw e; });
   }
-  return _sessionPromise;
+  // If the shared promise fails because THAT specific PDF isn't on DIBBS2,
+  // other concurrent callers should try their own URL independently — their
+  // PDFs might exist even though the first one didn't.
+  return _sessionPromise.catch(e => {
+    if (e.notOnDibbs) {
+      return acceptBannerAndGetCookie(targetUrl)
+        .then(c => { _sessionCookie = c; return c; });
+    }
+    throw e;
+  });
 }
 
 // Download PDF buffer for a sol number
@@ -408,6 +422,10 @@ async function fetchSolDetails(sol) {
     info("✅ " + sol_number + " — " + (fields.item_name || "no item name") + " | $" + (fields.unit_price || "?") + " | qty " + (fields.quantity || "?"));
     return { ...sol, ...fields };
   } catch (e) {
+    if (e.notOnDibbs) {
+      // SAM-sourced sol has no RFQ PDF on DIBBS2 — silent skip, use SAM metadata
+      return { ...sol, pdf_parsed: false };
+    }
     fail(sol_number + " PDF failed: " + e.message + " — using email data only");
     return { ...sol, pdf_parsed: false };
   }

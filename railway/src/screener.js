@@ -27,8 +27,9 @@ function info(...a) { console.log("[screener]", ...a); }
 async function screenBatch(sols) {
   if (!sols.length) return [];
 
-  // Batch in groups of 40 to stay under Claude context limits
-  const BATCH = 40;
+  // 25 per batch: each verdict is ~100 tokens → 25 × 100 = 2500 + overhead ≪ 8192 limit
+  // 40 was too large: responses got cut off mid-JSON → /\[...\]/ failed → 0 results
+  const BATCH = 25;
   const results = [];
 
   for (let i = 0; i < sols.length; i += BATCH) {
@@ -54,13 +55,15 @@ async function screenBatch(sols) {
     try {
       const msg = await client.messages.create({
         model:      "claude-sonnet-4-6",
-        max_tokens: 4096,
+        max_tokens: 8192,
         system:     SYSTEM,
         messages:   [{ role: "user", content: "Analyze these solicitations:\n" + prompt }],
       });
 
       const text = msg.content[0]?.text || "[]";
-      const parsed = JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] || "[]");
+      const match = text.match(/\[[\s\S]*\]/);
+      if (!match) info("⚠ Claude response had no JSON array — raw: " + text.slice(0, 200));
+      const parsed = JSON.parse(match?.[0] || "[]");
       results.push(...parsed);
       info("Batch complete — " + parsed.length + " results");
     } catch (e) {

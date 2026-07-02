@@ -75,6 +75,10 @@ function mapOpp(opp) {
   if (!solNum) return null;
   // DLA sol numbers: SPE... or SPRRA / SPRBL / SP450 etc.
   if (!/^SP[A-Z0-9]/i.test(solNum)) return null;
+  // DIBBS2 RFQ PDF filenames are alphanumeric only — hyphens/underscores mean
+  // it's a contract award (F/D/C type), IDIQ modification, or task order, none
+  // of which have RFQ PDFs at the Downloads/RFQ/X/ path.
+  if (/[-_]/.test(solNum)) return null;
 
   const title   = (opp.title || "").trim();
   const nsn     = extractNsn(title) || extractNsn(opp.description || "");

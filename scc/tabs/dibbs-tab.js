@@ -1316,11 +1316,32 @@
         try {
           const tr = await fetch(getAgentUrl() + "/trigger", { method: "POST", signal: AbortSignal.timeout(15000) });
           const td = await tr.json().catch(() => ({}));
-          if (td.already_running) {
+          if (td.ok === false && td.error === "Pipeline already running") {
             addLog("⚠ Pipeline already running — wait for current run to finish.", "warn");
-          } else {
-            addLog("✅ Railway pipeline started. Check Railway logs or wait for the summary email.", "ok");
+            setRunning(false);
+            return;
           }
+          addLog("✅ Railway pipeline started (SAM → PDF → screen → blast). Polling for completion…", "ok");
+
+          // Poll /health every 30s until pipeline finishes, then log result
+          const pollStart = Date.now();
+          const pollHandle = setInterval(async () => {
+            try {
+              const hr = await fetch(getAgentUrl() + "/health");
+              const hd = await hr.json().catch(() => ({}));
+              const elapsedMin = Math.round((Date.now() - pollStart) / 60000);
+              if (!hd.running) {
+                clearInterval(pollHandle);
+                if (hd.last_run_ok === false) {
+                  addLog("❌ Pipeline finished with errors after " + elapsedMin + " min — check Railway logs.", "err");
+                } else {
+                  addLog("✅ Pipeline complete (" + elapsedMin + " min) — check summary email for blast results.", "ok");
+                }
+              } else {
+                addLog("⟳ Pipeline running… " + elapsedMin + " min elapsed", "info");
+              }
+            } catch {}
+          }, 30000);
         } catch (e) {
           addLog("Trigger error: " + e.message, "err");
         }
