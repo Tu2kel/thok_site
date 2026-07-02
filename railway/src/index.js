@@ -27,6 +27,9 @@ const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabl
 const SKIP_FSCS = new Set(
   (process.env.SKIP_FSCS || "5305,5306,5307,5310,5315,5320,5325,5330").split(",").map(s => s.trim()).filter(Boolean)
 );
+// Minimum estimated order value — sols below this are skipped (0 = disabled).
+// ext_price = hist_price × qty from PDF. If no price data, sol passes through.
+const MIN_ORDER_VALUE = parseInt(process.env.MIN_ORDER_VALUE || "10000", 10) || 0;
 
 // Fix #6: hoisted to module scope so runPipeline and blast-existing stay in sync
 const SKIP_SET_ASIDES   = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
@@ -64,7 +67,7 @@ async function runPipeline() {
     log("Fetching DLA solicitations from DIBBS daily listing…");
     let dibbsDailySols = [];
     try {
-      dibbsDailySols = await fetchDibbsDailySols({ lookbackDays: 3 });
+      dibbsDailySols = await fetchDibbsDailySols({ lookbackDays: 1 });
     } catch (e) {
       err("DIBBS daily fetch failed:", e.message);
       errors.push("DIBBS daily: " + e.message);
@@ -180,9 +183,19 @@ async function runPipeline() {
   const skipped   = dnsFscFiltered.length - freshSols.length;
   if (skipped) log("Skipped " + skipped + " already-acted sols");
 
-  if (!freshSols.length) {
+  // Drop sub-minimum orders — focus on $10k+ opportunities.
+  // AN/MS/NAS parts already passed the FSC filter and are included here.
+  // If ext_price is null (PDF not parsed), let the sol through — we can't filter what we don't know.
+  const valuedSols = MIN_ORDER_VALUE > 0 ? freshSols.filter(s => {
+    if (s.ext_price == null) return true;
+    return s.ext_price >= MIN_ORDER_VALUE;
+  }) : freshSols;
+  const valueDrop = freshSols.length - valuedSols.length;
+  if (valueDrop) log("Dropped " + valueDrop + " sols under $" + MIN_ORDER_VALUE.toLocaleString() + " (ext_price)");
+
+  if (!valuedSols.length) {
     log("No new sols — sending summary");
-    await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: rawSols.length, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: "All sols already acted on", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
+    await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: rawSols.length, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: "All sols already acted on or below min value", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
     await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, errors, runDate });
     return;
   }
@@ -191,7 +204,7 @@ async function runPipeline() {
   log("Checking NSN watch list…");
   const watchList = await getNsnWatchList(db);
   log("Watch list: " + watchList.length + " NSNs");
-  const { watchHits, unwatched } = checkWatchList(freshSols, watchList);
+  const { watchHits, unwatched } = checkWatchList(valuedSols, watchList);
 
   // ── 5. Claude screening (only unwatched sols) ─────────────────────────
   let screenResults = [];
@@ -375,7 +388,7 @@ async function runPipeline() {
   await saveDailyBrief(db, {
     run_date:     new Date().toLocaleDateString("en-US"),
     total_sols:   rawSols.length,
-    fresh_sols:   freshSols.length,
+    fresh_sols:   valuedSols.length,
     go_count:     allScreened.filter(s => s.verdict === "GO").length,
     verify_count: allScreened.filter(s => s.verdict === "VERIFY FIRST").length,
     reject_count: allScreened.filter(s => s.verdict === "REJECT").length,
