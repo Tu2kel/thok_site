@@ -277,15 +277,19 @@ function parsePdfText(text, sol_number, nsn, fsc) {
 
   // ── Item name ──────────────────────────────────────────────────────────
   // DLA NSN names use commas not spaces (SCREW,MACHINE / VALVE,CHECK).
-  // DLA prints the name twice: compact then spaced-out ("SCREW, MACHINE").
-  // Stopping at the first space captures only the compact form — no dedup needed.
-  const itemName = extract(/ITEM DESCRIPTION\s+([A-Z][A-Z0-9,\-\.\/]+)/i)
-    || extract(/NOMENCLATURE[:\s]+([A-Z][A-Z0-9,\-]+)/i)
-    || extract(/ITEM NAME[:\s]+([A-Z][A-Z0-9,\-]+)/i);
+  // Require at least one comma or 4+ chars so single generic words ("ONLY",
+  // "FURNISHED") don't match — those appear in form boilerplate near labels.
+  const itemName = extract(/ITEM DESCRIPTION\s+([A-Z][A-Z0-9,\-\.\/]*,[A-Z0-9,\-\.\/]+)/i)
+    || extract(/NOMENCLATURE[:\s]+([A-Z][A-Z0-9,\-]{3,})/i)
+    || extract(/DESCRIPTION OF SUPPLIES[\/\s]+SERVICES[:\s]+([A-Z][A-Z0-9,\-\.\/]{3,})/i)
+    || extract(/ITEM NAME[:\s]+([A-Z][A-Z0-9,\-]{3,})/i);
 
   // ── Quantity ───────────────────────────────────────────────────────────
-  // CLIN table: "UI QUANTITY UNIT PRICE ... EA 1.000"
-  const qty = extract(/\bEA\s+([\d,]+)(?:\.\d+)?\s/i)
+  // DLA CLIN tables print quantity before the unit: "500.000 EA"
+  // SF-18 header block prints it after: "EA 500"
+  // Both formats appear depending on whether the PDF came from SAM or DIBBS.
+  const qty = extract(/([\d,]+(?:\.\d+)?)\s+(?:EA|EACH)\b/i)   // "500.000 EA" — CLIN format
+    || extract(/\bEA\s+([\d,]+)(?:\.\d+)?/i)                   // "EA 500" — header format
     || extract(/\bQUANTITY[:\s]+([\d,]+)/i)
     || extract(/\bQTY[:\s]+([\d,]+)/i);
 
