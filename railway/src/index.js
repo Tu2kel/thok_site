@@ -99,7 +99,10 @@ async function runPipeline() {
   const alreadyActed = await getAlreadyActedSols(db);
   const dnsFscFiltered = rawSols.filter(s => {
     const fsc = String(s.fsc || (s.nsn || "").slice(0, 4));
-    return !SKIP_FSCS.has(fsc);
+    if (!SKIP_FSCS.has(fsc)) return true;
+    // AN/MS/NAS parts are in fastener FSCs but route to approved-manufacturer vendors — keep them
+    const pn = (s.ref_part_number || "").trim().toUpperCase();
+    return /^(AN|MS|NAS)[\d-]/.test(pn);
   });
   const dnsDrop = rawSols.length - dnsFscFiltered.length;
   if (dnsDrop) log("Dropped " + dnsDrop + " sols in DNS FSC lanes (" + [...SKIP_FSCS].join(",") + ")");
