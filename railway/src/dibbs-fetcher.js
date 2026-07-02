@@ -33,74 +33,103 @@ async function ft(url, opts = {}, timeoutMs = 30000) {
   }
 }
 
-// Parse all Set-Cookie headers into a flat cookie string
+// Parse all Set-Cookie headers — use getSetCookie() (Node 18.14+) for correctness
 function parseCookies(res) {
-  const raw = res.headers.get("set-cookie");
-  if (!raw) return "";
-  return raw.split(/,(?=\s*[A-Za-z_][A-Za-z0-9_-]+=)/)
-    .map(c => c.split(";")[0].trim())
-    .filter(Boolean)
-    .join("; ");
+  const headers = typeof res.headers.getSetCookie === "function"
+    ? res.headers.getSetCookie()
+    : (res.headers.get("set-cookie") || "").split(/,(?=\s*[A-Za-z_][A-Za-z0-9_-]+=)/);
+  return headers.map(c => c.split(";")[0].trim()).filter(Boolean).join("; ");
+}
+
+// Merge cookie strings — later values override same-name keys
+function mergeCookies(base, incoming) {
+  const map = new Map();
+  for (const c of (base || "").split("; ").filter(Boolean)) {
+    const k = c.split("=")[0]; if (k) map.set(k, c);
+  }
+  for (const c of (incoming || "").split("; ").filter(Boolean)) {
+    const k = c.split("=")[0]; if (k) map.set(k, c);
+  }
+  return [...map.values()].join("; ");
 }
 
 // Accept DoD banner via plain fetch — no browser required.
-// Strategy: hit dodwarning.aspx directly (the known banner form page) to get a
-// fresh VIEWSTATE, then POST butAgree=OK. Never relies on the PDF URL returning
-// the form inline (that page's HTML structure varies and can omit the form).
+// GET dodwarning.aspx to get VIEWSTATE, POST butAgree=OK with redirect:manual
+// to capture the session cookie set on the 302 response (lost if we auto-follow).
 async function acceptBannerAndGetCookie(targetPdfUrl) {
   info("Accepting DoD banner via fetch (no browser)…");
 
-  // Build the dodwarning.aspx URL for this PDF path.
-  // Form action confirmed from live HTML: /dodwarning.aspx?goto=<pdfPath>
-  const pdfPath    = new URL(targetPdfUrl).pathname; // e.g. /Downloads/RFQ/C/SPE4A726T529C.PDF
-  const bannerUrl  = DIBBS2_BASE + "/dodwarning.aspx?goto=" + encodeURIComponent(pdfPath.toLowerCase());
+  // dodwarning.aspx?goto= is the DIBBS2 banner form page — use original-case path
+  const pdfPath   = new URL(targetPdfUrl).pathname;
+  const bannerUrl = DIBBS2_BASE + "/dodwarning.aspx?goto=" + encodeURIComponent(pdfPath);
 
-  // Step 1: GET the banner form page directly
-  const res1 = await ft(bannerUrl, { headers: { "User-Agent": UA, Accept: "text/html,*/*" } });
+  // Step 1: GET banner form — follow redirects to get final HTML
+  const res1 = await ft(bannerUrl, {
+    headers: { "User-Agent": UA, Accept: "text/html,*/*" },
+    redirect: "follow",
+  });
   let cookies = parseCookies(res1);
   const bannerHtml = await res1.text();
 
   info("Banner HTML: " + bannerHtml.length + " chars | hasForm: " + bannerHtml.includes("<form") + " | hasVS: " + bannerHtml.includes("__VIEWSTATE"));
 
-  // Parse ASP.NET WebForms hidden fields
+  if (!bannerHtml.includes("__VIEWSTATE")) {
+    info("No VIEWSTATE — sol may not exist on DIBBS2, skipping banner");
+    return cookies || "";
+  }
+
   const qs = (id) => {
     const m = bannerHtml.match(new RegExp('id="' + id + '"[^>]*value="([^"]*)"', "i"))
            || bannerHtml.match(new RegExp('name="' + id + '"[^>]*value="([^"]*)"', "i"))
-           || bannerHtml.match(new RegExp('value="([^"]*)"[^>]*id="' + id + '"', "i"));
+           || bannerHtml.match(new RegExp('value="([^"]*)"[^>]*(?:id|name)="' + id + '"', "i"));
     return m ? m[1] : "";
   };
   const viewstate = qs("__VIEWSTATE");
   const vsgen     = qs("__VIEWSTATEGENERATOR");
   const evval     = qs("__EVENTVALIDATION");
 
-  info("VIEWSTATE: " + viewstate.length + "chars | POST target: " + bannerUrl);
+  info("VIEWSTATE: " + viewstate.length + "chars");
 
-  // Step 2: POST butAgree=OK back to the same dodwarning.aspx URL
-  const body = new URLSearchParams({
-    __VIEWSTATE:          viewstate,
-    __VIEWSTATEGENERATOR: vsgen,
-    __EVENTVALIDATION:    evval,
-    __EVENTTARGET:        "",
-    __EVENTARGUMENT:      "",
-    butAgree:             "OK",
-  });
-
+  // Step 2: POST butAgree=OK — redirect:manual so we capture the 302 Set-Cookie
+  // Auto-follow would give us the PDF response headers (no Set-Cookie), losing the session marker
   const res2 = await ft(bannerUrl, {
-    method:  "POST",
+    method:   "POST",
+    redirect: "manual",
     headers: {
       "User-Agent":   UA,
       "Content-Type": "application/x-www-form-urlencoded",
       "Referer":      bannerUrl,
       Cookie:         cookies,
     },
-    body: body.toString(),
+    body: new URLSearchParams({
+      __VIEWSTATE:          viewstate,
+      __VIEWSTATEGENERATOR: vsgen,
+      __EVENTVALIDATION:    evval,
+      __EVENTTARGET:        "",
+      __EVENTARGUMENT:      "",
+      butAgree:             "OK",
+    }).toString(),
   });
 
-  const moreCookies = parseCookies(res2);
-  if (moreCookies) cookies = [cookies, moreCookies].filter(Boolean).join("; ");
+  const postCookies = parseCookies(res2);
+  cookies = mergeCookies(cookies, postCookies);
+  info("POST status: " + res2.status + " | session cookie chars: " + cookies.length);
 
-  info("POST response: " + res2.status + " | cookie chars: " + cookies.length);
-  info("✅ DoD banner accepted — session ready");
+  // If POST redirected (expected 302 → PDF), follow manually to pick up any extra cookies
+  if (res2.status >= 300 && res2.status < 400) {
+    const loc = res2.headers.get("location");
+    if (loc) {
+      const absLoc = loc.startsWith("http") ? loc : DIBBS2_BASE + loc;
+      info("POST → redirect: " + absLoc);
+      const res3 = await ft(absLoc, {
+        headers: { "User-Agent": UA, Cookie: cookies },
+        redirect: "manual",
+      });
+      cookies = mergeCookies(cookies, parseCookies(res3));
+    }
+  }
+
+  info("✅ DoD banner accepted — " + cookies.length + " cookie chars");
   return cookies;
 }
 
