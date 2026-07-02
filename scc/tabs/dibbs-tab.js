@@ -2396,11 +2396,15 @@
                       "NSN",
                       "FSC",
                       "Item",
+                      "P/N",
                       "Qty",
                       "Unit $",
                       "Ext $",
                       "Quote Due",
+                      "Del Days",
+                      "Ship To",
                       "Set-Aside",
+                      "PDF",
                     ].map((col) =>
                       h(
                         "th",
@@ -2535,13 +2539,28 @@
                             style: {
                               padding: "5px 10px",
                               color: "var(--alabaster)",
-                              maxWidth: "240px",
+                              maxWidth: "200px",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                             },
                           },
                           s.item_name || "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            title: s.ref_part_number || "",
+                            style: {
+                              padding: "5px 10px",
+                              color: "rgba(100,181,246,.75)",
+                              maxWidth: "130px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          s.ref_part_number || "—",
                         ),
                         h(
                           "td",
@@ -2554,7 +2573,7 @@
                           },
                           s.qty
                             ? s.qty + (s.unit_issue ? " " + s.unit_issue : "")
-                            : "—",
+                            : (s.quantity ? s.quantity + " EA" : "—"),
                         ),
                         h(
                           "td",
@@ -2597,7 +2616,48 @@
                               color: "var(--body-faint)",
                             },
                           },
-                          s.set_aside || "—",
+                          s.set_aside ? s.set_aside.replace("Set-Aside","SA") : "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            style: {
+                              padding: "5px 10px",
+                              color: "var(--body-faint)",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          s.delivery_days ? s.delivery_days + "d" : "—",
+                        ),
+                        h(
+                          "td",
+                          {
+                            title: [s.ship_to_name, s.ship_to_street, s.ship_to_csz].filter(Boolean).join(" · "),
+                            style: {
+                              padding: "5px 10px",
+                              color: "rgba(245,240,232,.5)",
+                              maxWidth: "180px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            },
+                          },
+                          s.ship_to_name
+                            ? s.ship_to_name + (s.ship_to_csz ? "  " + s.ship_to_csz : "")
+                            : (s.fob ? "FOB " + s.fob : "—"),
+                        ),
+                        h(
+                          "td",
+                          {
+                            title: s.pdf_parsed ? "PDF parsed ✓" : "PDF not parsed — SAM metadata only",
+                            style: {
+                              padding: "5px 10px",
+                              textAlign: "center",
+                              color: s.pdf_parsed ? "rgba(61,214,140,.8)" : "rgba(245,240,232,.2)",
+                              fontSize: "12px",
+                            },
+                          },
+                          s.pdf_parsed ? "✓" : "—",
                         ),
                       );
                     }),

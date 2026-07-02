@@ -81,9 +81,11 @@ async function runPipeline() {
       await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
       return;
     }
-    log("SAM returned " + samSols.length + " sols — using SAM metadata for blast (PDFs enriched async)");
-    rawSols = samSols; // blast uses SAM stubs; PDFs are fetched in background after emails go out
-    scrapeResult = { counts: { total: rawSols.length, pass1: samSols.length, pass2: 0, pass3: 0 } };
+    log("SAM returned " + samSols.length + " sols — fetching DIBBS PDFs (ship-to, pricing, packaging)…");
+    rawSols = await fetchAllSolDetails(samSols);
+    const pdfOk = rawSols.filter(s => s.pdf_parsed).length;
+    log("PDF fetch complete — " + pdfOk + "/" + rawSols.length + " parsed");
+    scrapeResult = { counts: { total: rawSols.length, pass1: samSols.length, pass2: pdfOk, pass3: 0 } };
 
   } else if (SOL_SOURCE === "email") {
     // DLA emails → Gmail → PDF parse
@@ -273,9 +275,9 @@ async function runPipeline() {
     }
   }
 
-  // ── 7b. Background PDF enrichment (SAM mode only) ────────────────────
-  // Blast is done — now go fetch the PDFs. This runs in the background so it
-  // doesn't delay the summary email or block the next pipeline cron.
+  // ── 7b. Background PDF retry (SAM mode, failed PDFs only) ────────────
+  // PDFs already fetched above — only retry the ones that failed banner/parse.
+  // Runs after blast so DIBBS2 latency doesn't delay vendor emails.
   if (SOL_SOURCE === "sam" && allScreened.length) {
     const toEnrich = allScreened.filter(s => !s.pdf_parsed);
     if (toEnrich.length) {
