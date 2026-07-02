@@ -83,7 +83,7 @@ function buildBodyForSender(vendor, sols, sender) {
       s.ref_part_number
         ? "  Part Number:   " + s.ref_part_number + (s.manufacturer_cage ? "  (Mfr CAGE: " + s.manufacturer_cage + ")" : "")
         : null,
-      "  Quantity:      " + (s.quantity || s.qty || "—"),
+      "  Quantity:      " + (s.quantity || s.qty || "Per RFQ (see Ref # below)"),
       s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
       dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       fobStr             ? "  Shipping:      " + fobStr : null,

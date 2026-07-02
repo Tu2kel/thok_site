@@ -283,17 +283,17 @@ async function runPipeline() {
   const blastSols = allScreened.filter(s => s.verdict !== "REJECT" && s.winProbabilityPct >= 50);
   log("Blast-eligible (pre-gate): " + blastSols.length + " sols");
 
-  // Quality gate: block any sol missing data vendors need to actually quote.
-  // Sending a vague RFQ with no item name or quantity is worse than not sending.
-  // quantity   — vendors must know how many units to price
-  // quote_due  — vendors must know the deadline
-  // item_name or nsn — at least one identifier so they know what they're quoting
+  // Quality gate: block any sol missing the minimum data vendors need to quote.
+  // Hard blocks: item_name (they must know WHAT to price) + quote_due (they must know the deadline).
+  // Quantity is NOT a hard block — SAM API never provides it and ~60% of sols have no PDF attachment.
+  // Missing quantity shows as "Per RFQ" in the vendor email body, which is professional and actionable.
   const heldSols  = [];
   const readySols = blastSols.filter(s => {
     const missing = [];
-    if (!s.quantity)  missing.push("quantity");
     if (!s.quote_due) missing.push("quote_due");
     if (!s.item_name) missing.push("item_name");
+    // Track missing quantity as advisory only — does not block blast
+    if (!s.quantity && !s.qty) s._missing_qty = true;
     if (missing.length) {
       log("⛔ " + s.sol_number + " held — missing: " + missing.join(", "));
       heldSols.push({ ...s, _missing: missing });
