@@ -1286,6 +1286,7 @@
       addLog("Checking agent…", "info");
 
       // Health check
+      let agentMode = "local";
       try {
         const hRes = await fetch(getAgentUrl() + "/health", {
           signal: AbortSignal.timeout(4000),
@@ -1293,7 +1294,7 @@
         const hData = await hRes.json();
         if (!hData.ok) throw new Error("Agent not ready");
         setAgentAlive(true);
-        if (hData.mode) setAgentMeta(hData);
+        if (hData.mode) { setAgentMeta(hData); agentMode = hData.mode; }
         addLog("Agent online ✓" + (hData.mode === "railway" ? " (Railway)" : " (local)"), "ok");
       } catch (e) {
         setAgentAlive(false);
@@ -1304,6 +1305,24 @@
           addLog("Tip: If Railway handles your daily runs, set the Railway URL: SCC_AGENT.setAgentUrl('https://your-app.up.railway.app')", "info");
         } else {
           addLog("Railway agent unreachable at " + url + " — check Railway dashboard for deployment status.", "err");
+        }
+        setRunning(false);
+        return;
+      }
+
+      // Railway agent — POST /trigger (SAM → PDF → Claude → blast), no Navigator scrape
+      if (agentMode === "railway") {
+        addLog("Triggering Railway pipeline — SAM fetch → PDF parse → Claude screen → blast…", "info");
+        try {
+          const tr = await fetch(getAgentUrl() + "/trigger", { method: "POST", signal: AbortSignal.timeout(15000) });
+          const td = await tr.json().catch(() => ({}));
+          if (td.already_running) {
+            addLog("⚠ Pipeline already running — wait for current run to finish.", "warn");
+          } else {
+            addLog("✅ Railway pipeline started. Check Railway logs or wait for the summary email.", "ok");
+          }
+        } catch (e) {
+          addLog("Trigger error: " + e.message, "err");
         }
         setRunning(false);
         return;
