@@ -104,7 +104,18 @@ async function runPipeline() {
   const dnsDrop = rawSols.length - dnsFscFiltered.length;
   if (dnsDrop) log("Dropped " + dnsDrop + " sols in DNS FSC lanes (" + [...SKIP_FSCS].join(",") + ")");
 
-  const freshSols = dnsFscFiltered.filter(s => !alreadyActed.has(s.sol_number));
+  // Hard-skip: set-aside categories IFL can't bid on, and locked supplier restrictions
+  const SKIP_SET_ASIDES    = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
+  const SKIP_RESTRICTIONS  = new Set(["Sole Source", "Source Control"]);
+  const bidableFiltered = dnsFscFiltered.filter(s => {
+    if (s.set_aside        && SKIP_SET_ASIDES.has(s.set_aside))        return false;
+    if (s.supplier_restrictions && SKIP_RESTRICTIONS.has(s.supplier_restrictions)) return false;
+    return true;
+  });
+  const setAsideDrop = dnsFscFiltered.length - bidableFiltered.length;
+  if (setAsideDrop) log("Dropped " + setAsideDrop + " sols — restricted set-aside or locked supplier");
+
+  const freshSols = bidableFiltered.filter(s => !alreadyActed.has(s.sol_number));
   const skipped   = dnsFscFiltered.length - freshSols.length;
   if (skipped) log("Skipped " + skipped + " already-acted sols");
 
