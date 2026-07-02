@@ -364,6 +364,71 @@ const httpServer = http.createServer((req, res) => {
 
   const u = req.url.split("?")[0];
 
+  // Blast sols already in MongoDB — bypasses SAM fetch + PDF parse entirely.
+  // Use when sols are already stored but haven't been emailed yet.
+  if (u === "/blast-existing" && req.method === "POST") {
+    if (pipelineRunning) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Pipeline already running" }));
+      return;
+    }
+    res.writeHead(202, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, message: "Blast-existing triggered" }));
+    log("Blast-existing triggered via HTTP");
+
+    (async () => {
+      pipelineRunning = true;
+      try {
+        const db   = await getDb();
+        const dists = await getDistributors(db);
+        log("Blast-existing: distributor DB — " + dists.length + " vendors");
+
+        // Pull GO/VERIFY sols not yet blasted (status = New or screened but unsent)
+        const SKIP_SET_ASIDES   = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
+        const SKIP_RESTRICTIONS = new Set(["Sole Source", "Source Control"]);
+        const existing = await db.collection("solicitations").find({
+          status:  { $nin: ["Awaiting Quotes", "Bid Submitted", "Awarded", "Lost", "Outreach"] },
+          verdict: { $in: ["GO", "VERIFY FIRST", null, ""] },
+        }).toArray();
+
+        const blastSols = existing.filter(s => {
+          if (s.set_aside        && SKIP_SET_ASIDES.has(s.set_aside))        return false;
+          if (s.supplier_restrictions && SKIP_RESTRICTIONS.has(s.supplier_restrictions)) return false;
+          return true;
+        });
+
+        log("Blast-existing: " + blastSols.length + " eligible sols from MongoDB");
+
+        if (!blastSols.length) {
+          log("Blast-existing: nothing to send");
+          lastRunOk = true;
+          return;
+        }
+
+        const plan = buildBlastPlan(blastSols, dists);
+        log("Blast-existing: plan = " + plan.length + " vendors");
+
+        if (plan.length) {
+          const result = await runBlast(plan, { isLive: IS_LIVE, fromAddress: "kelley.anthonyk@gmail.com" }, db);
+          log("Blast-existing complete: " + result.sent + " sent, " + result.failed + " failed");
+          for (const entry of plan) {
+            for (const sol of entry.sols) {
+              await saveSol(db, { sol_number: sol.sol_number, status: "Awaiting Quotes" }).catch(() => {});
+            }
+          }
+        }
+        lastRunOk = true;
+      } catch (e) {
+        err("Blast-existing error:", e.message);
+        lastRunOk = false;
+      } finally {
+        lastRunAt = Date.now();
+        pipelineRunning = false;
+      }
+    })();
+    return;
+  }
+
   if (u === "/health-check" && req.method === "GET") {
     getDb().then(async (mdb) => {
       const result = await runHealthCheck(mdb, { emailOnFailure: false });
