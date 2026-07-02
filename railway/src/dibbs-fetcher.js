@@ -464,30 +464,72 @@ async function fetchPdfFromUrl(pdfLink, sol_number) {
   return Buffer.from(await res2.arrayBuffer());
 }
 
-// Try downloading a PDF directly from SAM.gov resource links (captured from API response).
-// Many modern DLA solicitations store their PDFs on SAM.gov, not DIBBS2.
+// Download PDF via SAM.gov API — avoids DIBBS entirely.
+// DIBBS (both www and dibbs2 subdomains) blocks Railway datacenter IPs via WAF.
+// SAM API is designed for programmatic access and works from any IP.
+//
+// Path A: try resourceLinks captured from the search response (may be populated)
+// Path B: hit the SAM v3 attachments endpoint using the noticeId
+// Path C: hit the SAM v2 attachments endpoint as fallback
 async function fetchSamPdf(sol) {
-  const links = sol.sam_resource_links || [];
-  if (!links.length) return null;
-
   const apiKey = process.env.SAM_API_KEY || "";
+
+  // Path A — resourceLinks from search response
+  const links = sol.sam_resource_links || [];
   for (const link of links) {
     try {
       const sep = link.includes("?") ? "&" : "?";
       const url = link + sep + "api_key=" + encodeURIComponent(apiKey);
-      info("Trying SAM resource: " + link);
-      const res = await ft(url, {
-        headers: { "User-Agent": UA, Accept: "application/pdf,*/*" },
-      }, 30000);
-      if (!res.ok) { info("SAM resource → HTTP " + res.status); continue; }
+      info("SAM resource link: " + link.slice(0, 80));
+      const res = await ft(url, { headers: { "User-Agent": UA, Accept: "application/pdf,*/*" } }, 30000);
+      if (!res.ok) { info("SAM resource → " + res.status); continue; }
       const ct = res.headers.get("content-type") || "";
-      if (!ct.includes("pdf") && !ct.includes("octet")) { info("SAM resource not PDF (content-type: " + ct + ")"); continue; }
-      info("✅ SAM resource PDF for " + sol.sol_number);
+      if (!ct.includes("pdf") && !ct.includes("octet")) { info("SAM resource not PDF (" + ct + ")"); continue; }
+      info("✅ SAM resourceLink PDF for " + sol.sol_number);
       return Buffer.from(await res.arrayBuffer());
-    } catch (e) {
-      info("SAM resource failed: " + e.message);
-    }
+    } catch (e) { info("SAM resource failed: " + e.message); }
   }
+
+  // Path B/C — attachment API using noticeId
+  const noticeId = sol.notice_id || "";
+  if (!noticeId) return null;
+
+  const attachmentEndpoints = [
+    "https://api.sam.gov/prod/opps/v3/opportunities/" + noticeId + "/attachments",
+    "https://api.sam.gov/opportunities/v2/" + noticeId + "/attachments",
+  ];
+
+  for (const endpoint of attachmentEndpoints) {
+    try {
+      const res = await ft(endpoint + "?api_key=" + encodeURIComponent(apiKey), {
+        headers: { Accept: "application/json", "User-Agent": UA },
+      }, 15000);
+      info("SAM attachments [" + endpoint.split("/")[5] + "] → " + res.status);
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      info("SAM attachments response keys: " + Object.keys(data).join(", "));
+
+      const list = data.opportunityAttachments || data.attachments || data.resources || data.files || [];
+      if (!list.length) { info("No attachments for " + noticeId); continue; }
+
+      // Find the PDF
+      const pdf = list.find(a =>
+        (a.filename || a.name || a.fileName || "").toLowerCase().endsWith(".pdf") ||
+        (a.mimeType || a.contentType || "").toLowerCase().includes("pdf")
+      ) || list[0];
+
+      const dlUrl = pdf.downloadUrl || pdf.url || pdf.accessUrl || pdf.href || "";
+      if (!dlUrl) { info("PDF attachment found but no download URL: " + JSON.stringify(pdf).slice(0, 200)); continue; }
+
+      const fullUrl = dlUrl + (dlUrl.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(apiKey);
+      const dlRes = await ft(fullUrl, { headers: { "User-Agent": UA, Accept: "application/pdf,*/*" } }, 30000);
+      if (!dlRes.ok) { info("SAM attachment download → " + dlRes.status); continue; }
+      info("✅ SAM attachment PDF for " + sol.sol_number + " via " + endpoint.split("/")[5]);
+      return Buffer.from(await dlRes.arrayBuffer());
+    } catch (e) { info("SAM attachment endpoint failed: " + e.message); }
+  }
+
   return null;
 }
 
@@ -499,17 +541,19 @@ async function fetchSolDetails(sol) {
   try {
     let buffer = null;
 
-    // Path 1: DIBBS daily listing already gave us the exact PDF URL — use it directly
-    if (sol.pdf_direct_url) {
-      buffer = await fetchPdfFromUrl(sol.pdf_direct_url, sol_number);
-    }
-
-    // Path 2: SAM.gov resource links (captured from SAM API response)
-    if (!buffer && sol.sam_resource_links && sol.sam_resource_links.length) {
+    // Path 1: SAM API attachment download — works from any IP, no DIBBS WAF issue
+    // DIBBS (www + dibbs2) blocks Railway datacenter IPs; SAM API does not.
+    if (sol.notice_id || (sol.sam_resource_links && sol.sam_resource_links.length)) {
       buffer = await fetchSamPdf(sol);
     }
 
-    // Path 3: Discover URL via public DIBBS record page + dibbs2 banner
+    // Path 2: DIBBS daily listing already gave us the exact PDF URL — use it directly
+    // Only reached if not running on Railway or DIBBS becomes accessible
+    if (!buffer && sol.pdf_direct_url) {
+      buffer = await fetchPdfFromUrl(sol.pdf_direct_url, sol_number);
+    }
+
+    // Path 3: Last resort — public DIBBS record page + dibbs2 banner
     if (!buffer) {
       buffer = await fetchPdfBuffer(sol_number);
     }
