@@ -75,20 +75,21 @@ async function acceptBannerAndGetCookie() {
   const evval        = qs("__EVENTVALIDATION");
   const formActionM  = bannerHtml.match(/<form[^>]+action="([^"]+)"/i);
   const formAction   = formActionM ? formActionM[1] : bannerUrl;
-  const absAction    = formAction.startsWith("http") ? formAction : new URL(formAction, DIBBS2_BASE).href;
+  // Resolve relative form action against the actual banner page URL (not just host root)
+  const absAction = formAction.startsWith("http")
+    ? formAction
+    : new URL(formAction, bannerUrl).href;
 
-  // Debug: log banner structure so we can see real form action + button names
-  info("Banner snippet: " + bannerHtml.slice(0, 800).replace(/\s+/g, " "));
-  info("Parsed — formAction: [" + formAction + "] absAction: " + absAction + " VIEWSTATE: " + viewstate.length + "chars EVVAL: " + evval.length + "chars");
+  info("Parsed — formAction: [" + formAction + "] absAction: " + absAction + " VIEWSTATE: " + viewstate.length + "chars");
 
-  // Step 2: POST #butAgree (ASP.NET submit button — name=butAgree included in body)
+  // Step 2: POST #butAgree — button value="OK" (verified from live HTML, NOT "I Agree")
   const body = new URLSearchParams({
     __VIEWSTATE:          viewstate,
     __VIEWSTATEGENERATOR: vsgen,
     __EVENTVALIDATION:    evval,
     __EVENTTARGET:        "",
     __EVENTARGUMENT:      "",
-    butAgree:             "I Agree",
+    butAgree:             "OK",
   });
 
   const res2 = await ft(absAction, {
