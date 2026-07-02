@@ -23,8 +23,11 @@ async function checkSamApi() {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 15000);
+    const today = new Date();
+    const from  = new Date(today); from.setDate(from.getDate() - 3);
+    const fmt   = d => (d.getMonth()+1).toString().padStart(2,"0") + "/" + d.getDate().toString().padStart(2,"0") + "/" + d.getFullYear();
     const res = await fetch(
-      "https://api.sam.gov/opportunities/v2/search?api_key=" + key + "&active=Yes&organizationName=DEFENSE+LOGISTICS+AGENCY&limit=1",
+      "https://api.sam.gov/opportunities/v2/search?api_key=" + key + "&active=Yes&classificationCode=5305&postedFrom=" + fmt(from) + "&postedTo=" + fmt(today) + "&limit=1",
       { headers: { Accept: "application/json" }, signal: ctrl.signal },
     );
     clearTimeout(t);

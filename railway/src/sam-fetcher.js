@@ -25,7 +25,7 @@ async function fetchPage(apiKey, queryParams, offset = 0) {
   const url = SAM_API + "?" + p.toString();
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  const timer = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
   let res;
   try {
@@ -102,9 +102,10 @@ async function fetchSamSols({ lookbackDays = 3, fscLanes = [] } = {}) {
   const from = new Date(now);
   from.setDate(from.getDate() - lookbackDays);
 
+  // No organizationName filter — causes slow full-table scans and timeouts.
+  // classificationCode (FSC) narrows results; DLA sol numbers filtered via SP prefix in mapOpp.
   const baseParams = {
     active:     "Yes",
-    organizationName: "DEFENSE LOGISTICS AGENCY",
     postedFrom: samDate(from),
     postedTo:   samDate(now),
   };
