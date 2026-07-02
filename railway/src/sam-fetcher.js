@@ -35,7 +35,7 @@ async function fetchPage(apiKey, queryParams, offset = 0) {
     });
   } catch (e) {
     clearTimeout(timer);
-    throw new Error(e.name === "AbortError" ? "SAM API timeout (30s)" : e.message);
+    throw new Error(e.name === "AbortError" ? "SAM API timeout (60s)" : e.message);
   }
   clearTimeout(timer);
 

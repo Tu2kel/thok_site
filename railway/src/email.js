@@ -5,18 +5,26 @@ const nodemailer = require("nodemailer");
 const GMAIL_ADDRESS = "kelley.anthonyk@gmail.com";
 const GMAIL_FROM    = "Anthony Kelley | Imperio Federal Logistics <" + GMAIL_ADDRESS + ">";
 
+// Single reused transport — avoids opening a new TCP connection to smtp.gmail.com per email
+let _gmailTransport = null;
+function getGmailTransport() {
+  if (!_gmailTransport) {
+    _gmailTransport = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        type:         "OAuth2",
+        user:         GMAIL_ADDRESS,
+        clientId:     process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+      },
+    });
+  }
+  return _gmailTransport;
+}
+
 async function sendEmailGmail({ to, subject, body }) {
-  const transport = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      type:         "OAuth2",
-      user:         GMAIL_ADDRESS,
-      clientId:     process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-    },
-  });
-  await transport.sendMail({ from: GMAIL_FROM, to, subject, text: body });
+  await getGmailTransport().sendMail({ from: GMAIL_FROM, to, subject, text: body });
 }
 
 // ── Resend ────────────────────────────────────────────────────────────────────

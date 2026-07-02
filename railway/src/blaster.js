@@ -1,5 +1,7 @@
 // src/blaster.js — vendor selection + RFQ email blast
-// Auto-sender: Gmail (450/day) first → Resend (150/day) fallback
+// Auto-sender: Gmail (450/day) first → Resend (150/day) when Gmail hits daily cap.
+// If Gmail SMTP is unreachable (Railway blocks port 587/465), Resend is used as
+// an immediate network-level fallback without consuming Gmail quota.
 const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
 const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "600");
@@ -8,6 +10,28 @@ const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "150");
 const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
 
 function info(...a) { console.log("[blaster]", ...a); }
+
+// Network errors that indicate Railway's SMTP path is blocked (not an auth/address problem).
+// On these, fall back to Resend (HTTP/443) immediately without consuming Gmail quota.
+const SMTP_NETWORK_ERR = /timeout|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|ESOCKET/i;
+
+async function sendWithFallback(sender, { to, subject, body }) {
+  if (sender === "gmail") {
+    try {
+      await sendEmailGmail({ to, subject, body });
+      return "gmail";
+    } catch (e) {
+      if (SMTP_NETWORK_ERR.test(e.message)) {
+        info("⚡ Gmail SMTP unreachable (" + e.message.slice(0, 60) + ") — Resend fallback");
+        // fall through to Resend
+      } else {
+        throw e; // auth/credential errors — don't mask with Resend, surface immediately
+      }
+    }
+  }
+  await sendEmailResend({ to, subject, body });
+  return "resend";
+}
 
 function detectPNPrefix(pn) {
   const p = (pn || "").trim().toUpperCase();
@@ -233,23 +257,21 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
     const body    = buildBodyForSender(vendor, sols, sender);
 
     try {
-      if (sender === "gmail") {
-        await sendEmailGmail({ to, subject, body });
-      } else {
-        await sendEmailResend({ to, subject, body });
-      }
+      // sendWithFallback: if Gmail SMTP is blocked at the network level, Resend
+      // is used immediately without consuming Gmail quota or incrementing fail count.
+      const effectiveSender = await sendWithFallback(sender, { to, subject, body });
 
       results.sent++;
       lastSentVendorId = vendor.id || vendor.name;
-      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
-      info("✓ [" + sender.toUpperCase() + "] RFQ → " + vendor.name + " (" + sols.length + " items)");
-      await incrementSenderCount(db, sender);
+      results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender: effectiveSender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
+      info("✓ [" + effectiveSender.toUpperCase() + "] RFQ → " + vendor.name + " (" + sols.length + " items)");
+      await incrementSenderCount(db, effectiveSender);
 
       if (db) {
         for (const sol of sols) {
           await db.collection("blast_log").updateOne(
             { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
-            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, sender, status: "sent", sent_at: new Date().toISOString() } },
+            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, sender: effectiveSender, status: "sent", sent_at: new Date().toISOString() } },
             { upsert: true },
           ).catch(e => info("blast_log save err:", e.message));
         }
