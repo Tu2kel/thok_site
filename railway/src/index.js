@@ -8,6 +8,7 @@ const cron = require("node-cron");
 const { scrape }           = require("./scraper");
 const { fetchDibbsSols }   = require("./gmail-watcher");
 const { fetchAllSolDetails } = require("./dibbs-fetcher");
+const { fetchSamSols }     = require("./sam-fetcher");
 const { screenBatch }      = require("./screener");
 const { buildBlastPlan, runBlast } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
@@ -52,8 +53,30 @@ async function runPipeline() {
   let rawSols = [];
   let scrapeResult = { counts: { total: 0, pass1: 0, pass2: 0, pass3: 0 } };
 
-  if (SOL_SOURCE === "email") {
-    // Post-July-3: DLA emails → Gmail → PDF parse
+  if (SOL_SOURCE === "sam") {
+    // SAM.gov Opportunities API → DLA RFQ sol list → DIBBS PDF parse
+    log("Fetching DLA solicitations from SAM.gov API…");
+    const fscLanes = (process.env.NAVIGATOR_FSC_LANES || process.env.SAM_FSC_LANES || "").split(",").map(s => s.trim()).filter(Boolean);
+    let samSols = [];
+    try {
+      samSols = await fetchSamSols({ lookbackDays: 3, fscLanes });
+    } catch (e) {
+      err("SAM fetch failed:", e.message);
+      errors.push("SAM: " + e.message);
+    }
+    if (!samSols.length) {
+      log("No DLA solicitations from SAM — sending summary");
+      await saveDailyBrief(db, { run_date: new Date().toLocaleDateString("en-US"), total_sols: 0, fresh_sols: 0, go_count: 0, verify_count: 0, reject_count: 0, watch_hits: 0, blast_sent: 0, blast_failed: 0, error_count: errors.length, notes: "No SAM results", sols: [], blast_log: [] }).catch(e => err("saveDailyBrief:", e.message));
+      await sendSummary({ scrape: scrapeResult, screen: [], blast: { sent: 0, failed: 0 }, watchHits: [], errors, runDate });
+      return;
+    }
+    log("SAM returned " + samSols.length + " sols — fetching DIBBS PDFs…");
+    rawSols = await fetchAllSolDetails(samSols);
+    log("PDF fetch complete — " + rawSols.filter(s => s.pdf_parsed).length + "/" + rawSols.length + " parsed");
+    scrapeResult = { counts: { total: rawSols.length, pass1: samSols.length, pass2: 0, pass3: 0 } };
+
+  } else if (SOL_SOURCE === "email") {
+    // DLA emails → Gmail → PDF parse
     log("Checking Gmail for DLA solicitation emails…");
     let emailSols = [];
     try {
