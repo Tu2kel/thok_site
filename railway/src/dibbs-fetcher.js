@@ -6,6 +6,7 @@
 const pdfParse = require("pdf-parse");
 
 const DIBBS2_BASE = "https://dibbs2.bsm.dla.mil";
+const DIBBS_PUB   = "https://www.dibbs.bsm.dla.mil"; // public record site — no auth required
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 let _sessionCookie = null;
@@ -202,43 +203,66 @@ async function ensureSession(targetUrl) {
   });
 }
 
-// Download PDF buffer for a sol number
-async function fetchPdfBuffer(sol_number) {
-  const url    = pdfUrl(sol_number);
-  const cookie = await ensureSession(url);
+// Step 1 — scrape the public DIBBS record page to confirm the PDF exists and get its exact URL.
+// www.dibbs.bsm.dla.mil is open to the internet — no DoD banner, no auth required.
+// Returns the dibbs2 PDF URL string, or null if no PDF link found on the record page.
+async function findPdfUrlOnPublicDibbs(sol_number) {
+  const recordUrl = DIBBS_PUB + "/RFQ/RFQRec.aspx?sn=" + sol_number;
+  try {
+    const { html } = await fetchManual(recordUrl, {
+      headers: { "User-Agent": UA, Accept: "text/html,*/*" },
+    });
+    const m = (html || "").match(/href="(https?:\/\/dibbs2\.bsm\.dla\.mil\/[^"]+\.PDF)"/i);
+    if (m) {
+      info("Public DIBBS confirmed PDF: " + m[1]);
+      return m[1];
+    }
+    info(sol_number + " — no PDF link on public DIBBS record");
+    return null;
+  } catch (e) {
+    info("Public DIBBS record fetch failed (" + sol_number + "): " + e.message);
+    return null;
+  }
+}
 
-  const res = await fetch(url, {
-    headers: {
-      Cookie:       cookie,
-      "User-Agent": UA,
-      Accept:       "application/pdf,*/*",
-    },
+// Step 2 — download PDF from the dibbs2 URL found above.
+// Tries a direct GET with Referer set to the public page first (may bypass the DoD banner).
+// If DIBBS2 still redirects to the banner, falls through to full banner acceptance.
+async function fetchPdfBuffer(sol_number) {
+  const pdfLink = await findPdfUrlOnPublicDibbs(sol_number);
+  if (!pdfLink) {
+    const e = new Error("PDF_NOT_ON_DIBBS2");
+    e.notOnDibbs = true;
+    throw e;
+  }
+
+  const referer = DIBBS_PUB + "/RFQ/RFQRec.aspx?sn=" + sol_number;
+
+  // Attempt 1 — direct GET with Referer (may bypass the DoD banner)
+  const res1 = await ft(pdfLink, {
+    headers: { "User-Agent": UA, Accept: "application/pdf,*/*", Referer: referer },
+    redirect: "follow",
+  }, 30000);
+  const ct1 = res1.headers.get("content-type") || "";
+  if (res1.ok && !ct1.includes("text/html")) {
+    info("✅ PDF direct (no banner needed) for " + sol_number);
+    return Buffer.from(await res1.arrayBuffer());
+  }
+
+  // Attempt 2 — full DoD banner acceptance
+  info("Direct fetch returned " + res1.status + " (" + ct1 + ") — accepting banner for " + sol_number);
+  const cookie = await ensureSession(pdfLink);
+  const res2 = await fetch(pdfLink, {
+    headers: { Cookie: cookie, "User-Agent": UA, Accept: "application/pdf,*/*", Referer: referer },
     redirect: "follow",
   });
-
-  const ct = res.headers.get("content-type") || "";
-
-  // Fix #3: real HTTP errors (404, 500…) don't mean the banner is stale — don't null the session
-  if (!res.ok && !ct.includes("text/html")) {
-    throw new Error("PDF fetch HTTP " + res.status + " for " + sol_number);
-  }
-
-  // HTML response = banner not yet accepted for this session; retry once
-  if (!res.ok || ct.includes("text/html")) {
-    info("Banner still active — re-accepting for " + sol_number);
+  const ct2 = res2.headers.get("content-type") || "";
+  if (!res2.ok || ct2.includes("text/html")) {
     _sessionCookie = null;
     _sessionPromise = null;
-    const cookie2 = await ensureSession(url);
-    const res2 = await fetch(url, {
-      headers: { Cookie: cookie2, "User-Agent": UA, Accept: "application/pdf,*/*" },
-      redirect: "follow",
-    });
-    const ct2 = res2.headers.get("content-type") || "";
-    if (!res2.ok || ct2.includes("text/html")) throw new Error("PDF still returning HTML after re-accept for " + sol_number);
-    return Buffer.from(await res2.arrayBuffer());
+    throw new Error("PDF still returning HTML after banner acceptance for " + sol_number);
   }
-
-  return Buffer.from(await res.arrayBuffer());
+  return Buffer.from(await res2.arrayBuffer());
 }
 
 // Parse key fields from DIBBS solicitation PDF text
