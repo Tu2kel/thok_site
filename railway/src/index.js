@@ -717,6 +717,78 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // ── /navigator/scrape — scrape-only, no screen/blast, SSE streaming ────
+  if (u === "/navigator/scrape" && req.method === "POST") {
+    if (pipelineRunning) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Pipeline already running" }));
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+
+    const send = (obj) => res.write("data: " + JSON.stringify(obj) + "\n\n");
+    const sseLog = (msg, level) => { send({ type: "log", msg, level: level || "info" }); log(msg); };
+
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      let maxSols = 0;
+      try { const p = JSON.parse(body); maxSols = parseInt(p.maxSols) || 0; } catch {}
+
+      pipelineRunning = true;
+      try {
+        const { scrape } = require("./scraper");
+        sseLog("Navigator scrape starting (Pass 1: Today · Pass 2: Last 30 · Pass 3: AN/MS/NAS)…");
+        const result = await scrape({
+          username: process.env.NAVIGATOR_USERNAME,
+          password: process.env.NAVIGATOR_PASSWORD,
+          minPrice: 1000,
+        });
+
+        if (!result.ok) {
+          send({ type: "result", ok: false, error: result.error || "Scrape failed" });
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
+
+        const counts = result.counts;
+        sseLog("✅ P1:" + counts.pass1 + " P2:" + counts.pass2 + " P3:" + counts.pass3 + " → " + counts.total + " total", "ok");
+
+        let sols = result.sols;
+        if (maxSols > 0 && sols.length > maxSols) {
+          sseLog("Capped to " + maxSols + " sols (maxSols param)");
+          sols = sols.slice(0, maxSols);
+        }
+
+        // Apply DNS FSC filter so screener gets clean data
+        const dnsSols = sols.filter(s => {
+          const fsc = String(s.fsc || (s.nsn || "").slice(0, 4));
+          return !SKIP_FSCS.has(fsc);
+        });
+        if (dnsSols.length < sols.length) sseLog("Dropped " + (sols.length - dnsSols.length) + " DNS-FSC sols");
+
+        send({ type: "result", ok: true, sols: dnsSols, counts });
+        res.write("data: [DONE]\n\n");
+      } catch (e) {
+        err("Navigator scrape endpoint error:", e.message);
+        send({ type: "result", ok: false, error: e.message });
+        res.write("data: [DONE]\n\n");
+      } finally {
+        pipelineRunning = false;
+        lastRunAt = Date.now();
+        res.end();
+      }
+    });
+    return;
+  }
+
   if (u === "/trigger" && req.method === "POST") {
     if (pipelineRunning) {
       res.writeHead(409, { "Content-Type": "application/json" });
