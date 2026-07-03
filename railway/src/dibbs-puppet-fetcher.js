@@ -261,49 +261,45 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
       }
     }
 
-    // ── Scrape detail pages for historical unit price ─────────────────────────
-    // The DIBBS RFQ detail page (www domain, same session) has Purchase Unit Price
-    // in an HTML table — much more reliable than PDF form fields.
+    // ── Parallel detail-page price fetch ─────────────────────────────────────
+    // All detail pages are on www.dibbs (same session already established).
+    // Use page.evaluate(Promise.all(fetch(...))) — 32 parallel same-origin requests
+    // instead of 32 sequential page.goto() calls. Same trick as PDF downloads.
     if (allSols.length) {
-      info("Scraping detail pages for pricing (" + allSols.length + " sols)...");
-      for (const sol of allSols) {
-        if (!sol.sol_url) continue;
-        try {
-          await page.goto(sol.sol_url, { waitUntil: "networkidle2", timeout: 20000 });
-          const price = await page.evaluate(() => {
-            // DIBBS detail page labels vary: "Purchase Unit Price", "Historical Unit Price", "Unit Price"
-            const labels = Array.from(document.querySelectorAll("td, th, label, span"));
-            for (const el of labels) {
-              const txt = (el.innerText || "").trim().toUpperCase();
-              if (/PURCHASE UNIT PRICE|HIST.*UNIT.*PRICE|UNIT PRICE/.test(txt)) {
-                // Value is usually in the next sibling td or the next element
-                const next = el.nextElementSibling || el.parentElement && el.parentElement.nextElementSibling;
-                if (next) {
-                  const val = (next.innerText || "").trim().replace(/[,$\s]/g, "");
-                  const n = parseFloat(val);
-                  if (!isNaN(n) && n > 0) return n;
-                }
-              }
+      info("Fetching detail page prices (" + allSols.length + " in parallel)...");
+      try {
+        const priceResults = await page.evaluate(async (solList) => {
+          return Promise.all(solList.map(async ({ sol_number, sol_url }) => {
+            if (!sol_url) return { sol_number, price: null };
+            try {
+              const r = await fetch(sol_url, { credentials: "include" });
+              const html = await r.text();
+              // Match "Purchase Unit Price", "Historical Unit Price", "Unit Price" near a dollar amount
+              const m = html.match(/(?:PURCHASE|HIST(?:ORICAL)?)\s+UNIT\s+PRICE[^$\d\n]{0,40}\$?([\d,]+\.?\d{2})/i)
+                     || html.match(/\bUNIT\s+PRICE[^$\d\n]{0,40}\$?([\d,]+\.?\d{2})/i);
+              const price = m ? parseFloat(m[1].replace(/,/g, "")) : null;
+              return { sol_number, price: price && price > 0 ? price : null };
+            } catch {
+              return { sol_number, price: null };
             }
-            // Fallback: regex scan the full page text for a dollar amount near "UNIT PRICE"
-            const body = document.body ? document.body.innerText : "";
-            const m = body.match(/(?:PURCHASE|HIST\w*)\s+UNIT\s+PRICE[^\d]*\$?([\d,]+\.?\d*)/i);
-            if (m) { const n = parseFloat(m[1].replace(/,/g, "")); if (!isNaN(n) && n > 0) return n; }
-            // Also try simple "UNIT PRICE" followed by dollar amount
-            const m2 = body.match(/\bUNIT\s+PRICE[^\d$\n]*\$?([\d,]+\.?\d{2})/i);
-            if (m2) { const n = parseFloat(m2[1].replace(/,/g, "")); if (!isNaN(n) && n > 0) return n; }
-            return null;
-          });
-          if (price) {
-            sol.unit_price = price;
-            sol.hist_price = price;
-            const qty = parseFloat(String(sol.quantity || "0").replace(/,/g, "")) || 0;
-            if (qty) sol.ext_price = Math.round(price * qty * 100) / 100;
-            info("💰 " + sol.sol_number + " unit price: $" + price + (sol.ext_price ? " | ext: $" + sol.ext_price : ""));
-          }
-        } catch (e) {
-          info(sol.sol_number + " detail page failed: " + e.message.slice(0, 80));
+          }));
+        }, allSols.map(s => ({ sol_number: s.sol_number, sol_url: s.sol_url })));
+
+        let priced = 0;
+        for (const { sol_number, price } of priceResults) {
+          if (!price) continue;
+          const sol = allSols.find(s => s.sol_number === sol_number);
+          if (!sol) continue;
+          sol.unit_price = price;
+          sol.hist_price = price;
+          const qty = parseFloat(String(sol.quantity || "0").replace(/,/g, "")) || 0;
+          if (qty) sol.ext_price = Math.round(price * qty * 100) / 100;
+          priced++;
+          info("💰 " + sol_number + " $" + price + (sol.ext_price ? " | ext $" + sol.ext_price : ""));
         }
+        info("Prices found: " + priced + "/" + allSols.length);
+      } catch (e) {
+        info("Detail price fetch failed: " + e.message);
       }
     }
 
