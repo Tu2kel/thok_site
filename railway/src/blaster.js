@@ -4,6 +4,7 @@
 const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
 const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "100");
+const ITEMS_PER_EMAIL  = parseInt(process.env.BLAST_ITEMS_PER_EMAIL || "0"); // 0 = no limit
 const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "0");   // effectively 0 — Railway blocks SMTP
 const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "100"); // Resend free plan: 100/day
 const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
@@ -92,15 +93,18 @@ function buildBlastPlan(sols, dists) {
 
     if (!matchedSols.length) continue;
 
-    const totalExt = matchedSols.reduce((s, r) => {
+    // Cap items per email if configured
+    const cappedSols = ITEMS_PER_EMAIL > 0 ? matchedSols.slice(0, ITEMS_PER_EMAIL) : matchedSols;
+
+    const totalExt = cappedSols.reduce((s, r) => {
       return s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1) || parseFloat(r.ext_price || 0) || 0);
     }, 0);
 
     // Fix #7: use != null so price=0 is treated as "known" (not as missing)
-    const priceKnown = matchedSols.some(r => r.unit_price != null || r.ext_price != null || r.hist_price != null);
+    const priceKnown = cappedSols.some(r => r.unit_price != null || r.ext_price != null || r.hist_price != null);
     if (priceKnown && totalExt < 1000) continue;
 
-    plan.push({ vendor, sols: matchedSols, totalExt, fscs });
+    plan.push({ vendor, sols: cappedSols, totalExt, fscs });
   }
 
   // Approved-manufacturer vendors: receive ALL AN/MS/NAS sols regardless of FSC lane
