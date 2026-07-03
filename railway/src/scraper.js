@@ -4,12 +4,19 @@
 
 const puppeteer = require("puppeteer-core");
 
+// Column indices verified against DibbsNavigator layout (screenshot 2026-07-03):
+// 0:Solicitation 1:AI 2:Sol.Type 3:Send 4:Nomenclature 5:Repost 6:QTY
+// 7:Sol.Issue 8:Unit Price 9:Price Hist. 10:Extended Price 11:Quote Due
+// 12:Del(days) 13:NSN 14:Piece Part No. 15:JCP 16:Set Aside
+// 17:Material 18:Part Char. 19:Supplier Restrictions 20:Quote 21:Basic Drawing
+// 22:Insp. 23:FOB 24:Com.Pack 25:NAICS 26:Suppliers 27:NSN Info
+// 28:Resell Opp. 29:SA 30:AMSC 31:Complete Materials 32:Buyer Info 33:CMMC
 const COL = {
-  sol_number: 0, nomenclature: 5, qty: 6, unit_issue: 7,
+  sol_number: 0, nomenclature: 4, qty: 6, unit_issue: 7,
   unit_price: 8, hist_price: 9, ext_price: 10, quote_due: 11,
-  delivery_days: 12, nsn: 13, piece_part_no: 14, set_aside: 15,
-  material: 16, part_char: 17, supplier_restrictions: 18,
-  fob: 22, naics: 24, supplier_list: 28,
+  delivery_days: 12, nsn: 13, piece_part_no: 14, jcp: 15, set_aside: 16,
+  material: 17, part_char: 18, supplier_restrictions: 19,
+  fob: 23, naics: 25, supplier_list: 26, amsc: 30,
 };
 
 function info(...a)  { console.log("[scraper]", ...a); }
@@ -43,6 +50,7 @@ async function scrapePage(page, passNum, passLabel, fscHint, minPrice) {
         nsn,
         fsc:                  _fh || nsn.slice(0, 4) || "",
         ref_part_number:      txt(cells, _COL.piece_part_no),
+        jcp:                  txt(cells, _COL.jcp),
         set_aside:            txt(cells, _COL.set_aside),
         material:             txt(cells, _COL.material),
         part_char:            txt(cells, _COL.part_char),
@@ -50,6 +58,7 @@ async function scrapePage(page, passNum, passLabel, fscHint, minPrice) {
         fob:                  txt(cells, _COL.fob),
         naics:                txt(cells, _COL.naics),
         supplier_list:        txt(cells, _COL.supplier_list),
+        amsc:                 txt(cells, _COL.amsc),
         pass:                 _pn,
         pass_label:           _pl,
         scraped_at:           new Date().toISOString(),
