@@ -92,9 +92,10 @@ async function sortDesc(page) {
 }
 
 async function setCommonFilters(page) {
-  await page.evaluate(() => { const el = document.querySelector("#Main_rbAwarded_2"); if (el) el.click(); });
-  await page.evaluate(() => { const el = document.querySelector("#Main_chNotExpired"); if (el && !el.checked) el.click(); });
-  await page.evaluate(() => { const el = document.querySelector("#Main_chExpired"); if (el && el.checked) el.click(); });
+  await page.evaluate(() => { const el = document.querySelector("#Main_rbAwarded_2"); if (el) el.click(); });       // Not Already Awarded
+  await page.evaluate(() => { const el = document.querySelector("#Main_chNotExpired"); if (el && !el.checked) el.click(); }); // Not Expired ✓
+  await page.evaluate(() => { const el = document.querySelector("#Main_chExpired"); if (el && el.checked) el.click(); });     // Expired unchecked
+  await page.evaluate(() => { const el = document.querySelector("#Main_chRepost"); if (el && !el.checked) el.click(); });     // Repost ✓
   await page.evaluate(() => { const el = document.querySelector("#Main_chCPac"); if (el && !el.checked) el.click(); });
   await new Promise(r => setTimeout(r, 500));
 }
@@ -126,29 +127,8 @@ async function broadPass(page, passNum, dateId, label, minPrice) {
   return sols;
 }
 
-async function fscPass(page, fsc, seen, minPrice) {
-  await goToSearch(page);
-  await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
-  await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_3"); if (el) el.click(); });
-  await setCommonFilters(page);
-  const fscInput = await page.$("#Main_NSN_Search");
-  if (fscInput) {
-    await fscInput.click({ clickCount: 3 });
-    await page.keyboard.press("Backspace");
-    await page.type("#Main_NSN_Search", fsc, { delay: 50 });
-  }
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
-    page.click("#Main_btnApplySelections"),
-  ]);
-  await sortDesc(page);
-  const all = await scrapePage(page, 3, "FSC-" + fsc, fsc, minPrice);
-  const newSols = all.filter(s => { if (seen.has(s.sol_number)) return false; seen.add(s.sol_number); return true; });
-  info("FSC " + fsc + ": " + all.length + " on page, +" + newSols.length + " new");
-  return newSols;
-}
 
-async function scrape({ username, password, fscLanes, minPrice = 1000 }) {
+async function scrape({ username, password, minPrice = 1000 }) {
   // System Chromium installed by nixpacks — puppeteer-core needs explicit path
   const executablePath =
     process.env.CHROMIUM_PATH ||
@@ -188,12 +168,14 @@ async function scrape({ username, password, fscLanes, minPrice = 1000 }) {
     const pass1 = await broadPass(page, 1, "Main_rbDateRange_0", "Today (fresh)", minPrice);
     const pass2 = await broadPass(page, 2, "Main_rbDateRange_3", "Last 30 days (LHF)", minPrice);
 
-    const seen = new Set([...pass1, ...pass2].map(s => s.sol_number));
-    const pass3 = [];
-    for (const fsc of fscLanes) {
-      try { pass3.push(...await fscPass(page, fsc, seen, minPrice)); }
-      catch (e) { fail("FSC " + fsc + " failed (non-fatal):", e.message); }
-    }
+    // Pass 3: last 30 days filtered to AN/MS/NAS piece part numbers — always runs.
+    // Uses a lower floor ($1k) — these parts come in at small ext prices but route
+    // to approved MFRs who can fulfill; the $10k gate in index.js is bypassed for them.
+    const AN_MS_NAS = /^(AN|MS|NAS)[\d-]/i;
+    const pass3Raw = await broadPass(page, 3, "Main_rbDateRange_3", "AN/MS/NAS 30-day", 1000);
+    const seen12 = new Set([...pass1, ...pass2].map(s => s.sol_number));
+    const pass3 = pass3Raw.filter(s => AN_MS_NAS.test(s.ref_part_number || "") && !seen12.has(s.sol_number));
+    info("Pass 3 → " + pass3.length + " AN/MS/NAS sols (from " + pass3Raw.length + " on page)");
 
     await browser.close();
 

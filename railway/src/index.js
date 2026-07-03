@@ -152,17 +152,15 @@ async function runPipeline() {
     log("Found " + emailSols.length + " sols from email — fetching PDFs…");
     rawSols = await fetchAllSolDetails(emailSols);
     log("PDF fetch complete — " + rawSols.filter(s => s.pdf_parsed).length + "/" + rawSols.length + " PDFs parsed");
-    scrapeResult = { counts: { total: rawSols.length, pass1: emailSols.length, pass2: 0, pass3: 0 } };
+    scrapeResult = { counts: { total: rawSols.length, pass1: emailSols.length, pass2: 0 } };
 
   } else {
     // Navigator scraper (active until Navigator sub ends)
     log("Scraping DIBBS Navigator…");
     const { scrape } = require("./scraper");
-    const fscLanes = (process.env.NAVIGATOR_FSC_LANES || "").split(",").map(s => s.trim()).filter(Boolean);
     const result = await scrape({
       username:  process.env.NAVIGATOR_USERNAME,
       password:  process.env.NAVIGATOR_PASSWORD,
-      fscLanes,
       minPrice:  1000,
     });
     if (!result.ok || !result.sols.length) {
@@ -202,11 +200,14 @@ async function runPipeline() {
   const skipped   = dnsFscFiltered.length - freshSols.length;
   if (skipped) log("Skipped " + skipped + " already-acted sols");
 
-  // Drop sub-minimum orders — focus on $10k+ opportunities.
-  // AN/MS/NAS parts already passed the FSC filter and are included here.
-  // If ext_price is null (PDF not parsed), let the sol through — we can't filter what we don't know.
+  // Drop sub-minimum orders. AN/MS/NAS MIL-spec parts use a lower floor ($1k) —
+  // they come in at small ext prices but route to approved MFRs via blaster.
+  // If ext_price is null, let through — can't filter what we don't know.
+  const AN_MS_NAS_PFX = /^(AN|MS|NAS)[\d-]/i;
+  const AN_MS_NAS_MIN = 1000;
   const valuedSols = MIN_ORDER_VALUE > 0 ? freshSols.filter(s => {
     if (s.ext_price == null) return true;
+    if (AN_MS_NAS_PFX.test(s.ref_part_number || "")) return s.ext_price >= AN_MS_NAS_MIN;
     return s.ext_price >= MIN_ORDER_VALUE;
   }) : freshSols;
   const valueDrop = freshSols.length - valuedSols.length;
