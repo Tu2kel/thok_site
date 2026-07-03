@@ -674,7 +674,7 @@ const httpServer = http.createServer((req, res) => {
       ok: true,
       mode: "railway",
       schedule: SCHEDULE,
-      blast_live: effectiveLive,
+      blast_live: IS_LIVE,
       blast_paused:  _blastState.paused,
       daily_sent:    _blastState.daily_sent,
       daily_limit:   _blastState.daily_limit,
