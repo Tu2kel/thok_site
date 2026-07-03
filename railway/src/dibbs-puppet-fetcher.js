@@ -192,64 +192,68 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
       info(dateStr + " — " + daySols.length + " sols found");
     }
 
-    // Accept dibbs2 banner — it's a separate host with its own DoD warning.
-    // Navigate to any dibbs2 page first so we can click through before downloading PDFs.
-    if (allSols.length && allSols[0].pdf_direct_url) {
-      info("Establishing dibbs2 session — accepting banner if present...");
-      try {
-        await page.goto(allSols[0].pdf_direct_url, { waitUntil: "networkidle2", timeout: 30000 });
-        const ct = (await page.evaluate(() => document.contentType || "")) || "";
-        if (!ct.includes("pdf")) {
-          const content = await page.content();
-          if (content.includes("butAgree")) {
-            await Promise.all([
-              page.waitForNavigation({ waitUntil: "networkidle2", timeout: 20000 }),
-              page.click("#butAgree"),
-            ]);
-            info("✅ dibbs2 banner accepted");
-          } else {
-            info("dibbs2 no banner — content-type was: " + ct + " | snippet: " + content.slice(0, 200).replace(/\s+/g, " "));
-          }
-        } else {
-          info("✅ dibbs2 PDF direct — no banner needed");
-        }
-      } catch (e) {
-        info("dibbs2 session setup failed (non-fatal): " + e.message);
-      }
-    }
-
-    // Fetch + parse PDFs for each sol through the same browser session
+    // Open a dedicated dibbs2 page for PDF fetching.
+    // page.goto() on a PDF URL causes ERR_ABORTED because headless Chrome tries to
+    // open the built-in PDF viewer and aborts the navigation. Instead, open a page
+    // ON the dibbs2 domain and use page.evaluate(fetch()) — same-origin, no viewer.
     info("Fetching PDFs for " + allSols.length + " sols...");
     let parsed = 0;
 
-    for (const sol of allSols) {
-      if (!sol.pdf_direct_url) continue;
+    if (allSols.length) {
+      let pdfPage;
       try {
-        const pdfRes = await page.goto(sol.pdf_direct_url, {
-          waitUntil: "networkidle2",
-          timeout: 30000,
-        });
+        pdfPage = await browser.newPage();
+        await pdfPage.setUserAgent(
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        );
 
-        if (pdfRes && pdfRes.status() === 200) {
-          const contentType = pdfRes.headers()["content-type"] || "";
-          if (contentType.includes("pdf") || contentType.includes("octet")) {
-            const buffer = await pdfRes.buffer();
-            const fields = await parsePdf(buffer, sol.sol_number);
-            // Selective merge — never overwrite good data with null
-            for (const [k, v] of Object.entries(fields)) {
-              if (v !== null && v !== undefined && v !== "") sol[k] = v;
-            }
-            parsed++;
-            info("✅ " + sol.sol_number + " — " + (sol.item_name || "no item name") + " | qty " + (sol.quantity || "?"));
-          } else {
-            info(sol.sol_number + " — unexpected content-type: " + contentType);
-          }
-        } else {
-          info(sol.sol_number + " — PDF status: " + (pdfRes ? pdfRes.status() : "no response"));
+        // Land on dibbs2 domain to establish session + accept its banner
+        info("Establishing dibbs2 session...");
+        await pdfPage.goto("https://dibbs2.bsm.dla.mil/", { waitUntil: "networkidle2", timeout: 30000 });
+        try {
+          await pdfPage.waitForSelector("#butAgree", { timeout: 6000 });
+          await Promise.all([
+            pdfPage.waitForNavigation({ waitUntil: "networkidle2", timeout: 20000 }),
+            pdfPage.click("#butAgree"),
+          ]);
+          info("✅ dibbs2 banner accepted");
+        } catch {
+          info("dibbs2 no banner — session ready");
         }
 
-      } catch (e) {
-        info(sol.sol_number + " PDF fetch failed: " + e.message);
+        for (const sol of allSols) {
+          if (!sol.pdf_direct_url) continue;
+          try {
+            // Same-origin fetch from within the dibbs2 page — no PDF viewer, no CORS
+            const base64 = await pdfPage.evaluate(async (url) => {
+              const r = await fetch(url, { credentials: "include" });
+              if (!r.ok) return null;
+              const ct = r.headers.get("content-type") || "";
+              if (!ct.includes("pdf") && !ct.includes("octet")) return null;
+              const ab = await r.arrayBuffer();
+              const bytes = new Uint8Array(ab);
+              let str = "";
+              for (const b of bytes) str += String.fromCharCode(b);
+              return btoa(str);
+            }, sol.pdf_direct_url);
+
+            if (base64) {
+              const buffer = Buffer.from(base64, "base64");
+              const fields = await parsePdf(buffer, sol.sol_number);
+              for (const [k, v] of Object.entries(fields)) {
+                if (v !== null && v !== undefined && v !== "") sol[k] = v;
+              }
+              parsed++;
+              info("✅ " + sol.sol_number + " — " + (sol.item_name || "no item name") + " | qty " + (sol.quantity || "?"));
+            } else {
+              info(sol.sol_number + " — PDF fetch returned null (not a PDF or failed)");
+            }
+          } catch (e) {
+            info(sol.sol_number + " PDF fetch failed: " + e.message);
+          }
+        }
+      } finally {
+        if (pdfPage) try { await pdfPage.close(); } catch {}
       }
     }
 
