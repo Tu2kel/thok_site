@@ -436,19 +436,29 @@ async function runPipeline() {
     blast_sent:   blastResult.sent,
     blast_failed: blastResult.failed,
     error_count:  errors.length,
-    sols: allScreened.map(s => ({
-      sol_number:      s.sol_number,
-      item_name:       s.item_name || "",
-      fsc:             s.fsc || "",
-      nsn:             s.nsn || "",
-      verdict:         s.verdict || "GO",
-      win_pct:         s.winProbabilityPct || 0,
-      quote_due:       s.quote_due || "",
-      quantity:        String(s.quantity || s.qty || ""),
-      ref_part_number: s.ref_part_number || "",
-      is_watched:      !!s.is_watched,
-      reason:          s.reason || s.claudeReason || "",
-    })),
+    sols: allScreened.map(s => {
+      const qty       = parseFloat(String(s.quantity || s.qty || "0").replace(/,/g, "")) || 0;
+      const unitPrice = s.unit_price || s.hist_price || null;
+      const extPrice  = (unitPrice && qty) ? Math.round(unitPrice * qty * 100) / 100 : null;
+      return {
+        sol_number:      s.sol_number,
+        item_name:       s.item_name || "",
+        fsc:             s.fsc || "",
+        nsn:             s.nsn || "",
+        verdict:         s.verdict || "GO",
+        win_pct:         s.winProbabilityPct || 0,
+        quote_due:       s.quote_due || "",
+        quantity:        String(s.quantity || s.qty || ""),
+        unit_price:      unitPrice,
+        ext_price:       extPrice,
+        set_aside:       s.set_aside || "",
+        ref_part_number: s.ref_part_number || "",
+        sourcing_path:   s.sourcing_path || "",
+        is_watched:      !!s.is_watched,
+        reason:          s.reason || s.claudeReason || "",
+        sol_url:         s.sol_url || "",
+      };
+    }),
     blast_log: blastResult.log || [],
   }).catch(e => err("saveDailyBrief:", e.message));
 
@@ -686,6 +696,18 @@ const httpServer = http.createServer((req, res) => {
       log("Blast " + (paused ? "PAUSED" : "RESUMED") + " via HTTP");
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, paused }));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
+  if (u === "/daily-brief" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const brief = await mdb.collection("blast_briefs").findOne({}, { sort: { created_at: -1 } });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, brief: brief || null }));
     }).catch(e => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: e.message }));

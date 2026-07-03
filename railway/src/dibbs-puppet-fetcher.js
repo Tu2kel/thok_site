@@ -261,6 +261,52 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
       }
     }
 
+    // ── Scrape detail pages for historical unit price ─────────────────────────
+    // The DIBBS RFQ detail page (www domain, same session) has Purchase Unit Price
+    // in an HTML table — much more reliable than PDF form fields.
+    if (allSols.length) {
+      info("Scraping detail pages for pricing (" + allSols.length + " sols)...");
+      for (const sol of allSols) {
+        if (!sol.sol_url) continue;
+        try {
+          await page.goto(sol.sol_url, { waitUntil: "networkidle2", timeout: 20000 });
+          const price = await page.evaluate(() => {
+            // DIBBS detail page labels vary: "Purchase Unit Price", "Historical Unit Price", "Unit Price"
+            const labels = Array.from(document.querySelectorAll("td, th, label, span"));
+            for (const el of labels) {
+              const txt = (el.innerText || "").trim().toUpperCase();
+              if (/PURCHASE UNIT PRICE|HIST.*UNIT.*PRICE|UNIT PRICE/.test(txt)) {
+                // Value is usually in the next sibling td or the next element
+                const next = el.nextElementSibling || el.parentElement && el.parentElement.nextElementSibling;
+                if (next) {
+                  const val = (next.innerText || "").trim().replace(/[,$\s]/g, "");
+                  const n = parseFloat(val);
+                  if (!isNaN(n) && n > 0) return n;
+                }
+              }
+            }
+            // Fallback: regex scan the full page text for a dollar amount near "UNIT PRICE"
+            const body = document.body ? document.body.innerText : "";
+            const m = body.match(/(?:PURCHASE|HIST\w*)\s+UNIT\s+PRICE[^\d]*\$?([\d,]+\.?\d*)/i);
+            if (m) { const n = parseFloat(m[1].replace(/,/g, "")); if (!isNaN(n) && n > 0) return n; }
+            // Also try simple "UNIT PRICE" followed by dollar amount
+            const m2 = body.match(/\bUNIT\s+PRICE[^\d$\n]*\$?([\d,]+\.?\d{2})/i);
+            if (m2) { const n = parseFloat(m2[1].replace(/,/g, "")); if (!isNaN(n) && n > 0) return n; }
+            return null;
+          });
+          if (price) {
+            sol.unit_price = price;
+            sol.hist_price = price;
+            const qty = parseFloat(String(sol.quantity || "0").replace(/,/g, "")) || 0;
+            if (qty) sol.ext_price = Math.round(price * qty * 100) / 100;
+            info("💰 " + sol.sol_number + " unit price: $" + price + (sol.ext_price ? " | ext: $" + sol.ext_price : ""));
+          }
+        } catch (e) {
+          info(sol.sol_number + " detail page failed: " + e.message.slice(0, 80));
+        }
+      }
+    }
+
     // Open a dedicated dibbs2 page for PDF fetching.
     // page.goto() on a PDF URL causes ERR_ABORTED because headless Chrome tries to
     // open the built-in PDF viewer and aborts the navigation. Instead, open a page

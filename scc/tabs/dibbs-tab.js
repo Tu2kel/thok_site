@@ -1335,7 +1335,31 @@
                 if (hd.last_run_ok === false) {
                   addLog("❌ Pipeline finished with errors after " + elapsedMin + " min — check Railway logs.", "err");
                 } else {
-                  addLog("✅ Pipeline complete (" + elapsedMin + " min) — check summary email for blast results.", "ok");
+                  addLog("✅ Pipeline complete (" + elapsedMin + " min) — loading sol data…", "ok");
+                }
+                // Fetch sol data from last pipeline run and populate the UI
+                try {
+                  const br = await fetch(getAgentUrl() + "/daily-brief");
+                  const bd = await br.json().catch(() => ({}));
+                  if (bd.ok && bd.brief && Array.isArray(bd.brief.sols) && bd.brief.sols.length > 0) {
+                    const briefSols = bd.brief.sols.map(s => ({
+                      ...s,
+                      source: "dibbs-puppet",
+                      sam_resource_links: [],
+                    }));
+                    const sd = bd.brief.run_date || new Date().toLocaleString();
+                    setSols(briefSols);
+                    setScrapeDate(sd);
+                    storeSave({ mode: modeRef.current, sols: briefSols, scrapeDate: sd, analysis: null });
+                    addLog("AUTO ▶ " + briefSols.length + " sol(s) loaded from pipeline run.", "ok");
+                    if (modeRef.current === "auto") {
+                      await autoChain(briefSols);
+                    }
+                  } else {
+                    addLog("⚠ No sol data in last run brief.", "warn");
+                  }
+                } catch (e) {
+                  addLog("⚠ Could not load sol data: " + e.message, "warn");
                 }
               } else {
                 addLog("⟳ Pipeline running… " + elapsedMin + " min elapsed", "info");
