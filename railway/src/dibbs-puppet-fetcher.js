@@ -182,21 +182,40 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
         continue;
       }
 
-      // Debug: dump start + middle to see head vs body content
-      const flat = html.replace(/\s+/g, " ");
-      info("HTML[0:600]: " + flat.slice(0, 600));
-      info("HTML[mid]: " + flat.slice(Math.floor(flat.length / 2) - 300, Math.floor(flat.length / 2) + 300));
-      // Also check if dibbs2 PDF links appear anywhere in the page
       const hasPdfLinks = /dibbs2\.bsm\.dla\.mil\/Downloads\/RFQ/i.test(html);
-      info("Has dibbs2 PDF links: " + hasPdfLinks);
-      // Count <tr> tags so we know if a table is rendering
       const trCount = (html.match(/<tr[\s>]/gi) || []).length;
-      info("TR count: " + trCount);
+      info("Has PDF links: " + hasPdfLinks + " | TR count: " + trCount);
 
       const daySols = parseListingHtml(html).filter(s => !seen.has(s.sol_number));
       daySols.forEach(s => { s.issue_date = dateStr; seen.add(s.sol_number); });
       allSols.push(...daySols);
       info(dateStr + " — " + daySols.length + " sols found");
+    }
+
+    // Accept dibbs2 banner — it's a separate host with its own DoD warning.
+    // Navigate to any dibbs2 page first so we can click through before downloading PDFs.
+    if (allSols.length && allSols[0].pdf_direct_url) {
+      info("Establishing dibbs2 session — accepting banner if present...");
+      try {
+        await page.goto(allSols[0].pdf_direct_url, { waitUntil: "networkidle2", timeout: 30000 });
+        const ct = (await page.evaluate(() => document.contentType || "")) || "";
+        if (!ct.includes("pdf")) {
+          const content = await page.content();
+          if (content.includes("butAgree")) {
+            await Promise.all([
+              page.waitForNavigation({ waitUntil: "networkidle2", timeout: 20000 }),
+              page.click("#butAgree"),
+            ]);
+            info("✅ dibbs2 banner accepted");
+          } else {
+            info("dibbs2 no banner — content-type was: " + ct + " | snippet: " + content.slice(0, 200).replace(/\s+/g, " "));
+          }
+        } else {
+          info("✅ dibbs2 PDF direct — no banner needed");
+        }
+      } catch (e) {
+        info("dibbs2 session setup failed (non-fatal): " + e.message);
+      }
     }
 
     // Fetch + parse PDFs for each sol through the same browser session
@@ -206,10 +225,6 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
     for (const sol of allSols) {
       if (!sol.pdf_direct_url) continue;
       try {
-        // Use CDP to intercept the PDF response as bytes
-        const client = await page.target().createCDPSession();
-        await client.send("Page.enable");
-
         const pdfRes = await page.goto(sol.pdf_direct_url, {
           waitUntil: "networkidle2",
           timeout: 30000,
@@ -233,7 +248,6 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
           info(sol.sol_number + " — PDF status: " + (pdfRes ? pdfRes.status() : "no response"));
         }
 
-        await client.detach();
       } catch (e) {
         info(sol.sol_number + " PDF fetch failed: " + e.message);
       }
