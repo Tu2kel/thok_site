@@ -4,7 +4,7 @@
 const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
 const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "100");
-const ITEMS_PER_EMAIL  = parseInt(process.env.BLAST_ITEMS_PER_EMAIL || "0"); // 0 = no limit
+const ITEMS_PER_EMAIL  = 10; // hard cap — never more than 10 items per vendor email
 const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "0");   // effectively 0 — Railway blocks SMTP
 const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "100"); // Resend free plan: 100/day
 const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
