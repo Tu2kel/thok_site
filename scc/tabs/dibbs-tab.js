@@ -1314,7 +1314,12 @@
       if (agentMode === "railway") {
         addLog("Triggering Railway pipeline — SAM fetch → PDF parse → Claude screen → blast…", "info");
         try {
-          const tr = await fetch(getAgentUrl() + "/trigger", { method: "POST", signal: AbortSignal.timeout(15000) });
+          const tr = await fetch(getAgentUrl() + "/trigger", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ live: liveModeRef.current }),
+            signal: AbortSignal.timeout(15000),
+          });
           const td = await tr.json().catch(() => ({}));
           if (td.ok === false && td.error === "Pipeline already running") {
             addLog("⚠ Pipeline already running — wait for current run to finish.", "warn");
@@ -1826,7 +1831,11 @@
               },
               onClick: async () => {
                 try {
-                  const r = await fetch(getAgentUrl() + "/trigger", { method: "POST" });
+                  const r = await fetch(getAgentUrl() + "/trigger", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ live: liveModeRef.current }),
+                  });
                   const d = await r.json();
                   if (d.ok) { toast_("Railway pipeline triggered — check summary email in ~10 min."); setTimeout(checkAgent, 2000); }
                   else toast_("Trigger failed: " + d.error, true);

@@ -40,12 +40,13 @@ function log(...a)  { console.log("[scc-agent]", new Date().toISOString().slice(
 function err(...a)  { console.error("[scc-agent] ❌", ...a); }
 
 // ── MAIN PIPELINE ─────────────────────────────────────────────────────────
-async function runPipeline() {
+async function runPipeline(liveModeOverride) {
+  const effectiveLive = typeof liveModeOverride === "boolean" ? liveModeOverride : IS_LIVE;
   const runDate  = new Date().toISOString();
   const errors   = [];
 
   log("═".repeat(60));
-  log("Daily pipeline starting — " + (IS_LIVE ? "LIVE BLAST" : "TEST MODE (emails to anthony@ifedlog.com)"));
+  log("Daily pipeline starting — " + (effectiveLive ? "LIVE BLAST" : "TEST MODE (emails to anthony@ifedlog.com)"));
   log("═".repeat(60));
 
   // ── 1. MongoDB ────────────────────────────────────────────────────────
@@ -333,8 +334,8 @@ async function runPipeline() {
     const plan = buildBlastPlan(readySols, dists);
 
     if (plan.length) {
-      log("Firing blast: " + plan.length + " vendor emails (" + (IS_LIVE ? "LIVE" : "TEST") + ")…");
-      blastResult = await runBlast(plan, { isLive: IS_LIVE, fromAddress: "kelley.anthonyk@gmail.com" }, db);
+      log("Firing blast: " + plan.length + " vendor emails (" + (effectiveLive ? "LIVE" : "TEST") + ")…");
+      blastResult = await runBlast(plan, { isLive: effectiveLive, fromAddress: "kelley.anthonyk@gmail.com" }, db);
       log("Blast complete: " + blastResult.sent + " sent, " + blastResult.failed + " failed");
 
       // Only mark sols whose emails were actually confirmed sent
@@ -673,7 +674,7 @@ const httpServer = http.createServer((req, res) => {
       ok: true,
       mode: "railway",
       schedule: SCHEDULE,
-      blast_live: IS_LIVE,
+      blast_live: effectiveLive,
       blast_paused:  _blastState.paused,
       daily_sent:    _blastState.daily_sent,
       daily_limit:   _blastState.daily_limit,
@@ -722,10 +723,22 @@ const httpServer = http.createServer((req, res) => {
       res.end(JSON.stringify({ ok: false, error: "Pipeline already running" }));
       return;
     }
-    res.writeHead(202, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, message: "Pipeline triggered" }));
-    log("Manual trigger via HTTP /trigger");
-    runPipelineTracked().catch(e => err("Triggered pipeline error:", e.message));
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", () => {
+      let overrideLive = IS_LIVE;
+      try {
+        const parsed = JSON.parse(body);
+        if (typeof parsed.live === "boolean") {
+          overrideLive = parsed.live;
+          log("UI live override: " + (overrideLive ? "LIVE" : "TEST ONLY") + " (env BLAST_LIVE=" + IS_LIVE + ")");
+        }
+      } catch {}
+      res.writeHead(202, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, message: "Pipeline triggered", live: overrideLive }));
+      log("Manual trigger via HTTP /trigger (" + (overrideLive ? "LIVE" : "TEST") + ")");
+      runPipelineTracked(overrideLive).catch(e => err("Triggered pipeline error:", e.message));
+    });
     return;
   }
 
@@ -739,10 +752,10 @@ httpServer.listen(PORT, () => {
 
 // Wrap runPipeline to track state
 const _runPipeline = runPipeline;
-async function runPipelineTracked() {
+async function runPipelineTracked(liveModeOverride) {
   pipelineRunning = true;
   try {
-    await _runPipeline();
+    await _runPipeline(liveModeOverride);
     lastRunOk = true;
   } catch (e) {
     lastRunOk = false;
