@@ -167,6 +167,15 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
         continue;
       }
 
+      // Debug: dump first 800 chars so we can see actual HTML structure
+      info("HTML[0:800]: " + html.replace(/\s+/g, " ").slice(0, 800));
+      // Also check if dibbs2 PDF links appear anywhere in the page
+      const hasPdfLinks = /dibbs2\.bsm\.dla\.mil\/Downloads\/RFQ/i.test(html);
+      info("Has dibbs2 PDF links: " + hasPdfLinks);
+      // Count <tr> tags so we know if a table is rendering
+      const trCount = (html.match(/<tr[\s>]/gi) || []).length;
+      info("TR count: " + trCount);
+
       const daySols = parseListingHtml(html).filter(s => !seen.has(s.sol_number));
       daySols.forEach(s => { s.issue_date = dateStr; seen.add(s.sol_number); });
       allSols.push(...daySols);
