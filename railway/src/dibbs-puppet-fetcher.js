@@ -25,68 +25,127 @@ function dibbsDate(d) {
     d.getDate().toString().padStart(2, "0") + "-" + d.getFullYear();
 }
 
-function extractNsn(text) {
-  const m = (text || "").match(/\b(\d{4}-\d{2}-\d{3}-\d{4})\b/);
-  return m ? m[1] : null;
+// DOM-based table extraction — runs inside the browser so innerText gives
+// actual rendered cell values (not raw HTML with form-field placeholders).
+async function extractTableSolsFromDom(page, dateStr) {
+  return await page.evaluate((www, date) => {
+    const seen = new Set();
+    const sols = [];
+
+    // Find the table that has PDF download links — DIBBS GridView or first matching table
+    const tables = Array.from(document.querySelectorAll("table"));
+    let targetTable = null;
+    for (const t of tables) {
+      if (/GridView/i.test(t.id || "")) { targetTable = t; break; }
+      if (t.querySelector('a[href*="dibbs2.bsm.dla.mil/Downloads/RFQ/"]')) {
+        if (!targetTable || t.rows.length > targetTable.rows.length) targetTable = t;
+      }
+    }
+    if (!targetTable) return [];
+
+    // Detect column layout from header row
+    const headerRow = targetTable.rows[0];
+    const headers = headerRow
+      ? Array.from(headerRow.cells).map(c => c.innerText.trim().toUpperCase())
+      : [];
+
+    let colName = -1, colDate = -1, colNsn = -1;
+    for (let i = 0; i < headers.length; i++) {
+      if (/NOMENCLATURE|DESCRIPTION|ITEM|NAME/.test(headers[i])) colName = i;
+      if (/DATE|CLOSE|DUE|RETURN/.test(headers[i])) colDate = i;
+      if (/NSN|NATIONAL\s*STOCK/.test(headers[i])) colNsn = i;
+    }
+
+    // Helper: normalize a date cell to YYYY-MM-DD
+    function normalizeDate(raw) {
+      if (!raw) return null;
+      // MM/DD/YYYY
+      let m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) return m[3] + "-" + m[1].padStart(2, "0") + "-" + m[2].padStart(2, "0");
+      // YYYY-MM-DD already
+      m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) return raw;
+      // MM-DD-YYYY
+      m = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+      if (m) return m[3] + "-" + m[1] + "-" + m[2];
+      return null;
+    }
+
+    for (let r = 1; r < targetTable.rows.length; r++) {
+      const row = targetTable.rows[r];
+      const pdfLink = row.querySelector('a[href*="dibbs2.bsm.dla.mil/Downloads/RFQ/"]');
+      if (!pdfLink) continue;
+
+      const pdfUrl = pdfLink.href;
+      const solMatch = pdfUrl.match(/\/([^\/]+)\.PDF$/i);
+      if (!solMatch) continue;
+      const sol_number = solMatch[1].toUpperCase();
+      if (!/^SP[A-Z0-9]/i.test(sol_number) || seen.has(sol_number)) continue;
+      seen.add(sol_number);
+
+      const cells = Array.from(row.cells).map(c => c.innerText.trim());
+      const rowText = row.innerText || "";
+
+      // item_name: use detected column first, then scan for Fed-catalog pattern (NOUN,MODIFIER)
+      let item_name = colName >= 0 ? cells[colName] : null;
+      if (!item_name || item_name.length < 3) {
+        for (const c of cells) {
+          if (c.length >= 4 && /^[A-Z][A-Z0-9,\-\s]{3,}$/.test(c) &&
+              !/^\d/.test(c) && !/^SP[A-Z0-9]/i.test(c) && !/^\d{4}-\d/.test(c)) {
+            item_name = c; break;
+          }
+        }
+      }
+
+      // quote_due: use detected column first, then scan cells for a date pattern
+      let quote_due = colDate >= 0 ? normalizeDate(cells[colDate]) : null;
+      if (!quote_due) {
+        for (const c of cells) {
+          const nd = normalizeDate(c);
+          if (nd) { quote_due = nd; break; }
+        }
+      }
+
+      // NSN from row text
+      const nsnM = rowText.match(/\b(\d{4}-\d{2}-\d{3}-\d{4})\b/);
+      const nsn = nsnM ? nsnM[1] : "";
+
+      sols.push({
+        sol_number,
+        nsn,
+        fsc:            nsn ? nsn.replace(/-/g, "").slice(0, 4) : "",
+        item_name:      item_name || "",
+        quantity:       "",
+        quote_due:      quote_due || "",
+        pdf_direct_url: pdfUrl,
+        sol_url:        www + "/RFQ/RFQRec.aspx?sn=" + sol_number,
+        source:         "dibbs-puppet",
+        issue_date:     date,
+        sam_resource_links: [],
+      });
+    }
+    return sols;
+  }, DIBBS_WWW, dateStr);
 }
 
-function parseListingHtml(html) {
-  const sols = [];
-  const rowChunks = (html || "").split(/<tr[\s>]/i);
-  for (const chunk of rowChunks) {
-    const pdfMatch = chunk.match(/href="(https?:\/\/dibbs2\.bsm\.dla\.mil\/Downloads\/RFQ\/[^"]+\.PDF)"/i);
-    if (!pdfMatch) continue;
-    const pdfDirectUrl = pdfMatch[1];
-    const solMatch = pdfDirectUrl.match(/\/([^\/]+)\.PDF$/i);
-    if (!solMatch) continue;
-    const sol_number = solMatch[1].toUpperCase();
-    if (!/^SP[A-Z0-9]/i.test(sol_number)) continue;
-    const nsn = extractNsn(chunk);
-    sols.push({
-      sol_number,
-      nsn:            nsn || "",
-      fsc:            nsn ? nsn.replace(/-/g, "").slice(0, 4) : "",
-      item_name:      "",
-      quantity:       "",
-      quote_due:      "",
-      pdf_direct_url: pdfDirectUrl,
-      sol_url:        DIBBS_WWW + "/RFQ/RFQRec.aspx?sn=" + sol_number,
-      source:         "dibbs-puppet",
-      sam_resource_links: [],
-    });
-  }
-  return sols;
-}
-
-// Parse PDF buffer for procurement fields
+// Parse PDF buffer — quantity and part details only.
+// item_name and quote_due come from the listing table DOM (they are AcroForm
+// fields in the PDF that pdf-parse cannot read; the listing table has them).
 async function parsePdf(buffer, sol_number) {
   try {
     const parsed = await pdfParse(buffer);
     const text = (parsed.text || "").replace(/\s+/g, " ");
-    info(sol_number + " PDF text[0:400]: " + text.slice(0, 400));
 
     function extract(re) {
       const m = text.match(re);
       return m ? m[1].trim() : null;
     }
 
-    const itemName =
-      extract(/ITEM DESCRIPTION\s+([A-Z][A-Z0-9,\-\.\/]*,[A-Z0-9,\-\.\/]+)/i) ||
-      extract(/NOMENCLATURE[:\s]+([A-Z][A-Z0-9,\-]{3,})/i) ||
-      extract(/DESCRIPTION OF SUPPLIES[\/\s]+SERVICES[:\s]+([A-Z][A-Z0-9,\-\.\/]{3,})/i) ||
-      extract(/ITEM NAME[:\s]+([A-Z][A-Z0-9,\-]{3,})/i);
-
     const qty =
       extract(/([\d,]+(?:\.\d+)?)\s+(?:EA|EACH)\b/i) ||
-      extract(/\bEA\s+([\d,]+)(?:\.\d+)?/i) ||
+      extract(/\bEA\s+([\d,]+(?:\.\d+)?)/i) ||
       extract(/\bQUANTITY[:\s]+([\d,]+)/i) ||
       extract(/\bQTY[:\s]+([\d,]+)/i);
-
-    const quoteDue =
-      extract(/QUOTE\s+DUE[:\s]+(\d{4}-\d{2}-\d{2})/i) ||
-      extract(/RETURN\s+BY[:\s]+(\d{4}-\d{2}-\d{2})/i) ||
-      extract(/RESPONSE\s+DATE[:\s]+(\d{2}[-\/]\d{2}[-\/]\d{4})/i) ||
-      extract(/DUE\s+DATE[:\s]+(\d{4}-\d{2}-\d{2})/i);
 
     const refPn = extract(/PIECE\s+PART\s+(?:NO|NUMBER)[:\s]+([A-Z0-9\-]+)/i) ||
       extract(/PART\s+(?:NO|NUMBER)[:\s]+([A-Z0-9\-]+)/i);
@@ -95,9 +154,7 @@ async function parsePdf(buffer, sol_number) {
     const unitPrice = extract(/UNIT\s+PRICE[:\s]*\$?([\d,]+\.?\d*)/i);
 
     return {
-      item_name:       itemName || null,
       quantity:        qty ? qty.replace(/,/g, "") : null,
-      quote_due:       quoteDue || null,
       ref_part_number: refPn || null,
       hist_price:      histPrice ? parseFloat(histPrice.replace(/,/g, "")) : null,
       unit_price:      unitPrice ? parseFloat(unitPrice.replace(/,/g, "")) : null,
@@ -171,25 +228,37 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
         info("No table selector found — grabbing content anyway");
       }
 
-      const html = await page.content();
-      const pageLen = html.length;
+      const pageLen = (await page.content()).length;
       info("Listing HTML: " + pageLen + " chars");
 
       if (pageLen < 500) {
         fail("Listing too short (" + pageLen + " chars) — WAF likely still blocking");
-        // Log what we got so we can diagnose
-        info("Response snippet: " + html.slice(0, 300));
+        info("Response snippet: " + (await page.content()).slice(0, 300));
         continue;
       }
 
-      const hasPdfLinks = /dibbs2\.bsm\.dla\.mil\/Downloads\/RFQ/i.test(html);
-      const trCount = (html.match(/<tr[\s>]/gi) || []).length;
-      info("Has PDF links: " + hasPdfLinks + " | TR count: " + trCount);
+      // Log detected table headers so we can verify column mapping
+      const headers = await page.evaluate(() => {
+        const tables = Array.from(document.querySelectorAll("table"));
+        for (const t of tables) {
+          if (t.querySelector('a[href*="dibbs2.bsm.dla.mil/Downloads/RFQ/"]')) {
+            const hr = t.rows[0];
+            return hr ? Array.from(hr.cells).map(c => c.innerText.trim()) : [];
+          }
+        }
+        return [];
+      });
+      info("Table headers: " + JSON.stringify(headers));
 
-      const daySols = parseListingHtml(html).filter(s => !seen.has(s.sol_number));
-      daySols.forEach(s => { s.issue_date = dateStr; seen.add(s.sol_number); });
+      const daySols = (await extractTableSolsFromDom(page, dateStr))
+        .filter(s => !seen.has(s.sol_number));
+      daySols.forEach(s => seen.add(s.sol_number));
       allSols.push(...daySols);
       info(dateStr + " — " + daySols.length + " sols found");
+      if (daySols.length) {
+        info("Sample: " + daySols[0].sol_number + " | " + (daySols[0].item_name || "no name") +
+             " | due " + (daySols[0].quote_due || "no date"));
+      }
     }
 
     // Open a dedicated dibbs2 page for PDF fetching.
@@ -240,13 +309,15 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
             if (base64) {
               const buffer = Buffer.from(base64, "base64");
               const fields = await parsePdf(buffer, sol.sol_number);
+              // Merge PDF fields — only fill in missing fields; listing values win
               for (const [k, v] of Object.entries(fields)) {
-                if (v !== null && v !== undefined && v !== "") sol[k] = v;
+                if (v !== null && v !== undefined && v !== "" && !sol[k]) sol[k] = v;
               }
               parsed++;
-              info("✅ " + sol.sol_number + " — " + (sol.item_name || "no item name") + " | qty " + (sol.quantity || "?"));
+              info("✅ " + sol.sol_number + " | " + (sol.item_name || "no item name") +
+                   " | qty " + (sol.quantity || "?") + " | due " + (sol.quote_due || "?"));
             } else {
-              info(sol.sol_number + " — PDF fetch returned null (not a PDF or failed)");
+              info(sol.sol_number + " — PDF fetch null (skipping qty)");
             }
           } catch (e) {
             info(sol.sol_number + " PDF fetch failed: " + e.message);
