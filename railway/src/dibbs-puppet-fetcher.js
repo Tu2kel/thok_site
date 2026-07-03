@@ -152,8 +152,11 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
             page.waitForNavigation({ waitUntil: "networkidle2", timeout: 45000 }),
             page.click("#butAgree"),
           ]);
-          info("✅ Banner accepted");
-          // Extra wait for ASP.NET UpdatePanel AJAX render
+          info("✅ Banner accepted — landed on: " + page.url());
+          // After banner, navigate directly to the listing URL again —
+          // the banner POST may redirect to a different page than expected.
+          await page.goto(listUrl, { waitUntil: "networkidle2", timeout: 60000 });
+          info("Re-navigated to listing — now on: " + page.url());
           await new Promise(r => setTimeout(r, 3000));
         }
       } catch {
@@ -179,8 +182,10 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
         continue;
       }
 
-      // Debug: dump first 800 chars so we can see actual HTML structure
-      info("HTML[0:800]: " + html.replace(/\s+/g, " ").slice(0, 800));
+      // Debug: dump start + middle to see head vs body content
+      const flat = html.replace(/\s+/g, " ");
+      info("HTML[0:600]: " + flat.slice(0, 600));
+      info("HTML[mid]: " + flat.slice(Math.floor(flat.length / 2) - 300, Math.floor(flat.length / 2) + 300));
       // Also check if dibbs2 PDF links appear anywhere in the page
       const hasPdfLinks = /dibbs2\.bsm\.dla\.mil\/Downloads\/RFQ/i.test(html);
       info("Has dibbs2 PDF links: " + hasPdfLinks);
