@@ -135,7 +135,7 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
 
       info("Navigating to listing: " + listUrl);
       try {
-        await page.goto(listUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+        await page.goto(listUrl, { waitUntil: "networkidle2", timeout: 60000 });
       } catch (e) {
         fail("Navigation failed for " + dateStr + ": " + e.message);
         continue;
@@ -146,14 +146,26 @@ async function fetchDibbsDailySols({ lookbackDays = 1 } = {}) {
         const bannerBtn = await page.waitForSelector("#butAgree", { timeout: 8000 });
         if (bannerBtn) {
           info("Banner found — clicking OK...");
+          // After banner POST, DIBBS fires an ASP.NET UpdatePanel AJAX call to load results.
+          // Wait for networkidle2 so the table has time to populate.
           await Promise.all([
-            page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
+            page.waitForNavigation({ waitUntil: "networkidle2", timeout: 45000 }),
             page.click("#butAgree"),
           ]);
           info("✅ Banner accepted");
+          // Extra wait for ASP.NET UpdatePanel AJAX render
+          await new Promise(r => setTimeout(r, 3000));
         }
       } catch {
         info("No banner — session active or already accepted");
+      }
+
+      // Wait for the results table or a known element on the listing page
+      try {
+        await page.waitForSelector("table, #ctl00_ContentPlaceHolder1_GridView1, .ms-listviewtable", { timeout: 10000 });
+        info("Results table element found");
+      } catch {
+        info("No table selector found — grabbing content anyway");
       }
 
       const html = await page.content();
