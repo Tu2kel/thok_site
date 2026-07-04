@@ -1310,74 +1310,6 @@
         return;
       }
 
-      // Railway agent — POST /trigger (SAM → PDF → Claude → blast), no Navigator scrape
-      if (agentMode === "railway") {
-        addLog("Triggering Railway pipeline — SAM fetch → PDF parse → Claude screen → blast…", "info");
-        try {
-          const tr = await fetch(getAgentUrl() + "/trigger", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ live: liveModeRef.current }),
-            signal: AbortSignal.timeout(15000),
-          });
-          const td = await tr.json().catch(() => ({}));
-          if (td.ok === false && td.error === "Pipeline already running") {
-            addLog("⚠ Pipeline already running — wait for current run to finish.", "warn");
-            setRunning(false);
-            return;
-          }
-          addLog("✅ Railway pipeline started (SAM → PDF → screen → blast). Polling for completion…", "ok");
-
-          // Poll /health every 30s until pipeline finishes, then log result
-          const pollStart = Date.now();
-          const pollHandle = setInterval(async () => {
-            try {
-              const hr = await fetch(getAgentUrl() + "/health");
-              const hd = await hr.json().catch(() => ({}));
-              const elapsedMin = Math.round((Date.now() - pollStart) / 60000);
-              if (!hd.running) {
-                clearInterval(pollHandle);
-                if (hd.last_run_ok === false) {
-                  addLog("❌ Pipeline finished with errors after " + elapsedMin + " min — check Railway logs.", "err");
-                } else {
-                  addLog("✅ Pipeline complete (" + elapsedMin + " min) — loading sol data…", "ok");
-                }
-                // Fetch sol data from last pipeline run and populate the UI
-                try {
-                  const br = await fetch(getAgentUrl() + "/daily-brief");
-                  const bd = await br.json().catch(() => ({}));
-                  if (bd.ok && bd.brief && Array.isArray(bd.brief.sols) && bd.brief.sols.length > 0) {
-                    const briefSols = bd.brief.sols.map(s => ({
-                      ...s,
-                      source: "dibbs-puppet",
-                      sam_resource_links: [],
-                    }));
-                    const sd = bd.brief.run_date || new Date().toLocaleString();
-                    setSols(briefSols);
-                    setScrapeDate(sd);
-                    storeSave({ mode: modeRef.current, sols: briefSols, scrapeDate: sd, analysis: null });
-                    addLog("AUTO ▶ " + briefSols.length + " sol(s) loaded from pipeline run.", "ok");
-                    if (modeRef.current === "auto") {
-                      await autoChain(briefSols);
-                    }
-                  } else {
-                    addLog("⚠ No sol data in last run brief.", "warn");
-                  }
-                } catch (e) {
-                  addLog("⚠ Could not load sol data: " + e.message, "warn");
-                }
-              } else {
-                addLog("⟳ Pipeline running… " + elapsedMin + " min elapsed", "info");
-              }
-            } catch {}
-          }, 30000);
-        } catch (e) {
-          addLog("Trigger error: " + e.message, "err");
-        }
-        setRunning(false);
-        return;
-      }
-
       addLog("Triggering Navigator scrape…", "info");
 
       try {
@@ -1960,25 +1892,6 @@
                 m.toUpperCase(),
               ),
             ),
-          ),
-
-          // Vendors-per-FSC cap control
-          h("div", {
-            style: { display: "flex", alignItems: "center", gap: "6px" },
-            title: "Max vendors emailed per FSC lane. Raise if you want broader coverage from one company.",
-          },
-            h("span", { style: { fontFamily: "JetBrains Mono,monospace", fontSize: "9px", color: "rgba(245,240,232,.3)", letterSpacing: ".08em", textTransform: "uppercase" } }, "Cap/FSC"),
-            h("input", {
-              type: "number", min: 1, max: 20, value: blastCapPerFsc,
-              onChange: e => setBlastCapPerFsc(Math.max(1, parseInt(e.target.value) || 1)),
-              style: {
-                width: "46px", textAlign: "center", padding: "5px 4px",
-                fontFamily: "JetBrains Mono,monospace", fontSize: "12px",
-                background: "rgba(201,168,76,.08)", color: "rgba(201,168,76,.9)",
-                border: "1px solid rgba(201,168,76,.3)", borderRadius: "3px",
-                outline: "none",
-              },
-            }),
           ),
 
           // LIVE toggle — OFF = test emails only, ON = real vendor blast

@@ -3,6 +3,7 @@
 // Mirrors navigator-scraper.js v3.1 logic exactly.
 
 const puppeteer = require("puppeteer-core");
+const fs        = require("fs");
 
 // Column indices verified against DibbsNavigator layout (screenshot 2026-07-03):
 // 0:Solicitation 1:AI 2:Sol.Type 3:Send 4:Nomenclature 5:Repost 6:QTY
@@ -129,11 +130,16 @@ async function broadPass(page, passNum, dateId, label, minPrice) {
 
 
 async function scrape({ username, password, minPrice = 1000 }) {
-  // System Chromium installed by nixpacks — puppeteer-core needs explicit path
-  const executablePath =
-    process.env.CHROMIUM_PATH ||
-    "/usr/bin/chromium" ||
-    "/usr/bin/chromium-browser";
+  // Find Chromium — try candidates in order, pick first that actually exists on disk.
+  // CHROMIUM_PATH env var is checked first but only used if the file is present.
+  const _candidates = [
+    process.env.CHROMIUM_PATH,
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+  ].filter(Boolean);
+  const executablePath = _candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || _candidates[0];
 
   info("Launching Chromium at " + executablePath + "…");
   const browser = await puppeteer.launch({
