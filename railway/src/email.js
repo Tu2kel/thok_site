@@ -114,7 +114,7 @@ function buildBodyForSender(vendor, sols, sender) {
   return [
     "Hi " + greeting + ",",
     "",
-    "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). We are a DLA-registered reseller and defense supply chain partner. As a reseller, we qualify for distributor-level pricing and can provide a sales tax exemption certificate upon request.",
+    "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). We are a DLA-registered reseller and defense supply chain partner. We'd appreciate being extended your wholesale / distributor-level pricing — we can provide a resale certificate or tax exemption documentation on request.",
     "",
     "I have active government procurement needs in your lane and need pricing and availability on the following:",
     "",
