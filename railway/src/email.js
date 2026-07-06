@@ -62,9 +62,14 @@ function dayBefore(raw) {
   return (d.getMonth()+1).toString().padStart(2,"0") + "/" + d.getDate().toString().padStart(2,"0") + "/" + d.getFullYear();
 }
 
+function toTitleCase(s) {
+  if (!s) return s;
+  return s.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
 // sender = "gmail" | "resend"
 function buildBodyForSender(vendor, sols, sender) {
-  const greeting = vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name;
+  const greeting = toTitleCase(vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name);
   const isMulti  = sols.length > 1;
 
   // Build item lines — distros don't know NSNs, never include price
