@@ -85,7 +85,6 @@ function buildBodyForSender(vendor, sols, sender) {
     return [
       isMulti ? ("Item " + (i + 1) + ":") : null,
       "  Item:          " + (s.item_name || "—"),
-      s.nsn               ? "  NSN:           " + s.nsn : null,
       s.ref_part_number
         ? "  Part Number:   " + s.ref_part_number + (s.manufacturer_cage ? "  (Mfr CAGE: " + s.manufacturer_cage + ")" : "")
         : null,
