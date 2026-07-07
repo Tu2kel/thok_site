@@ -916,7 +916,8 @@ exports.handler = async (event) => {
               ).catch(() => {});
             }
             if (sbsNaics.length) {
-              const fsc = naicsToFsc(sbsNaics);
+              const primaryOnly = sbsResult.primary_naics ? [sbsResult.primary_naics] : sbsNaics.slice(0, 1);
+              const fsc = naicsToFsc(primaryOnly);
               await db.collection("distributors").updateOne(
                 { id: d.id },
                 { $set: {
@@ -972,7 +973,8 @@ exports.handler = async (event) => {
             continue;
           }
 
-          const fsc = naicsToFsc(allNaics);
+          const primaryOnly = primary ? [primary] : allNaics.slice(0, 1);
+          const fsc = naicsToFsc(primaryOnly);
           await db.collection("distributors").updateOne(
             { id: d.id },
             { $set: {
