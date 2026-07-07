@@ -96,5 +96,16 @@
     "Switzerland", "Turkey", "United Kingdom",
   ];
 
-  window.SCC_CONSTANTS = { FSC_NAMES, BAA_NON_QUAL, BAA_QUAL };
+  // ROT18: decode obfuscated sol numbers from vendor email replies
+  // Same function encodes and decodes — apply once to reveal the real sol number
+  function rot18(s) {
+    return (s || "").replace(/[a-zA-Z0-9]/g, c => {
+      if (c >= "A" && c <= "Z") return String.fromCharCode(((c.charCodeAt(0) - 65 + 13) % 26) + 65);
+      if (c >= "a" && c <= "z") return String.fromCharCode(((c.charCodeAt(0) - 97 + 13) % 26) + 97);
+      if (c >= "0" && c <= "9") return String.fromCharCode(((c.charCodeAt(0) - 48 +  5) % 10) + 48);
+      return c;
+    });
+  }
+
+  window.SCC_CONSTANTS = { FSC_NAMES, BAA_NON_QUAL, BAA_QUAL, rot18 };
 })();
