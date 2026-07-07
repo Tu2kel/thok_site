@@ -301,13 +301,29 @@ async function runPipeline(liveModeOverride) {
   }
 
   // ── 7. Blast — only GO + VERIFY sols ─────────────────────────────────
-  const blastSols = allScreened.filter(s => s.verdict !== "REJECT" && s.winProbabilityPct >= 50);
+  let blastSols = allScreened.filter(s => s.verdict !== "REJECT" && s.winProbabilityPct >= 50);
   log("Blast-eligible (pre-gate): " + blastSols.length + " sols");
 
   // Quality gate: block any sol missing the minimum data vendors need to quote.
   // Hard blocks: item_name (they must know WHAT to price) + quote_due (they must know the deadline).
   // Quantity is NOT a hard block — SAM API never provides it and ~60% of sols have no PDF attachment.
   // Missing quantity shows as "Per RFQ" in the vendor email body, which is professional and actionable.
+  // Drop sols where vendor's displayed response due (= DLA quote_due minus 1 day) is today or already past.
+  // Raw quote_due must be at least 2 days out so the vendor has a real day to respond.
+  const todayMs = new Date().setHours(0, 0, 0, 0);
+  const cutoffMs = todayMs + 2 * 86400000; // today + 2 days
+  const expiredSols = blastSols.filter(s => {
+    if (!s.quote_due) return false;
+    const d = new Date(s.quote_due);
+    return !isNaN(d.getTime()) && d.getTime() < cutoffMs;
+  });
+  if (expiredSols.length) log("Dropped " + expiredSols.length + " sol(s) — quote due today or tomorrow (too late to blast)");
+  blastSols = blastSols.filter(s => {
+    if (!s.quote_due) return true;
+    const d = new Date(s.quote_due);
+    return isNaN(d.getTime()) || d.getTime() >= cutoffMs;
+  });
+
   const heldSols  = [];
   const readySols = blastSols.filter(s => {
     const missing = [];
