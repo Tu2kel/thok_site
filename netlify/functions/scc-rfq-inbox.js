@@ -12,12 +12,12 @@
 // Env: GMAIL_APP_PASSWORD, ANTHROPIC_API_KEY, MONGODB_URI
 
 const { ImapFlow }   = require("imapflow");
-const nodemailer     = require("nodemailer");
 const { MongoClient } = require("mongodb");
 
 const IMAP_USER    = "kelley.anthonyk@gmail.com";
-const SUMMARY_TO   = ["anthony@ifedlog.com", "kelley.anthonyk@gmail.com"];
+const SUMMARY_TO   = "anthony@ifedlog.com";
 const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
+const RESEND_FROM  = FROM_NAME + " <" + SUMMARY_TO + ">";
 
 const HIST_OVER_THRESHOLD  =  15;
 const HIST_UNDER_THRESHOLD = -10;
@@ -85,18 +85,17 @@ function extractSol(text) {
   return m.length ? m[0][1] : null;
 }
 
-// ── NODEMAILER SMTP SUMMARY ────────────────────────────────────────────────
+// ── RESEND SUMMARY ─────────────────────────────────────────────────────────
 async function sendSummary(subject, text) {
-  const t = nodemailer.createTransport({
-    host: "smtp.gmail.com", port: 465, secure: true,
-    auth: { user: IMAP_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY not set");
+  const res = await fetch("https://api.resend.com/emails", {
+    method:  "POST",
+    headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+    body:    JSON.stringify({ from: RESEND_FROM, to: [SUMMARY_TO], subject, text }),
   });
-  await t.sendMail({
-    from: '"' + FROM_NAME + '" <' + IMAP_USER + '>',
-    to:   Array.isArray(SUMMARY_TO) ? SUMMARY_TO.join(", ") : SUMMARY_TO,
-    subject,
-    text,
-  });
+  const data = await res.json();
+  if (!res.ok) throw new Error("Resend summary failed: " + JSON.stringify(data));
 }
 
 // ── CLAUDE PARSER ──────────────────────────────────────────────────────────
