@@ -161,36 +161,50 @@ function buildBlastPlan(sols, dists) {
 }
 
 // ── Sender routing ────────────────────────────────────────────────────────────
-// Returns: "gmail" | "resend" | "paused" | "limit"
-async function pickSender(db) {
-  if (!db) return "gmail";
+// Reads state once at blast start, tracks counts in memory — no MongoDB per email.
+function makeSenderCache(db) {
+  let paused      = false;
+  let gmailCount  = 0;
+  let resendCount = 0;
+  let loaded      = false;
 
-  const today = new Date().toISOString().slice(0, 10);
-  const [ctrl, gmailDoc, resendDoc] = await Promise.all([
-    db.collection("_meta").findOne({ _id: "blast_control" }),
-    db.collection("_meta").findOne({ _id: "gmail_daily"  }),
-    db.collection("_meta").findOne({ _id: "resend_daily" }),
-  ]);
+  async function load() {
+    if (!db || loaded) return;
+    loaded = true;
+    const today = new Date().toISOString().slice(0, 10);
+    const [ctrl, gmailDoc, resendDoc] = await Promise.all([
+      db.collection("_meta").findOne({ _id: "blast_control" }),
+      db.collection("_meta").findOne({ _id: "gmail_daily"  }),
+      db.collection("_meta").findOne({ _id: "resend_daily" }),
+    ]);
+    paused      = !!(ctrl && ctrl.paused);
+    gmailCount  = (gmailDoc  && gmailDoc.date  === today) ? (gmailDoc.count  || 0) : 0;
+    resendCount = (resendDoc && resendDoc.date === today) ? (resendDoc.count || 0) : 0;
+  }
 
-  if (ctrl && ctrl.paused) return "paused";
-
-  const gmailCount  = (gmailDoc  && gmailDoc.date  === today) ? (gmailDoc.count  || 0) : 0;
-  const resendCount = (resendDoc && resendDoc.date === today) ? (resendDoc.count || 0) : 0;
-
-  if (gmailCount  < GMAIL_LIMIT)  return "gmail";
-  if (resendCount < RESEND_LIMIT) return "resend";
-  return "limit";
-}
-
-async function incrementSenderCount(db, sender) {
-  if (!db) return;
-  const today = new Date().toISOString().slice(0, 10);
-  const id    = sender === "gmail" ? "gmail_daily" : "resend_daily";
-  await db.collection("_meta").updateOne(
-    { _id: id },
-    { $inc: { count: 1 }, $set: { date: today }, $setOnInsert: { _id: id } },
-    { upsert: true },
-  ).catch(() => {});
+  return {
+    async pick() {
+      await load();
+      if (paused)                      return "paused";
+      if (gmailCount  < GMAIL_LIMIT)   return "gmail";
+      if (resendCount < RESEND_LIMIT)  return "resend";
+      return "limit";
+    },
+    increment(sender) {
+      if (sender === "gmail")  gmailCount++;
+      else                     resendCount++;
+      // Fire-and-forget persist — don't block the send loop
+      if (db) {
+        const today = new Date().toISOString().slice(0, 10);
+        const id    = sender === "gmail" ? "gmail_daily" : "resend_daily";
+        db.collection("_meta").updateOne(
+          { _id: id },
+          { $inc: { count: 1 }, $set: { date: today }, $setOnInsert: { _id: id } },
+          { upsert: true },
+        ).catch(() => {});
+      }
+    },
+  };
 }
 
 // ── Blast runner ──────────────────────────────────────────────────────────────
@@ -241,12 +255,12 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
   info("IFL refs assigned: " + solRefMap.size + " unique sols → IFL-" + blastDate + "-001 through IFL-" + blastDate + "-" + String(refSeq).padStart(3, "0"));
 
   let lastSentVendorId = null;
+  const senderCache = makeSenderCache(db);
 
   for (const entry of rotatedPlan) {
     const { vendor, sols: allSols } = entry;
 
-    // Pick sender before each email (auto-switches when Gmail cap is hit)
-    const sender = await pickSender(db);
+    const sender = await senderCache.pick();
 
     if (sender === "paused") {
       info("⏸ Blast paused via kill switch — stopping");
@@ -302,16 +316,17 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       lastSentVendorId = vendor.id || vendor.name;
       results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender: effectiveSender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
       info("✓ [" + effectiveSender.toUpperCase() + "] RFQ → " + vendor.name + " (" + sols.length + " items)");
-      await incrementSenderCount(db, effectiveSender);
+      senderCache.increment(effectiveSender);
 
       if (db) {
-        for (const sol of sols) {
-          await db.collection("blast_log").updateOne(
+        const sentAt = new Date().toISOString();
+        Promise.all(sols.map(sol =>
+          db.collection("blast_log").updateOne(
             { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
-            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, sender: effectiveSender, status: "sent", sent_at: new Date().toISOString() } },
+            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, sender: effectiveSender, status: "sent", sent_at: sentAt } },
             { upsert: true },
-          ).catch(e => info("blast_log save err:", e.message));
-        }
+          )
+        )).catch(e => info("blast_log save err:", e.message));
       }
     } catch (e) {
       results.failed++;
@@ -319,13 +334,14 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       info("✗ [" + sender.toUpperCase() + "] RFQ FAILED → " + vendor.name + ": " + e.message);
 
       if (db) {
-        for (const sol of sols) {
-          await db.collection("blast_log").updateOne(
+        const failAt = new Date().toISOString();
+        Promise.all(sols.map(sol =>
+          db.collection("blast_log").updateOne(
             { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
-            { $set: { sol_number: sol.sol_number, vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), sender, status: "failed", error: e.message, sent_at: new Date().toISOString() } },
+            { $set: { sol_number: sol.sol_number, vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), sender, status: "failed", error: e.message, sent_at: failAt } },
             { upsert: true },
-          ).catch(() => {});
-        }
+          )
+        )).catch(() => {});
       }
     }
 
