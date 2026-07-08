@@ -287,6 +287,123 @@
     );
   }
 
+  // ── FSC Scrub Panel ──────────────────────────────────────────────────────
+  const SCRUB_FN = "/.netlify/functions/scc-fsc-scrub";
+
+  function FscScrubPanel() {
+    const [emailText,   setEmailText]   = useState("");
+    const [parsing,     setParsing]     = useState(false);
+    const [preview,     setPreview]     = useState(null);
+    const [applying,    setApplying]    = useState(false);
+    const [scrubResult, setScrubResult] = useState(null);
+    const [scrubError,  setScrubError]  = useState(null);
+    const [collapsed,   setCollapsed]   = useState(false);
+
+    const handleParse = async () => {
+      setParsing(true); setPreview(null); setScrubResult(null); setScrubError(null);
+      try {
+        const res  = await fetch(SCRUB_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview", email_text: emailText }) });
+        const data = await res.json();
+        if (data.error && !data.ok) { setScrubError(data.error); } else { setPreview(data); }
+      } catch (e) { setScrubError(e.message); }
+      finally { setParsing(false); }
+    };
+
+    const handleApply = async () => {
+      if (!preview?.vendor?.id || !preview?.fsc_to_remove?.length) return;
+      if (!confirm("Strip " + preview.fsc_to_remove.length + " FSC(s) from " + preview.vendor.name + "?\n\nThis removes them from the blast rotation for this vendor.")) return;
+      setApplying(true); setScrubError(null);
+      try {
+        const res  = await fetch(SCRUB_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "apply", vendor_id: preview.vendor.id, fsc_codes: preview.fsc_to_remove }) });
+        const data = await res.json();
+        setScrubResult(data); setPreview(null); setEmailText("");
+      } catch (e) { setScrubError(e.message); }
+      finally { setApplying(false); }
+    };
+
+    return h("div", { style: { marginBottom: "16px", border: "1px solid rgba(239,68,68,.25)", background: "var(--inset-bg)" } },
+
+      // Header
+      h("div", {
+        onClick: () => setCollapsed(x => !x),
+        style: { display: "flex", alignItems: "center", gap: "10px", padding: "9px 14px", cursor: "pointer", borderBottom: collapsed ? "none" : "1px solid rgba(239,68,68,.15)", background: "rgba(239,68,68,.04)" },
+      },
+        h("span", { style: { fontFamily: mono, fontSize: "9px", color: dim } }, collapsed ? "▶" : "▼"),
+        h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", letterSpacing: ".08em", color: red + "0.8)" } }, "FSC SCRUB"),
+        h("div", { style: { fontFamily: mono, fontSize: "10px", color: dim } }, "Paste a no-bid reply → strip those FSC codes from the vendor's blast lane"),
+      ),
+
+      !collapsed && h("div", { style: { padding: "14px" } },
+
+        h("textarea", {
+          value: emailText,
+          onChange: e => setEmailText(e.target.value),
+          placeholder: "Paste the full vendor reply email here — include the quoted original so the Ref # lines are visible...",
+          rows: 6,
+          style: { width: "100%", boxSizing: "border-box", background: "rgba(0,0,0,.3)", border: "1px solid rgba(245,240,232,.12)", color: "var(--alabaster)", fontFamily: mono, fontSize: "11px", padding: "10px", resize: "vertical" },
+        }),
+
+        h("div", { style: { display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" } },
+          h("button", {
+            onClick: handleParse,
+            disabled: parsing || !emailText.trim(),
+            style: { padding: "6px 16px", background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", color: red + "0.9)", cursor: "pointer", fontFamily: mono, fontSize: "10px", letterSpacing: ".05em" },
+          }, parsing ? "Parsing…" : "⚡ Parse Email"),
+
+          scrubResult && h("span", { style: { fontFamily: mono, fontSize: "10px", color: green + "1)" } },
+            "✓ Stripped " + scrubResult.removed.length + " FSC(s) from " + scrubResult.vendor_name + " — " + scrubResult.fsc_remaining + " remain"),
+
+          scrubError && h("span", { style: { fontFamily: mono, fontSize: "10px", color: red + "0.8)" } }, "✗ " + scrubError),
+        ),
+
+        // Preview block
+        preview && h("div", { style: { marginTop: "12px", padding: "12px", background: "rgba(0,0,0,.2)", border: "1px solid rgba(245,240,232,.08)" } },
+
+          // Vendor line
+          preview.vendor
+            ? h("div", { style: { display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px", flexWrap: "wrap" } },
+                h("div", { style: { fontFamily: "Cinzel,serif", fontSize: "11px", color: gold + "1)" } }, preview.vendor.name),
+                h("div", { style: { fontFamily: mono, fontSize: "10px", color: dim } }, preview.sender_email),
+                h("div", { style: { fontFamily: mono, fontSize: "10px", color: dim } }, preview.vendor.fsc_count + " FSCs on file"),
+              )
+            : h("div", { style: { fontFamily: mono, fontSize: "11px", color: amber + "0.9)", marginBottom: "10px" } },
+                "⚠ " + (preview.warning || "Vendor not found in DB") + " — " + preview.sender_email),
+
+          // Refs found
+          preview.refs_found && preview.refs_found.length > 0 && h("div", { style: { marginBottom: "10px" } },
+            h("div", { style: { fontFamily: mono, fontSize: "9px", letterSpacing: ".08em", color: dim, textTransform: "uppercase", marginBottom: "5px" } }, "Refs Found"),
+            h("div", null, ...preview.refs_found.map((r, i) =>
+              h("div", { key: i, style: { fontFamily: mono, fontSize: "10px", color: "var(--alabaster)", paddingLeft: "8px", lineHeight: "1.8" } },
+                r.ref + (r.item_name ? " — " + r.item_name : "") + "  →  FSC " + r.fsc + (preview.fsc_names && preview.fsc_names[r.fsc] ? " (" + preview.fsc_names[r.fsc] + ")" : ""))
+            )),
+          ),
+
+          // FSCs to strip
+          preview.fsc_to_remove && preview.fsc_to_remove.length > 0
+            ? h("div", null,
+                h("div", { style: { fontFamily: mono, fontSize: "9px", letterSpacing: ".08em", color: red + "0.7)", textTransform: "uppercase", marginBottom: "5px" } }, "FSC Codes to Strip"),
+                h("div", { style: { display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px" } },
+                  ...preview.fsc_to_remove.map(f =>
+                    h("span", { key: f, style: { fontFamily: mono, fontSize: "10px", color: red + "0.9)", background: red + ".10)", border: "1px solid " + red + ".3)", borderRadius: "3px", padding: "2px 8px" } },
+                      f + " · " + (preview.fsc_names && preview.fsc_names[f] ? preview.fsc_names[f] : "FSC " + f))
+                  )
+                ),
+                preview.vendor && h("button", {
+                  onClick: handleApply,
+                  disabled: applying,
+                  style: { padding: "7px 20px", background: "rgba(239,68,68,.2)", border: "1px solid rgba(239,68,68,.5)", color: red + "1)", cursor: "pointer", fontFamily: mono, fontSize: "11px", letterSpacing: ".06em", fontWeight: 700 },
+                }, applying ? "Removing…" : "✕ Confirm Scrub — " + preview.fsc_to_remove.length + " FSC(s) from " + preview.vendor.name),
+              )
+            : preview.vendor && preview.fsc_from_refs && preview.fsc_from_refs.length > 0
+              ? h("div", { style: { fontFamily: mono, fontSize: "10px", color: amber + "0.8)" } },
+                  "⚠ Found FSC(s) " + preview.fsc_from_refs.join(", ") + " in these refs but vendor doesn't have them assigned — nothing to remove")
+              : preview.vendor && h("div", { style: { fontFamily: mono, fontSize: "10px", color: amber + "0.8)" } },
+                  "⚠ Could not match refs to FSC codes — check that the quoted original email is included"),
+        ),
+      ),
+    );
+  }
+
   // ── Main Tab ─────────────────────────────────────────────────────────────
   function InboxTab() {
     const [report,    setReport]    = useState(null);
@@ -435,6 +552,9 @@
       error && h("div", {
         style: { margin: "12px 0", padding: "10px 16px", background: red + ".08)", border: "1px solid " + red + ".25)", fontFamily: mono, fontSize: "11px", color: red + "0.9)" },
       }, "Error: " + error),
+
+      // ── FSC Scrub ──
+      h(FscScrubPanel, {}),
 
       // ── Loading ──
       loading && h("div", {
