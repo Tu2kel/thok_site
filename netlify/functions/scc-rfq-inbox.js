@@ -223,7 +223,7 @@ async function buildDailyReport(db, dateStr) {
 }
 
 // ── SUMMARY EMAIL TEXT ──────────────────────────────────────────────────────
-function buildSummaryText(report, stats) {
+function buildSummaryText(report, stats, fscScrubLog = []) {
   const ct = new Date().toLocaleString("en-US", { timeZone: "America/Chicago" });
   const lines = [
     "RFQ INBOX SCAN — " + ct + " CT",
@@ -231,6 +231,7 @@ function buildSummaryText(report, stats) {
     "",
     "Scan:  " + stats.scanned + " checked · " + stats.new_count + " new · " + stats.errors + " error(s)",
     "Daily: " + report.total_quotes + " quote(s) · " + report.total_no_bids + " no-bid(s) · " + report.total_sols + " sol(s)",
+    fscScrubLog.length ? "FSC Auto-Scrub: " + fscScrubLog.length + " vendor(s) updated" : "",
     "",
   ];
 
@@ -262,9 +263,60 @@ function buildSummaryText(report, stats) {
       lines.push("");
     }
   }
+  if (fscScrubLog.length) {
+    lines.push("FSC AUTO-SCRUB LOG");
+    lines.push("─".repeat(40));
+    for (const s of fscScrubLog) {
+      lines.push("  " + (s.vendor_name || s.vendor_email) + " → stripped FSC " + s.removed.join(", "));
+    }
+    lines.push("");
+  }
   lines.push("═".repeat(50));
   lines.push("Pipeline → https://thehouseofkel.com/scc/");
   return lines.join("\n");
+}
+
+// ── FSC AUTO-SCRUB ─────────────────────────────────────────────────────────
+// Called whenever a vendor no-bid is detected. Looks up the FSC code for each
+// sol number (via rfq_refs), finds the vendor in distributors, and $pulls those
+// FSC codes so the vendor stops receiving blasts for items in that lane.
+async function scrubFscForNoBid(db, vendorEmail, solNumbers) {
+  const fscs = new Set();
+  for (const sol of solNumbers) {
+    if (!sol || sol === "UNMATCHED") continue;
+    const doc = await db.collection("rfq_refs").findOne({ $or: [{ ref: sol }, { sol_number: sol }] });
+    if (doc && doc.fsc) fscs.add(String(doc.fsc));
+    // Also try blast_log for older sol numbers not in rfq_refs
+    if (!doc) {
+      const log = await db.collection("blast_log").findOne({ sol_number: sol });
+      if (log && log.fsc) fscs.add(String(log.fsc));
+    }
+  }
+  if (!fscs.size) return { removed: [], vendor_name: null, reason: "no_fsc_found" };
+
+  const dist = db.collection("distributors");
+  let vendor = await dist.findOne({
+    email: new RegExp("^" + vendorEmail.replace(/[.+[\](){}^$|\\]/g, "\\$&") + "$", "i"),
+  });
+  if (!vendor) {
+    const domain = vendorEmail.split("@")[1];
+    if (domain) {
+      vendor = await dist.findOne({
+        email: new RegExp("@" + domain.replace(/\./g, "\\.") + "$", "i"),
+      });
+    }
+  }
+  if (!vendor) return { removed: [], vendor_name: null, reason: "vendor_not_in_db" };
+
+  const vendorFsc = (vendor.fsc || vendor.fsc_codes || []).map(String);
+  const toRemove  = [...fscs].filter(f => vendorFsc.includes(f));
+  if (!toRemove.length) return { removed: [], vendor_name: vendor.name || vendor.company_name, reason: "fsc_not_assigned" };
+
+  await dist.updateOne(
+    { id: vendor.id },
+    { $pull: { fsc: { $in: toRemove }, fsc_codes: { $in: toRemove } } },
+  );
+  return { removed: toRemove, vendor_name: vendor.name || vendor.company_name, reason: "scrubbed" };
 }
 
 // ── MONGODB ────────────────────────────────────────────────────────────────
@@ -426,8 +478,9 @@ exports.handler = async (event) => {
 
   const imap = makeImapClient();
   let scanned = 0, errors = 0;
-  const newDocs   = [];
-  const newMsgIds = [];
+  const newDocs      = [];
+  const newMsgIds    = [];
+  const fscScrubLog  = [];  // { vendor_name, removed[], sol_numbers[] }
 
   try {
     await imap.connect();
@@ -627,6 +680,21 @@ exports.handler = async (event) => {
           );
           newDocs.push(doc);
         }
+
+        // Auto-scrub FSC lanes when vendor says no-bid / not our lane
+        if (parsed.type === "no_bid") {
+          try {
+            const scrub = await scrubFscForNoBid(db, vendorEmail, targets.map(t => t.sol_number));
+            if (scrub.removed.length > 0) {
+              fscScrubLog.push({ vendor_name: scrub.vendor_name, vendor_email: vendorEmail, removed: scrub.removed, sol_numbers: targets.map(t => t.sol_number) });
+              addLog("FSC SCRUB " + vendorEmail + " → stripped " + scrub.removed.join(",") + " from " + scrub.vendor_name);
+            } else {
+              addLog("FSC SCRUB " + vendorEmail + " → " + (scrub.reason || "no change"));
+            }
+          } catch (e) {
+            addLog("FSC scrub error for " + vendorEmail + ": " + e.message);
+          }
+        }
       }
     } finally {
       lock.release();
@@ -643,10 +711,10 @@ exports.handler = async (event) => {
   await markProcessed(db, newMsgIds);
 
   const report = await buildDailyReport(db, today);
-  const stats  = { scanned, new_count: newDocs.length, errors, scanned_at: new Date(), log };
+  const stats  = { scanned, new_count: newDocs.length, errors, fsc_scrubs: fscScrubLog.length, scanned_at: new Date(), log };
   await db.collection("rfq_scan_log").insertOne(stats);
 
-  const summaryText    = buildSummaryText(report, stats);
+  const summaryText    = buildSummaryText(report, stats, fscScrubLog);
   const summarySubject = stats.new_count === 0
     ? "SCC Inbox Scan: No new responses · " + new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago" })
     : "SCC: " + stats.new_count + " new · " + report.total_quotes + " quotes · " + report.total_no_bids + " no-bids";
