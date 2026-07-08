@@ -11,6 +11,26 @@ const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
 
 function info(...a) { console.log("[blaster]", ...a); }
 
+// ── IFL Reference Generator ───────────────────────────────────────────────────
+// Format: IFL-YYMMDD-NN — meaningless to vendors, one lookup in SCC for us.
+// Refs are sol-scoped: same sol always gets the same ref on a given blast date.
+function makeIflRef(seq) {
+  const d   = new Date();
+  const ymd = d.toISOString().slice(2, 10).replace(/-/g, "");
+  return "IFL-" + ymd + "-" + String(seq + 1).padStart(2, "0");
+}
+
+async function saveRefMap(db, entries) {
+  if (!db || !entries.length) return;
+  await Promise.all(entries.map(e =>
+    db.collection("rfq_refs").updateOne(
+      { ref: e.ref },
+      { $set: e },
+      { upsert: true }
+    ).catch(() => {})
+  ));
+}
+
 // Network errors that indicate Railway's SMTP path is blocked (not an auth/address problem).
 // On these, fall back to Resend (HTTP/443) immediately without consuming Gmail quota.
 const SMTP_NETWORK_ERR = /timeout|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|ESOCKET/i;
@@ -253,11 +273,20 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       }
     }
 
+    // Assign IFL refs to each sol — vendors see IFL-260707-01, not the real sol number
+    const refEntries = [];
+    const solsWithRefs = sols.map((s, i) => {
+      const ref = makeIflRef(i);
+      refEntries.push({ ref, sol_number: s.sol_number, item_name: s.item_name || "", fsc: s.fsc || "", nsn: s.nsn || "", ref_part_number: s.ref_part_number || "", blast_date: new Date().toISOString().slice(0, 10) });
+      return { ...s, ref_code: ref };
+    });
+    await saveRefMap(db, refEntries);
+
     // Build subject + body for chosen sender
-    const firstSol = sols[0];
+    const firstSol = solsWithRefs[0];
     const { subject: baseSubject } = buildRFQBody(vendor, firstSol);
-    const subject = baseSubject + (sols.length > 1 ? " +" + (sols.length - 1) + " more" : "");
-    const body    = buildBodyForSender(vendor, sols, sender);
+    const subject = baseSubject + (solsWithRefs.length > 1 ? " +" + (solsWithRefs.length - 1) + " more" : "");
+    const body    = buildBodyForSender(vendor, solsWithRefs, sender);
 
     try {
       // sendWithFallback: if Gmail SMTP is blocked at the network level, Resend

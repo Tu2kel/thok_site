@@ -53,18 +53,6 @@ async function sendEmailResend({ to, subject, body, isHtml = false }) {
 // Backwards-compat alias (used by any code that still calls sendEmail)
 const sendEmail = sendEmailResend;
 
-// ── ROT18 obfuscation (ROT13 letters + ROT5 digits) ──────────────────────────
-// Hides sol numbers from vendors so they can't look up DLA historical prices.
-// Same function encodes and decodes — apply twice to reverse.
-function rot18(s) {
-  return (s || "").replace(/[a-zA-Z0-9]/g, c => {
-    if (c >= "A" && c <= "Z") return String.fromCharCode(((c.charCodeAt(0) - 65 + 13) % 26) + 65);
-    if (c >= "a" && c <= "z") return String.fromCharCode(((c.charCodeAt(0) - 97 + 13) % 26) + 97);
-    if (c >= "0" && c <= "9") return String.fromCharCode(((c.charCodeAt(0) - 48 +  5) % 10) + 48);
-    return c;
-  });
-}
-
 // ── Body builder ──────────────────────────────────────────────────────────────
 function dayBefore(raw) {
   if (!raw) return null;
@@ -104,7 +92,7 @@ function buildBodyForSender(vendor, sols, sender) {
       s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
       dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       fobStr             ? "  Shipping:      " + fobStr : null,
-      "  Ref #:         " + rot18(s.sol_number),
+      "  Ref #:         " + (s.ref_code || s.sol_number),
     ].filter(Boolean).join("\n");
   }).join("\n\n");
 
@@ -151,7 +139,7 @@ function buildBodyForSender(vendor, sols, sender) {
 
 // Single-sol helper (used for subject extraction in older call sites)
 function buildRFQBody(dist, record) {
-  const subject = "RFQ | " + rot18(record.sol_number) + " | Imperio Federal Logistics";
+  const subject = "RFQ | " + (record.ref_code || record.sol_number) + " | Imperio Federal Logistics";
   const body    = buildBodyForSender(dist, [record], "resend");
   return { subject, body };
 }
