@@ -345,6 +345,55 @@
   }
 
   // ── Main Tab ──────────────────────────────────────────────────────────────
+  // ── IFL Ref Lookup ────────────────────────────────────────────────────────
+  function RefLookup() {
+    const [input,  setInput]  = useState("");
+    const [result, setResult] = useState(null);
+    const [status, setStatus] = useState(null); // "loading" | "error" | "found"
+
+    async function lookup() {
+      const ref = input.trim().toUpperCase();
+      if (!ref) return;
+      setStatus("loading"); setResult(null);
+      try {
+        const data = await window.SCC_CONSTANTS.lookupIflRef(ref);
+        if (data.error) { setStatus("error"); setResult(data.error); }
+        else            { setStatus("found"); setResult(data); }
+      } catch (e) { setStatus("error"); setResult(e.message); }
+    }
+
+    return h("div", {
+      style: { background: "rgba(201,168,76,.06)", border: "1px solid rgba(201,168,76,.2)", borderRadius: "6px", padding: "14px 18px", marginBottom: "24px" },
+    },
+      h("div", { style: { fontFamily: mono, fontSize: "10px", letterSpacing: ".1em", color: gold + ".6)", marginBottom: "10px" } }, "IFL REF LOOKUP"),
+      h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } },
+        h("input", {
+          type: "text", placeholder: "IFL-260707-047",
+          value: input,
+          onChange: e => setInput(e.target.value),
+          onKeyDown: e => e.key === "Enter" && lookup(),
+          style: { fontFamily: mono, fontSize: "12px", background: "rgba(0,0,0,.3)", border: "1px solid rgba(201,168,76,.25)", borderRadius: "4px", color: "#e2e8f0", padding: "6px 10px", width: "200px", outline: "none" },
+        }),
+        h("button", {
+          onClick: lookup,
+          style: { padding: "6px 14px", fontFamily: mono, fontSize: "11px", background: "rgba(201,168,76,.15)", border: "1px solid rgba(201,168,76,.3)", color: gold + ".9)", borderRadius: "4px", cursor: "pointer" },
+        }, "Decode"),
+      ),
+      status === "loading" && h("div", { style: { fontFamily: mono, fontSize: "11px", color: "var(--body-faint)", marginTop: "10px" } }, "Looking up…"),
+      status === "error"   && h("div", { style: { fontFamily: mono, fontSize: "11px", color: "#ef4444", marginTop: "10px" } }, "Not found: " + result),
+      status === "found"   && result && h("div", {
+        style: { marginTop: "12px", fontFamily: mono, fontSize: "11px", lineHeight: "1.8", color: "#e2e8f0" },
+      },
+        h("div", null, h("span", { style: { color: gold + ".6)" } }, "Sol #:   "), result.sol_number),
+        h("div", null, h("span", { style: { color: gold + ".6)" } }, "Item:    "), result.item_name  || "—"),
+        h("div", null, h("span", { style: { color: gold + ".6)" } }, "FSC:     "), result.fsc        || "—"),
+        h("div", null, h("span", { style: { color: gold + ".6)" } }, "NSN:     "), result.nsn        || "—"),
+        h("div", null, h("span", { style: { color: gold + ".6)" } }, "P/N:     "), result.ref_part_number || "—"),
+        h("div", null, h("span", { style: { color: gold + ".6)" } }, "Blasted: "), result.blast_date || "—"),
+      ),
+    );
+  }
+
   function BlastLogTab() {
     const [briefs,    setBriefs]    = useState([]);
     const [loading,   setLoading]   = useState(true);
@@ -382,6 +431,8 @@
           style: { padding: "6px 14px", fontFamily: serif, fontSize: "9px", letterSpacing: ".1em", background: "rgba(201,168,76,.08)", border: "1px solid " + gold + ".25)", color: gold + ".8)", borderRadius: "4px", cursor: "pointer" },
         }, "↻ Refresh"),
       ),
+
+      h(RefLookup),
 
       loading && h("div", { style: { fontFamily: mono, fontSize: "12px", color: "var(--body-faint)", padding: "40px", textAlign: "center" } }, "Loading briefs…"),
 
