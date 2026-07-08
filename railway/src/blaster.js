@@ -11,15 +11,7 @@ const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
 
 function info(...a) { console.log("[blaster]", ...a); }
 
-// ── IFL Reference Generator ───────────────────────────────────────────────────
-// Format: IFL-YYMMDD-NN — meaningless to vendors, one lookup in SCC for us.
-// Refs are sol-scoped: same sol always gets the same ref on a given blast date.
-function makeIflRef(seq) {
-  const d   = new Date();
-  const ymd = d.toISOString().slice(2, 10).replace(/-/g, "");
-  return "IFL-" + ymd + "-" + String(seq + 1).padStart(2, "0");
-}
-
+// ── IFL Reference Store ───────────────────────────────────────────────────────
 async function saveRefMap(db, entries) {
   if (!db || !entries.length) return;
   await Promise.all(entries.map(e =>
@@ -229,6 +221,25 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
     }
   }
 
+  // Build global sol → IFL ref map ONCE before vendor loop.
+  // Same sol number always gets the same ref for this blast date, regardless of
+  // how many vendors receive it. Prevents collision from per-vendor indexing.
+  const blastDate = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+  const solRefMap = new Map(); // sol_number → IFL ref
+  let refSeq = 0;
+  const allRefEntries = [];
+  for (const entry of rotatedPlan) {
+    for (const s of entry.sols) {
+      if (!solRefMap.has(s.sol_number)) {
+        const ref = "IFL-" + blastDate + "-" + String(++refSeq).padStart(3, "0");
+        solRefMap.set(s.sol_number, ref);
+        allRefEntries.push({ ref, sol_number: s.sol_number, item_name: s.item_name || "", fsc: s.fsc || "", nsn: s.nsn || "", ref_part_number: s.ref_part_number || "", blast_date: new Date().toISOString().slice(0, 10) });
+      }
+    }
+  }
+  await saveRefMap(db, allRefEntries);
+  info("IFL refs assigned: " + solRefMap.size + " unique sols → IFL-" + blastDate + "-001 through IFL-" + blastDate + "-" + String(refSeq).padStart(3, "0"));
+
   let lastSentVendorId = null;
 
   for (const entry of rotatedPlan) {
@@ -273,14 +284,8 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       }
     }
 
-    // Assign IFL refs to each sol — vendors see IFL-260707-01, not the real sol number
-    const refEntries = [];
-    const solsWithRefs = sols.map((s, i) => {
-      const ref = makeIflRef(i);
-      refEntries.push({ ref, sol_number: s.sol_number, item_name: s.item_name || "", fsc: s.fsc || "", nsn: s.nsn || "", ref_part_number: s.ref_part_number || "", blast_date: new Date().toISOString().slice(0, 10) });
-      return { ...s, ref_code: ref };
-    });
-    await saveRefMap(db, refEntries);
+    // Attach pre-assigned global IFL refs — same sol = same ref across all vendors
+    const solsWithRefs = sols.map(s => ({ ...s, ref_code: solRefMap.get(s.sol_number) || s.sol_number }));
 
     // Build subject + body for chosen sender
     const firstSol = solsWithRefs[0];
