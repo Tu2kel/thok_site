@@ -233,6 +233,10 @@ function extractNsn(text) {
   return m ? m[1] : null;
 }
 
+function stripTags(html) {
+  return (html || "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function parseListingHtml(html) {
   const sols = [];
   const rowChunks = (html || "").split(/<tr[\s>]/i);
@@ -245,16 +249,54 @@ function parseListingHtml(html) {
     const sol_number = solMatch[1].toUpperCase();
     if (!/^SP[A-Z0-9]/i.test(sol_number)) continue;
     const nsn = extractNsn(chunk);
+
+    // Pull cells in order — DIBBS table is <td>...</td> delimited
+    const cells = [];
+    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let cm;
+    while ((cm = cellRe.exec(chunk)) !== null) cells.push(stripTags(cm[1]));
+
+    // Extract key column values by content matching (column order varies by user prefs)
+    const getText = (pattern) => { const c = cells.find(x => pattern.test(x)); return c || null; };
+    const nomenclature = cells.find(c => /[A-Z]{3,},[A-Z]/.test(c) && c.length > 4) || "";
+    const quoteDueCell = cells.find(c => /^\d{2}\/\d{2}\/\d{2,4}$/.test(c.trim())) || "";
+    const postedCell   = cells.find((c, i) => /^\d{2}\/\d{2}\/\d{2,4}$/.test(c.trim()) && i > cells.indexOf(quoteDueCell)) || "";
+    const qtyCell      = cells.find(c => /^[\d,]+$/.test(c.trim()) && parseInt(c.replace(/,/g,"")) > 0) || "";
+    const naicsCell    = cells.find(c => /^\d{5,6}$/.test(c.trim())) || "";
+    const jcpCell      = cells.find(c => /^[YN]$/.test(c.trim()) && cells.indexOf(c) > 5) || "";
+    const amscCell     = cells.find(c => /^[A-Z]$/.test(c.trim()) && c.length === 1 && cells.indexOf(c) > 10) || "";
+    const restrictedFlag = /Restricted/i.test(chunk) ? "Restricted" : null;
+    const techDocsFlag   = cells.find(c => /^Yes$/i.test(c.trim())) ? true : null;
+
+    // Buyer info often appears in a title/tooltip attribute
+    const buyerMatch = chunk.match(/(?:title|alt)="([^"]*(?:Name|Buyer|Tel)[^"]*)"/i);
+    const buyerRaw   = buyerMatch ? buyerMatch[1] : null;
+    const buyerName  = buyerRaw ? (buyerRaw.match(/Name:\s*([^,\n]+)/i) || [])[1]?.trim() : null;
+    const buyerPhone = buyerRaw ? (buyerRaw.match(/Tel:\s*([\d\-\(\) ]+)/i) || [])[1]?.trim() : null;
+    const buyerEmail = buyerRaw ? (buyerRaw.match(/Email:\s*([\w.\-]+@[\w.\-]+)/i) || [])[1]?.trim() : null;
+    const buyerCode  = buyerRaw ? (buyerRaw.match(/Buyer Code:\s*([A-Z0-9]+)/i) || [])[1]?.trim() : null;
+
     sols.push({
       sol_number,
-      nsn:            nsn || "",
-      fsc:            nsn ? nsn.replace(/-/g, "").slice(0, 4) : "",
-      item_name:      "",
-      quote_due:      "",
-      pdf_direct_url: pdfDirectUrl,
-      sol_url:        DIBBS_WWW + "/RFQ/RFQRec.aspx?sn=" + sol_number,
-      source:         "dibbs-daily",
-      sam_resource_links: [],
+      nsn:                  nsn || "",
+      fsc:                  nsn ? nsn.replace(/-/g, "").slice(0, 4) : "",
+      item_name:            nomenclature || "",
+      quote_due:            quoteDueCell || "",
+      posted_date:          postedCell || "",
+      quantity:             qtyCell || "",
+      naics:                naicsCell || "",
+      jcp_required:         jcpCell === "Y" ? true : jcpCell === "N" ? false : null,
+      amsc:                 amscCell || null,
+      supplier_restrictions: restrictedFlag,
+      tech_docs:            techDocsFlag,
+      buyer_name:           buyerName || null,
+      buyer_phone:          buyerPhone || null,
+      buyer_email:          buyerEmail || null,
+      buyer_code:           buyerCode || null,
+      pdf_direct_url:       pdfDirectUrl,
+      sol_url:              DIBBS_WWW + "/RFQ/RFQRec.aspx?sn=" + sol_number,
+      source:               "dibbs-daily",
+      sam_resource_links:   [],
     });
   }
   return sols;

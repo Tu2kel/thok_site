@@ -1991,6 +1991,8 @@ Rules:
                     ),
                   ),
                   hP("th", null, "Status"),
+                  hP("th", { title: "Supplier Restrictions / JCP / AMSC", style: { whiteSpace: "nowrap" } }, "Flags"),
+                  hP("th", { title: "Buyer name, phone, email (from DLA solicitation)", style: { whiteSpace: "nowrap" } }, "Buyer"),
                   hP("th", null, "Actions"),
                 ),
               ),
@@ -2003,7 +2005,7 @@ Rules:
                     null,
                     hP(
                       "td",
-                      { colSpan: "12", className: "empty" },
+                      { colSpan: "14", className: "empty" },
                       bidBand !== "All"
                         ? "No bids in the " + bidBand + " range."
                         : "No solicitations match this filter.",
@@ -2550,6 +2552,38 @@ Rules:
                             hP("option", { key: s, value: s }, s),
                           ),
                         ),
+                      ),
+                      hP(
+                        "td",
+                        { style: { fontSize: "10px", whiteSpace: "nowrap", verticalAlign: "middle" } },
+                        hP("div", { style: { display: "flex", flexDirection: "column", gap: "3px" } },
+                          r.supplier_restrictions && hP("span", {
+                            title: r.supplier_restrictions,
+                            style: { background: "rgba(231,76,60,.18)", border: "1px solid rgba(231,76,60,.5)", color: "#ef5350", borderRadius: "3px", padding: "1px 5px", fontSize: "9px", fontFamily: "JetBrains Mono,monospace", letterSpacing: ".04em" }
+                          }, "RESTRICTED"),
+                          r.jcp_required === true && hP("span", {
+                            title: "JCP certification required to view drawings and submit quote",
+                            style: { background: "rgba(255,152,0,.15)", border: "1px solid rgba(255,152,0,.4)", color: "#ffa726", borderRadius: "3px", padding: "1px 5px", fontSize: "9px", fontFamily: "JetBrains Mono,monospace" }
+                          }, "JCP REQ"),
+                          r.amsc && hP("span", {
+                            title: "AMSC: Acquisition Method Suffix Code — " + r.amsc,
+                            style: { background: "rgba(201,168,76,.12)", border: "1px solid rgba(201,168,76,.3)", color: "var(--gold-dim)", borderRadius: "3px", padding: "1px 5px", fontSize: "9px", fontFamily: "JetBrains Mono,monospace" }
+                          }, "AMSC-" + r.amsc),
+                          r.tech_docs && hP("span", {
+                            title: "Technical documents / drawings available",
+                            style: { background: "rgba(61,214,140,.1)", border: "1px solid rgba(61,214,140,.3)", color: "var(--accent-green)", borderRadius: "3px", padding: "1px 5px", fontSize: "9px", fontFamily: "JetBrains Mono,monospace" }
+                          }, "TECH DOCS"),
+                        ),
+                      ),
+                      hP(
+                        "td",
+                        { style: { fontSize: "10px", whiteSpace: "nowrap", verticalAlign: "middle", maxWidth: "160px" } },
+                        (r.buyer_name || r.buyer_phone || r.buyer_email) ? hP("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
+                          r.buyer_name && hP("span", { style: { color: "var(--alabaster)", fontSize: "10px" } }, r.buyer_name),
+                          r.buyer_code && hP("span", { style: { color: "var(--body-faint)", fontSize: "9px", fontFamily: "JetBrains Mono,monospace" } }, r.buyer_code),
+                          r.buyer_phone && hP("a", { href: "tel:" + r.buyer_phone.replace(/\D/g,""), style: { color: "rgba(135,206,235,.8)", fontSize: "9px", textDecoration: "none" } }, r.buyer_phone),
+                          r.buyer_email && hP("a", { href: "mailto:" + r.buyer_email, style: { color: "rgba(135,206,235,.6)", fontSize: "9px", textDecoration: "none" } }, r.buyer_email),
+                        ) : hP("span", { style: { color: "var(--body-faint)" } }, "—"),
                       ),
                       hP(
                         "td",

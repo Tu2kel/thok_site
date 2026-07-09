@@ -92,6 +92,8 @@ function buildBodyForSender(vendor, sols, sender) {
       s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
       dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       fobStr             ? "  Shipping:      " + fobStr : null,
+      s.supplier_restrictions ? "  ⚠ Source:       " + s.supplier_restrictions + " — please confirm manufacturer CAGE, lot date, and C of C" : null,
+      s.jcp_required === true ? "  ⚠ JCP Required: Joint Certification Program certification required to submit quote" : null,
       "  Ref #:         " + (s.ref_code || s.sol_number),
     ].filter(Boolean).join("\n");
   }).join("\n\n");
@@ -106,7 +108,7 @@ function buildBodyForSender(vendor, sols, sender) {
     ? [
         "Anthony K Kelley | Founder and CEO",
         "Imperio Federal Logistics · CAGE 152U4 · SDVOSB | VetHUB | (254) 226-5216",
-        "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
+        "anthony@ifedlog.com | ifedlog.com",
       ]
     : [
         "Anthony K Kelley | Founder and CEO",

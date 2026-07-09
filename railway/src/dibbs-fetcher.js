@@ -361,6 +361,14 @@ function parsePdfText(text, sol_number, nsn, fsc) {
   // ── Buyer info ─────────────────────────────────────────────────────────
   const buyerEmail = extract(/Email:\s*([\w.\-]+@[\w.\-]+)/i);
   const buyerName  = extract(/Name:\s*([A-Z][a-zA-Z\s]+?)(?:\s+Buyer Code)/i);
+  const buyerPhone = extract(/Tel(?:ephone)?[:\s]+([\d\-\(\)\s\.]{7,}?)(?:\s+Email|\s+Fax|\s*$)/im);
+  const buyerCode  = extract(/Buyer Code[:\s]+([A-Z0-9]{4,12})/i);
+  const naics      = extract(/NAICS[:\s]+(\d{4,6})/i);
+  const amsc       = extract(/AMSC[:\s]*([A-Z])\b/i)
+    || extract(/ACQUISITION METHOD SUFFIX CODE[:\s]*([A-Z])\b/i);
+  const jcpRequired = /JCP(?:\s+REQUIRED|\s+CERTIFICATION REQUIRED|:\s*Y)/i.test(t) ? true
+    : /JCP(?:\s+NOT REQUIRED|:\s*N)/i.test(t) ? false : null;
+  const techDocsAvailable = /cFolders|Technical Data Package|TDP Available|TECH DOCS.*YES/i.test(t) ? true : null;
 
   // ── Ship-to (full address) ─────────────────────────────────────────────
   // DLA address block (normalized to single spaces):
@@ -423,6 +431,12 @@ function parsePdfText(text, sol_number, nsn, fsc) {
     fob:                   fob || null,
     buyer_email:           buyerEmail || null,
     buyer_name:            buyerName || null,
+    buyer_phone:           buyerPhone ? buyerPhone.trim() : null,
+    buyer_code:            buyerCode || null,
+    naics:                 naics || null,
+    amsc:                  amsc || null,
+    jcp_required:          jcpRequired,
+    tech_docs:             techDocsAvailable,
     ship_to_dodaac:        shipToDodaac || null,
     ship_to_name:          shipToName || null,
     ship_to_street:        shipToStreet || null,
@@ -567,8 +581,17 @@ async function fetchSolDetails(sol) {
     // Dump first 400 chars of extracted text so we can tune field regexes if needed
     info(sol_number + " PDF text[0:400]: " + (parsed.text || "").replace(/\s+/g, " ").slice(0, 400));
     const fields = parsePdfText(parsed.text, sol_number, nsn, fsc);
-    info("✅ " + sol_number + " — " + (fields.item_name || "no item name") + " | $" + (fields.unit_price || "?") + " | qty " + (fields.quantity || "?"));
-    return { ...sol, ...fields };
+
+    // Merge PDF fields but never overwrite good SAM data with null PDF results.
+    // SAM provides item_name (from title) and quote_due (responseDeadLine) —
+    // if the PDF regex doesn't match those fields, keep what SAM gave us.
+    const merged = { ...sol };
+    for (const [k, v] of Object.entries(fields)) {
+      if (v !== null && v !== undefined && v !== "") merged[k] = v;
+    }
+
+    info("✅ " + sol_number + " — " + (merged.item_name || "no item name") + " | qty " + (merged.quantity || "?"));
+    return merged;
   } catch (e) {
     if (e.notOnDibbs) {
       // SAM-sourced sol has no RFQ PDF on DIBBS2 — silent skip, use SAM metadata
