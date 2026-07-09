@@ -43,17 +43,29 @@ const FSC_NAMES = {
   9535: "Metal Plate/Sheet/Strip", 9540: "Structural Metal",
 };
 
-// Extract the first email address from a "From:" or "Email:" line in a reply email
+const OWN_DOMAINS = /ifedlog\.com|thehouseofkel/i;
+
+// Extract vendor (non-IFL) email from a reply email that may contain quoted original
 function parseSenderEmail(text) {
-  // "From: Mike Varga <mjvarga@jwwinco.com>" — look for From: lines in quoted block
-  const fromMatch = text.match(/^From:\s+.*?<([^>@\s]+@[^>@\s]+)>/im);
-  if (fromMatch) return fromMatch[1].toLowerCase();
-  // Fallback: bare "From: email@domain.com"
-  const bareFrom = text.match(/^From:\s+([^\s<@]+@[^\s>@,]+)/im);
-  if (bareFrom) return bareFrom[1].toLowerCase();
-  // Look for Email: field in signature block
-  const emailField = text.match(/^Email:\s+([^\s<@]+@[^\s>@,\r\n]+)/im);
-  if (emailField) return emailField[1].toLowerCase();
+  // Truncate at the original message divider — only look in the vendor's reply portion
+  const dividerIdx = text.search(
+    /^[-─=]{3,}\s*(?:Original Message|Forwarded Message)\s*[-─=]{3,}|^From:.*anthony@ifedlog/im
+  );
+  const replyPart = dividerIdx > 20 ? text.slice(0, dividerIdx) : text;
+
+  // Try all From: <email> patterns, skip our own domain
+  const allAngled = [...text.matchAll(/^From:\s+[^<\r\n]*<([^>@\s]+@[^>@\s]+)>/gim)];
+  const vendorAngled = allAngled.find(m => !OWN_DOMAINS.test(m[1]));
+  if (vendorAngled) return vendorAngled[1].toLowerCase();
+
+  const allBare = [...text.matchAll(/^From:\s+([^\s<@\r\n]+@[^\s>@,\r\n]+)/gim)];
+  const vendorBare = allBare.find(m => !OWN_DOMAINS.test(m[1]));
+  if (vendorBare) return vendorBare[1].toLowerCase();
+
+  // Email: field in signature block (reply portion only)
+  const emailField = replyPart.match(/^Email:\s+([^\s<@]+@[^\s>@,\r\n]+)/im);
+  if (emailField && !OWN_DOMAINS.test(emailField[1])) return emailField[1].toLowerCase();
+
   return null;
 }
 

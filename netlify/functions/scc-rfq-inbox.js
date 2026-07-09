@@ -309,28 +309,62 @@ async function scrubFscForNoBid(db, vendorEmail, solNumbers) {
   if (!fscs.size) return { removed: [], vendor_name: null, reason: "no_fsc_found" };
 
   const dist = db.collection("distributors");
-  let vendor = await dist.findOne({
-    email: new RegExp("^" + vendorEmail.replace(/[.+[\](){}^$|\\]/g, "\\$&") + "$", "i"),
-  });
+  const escapeEmail = e => e.replace(/[.+[\](){}^$|\\]/g, "\\$&");
+
+  let vendor = await dist.findOne({ email: new RegExp("^" + escapeEmail(vendorEmail) + "$", "i") });
   if (!vendor) {
     const domain = vendorEmail.split("@")[1];
-    if (domain) {
-      vendor = await dist.findOne({
-        email: new RegExp("@" + domain.replace(/\./g, "\\.") + "$", "i"),
-      });
+    if (domain) vendor = await dist.findOne({ email: new RegExp("@" + domain.replace(/\./g, "\\.") + "$", "i") });
+  }
+
+  // Cross-domain reply: vendor replied from a different address/domain than we blasted —
+  // look up the original blast email for these sol numbers and find the distributor that way.
+  let contactUpdated = null;
+  if (!vendor) {
+    const validSols = solNumbers.filter(s => s && s !== "UNMATCHED");
+    if (validSols.length) {
+      const blastEntry = await db.collection("blast_log").findOne({ sol_number: { $in: validSols }, status: "sent" });
+      const origEmail  = blastEntry?.vendor_email?.toLowerCase();
+      if (origEmail && origEmail !== vendorEmail.toLowerCase()) {
+        vendor = await dist.findOne({ email: new RegExp("^" + escapeEmail(origEmail) + "$", "i") });
+        if (!vendor) {
+          const origDomain = origEmail.split("@")[1];
+          if (origDomain) vendor = await dist.findOne({ email: new RegExp("@" + origDomain.replace(/\./g, "\\.") + "$", "i") });
+        }
+        if (vendor) {
+          // Record the new reply-from address; user can promote to primary in the UI
+          await dist.updateOne(
+            { _id: vendor._id },
+            { $addToSet: { email_aliases: vendorEmail }, $set: { contact_reply_email: vendorEmail, contact_updated_at: new Date() } },
+          );
+          contactUpdated = { from: origEmail, to: vendorEmail };
+        }
+      }
     }
   }
-  if (!vendor) return { removed: [], vendor_name: null, reason: "vendor_not_in_db" };
+
+  if (!vendor) {
+    // Vendor not in DB — log suggestion so it can be reviewed without manual intervention
+    await db.collection("fsc_scrub_suggestions").insertOne({
+      vendor_email: vendorEmail,
+      sol_numbers:  solNumbers.filter(s => s && s !== "UNMATCHED"),
+      fsc_codes:    [...fscs],
+      reason:       "vendor_not_in_db",
+      resolved:     false,
+      at:           new Date(),
+    });
+    return { removed: [], vendor_name: null, reason: "vendor_not_in_db", suggestion_logged: true };
+  }
 
   const vendorFsc = (vendor.fsc || vendor.fsc_codes || []).map(String);
   const toRemove  = [...fscs].filter(f => vendorFsc.includes(f));
-  if (!toRemove.length) return { removed: [], vendor_name: vendor.name || vendor.company_name, reason: "fsc_not_assigned" };
+  if (!toRemove.length) return { removed: [], vendor_name: vendor.name || vendor.company_name, reason: "fsc_not_assigned", contact_updated: contactUpdated };
 
   await dist.updateOne(
-    { id: vendor.id },
+    { _id: vendor._id },
     { $pull: { fsc: { $in: toRemove }, fsc_codes: { $in: toRemove } } },
   );
-  return { removed: toRemove, vendor_name: vendor.name || vendor.company_name, reason: "scrubbed" };
+  return { removed: toRemove, vendor_name: vendor.name || vendor.company_name, reason: "scrubbed", contact_updated: contactUpdated };
 }
 
 // ── MONGODB ────────────────────────────────────────────────────────────────
@@ -714,9 +748,14 @@ exports.handler = async (event) => {
         if (noBidSols.length > 0) {
           try {
             const scrub = await scrubFscForNoBid(db, vendorEmail, noBidSols);
+            if (scrub.contact_updated) {
+              addLog("CONTACT UPDATE " + scrub.contact_updated.from + " → " + scrub.contact_updated.to + " (alias saved, scrub continued)");
+            }
             if (scrub.removed.length > 0) {
               fscScrubLog.push({ vendor_name: scrub.vendor_name, vendor_email: vendorEmail, removed: scrub.removed, sol_numbers: noBidSols });
               addLog("FSC SCRUB " + vendorEmail + " → stripped " + scrub.removed.join(",") + " from " + (scrub.vendor_name || vendorEmail) + " (" + noBidSols.length + " item(s) declined)");
+            } else if (scrub.reason === "vendor_not_in_db") {
+              addLog("FSC SCRUB " + vendorEmail + " → vendor not in DB — logged suggestion for " + noBidSols.length + " sol(s) [check fsc_scrub_suggestions]");
             } else {
               addLog("FSC SCRUB " + vendorEmail + " → " + (scrub.reason || "no change"));
             }
