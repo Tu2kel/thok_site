@@ -14,7 +14,7 @@
 const { ImapFlow }   = require("imapflow");
 const { MongoClient } = require("mongodb");
 
-const IMAP_USER    = "kelley.anthonyk@gmail.com";
+const IMAP_USER    = "anthony@ifedlog.com";
 const SUMMARY_TO   = "anthony@ifedlog.com";
 const FROM_NAME    = "Anthony K Kelley | Imperio Federal Logistics";
 const RESEND_FROM  = FROM_NAME + " <" + SUMMARY_TO + ">";
@@ -29,7 +29,7 @@ function makeImapClient() {
     host:   "imap.gmail.com",
     port:   993,
     secure: true,
-    auth:   { user: IMAP_USER, pass: process.env.GMAIL_APP_PASSWORD },
+    auth:   { user: IMAP_USER, pass: process.env.IFEDLOG_APP_PASSWORD },
     logger: false,
   });
 }
@@ -458,7 +458,7 @@ exports.handler = async (event) => {
           const from = fromAddr ? ((fromAddr.address || (fromAddr.mailbox + "@" + fromAddr.host)) || "") : "";
           let skip = null;
           if (processed2.has(msgId)) skip = "already_processed";
-          else if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(from)) skip = "own_email";
+          else if (/ifedlog\.com|thehouseofkel/i.test(from)) skip = "own_email";
           else if (/automatic reply|out of office|autoreply/i.test(subject)) skip = "auto_reply";
           else if (!/(?:re|fw[d]?):\s*rfq/i.test(subject)) skip = "subject_no_re_rfq";
           rows.push({ from, subject, msgId: msgId.slice(0, 40), skip: skip || "WOULD_PROCESS" });
@@ -548,7 +548,7 @@ exports.handler = async (event) => {
           ? msgDate.toISOString().slice(0, 10) : today;
 
         // Skip our own outbound/auto emails
-        if (/ifedlog\.com|thehouseofkel|kelley\.anthonyk/i.test(vendorEmail)) {
+        if (/ifedlog\.com|thehouseofkel/i.test(vendorEmail)) {
           addLog("SKIP own_email: " + vendorEmail + " | " + subject.slice(0, 50));
           newMsgIds.push(msgId);
           continue;
