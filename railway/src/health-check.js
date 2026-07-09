@@ -99,18 +99,18 @@ async function checkResend() {
 }
 
 async function checkGmail() {
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  if (!pass) return { ok: false, msg: "GMAIL_APP_PASSWORD not set" };
+  const pass = process.env.IFEDLOG_APP_PASSWORD;
+  if (!pass) return { ok: false, msg: "IFEDLOG_APP_PASSWORD not set" };
   try {
     const { ImapFlow } = require("imapflow");
     const client = new ImapFlow({
       host: "imap.gmail.com", port: 993, secure: true,
-      auth: { user: "kelley.anthonyk@gmail.com", pass },
+      auth: { user: "anthony@ifedlog.com", pass },
       logger: false,
     });
     await client.connect();
     await client.logout();
-    return { ok: true, msg: "IMAP connected" };
+    return { ok: true, msg: "IMAP connected (anthony@ifedlog.com)" };
   } catch (e) {
     return { ok: false, msg: e.message };
   }

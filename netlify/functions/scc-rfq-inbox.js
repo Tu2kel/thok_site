@@ -1,15 +1,15 @@
 // netlify/functions/scc-rfq-inbox.js
 // Imperio SCC — Vendor RFQ Inbox Scanner
 //
-// Reads kelley.anthonyk@gmail.com via IMAP (GMAIL_APP_PASSWORD — same cred as send-rfq.js).
+// Reads anthony@ifedlog.com via IMAP (IFEDLOG_APP_PASSWORD).
 // Finds Re: RFQ replies from vendors, parses price/no-bid with Claude Haiku,
 // compares vs DIBBS historical unit_price, calculates margin, saves to MongoDB,
 // sends summary email to anthony@ifedlog.com after each run.
 //
 // Actions (POST): scan | getReport | getScanLog
-// Scheduled 4x/day via netlify.toml: 8AM, 12PM, 4PM, 8PM CT
+// Scheduled 4x/day via netlify.toml: 10AM, 1PM, 4PM, 7PM CT
 //
-// Env: GMAIL_APP_PASSWORD, ANTHROPIC_API_KEY, MONGODB_URI
+// Env: IFEDLOG_APP_PASSWORD, ANTHROPIC_API_KEY, MONGODB_URI
 
 const { ImapFlow }   = require("imapflow");
 const { MongoClient } = require("mongodb");
