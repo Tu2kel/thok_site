@@ -446,7 +446,7 @@ exports.handler = async (event) => {
     const rows = [];
     try {
       await imap2.connect();
-      const lock2 = await imap2.getMailboxLock("INBOX");
+      const lock2 = await imap2.getMailboxLock("[Gmail]/All Mail");
       try {
         const since2 = new Date(); since2.setDate(since2.getDate() - 7);
         const uids2 = await imap2.search({ since: since2, subject: "RFQ" });
@@ -486,7 +486,7 @@ exports.handler = async (event) => {
     await imap.connect();
     addLog("IMAP connected");
 
-    const lock = await imap.getMailboxLock("INBOX");
+    const lock = await imap.getMailboxLock("[Gmail]/All Mail");
     try {
       const since = new Date();
       since.setDate(since.getDate() - 7);

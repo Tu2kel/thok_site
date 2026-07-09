@@ -15,6 +15,7 @@
 
 [functions."scc-rfq-inbox"]
   timeout = 120
+  schedule = "0 15,18,21,0 * * 1-5"
 
 [functions."scc-sba-import"]
   timeout = 30
