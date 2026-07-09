@@ -246,54 +246,47 @@ async function buildDailyReport(db, dateStr) {
 // ── SUMMARY EMAIL TEXT ──────────────────────────────────────────────────────
 function buildSummaryText(report, stats, fscScrubLog = []) {
   const ct = new Date().toLocaleString("en-US", { timeZone: "America/Chicago" });
+  const solsWithQuotes = report.sols.filter(s => s.quote_count > 0);
+
   const lines = [
     "RFQ INBOX SCAN — " + ct + " CT",
     "═".repeat(50),
     "",
-    "Scan:  " + stats.scanned + " checked · " + stats.new_count + " new · " + stats.errors + " error(s)",
-    "Daily: " + report.total_quotes + " quote(s) · " + report.total_no_bids + " no-bid(s) · " + report.total_sols + " sol(s)",
-    fscScrubLog.length ? "FSC Auto-Scrub: " + fscScrubLog.length + " vendor(s) updated" : "",
+    "Scan:    " + stats.scanned + " checked · " + stats.new_count + " new · " + stats.errors + " error(s)",
+    "No-bids: " + report.total_no_bids + " processed — FSC auto-scrubbed for " + fscScrubLog.length + " vendor(s)",
     "",
   ];
 
-  if (!report.sols.length) {
-    lines.push("No vendor responses today.");
+  if (!solsWithQuotes.length) {
+    lines.push("No quotes received this scan.");
   } else {
-    for (const sol of report.sols) {
-      lines.push("SOL: " + sol.sol_number + (sol.item_name ? " — " + sol.item_name.slice(0, 40) : ""));
-      for (const q of sol.quotes) {
-        const dev = q.hist_deviation_pct != null ? (q.hist_deviation_pct >= 0 ? "+" : "") + q.hist_deviation_pct + "%" : "";
+    lines.push("QUOTES — " + solsWithQuotes.length + " sol(s) need your attention");
+    lines.push("─".repeat(50));
+    lines.push("");
+    for (const sol of solsWithQuotes) {
+      lines.push(sol.sol_number + (sol.item_name ? "  " + sol.item_name.slice(0, 35) : ""));
+      const sorted = sol.quotes.slice().sort((a, b) => (a.unit_price || Infinity) - (b.unit_price || Infinity));
+      for (let i = 0; i < sorted.length; i++) {
+        const q    = sorted[i];
+        const dev  = q.hist_deviation_pct != null ? (q.hist_deviation_pct >= 0 ? "+" : "") + q.hist_deviation_pct + "%" : "";
         const hist = q.hist_flag && q.hist_flag !== "NO_HIST" ? " [" + q.hist_flag + (dev ? " " + dev : "") + "]" : " [NO HIST]";
         const marg = q.margin_flag ? " → " + q.margin_flag : "";
         const bid  = q.target_bid  ? " | Bid@27.5%: $" + q.target_bid.toFixed(4) : "";
-        lines.push("  QUOTE   " + (q.vendor_name || q.vendor_email).slice(0, 28).padEnd(28) +
-          " $" + (q.unit_price != null ? q.unit_price.toFixed(4) : "?") + hist + marg + bid);
+        lines.push(
+          (i === 0 ? "  ★ " : "    ") +
+          (q.vendor_name || q.vendor_email).slice(0, 26).padEnd(26) +
+          " $" + (q.unit_price != null ? q.unit_price.toFixed(4) : "pending") +
+          hist + marg + bid
+        );
       }
-      for (const nb of sol.no_bids) {
-        lines.push("  NO-BID  " + (nb.vendor_name || nb.vendor_email).slice(0, 28) +
-          (nb.no_bid_reason ? ": " + nb.no_bid_reason : ""));
-      }
-      if (sol.best_vendor && sol.quote_count > 0) {
-        lines.push("  ★ BEST: " + sol.best_vendor + " @ $" + (sol.best_price || "?") +
-          (sol.best_target_bid   ? " → Bid $" + sol.best_target_bid.toFixed(4) : "") +
-          (sol.best_margin_flag  ? " [" + sol.best_margin_flag + "]" : ""));
-      }
-      if (sol.action === "ALL_NO_BID")      lines.push("  !! Re-blast or mark No Source");
-      if (sol.action === "REVIEW_PRICE")    lines.push("  ⚠  Best quote above historical — review before bidding");
-      if (sol.action === "MARGIN_NEGATIVE") lines.push("  !! Vendor price exceeds DIBBS price — margin negative");
+      if (sol.action === "REVIEW_PRICE")    lines.push("    ⚠  Above historical — verify before bidding");
+      if (sol.action === "MARGIN_NEGATIVE") lines.push("    !! Vendor price exceeds DIBBS — margin negative");
       lines.push("");
     }
   }
-  if (fscScrubLog.length) {
-    lines.push("FSC AUTO-SCRUB LOG");
-    lines.push("─".repeat(40));
-    for (const s of fscScrubLog) {
-      lines.push("  " + (s.vendor_name || s.vendor_email) + " → stripped FSC " + s.removed.join(", "));
-    }
-    lines.push("");
-  }
+
   lines.push("═".repeat(50));
-  lines.push("Pipeline → https://thehouseofkel.com/scc/");
+  lines.push("Review quotes → https://thehouseofkel.com/scc/");
   return lines.join("\n");
 }
 
