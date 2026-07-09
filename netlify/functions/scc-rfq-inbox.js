@@ -99,24 +99,39 @@ async function sendSummary(subject, text) {
 }
 
 // ── CLAUDE PARSER ──────────────────────────────────────────────────────────
-async function claudeParse(body, vendorName, subject) {
+// Returns per-item results so a mixed reply ("can quote rivets, don't stock the rest")
+// correctly strips only the no-bid items' FSC lanes, not the ones they quoted.
+async function claudeParse(body, vendorName, subject, targets) {
+  const itemList = targets.map((t, i) =>
+    (i + 1) + ". " + (t.item_name || t.sol_number) + " (Ref: " + t.sol_number + ")"
+  ).join("\n");
+
   const prompt = [
-    "Parse this vendor email response to a US government DLA RFQ (Request for Quote) from Imperio Federal Logistics.",
-    "Return ONLY a JSON object:",
-    '{"type":"quote|no_bid","unit_price":number|null,"lead_time_days":number|null,"country_of_origin":"string"|null,"no_bid_reason":"string"|null,"notes":"string"|null}',
+    "Parse this vendor email response to a US government DLA RFQ from Imperio Federal Logistics.",
+    "The email may cover one or multiple items. Classify EACH item separately.",
+    "",
+    "Items we requested quotes on:",
+    itemList,
+    "",
+    "Return ONLY a JSON object in this exact shape:",
+    '{"items":[{"ref":"sol_or_ref_number","type":"quote|no_bid","unit_price":number|null,"lead_time_days":number|null,"country_of_origin":"string"|null,"no_bid_reason":"string"|null,"notes":"string"|null}]}',
     "",
     "Rules:",
-    "- type=no_bid if vendor says: unable, cannot, no bid, NB, not available, out of stock, decline, pass, no quote, EOL, discontinued, do not carry",
-    "- unit_price = per-unit USD price only (ignore freight totals); if range, use lower end",
-    "- lead_time_days: convert weeks×7, months×30",
-    "- no_bid_reason: their stated reason, max 80 chars",
-    "- notes: MOQ, certifications, special terms",
+    "- Match each item by its ref number or item name mentioned in the email",
+    "- type=no_bid if vendor says for that item: unable, no bid, don't stock, don't carry, not available, EOL, discontinued, pass, NB, no quote",
+    "- type=quote if vendor provides a price OR confirms availability for that item",
+    "- If vendor gives one blanket no-bid ('we don't sell any of these'), mark ALL items no_bid",
+    "- If vendor quotes some and declines others, mark each correctly",
+    "- If vendor doesn't mention an item at all, default to no_bid",
+    "- unit_price = per-unit USD, lower end if range",
+    "- lead_time_days: weeks×7, months×30",
+    "- no_bid_reason: max 80 chars",
     "",
     "Subject: " + subject,
     "From: " + vendorName,
     "",
     "Email:",
-    body.slice(0, 2000),
+    body.slice(0, 2500),
   ].join("\n");
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -128,7 +143,7 @@ async function claudeParse(body, vendorName, subject) {
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 400,
+      max_tokens: 600,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -137,7 +152,13 @@ async function claudeParse(body, vendorName, subject) {
   if (!raw) throw new Error("No Claude response: " + JSON.stringify(data).slice(0, 200));
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("No JSON in Claude response");
-  return JSON.parse(m[0]);
+  const parsed = JSON.parse(m[0]);
+
+  // Normalise: if old single-object shape comes back, wrap it
+  if (!parsed.items) {
+    return { items: targets.map(t => ({ ref: t.sol_number, ...parsed })) };
+  }
+  return parsed;
 }
 
 // ── PRICE ANALYSIS ─────────────────────────────────────────────────────────
@@ -626,25 +647,38 @@ exports.handler = async (event) => {
 
         // Run Claude parse + batch sol lookup in parallel
         const targetSolNums = targets.map(t => t.sol_number);
-        let parsed;
+        let parsedResult;
         let solRecMap = {};
         let parseError = null;
         try {
-          const [parsedResult, solRecs] = await Promise.all([
-            claudeParse(body, vendorName, subject),
+          const [pr, solRecs] = await Promise.all([
+            claudeParse(body, vendorName, subject, targets),
             db.collection("solicitations").find({ sol_number: { $in: targetSolNums } }).toArray(),
           ]);
-          parsed = parsedResult;
+          parsedResult = pr;
           solRecMap = Object.fromEntries(solRecs.map(s => [s.sol_number, s]));
         } catch (e) {
           parseError = e.message;
           addLog("Parse failed (" + vendorEmail + "): " + e.message + " — saving raw");
           errors++;
-          parsed = { type: "parse_error", unit_price: null, lead_time_days: null, country_of_origin: null, no_bid_reason: null, notes: "Claude parse failed: " + e.message };
+          parsedResult = { items: targets.map(t => ({ ref: t.sol_number, type: "parse_error", unit_price: null, lead_time_days: null, country_of_origin: null, no_bid_reason: null, notes: "Claude parse failed: " + e.message })) };
           solRecMap = {};
         }
 
+        // Build a lookup from ref/sol_number → per-item result from Claude
+        const itemResultMap = {};
+        for (const item of (parsedResult.items || [])) {
+          if (item.ref) itemResultMap[item.ref] = item;
+        }
+
+        const noBidSols = [];
+
         for (const target of targets) {
+          // Match Claude's per-item result by ref, fall back to first item if only one
+          const parsed = itemResultMap[target.sol_number]
+            || (parsedResult.items?.length === 1 ? parsedResult.items[0] : null)
+            || { type: "no_bid", no_bid_reason: "Not mentioned in reply" };
+
           const solRec    = solRecMap[target.sol_number] || null;
           const histPrice = solRec ? (parseFloat(solRec.hist_unit_price || solRec.unit_price || 0) || null) : null;
           const itemName  = solRec ? (solRec.item_name || solRec.item_description || "") : (target.item_name || "");
@@ -679,15 +713,17 @@ exports.handler = async (event) => {
             { upsert: true },
           );
           newDocs.push(doc);
+
+          if (parsed.type === "no_bid") noBidSols.push(target.sol_number);
         }
 
-        // Auto-scrub FSC lanes when vendor says no-bid / not our lane
-        if (parsed.type === "no_bid") {
+        // Auto-scrub FSC — only for the specific items they declined, not the whole email
+        if (noBidSols.length > 0) {
           try {
-            const scrub = await scrubFscForNoBid(db, vendorEmail, targets.map(t => t.sol_number));
+            const scrub = await scrubFscForNoBid(db, vendorEmail, noBidSols);
             if (scrub.removed.length > 0) {
-              fscScrubLog.push({ vendor_name: scrub.vendor_name, vendor_email: vendorEmail, removed: scrub.removed, sol_numbers: targets.map(t => t.sol_number) });
-              addLog("FSC SCRUB " + vendorEmail + " → stripped " + scrub.removed.join(",") + " from " + scrub.vendor_name);
+              fscScrubLog.push({ vendor_name: scrub.vendor_name, vendor_email: vendorEmail, removed: scrub.removed, sol_numbers: noBidSols });
+              addLog("FSC SCRUB " + vendorEmail + " → stripped " + scrub.removed.join(",") + " from " + (scrub.vendor_name || vendorEmail) + " (" + noBidSols.length + " item(s) declined)");
             } else {
               addLog("FSC SCRUB " + vendorEmail + " → " + (scrub.reason || "no change"));
             }
