@@ -721,6 +721,23 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  if (u === "/reset-daily-counts" && req.method === "POST") {
+    getDb().then(async (mdb) => {
+      const today = new Date().toISOString().slice(0, 10);
+      await Promise.all([
+        mdb.collection("_meta").updateOne({ _id: "gmail_daily"  }, { $set: { count: 0, date: today } }, { upsert: true }),
+        mdb.collection("_meta").updateOne({ _id: "resend_daily" }, { $set: { count: 0, date: today } }, { upsert: true }),
+      ]);
+      log("Daily send counts reset to 0 for " + today);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, date: today, gmail: 0, resend: 0 }));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
   if (u === "/daily-brief" && req.method === "GET") {
     getDb().then(async (mdb) => {
       const brief = await mdb.collection("blast_briefs").findOne({}, { sort: { created_at: -1 } });

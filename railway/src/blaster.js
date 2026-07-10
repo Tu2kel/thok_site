@@ -193,13 +193,16 @@ function makeSenderCache(db) {
     increment(sender) {
       if (sender === "gmail")  gmailCount++;
       else                     resendCount++;
-      // Fire-and-forget persist — don't block the send loop
+      // Write in-memory count (not $inc) so the DB value always matches what we track.
+      // $inc accumulates across day boundaries because the first write of a new day
+      // sets date:today while still incrementing the stale previous-day total.
       if (db) {
         const today = new Date().toISOString().slice(0, 10);
         const id    = sender === "gmail" ? "gmail_daily" : "resend_daily";
+        const count = sender === "gmail" ? gmailCount : resendCount;
         db.collection("_meta").updateOne(
           { _id: id },
-          { $inc: { count: 1 }, $set: { date: today }, $setOnInsert: { _id: id } },
+          { $set: { count, date: today } },
           { upsert: true },
         ).catch(() => {});
       }
