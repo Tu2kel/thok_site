@@ -3,10 +3,10 @@
 // Resend free plan: 100/day, 3,000/month.
 const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
-const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "100");
+const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "5000");
 const ITEMS_PER_EMAIL  = 10; // hard cap — never more than 10 items per vendor email
-const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "0");   // effectively 0 — Railway blocks SMTP
-const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "100"); // Resend free plan: 100/day
+const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "0");    // effectively 0 — Railway blocks SMTP
+const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "5000"); // Resend Pro: unlimited daily, 50k/month
 const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
 
 function info(...a) { console.log("[blaster]", ...a); }
