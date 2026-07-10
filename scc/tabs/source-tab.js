@@ -977,14 +977,22 @@
     );
 
     const allFiltered = dists.filter((d) => {
-      const q = search.toLowerCase();
-      return (
-        !q ||
-        (d.name || "").toLowerCase().includes(q) ||
-        (d.id || "").includes(q) ||
-        (d.tags || []).some((t) => t.includes(q)) ||
-        (d.fsc || []).some((f) => f.includes(q))
-      );
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      // Search every text-bearing field, not just name/FSC/tag — a POC name,
+      // email, website, phone, or note should all find the record.
+      const hay = [
+        d.name, d.id, d.poc_name, d.email, d.phone, d.website, d.notes, d.cage,
+        ...(d.tags || []),
+        ...(d.fsc || []),
+        ...(d.item_keywords || []),
+        ...(d.known_nsns || []),
+      ].filter(Boolean).join("  ").toLowerCase();
+      if (hay.includes(q)) return true;
+      // Phone: match on digits so "5041967" or "2145041967" finds "(214) 504-1967".
+      const qDigits = q.replace(/\D/g, "");
+      if (qDigits && (d.phone || "").replace(/\D/g, "").includes(qDigits)) return true;
+      return false;
     });
     const DISPLAY_CAP = 500;
     const filtered = search ? allFiltered : allFiltered.slice(0, DISPLAY_CAP);
@@ -1068,7 +1076,7 @@
           h("input", {
             value: search,
             onChange: (e) => setSearch(e.target.value),
-            placeholder: "Filter by name, FSC, tag…",
+            placeholder: "Filter by name, POC, email, website, phone, FSC, tag…",
             style: {
               padding: "7px 12px",
               background: "var(--inset-bg)",
