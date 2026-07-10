@@ -43,6 +43,16 @@ function detectPNPrefix(pn) {
 }
 function isAerospacePN(pn) { return detectPNPrefix(pn) !== null; }
 
+// An "aerospace company" — identified by name (Aero*, *Aerospace*) or an aero tag.
+// The `aerospace` tag is barely applied in the rolodex (~4 vendors), so name is the
+// primary signal (~29). These vendors ALSO receive aerospace-standard parts on top
+// of their FSC lanes.
+function isAerospaceVendor(d) {
+  if (!d) return false;
+  if (/aero/i.test(d.name || d.company_name || "")) return true;
+  return (d.tags || []).some(t => /aero/i.test(t));
+}
+
 // Select vendors for a set of sols, respecting FSC cap + tier ordering
 function buildBlastPlan(sols, dists) {
   const goFscs = new Set(sols.map(s => String(s.fsc || (s.nsn || "").slice(0, 4))).filter(Boolean));
@@ -92,6 +102,17 @@ function buildBlastPlan(sols, dists) {
       const vendorNsns = new Set((vendor.known_nsns || []).map(n => n.replace(/\D/g, "")));
       return vendorFscSet.has(solFsc) || (solNsn && vendorNsns.has(solNsn));
     });
+
+    // Aerospace companies also receive aerospace-standard parts (NAS/AN/MS/MIL/AS/
+    // BAC/NSA/DIN) regardless of FSC lane — appended on top of their FSC matches.
+    if (isAerospaceVendor(vendor)) {
+      const have = new Set(matchedSols.map(s => s.sol_number));
+      for (const s of sols) {
+        if (isAerospacePN(s.ref_part_number) && !have.has(s.sol_number)) {
+          matchedSols.push(s); have.add(s.sol_number);
+        }
+      }
+    }
 
     if (!matchedSols.length) continue;
 
