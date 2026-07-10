@@ -86,18 +86,10 @@
     });
 
     const send = async () => {
-      if (!selected.size) return;
-      setSending(true);
-      try {
-        const vendors = dists.filter(d => selected.has(d.id || d._id?.toString()));
-        const res = await api("reBlast", { sol, vendors });
-        setResults(res);
-        onSent && onSent(sol.sol_number, res);
-      } catch (e) {
-        alert("Send failed: " + e.message);
-      } finally {
-        setSending(false);
-      }
+      // Re-blast retired 2026-07-10 — it sent via a personal Gmail placeholder
+      // (pre-Resend). Vendor sending now runs only through the Railway pipeline
+      // (Resend, from anthony@ifedlog.com).
+      alert("Re-blast is retired. Vendor RFQs go out through the Railway blaster (Resend). Use the DIBBS tab → Run Now.");
     };
 
     const days = daysLeft(sol.quote_due);

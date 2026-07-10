@@ -1929,7 +1929,7 @@
               const body = [
                 "Hi Imperio Federal Logistics,",
                 "",
-                "My name is Anthony Kelley — Founder & CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). Quick heads-up before the ask: we recently went through a company restructuring and our new corporate email, anthony@ifedlog.com, is still building deliverability as a fresh domain — there’s a chance it’s landing in spam folders. I’m reaching out from my personal business Gmail in the meantime. Please add kelley.anthonyk@gmail.com to your safe senders list and feel free to reply to either address going forward.",
+                "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 \xb7 SDVOSB \xb7 VetHUB). We are a DLA-registered reseller and defense supply chain partner. We'd appreciate being extended your wholesale / distributor-level pricing — we can provide a resale certificate or tax exemption documentation on request.",
                 "",
                 "Now to the reason I’m reaching out — I have 2 active DLA procurement needs in your lane and need pricing and availability on the following:",
                 "",
@@ -1958,7 +1958,7 @@
                 "Anthony K Kelley | Founder & CEO",
                 "Imperio Federal Logistics \xb7 The House of Kel LLC \xb7 CAGE 152U4",
                 "SDVOSB | VetHUB | (254) 226-5216",
-                "kelley.anthonyk@gmail.com | anthony@ifedlog.com | ifedlog.com",
+                "anthony@ifedlog.com | ifedlog.com",
               ].join("\n");
               try {
                 const res  = await fetch("/.netlify/functions/send-rfq", {
