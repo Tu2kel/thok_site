@@ -54,6 +54,15 @@ async function sendEmailResend({ to, subject, body, isHtml = false }) {
 const sendEmail = sendEmailResend;
 
 // ── Body builder ──────────────────────────────────────────────────────────────
+// DIBBS puts a value in Supplier Restrictions whether or not the source is
+// actually restricted. "Unrestricted" and "COTS" mean anyone may quote — asking
+// those vendors to confirm CAGE / lot date / C of C is a warning about the
+// absence of a restriction. Only flag genuinely restricted sources.
+const NON_RESTRICTIVE = new Set(["unrestricted", "cots", "none", "n/a", ""]);
+function isSourceRestricted(raw) {
+  return !NON_RESTRICTIVE.has(String(raw || "").trim().toLowerCase());
+}
+
 function dayBefore(raw) {
   if (!raw) return null;
   const d = new Date(raw);
@@ -92,7 +101,7 @@ function buildBodyForSender(vendor, sols, sender) {
       s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
       dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       fobStr             ? "  Shipping:      " + fobStr : null,
-      s.supplier_restrictions ? "  ⚠ Source:       " + s.supplier_restrictions + " — please confirm manufacturer CAGE, lot date, and C of C" : null,
+      isSourceRestricted(s.supplier_restrictions) ? "  ⚠ Source:       " + s.supplier_restrictions + " — please confirm manufacturer CAGE, lot date, and C of C" : null,
       s.jcp_required === true ? "  ⚠ JCP Required: Joint Certification Program certification required to submit quote" : null,
       "  Ref #:         " + (s.ref_code || s.sol_number),
     ].filter(Boolean).join("\n");
