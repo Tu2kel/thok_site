@@ -23,6 +23,9 @@ const SOL_SOURCE = process.env.SOL_SOURCE || "navigator";
 
 const SCHEDULE  = process.env.CRON_SCHEDULE || "0 2 * * 1-5"; // 2 AM CT Mon–Fri — DIBBS scrape + vendor blast
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
+// Where TEST-mode blasts are delivered instead of the vendor. This is the same
+// mailbox SCRUBBER scans, so a test RFQ is visible where the real ones land.
+const TEST_RECIPIENT = process.env.TEST_RECIPIENT || "anthony@ifedlog.com";
 // Comma-separated FSC codes to skip entirely (over hist price, too competitive, etc.)
 // Default: aerospace fasteners — AN/MS/NAS parts consistently beat hist price
 const SKIP_FSCS = new Set(
@@ -40,13 +43,14 @@ function log(...a)  { console.log("[scc-agent]", new Date().toISOString().slice(
 function err(...a)  { console.error("[scc-agent] ❌", ...a); }
 
 // ── MAIN PIPELINE ─────────────────────────────────────────────────────────
-async function runPipeline(liveModeOverride) {
+async function runPipeline(liveModeOverride, maxVendors = 0) {
   const effectiveLive = typeof liveModeOverride === "boolean" ? liveModeOverride : IS_LIVE;
   const runDate  = new Date().toISOString();
   const errors   = [];
 
   log("═".repeat(60));
-  log("Daily pipeline starting — " + (effectiveLive ? "LIVE BLAST" : "TEST MODE (emails to anthony@ifedlog.com)"));
+  log("Daily pipeline starting — " + (effectiveLive ? "LIVE BLAST" : "TEST MODE (emails to " + TEST_RECIPIENT + ")"));
+  if (maxVendors > 0) log("Vendor cap: " + maxVendors + " email(s) max this run");
   log("═".repeat(60));
 
   // ── 1. MongoDB ────────────────────────────────────────────────────────
@@ -351,7 +355,7 @@ async function runPipeline(liveModeOverride) {
 
     if (plan.length) {
       log("Firing blast: " + plan.length + " vendor emails (" + (effectiveLive ? "LIVE" : "TEST") + ")…");
-      blastResult = await runBlast(plan, { isLive: effectiveLive, fromAddress: "kelley.anthonyk@gmail.com" }, db);
+      blastResult = await runBlast(plan, { isLive: effectiveLive, fromAddress: TEST_RECIPIENT, maxVendors }, db);
       log("Blast complete: " + blastResult.sent + " sent, " + blastResult.failed + " failed");
 
       // Only mark sols whose emails were actually confirmed sent
@@ -579,7 +583,7 @@ const httpServer = http.createServer((req, res) => {
         log("Blast-existing: plan = " + plan.length + " vendors");
 
         if (plan.length) {
-          const result = await runBlast(plan, { isLive: IS_LIVE, fromAddress: "kelley.anthonyk@gmail.com" }, db);
+          const result = await runBlast(plan, { isLive: IS_LIVE, fromAddress: TEST_RECIPIENT }, db);
           log("Blast-existing complete: " + result.sent + " sent, " + result.failed + " failed");
           // Fix #2: only mark sols whose emails were actually sent — don't blackhole
           // unsent sols when runBlast stopped early at the daily limit
@@ -832,17 +836,22 @@ const httpServer = http.createServer((req, res) => {
     req.on("data", c => { body += c; });
     req.on("end", () => {
       let overrideLive = IS_LIVE;
+      let maxVendors   = 0;
       try {
         const parsed = JSON.parse(body);
         if (typeof parsed.live === "boolean") {
           overrideLive = parsed.live;
           log("UI live override: " + (overrideLive ? "LIVE" : "TEST ONLY") + " (env BLAST_LIVE=" + IS_LIVE + ")");
         }
+        // limit: cap vendor emails this run. A TEST run without a cap still
+        // sends one email per matched vendor (~2,400) to TEST_RECIPIENT.
+        const lim = parseInt(parsed.limit ?? parsed.maxVendors, 10);
+        if (Number.isFinite(lim) && lim > 0) maxVendors = lim;
       } catch {}
       res.writeHead(202, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, message: "Pipeline triggered", live: overrideLive }));
-      log("Manual trigger via HTTP /trigger (" + (overrideLive ? "LIVE" : "TEST") + ")");
-      runPipelineTracked(overrideLive).catch(e => err("Triggered pipeline error:", e.message));
+      res.end(JSON.stringify({ ok: true, message: "Pipeline triggered", live: overrideLive, maxVendors: maxVendors || null }));
+      log("Manual trigger via HTTP /trigger (" + (overrideLive ? "LIVE" : "TEST") + (maxVendors ? ", limit " + maxVendors : "") + ")");
+      runPipelineTracked(overrideLive, maxVendors).catch(e => err("Triggered pipeline error:", e.message));
     });
     return;
   }
@@ -857,10 +866,10 @@ httpServer.listen(PORT, () => {
 
 // Wrap runPipeline to track state
 const _runPipeline = runPipeline;
-async function runPipelineTracked(liveModeOverride) {
+async function runPipelineTracked(liveModeOverride, maxVendors = 0) {
   pipelineRunning = true;
   try {
-    await _runPipeline(liveModeOverride);
+    await _runPipeline(liveModeOverride, maxVendors);
     lastRunOk = true;
   } catch (e) {
     lastRunOk = false;

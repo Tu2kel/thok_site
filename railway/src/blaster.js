@@ -211,7 +211,10 @@ function makeSenderCache(db) {
 }
 
 // ── Blast runner ──────────────────────────────────────────────────────────────
-async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
+// maxVendors: cap the number of vendor emails this run may send. Intended for
+// test runs — a full plan is one email per matched vendor (~2,400), which is
+// not something you want landing in your own inbox to "see what it looks like".
+async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
 
   // Round-robin rotation across all vendors in the blast plan.
@@ -236,6 +239,11 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       rotatedPlan = [...plan.slice(offset), ...plan.slice(0, offset)];
       info("Round-robin: cold start at position " + offset + " (BLAST_START_INDEX=" + START_INDEX + ")");
     }
+  }
+
+  if (maxVendors > 0 && rotatedPlan.length > maxVendors) {
+    info("Capped to first " + maxVendors + " of " + rotatedPlan.length + " vendors (maxVendors)");
+    rotatedPlan = rotatedPlan.slice(0, maxVendors);
   }
 
   // Build global sol → IFL ref map ONCE before vendor loop.
@@ -321,7 +329,10 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       info("✓ [" + effectiveSender.toUpperCase() + "] RFQ → " + vendor.name + " (" + sols.length + " items)");
       senderCache.increment(effectiveSender);
 
-      if (db) {
+      // Only a real send may be recorded. A test run addresses the mail to us,
+      // not the vendor — logging it as "sent" against vendor_email would make
+      // the isLive dedup below skip those sols on the next real blast.
+      if (db && isLive) {
         const sentAt = new Date().toISOString();
         Promise.all(sols.map(sol =>
           db.collection("blast_log").updateOne(
@@ -336,7 +347,7 @@ async function runBlast(plan, { isLive = false, fromAddress } = {}, db = null) {
       results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), status: "failed", error: e.message });
       info("✗ [" + sender.toUpperCase() + "] RFQ FAILED → " + vendor.name + ": " + e.message);
 
-      if (db) {
+      if (db && isLive) {
         const failAt = new Date().toISOString();
         Promise.all(sols.map(sol =>
           db.collection("blast_log").updateOne(
