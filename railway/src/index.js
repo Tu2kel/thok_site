@@ -21,7 +21,7 @@ const { runHealthCheck } = require("./health-check");
 // SOL_SOURCE=email (switches to DLA Gmail after Navigator sub ends)
 const SOL_SOURCE = process.env.SOL_SOURCE || "navigator";
 
-const SCHEDULE  = process.env.CRON_SCHEDULE || "0 8,12,16,20 * * 1-5"; // 8 AM / noon / 4 PM / 8 PM CT Mon–Fri
+const SCHEDULE  = process.env.CRON_SCHEDULE || "0 2 * * 1-5"; // 2 AM CT Mon–Fri — DIBBS scrape + vendor blast
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
 // Comma-separated FSC codes to skip entirely (over hist price, too competitive, etc.)
 // Default: aerospace fasteners — AN/MS/NAS parts consistently beat hist price
