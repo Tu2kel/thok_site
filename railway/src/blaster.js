@@ -1,12 +1,12 @@
 // src/blaster.js — vendor selection + RFQ email blast
-// Gmail SMTP is blocked on Railway (port 587/465 firewalled) — all sends go through Resend.
-// Resend free plan: 100/day, 3,000/month.
-const { sendEmailGmail, sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
+// Resend (HTTP/443) is the sole sender. The old Gmail-SMTP-first path timed out
+// ~60s per email on Railway's firewalled SMTP ports before falling back, which
+// throttled the whole blast to ~1 email/minute — removed 2026-07-10.
+const { sendEmailResend, buildBodyForSender, buildRFQBody } = require("./email");
 
 const CAP              = parseInt(process.env.BLAST_CAP_PER_FSC   || "5000");
 const ITEMS_PER_EMAIL  = 10; // hard cap — never more than 10 items per vendor email
-const GMAIL_LIMIT      = parseInt(process.env.GMAIL_DAILY_LIMIT   || "0");    // effectively 0 — Railway blocks SMTP
-const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "5000"); // Resend Pro: unlimited daily, 50k/month
+const RESEND_LIMIT     = parseInt(process.env.RESEND_DAILY_LIMIT  || "5000"); // Resend Pro: 50k/month
 const SEND_DELAY_MS    = parseInt(process.env.BLAST_DELAY_MS      || "2000");
 
 function info(...a) { console.log("[blaster]", ...a); }
@@ -21,28 +21,6 @@ async function saveRefMap(db, entries) {
       { upsert: true }
     ).catch(() => {})
   ));
-}
-
-// Network errors that indicate Railway's SMTP path is blocked (not an auth/address problem).
-// On these, fall back to Resend (HTTP/443) immediately without consuming Gmail quota.
-const SMTP_NETWORK_ERR = /timeout|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|ESOCKET/i;
-
-async function sendWithFallback(sender, { to, subject, body }) {
-  if (sender === "gmail") {
-    try {
-      await sendEmailGmail({ to, subject, body });
-      return "gmail";
-    } catch (e) {
-      if (SMTP_NETWORK_ERR.test(e.message)) {
-        info("⚡ Gmail SMTP unreachable (" + e.message.slice(0, 60) + ") — Resend fallback");
-        // fall through to Resend
-      } else {
-        throw e; // auth/credential errors — don't mask with Resend, surface immediately
-      }
-    }
-  }
-  await sendEmailResend({ to, subject, body });
-  return "resend";
 }
 
 function detectPNPrefix(pn) {
@@ -164,7 +142,6 @@ function buildBlastPlan(sols, dists) {
 // Reads state once at blast start, tracks counts in memory — no MongoDB per email.
 function makeSenderCache(db) {
   let paused      = false;
-  let gmailCount  = 0;
   let resendCount = 0;
   let loaded      = false;
 
@@ -172,13 +149,11 @@ function makeSenderCache(db) {
     if (!db || loaded) return;
     loaded = true;
     const today = new Date().toISOString().slice(0, 10);
-    const [ctrl, gmailDoc, resendDoc] = await Promise.all([
+    const [ctrl, resendDoc] = await Promise.all([
       db.collection("_meta").findOne({ _id: "blast_control" }),
-      db.collection("_meta").findOne({ _id: "gmail_daily"  }),
       db.collection("_meta").findOne({ _id: "resend_daily" }),
     ]);
     paused      = !!(ctrl && ctrl.paused);
-    gmailCount  = (gmailDoc  && gmailDoc.date  === today) ? (gmailDoc.count  || 0) : 0;
     resendCount = (resendDoc && resendDoc.date === today) ? (resendDoc.count || 0) : 0;
   }
 
@@ -186,23 +161,19 @@ function makeSenderCache(db) {
     async pick() {
       await load();
       if (paused)                      return "paused";
-      if (gmailCount  < GMAIL_LIMIT)   return "gmail";
       if (resendCount < RESEND_LIMIT)  return "resend";
       return "limit";
     },
-    increment(sender) {
-      if (sender === "gmail")  gmailCount++;
-      else                     resendCount++;
+    increment() {
+      resendCount++;
       // Write in-memory count (not $inc) so the DB value always matches what we track.
       // $inc accumulates across day boundaries because the first write of a new day
       // sets date:today while still incrementing the stale previous-day total.
       if (db) {
         const today = new Date().toISOString().slice(0, 10);
-        const id    = sender === "gmail" ? "gmail_daily" : "resend_daily";
-        const count = sender === "gmail" ? gmailCount : resendCount;
         db.collection("_meta").updateOne(
-          { _id: id },
-          { $set: { count, date: today } },
+          { _id: "resend_daily" },
+          { $set: { count: resendCount, date: today } },
           { upsert: true },
         ).catch(() => {});
       }
@@ -280,9 +251,9 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
       break;
     }
     if (sender === "limit") {
-      info("🛑 Both senders at daily limit (Gmail " + GMAIL_LIMIT + " + Resend " + RESEND_LIMIT + ") — stopping. Resume tomorrow.");
+      info("🛑 Resend daily limit reached (" + RESEND_LIMIT + ") — stopping. Resume tomorrow.");
       results.daily_limit = true;
-      results.log.push({ status: "stopped", reason: "daily_limit", gmail_limit: GMAIL_LIMIT, resend_limit: RESEND_LIMIT });
+      results.log.push({ status: "stopped", reason: "daily_limit", resend_limit: RESEND_LIMIT });
       break;
     }
 
@@ -312,22 +283,21 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
     // Attach pre-assigned global IFL refs — same sol = same ref across all vendors
     const solsWithRefs = sols.map(s => ({ ...s, ref_code: solRefMap.get(s.sol_number) || s.sol_number }));
 
-    // Build subject + body for chosen sender
+    // Build subject + body
     const firstSol = solsWithRefs[0];
     const { subject: baseSubject } = buildRFQBody(vendor, firstSol);
     const subject = baseSubject + (solsWithRefs.length > 1 ? " +" + (solsWithRefs.length - 1) + " more" : "");
     const body    = buildBodyForSender(vendor, solsWithRefs, sender);
 
     try {
-      // sendWithFallback: if Gmail SMTP is blocked at the network level, Resend
-      // is used immediately without consuming Gmail quota or incrementing fail count.
-      const effectiveSender = await sendWithFallback(sender, { to, subject, body });
+      await sendEmailResend({ to, subject, body });
+      const effectiveSender = "resend";
 
       results.sent++;
       lastSentVendorId = vendor.id || vendor.name;
       results.log.push({ vendor: vendor.name, vendor_email: vendor.email, to, sender: effectiveSender, sols: sols.length, sol_numbers: sols.map(s => s.sol_number), totalExt: entry.totalExt, status: "sent" });
       info("✓ [" + effectiveSender.toUpperCase() + "] RFQ → " + vendor.name + " (" + sols.length + " items)");
-      senderCache.increment(effectiveSender);
+      senderCache.increment();
 
       // Only a real send may be recorded. A test run addresses the mail to us,
       // not the vendor — logging it as "sent" against vendor_email would make

@@ -119,21 +119,19 @@ async function checkGmail() {
 async function checkBlastState(db) {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const [cursor, gmailDoc, resendDoc, ctrl] = await Promise.all([
+    const resendLimit = parseInt(process.env.RESEND_DAILY_LIMIT || "5000");
+    const [cursor, resendDoc, ctrl] = await Promise.all([
       db.collection("_meta").findOne({ _id: "blast_cursor" }),
-      db.collection("_meta").findOne({ _id: "gmail_daily" }),
       db.collection("_meta").findOne({ _id: "resend_daily" }),
       db.collection("_meta").findOne({ _id: "blast_control" }),
     ]);
-    const gmailSent  = (gmailDoc  && gmailDoc.date  === today) ? (gmailDoc.count  || 0) : 0;
     const resendSent = (resendDoc && resendDoc.date === today) ? (resendDoc.count || 0) : 0;
     const paused     = !!(ctrl && ctrl.paused);
     const lastVendor = cursor ? cursor.last_vendor_id : null;
     return {
       ok: true,
-      msg: "Gmail " + gmailSent + "/450 · Resend " + resendSent + "/150" + (paused ? " · PAUSED" : "") + (lastVendor ? " · cursor: " + lastVendor : " · no cursor"),
+      msg: "Resend " + resendSent + "/" + resendLimit + (paused ? " · PAUSED" : "") + (lastVendor ? " · cursor: " + lastVendor : " · no cursor"),
       paused,
-      gmail_sent: gmailSent,
       resend_sent: resendSent,
     };
   } catch (e) {

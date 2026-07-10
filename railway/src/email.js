@@ -1,31 +1,6 @@
-// src/email.js — Dual sender: Gmail (450/day) → Resend (150/day)
-const nodemailer = require("nodemailer");
-
-// ── Gmail ─────────────────────────────────────────────────────────────────────
-const GMAIL_ADDRESS = "kelley.anthonyk@gmail.com";
-const GMAIL_FROM    = "Anthony Kelley | Imperio Federal Logistics <" + GMAIL_ADDRESS + ">";
-
-// Single reused transport — avoids opening a new TCP connection to smtp.gmail.com per email
-let _gmailTransport = null;
-function getGmailTransport() {
-  if (!_gmailTransport) {
-    _gmailTransport = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        type:         "OAuth2",
-        user:         GMAIL_ADDRESS,
-        clientId:     process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-      },
-    });
-  }
-  return _gmailTransport;
-}
-
-async function sendEmailGmail({ to, subject, body }) {
-  await getGmailTransport().sendMail({ from: GMAIL_FROM, to, subject, text: body });
-}
+// src/email.js — Resend is the sole sender.
+// A Gmail SMTP placeholder used before Resend was firewalled on Railway and has
+// been removed. AWS SES was declined. From-address is anthony@ifedlog.com.
 
 // ── Resend ────────────────────────────────────────────────────────────────────
 const RESEND_API     = "https://api.resend.com/emails";
@@ -76,7 +51,8 @@ function toTitleCase(s) {
   return s.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
-// sender = "gmail" | "resend"
+// sender arg is retained for call-site compatibility but no longer used —
+// Resend is the only sender, so there is one signature block.
 function buildBodyForSender(vendor, sols, sender) {
   const greeting = toTitleCase(vendor.poc_first || vendor.poc_name || vendor.name || vendor.company_name);
   const isMulti  = sols.length > 1;
@@ -113,18 +89,12 @@ function buildBodyForSender(vendor, sols, sender) {
     ? "- Packaging: This requirement calls for MIL-STD-2073 military specification packaging. Are you able to comply?"
     : null;
 
-  const sig = sender === "gmail"
-    ? [
-        "Anthony K Kelley | Founder and CEO",
-        "Imperio Federal Logistics · CAGE 152U4 · SDVOSB | VetHUB | (254) 226-5216",
-        "anthony@ifedlog.com | ifedlog.com",
-      ]
-    : [
-        "Anthony K Kelley | Founder and CEO",
-        "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
-        "SDVOSB | VetHUB | (254) 226-5216",
-        "anthony@ifedlog.com | ifedlog.com",
-      ];
+  const sig = [
+    "Anthony K Kelley | Founder and CEO",
+    "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
+    "SDVOSB | VetHUB | (254) 226-5216",
+    "anthony@ifedlog.com | ifedlog.com",
+  ];
 
   return [
     "Hi " + greeting + ",",
@@ -157,11 +127,9 @@ function buildRFQBody(dist, record) {
 
 module.exports = {
   sendEmail,
-  sendEmailGmail,
   sendEmailResend,
   buildBodyForSender,
   buildRFQBody,
-  GMAIL_ADDRESS,
   RESEND_ADDRESS,
   FROM_ADDRESS: RESEND_ADDRESS,
 };
