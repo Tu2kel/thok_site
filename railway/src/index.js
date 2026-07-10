@@ -477,6 +477,7 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
         ref_part_number: s.ref_part_number || "",
         sourcing_path:   s.sourcing_path || "",
         is_watched:      !!s.is_watched,
+        is_repost:       !!s.is_repost,
         reason:          s.reason || s.claudeReason || "",
         sol_url:         s.sol_url || "",
       };
