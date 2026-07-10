@@ -83,7 +83,15 @@ function buildBlastPlan(sols, dists) {
 
     if (!matchedSols.length) continue;
 
-    // Cap items per email if configured
+    // Rank by extended order value (unit_price × qty, falling back to ext_price)
+    // so the per-email cap keeps a vendor's HIGHEST-dollar sols, not whatever
+    // happened to come first in scrape order.
+    const solExt = (r) =>
+      (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1)) ||
+      parseFloat(r.ext_price || 0) || 0;
+    matchedSols.sort((a, b) => solExt(b) - solExt(a));
+
+    // Cap items per email if configured (top-N by value after the sort above)
     const cappedSols = ITEMS_PER_EMAIL > 0 ? matchedSols.slice(0, ITEMS_PER_EMAIL) : matchedSols;
 
     const totalExt = cappedSols.reduce((s, r) => {
