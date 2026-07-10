@@ -137,7 +137,7 @@ async function classifyFsc(body, subject, vendorName, currentFsc) {
   });
   const data = await res.json();
   const raw = data.content?.[0]?.text;
-  if (!raw) throw new Error("No Claude response: " + JSON.stringify(data).slice(0, 150));
+  if (!raw) throw new Error("No Claude response: " + JSON.stringify(data).slice(0, 300));
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("No JSON in Claude response");
   const parsed = JSON.parse(m[0]);
@@ -180,7 +180,7 @@ async function run({ apply, limit, label }) {
         const body = extractBody(msg.source);
         let cls;
         try { cls = await classifyFsc(body, env.subject || "", vendor.name || vendor.company_name || from, (vendor.fsc || vendor.fsc_codes || []).map(String)); }
-        catch (e) { skipped.push({ email: from, reason: "claude_error: " + e.message.slice(0, 60) }); continue; }
+        catch (e) { skipped.push({ email: from, reason: "claude_error: " + e.message.slice(0, 220) }); continue; }
 
         const cur = new Set((vendor.fsc || vendor.fsc_codes || []).map(String));
         const add    = cls.serves.filter(f => !cur.has(f));
