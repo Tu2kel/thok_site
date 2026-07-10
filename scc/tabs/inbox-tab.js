@@ -9,8 +9,9 @@
 
   const { createElement: h, useState, useEffect, useCallback } = React;
 
-  const FN   = "/.netlify/functions/scc-rfq-inbox";
-  const mono = "JetBrains Mono,monospace";
+  const FN    = "/.netlify/functions/scc-rfq-inbox";
+  const FN_BG = "/.netlify/functions/scc-rfq-inbox-background";
+  const mono  = "JetBrains Mono,monospace";
 
   // ── Color constants ──────────────────────────────────────────────────────
   const gold  = "rgba(201,168,76,";
@@ -20,6 +21,7 @@
   const blue  = "rgba(56,189,248,";
   const dim   = "rgba(245,240,232,0.35)";
 
+  // Fast data queries → scc-rfq-inbox (sync)
   async function api(action, payload) {
     const res = await fetch(FN, {
       method: "POST",
@@ -29,6 +31,18 @@
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "API error");
     return data;
+  }
+
+  // Long-running IMAP actions → scc-rfq-inbox-background (202 Accepted immediately)
+  async function apiBg(action, payload) {
+    const res = await fetch(FN_BG, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    if (res.status === 202) return { ok: true, triggered: true };
+    const data = await res.json().catch(() => ({}));
+    return { ok: data.ok !== false, ...data };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -439,7 +453,23 @@
       setScanning(true);
       setError(null);
       try {
-        await api("scan");
+        // Background function returns 202 immediately — poll getScanLog until a new entry appears
+        const snapBefore = scanLogs[0] ? new Date(scanLogs[0].scanned_at).getTime() : 0;
+        await apiBg("scan");
+        // Poll for up to 3 minutes, checking every 8 seconds
+        let elapsed = 0;
+        while (elapsed < 180000) {
+          await new Promise(r => setTimeout(r, 8000));
+          elapsed += 8000;
+          const { logs } = await api("getScanLog");
+          if (logs && logs[0] && new Date(logs[0].scanned_at).getTime() > snapBefore) {
+            setScanLogs(logs);
+            setLastScan(logs[0].scanned_at);
+            await loadReport();
+            return;
+          }
+        }
+        // Timed out polling — reload anyway
         await loadReport();
       } catch (e) {
         setError("Scan failed: " + e.message);
@@ -453,8 +483,8 @@
       setBouncing(true);
       setError(null);
       try {
-        const d = await api("processBounces", { days: 30 });
-        alert("Bounce cleanup: " + d.marked + " addresses marked invalid, " + d.noMatch + " unmatched.\n\n" + (d.log || []).join("\n"));
+        await apiBg("processBounces", { days: 30 });
+        alert("Bounce processing triggered — distributor records will be updated shortly.");
         await loadReport();
       } catch (e) {
         setError("Bounce process failed: " + e.message);
