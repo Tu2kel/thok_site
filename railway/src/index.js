@@ -11,7 +11,7 @@ const { fetchSamSols }         = require("./sam-fetcher");
 const { fetchDibbsDailySols }  = require("./dibbs-daily-fetcher");
 const { fetchDibbsDailySols: fetchDibbsPuppet } = require("./dibbs-puppet-fetcher");
 const { screenBatch }      = require("./screener");
-const { buildBlastPlan, runBlast } = require("./blaster");
+const { buildBlastPlan, runBlast, isAerospacePN } = require("./blaster");
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
 const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, upsertNsnWatch, saveDailyBrief } = require("./db");
@@ -185,9 +185,8 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
   const dnsFscFiltered = rawSols.filter(s => {
     const fsc = String(s.fsc || (s.nsn || "").slice(0, 4));
     if (!SKIP_FSCS.has(fsc)) return true;
-    // AN/MS/NAS parts are in fastener FSCs but route to approved-manufacturer vendors — keep them
-    const pn = (s.ref_part_number || "").trim().toUpperCase();
-    return /^(AN|MS|NAS)[\d-]/.test(pn);
+    // Aerospace-standard parts are in fastener FSCs but route to approved-mfr vendors — keep them
+    return isAerospacePN(s.ref_part_number);
   });
   const dnsDrop = rawSols.length - dnsFscFiltered.length;
   if (dnsDrop) log("Dropped " + dnsDrop + " sols in DNS FSC lanes (" + [...SKIP_FSCS].join(",") + ")");
@@ -205,14 +204,13 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
   const skipped   = dnsFscFiltered.length - freshSols.length;
   if (skipped) log("Skipped " + skipped + " already-acted sols");
 
-  // Drop sub-minimum orders. AN/MS/NAS MIL-spec parts use a lower floor ($1k) —
-  // they come in at small ext prices but route to approved MFRs via blaster.
+  // Drop sub-minimum orders. Aerospace-standard MIL-spec parts use a lower floor
+  // ($1k) — they come in at small ext prices but route to approved MFRs via blaster.
   // If ext_price is null, let through — can't filter what we don't know.
-  const AN_MS_NAS_PFX = /^(AN|MS|NAS)[\d-]/i;
   const AN_MS_NAS_MIN = 1000;
   const valuedSols = MIN_ORDER_VALUE > 0 ? freshSols.filter(s => {
     if (s.ext_price == null) return true;
-    if (AN_MS_NAS_PFX.test(s.ref_part_number || "")) return s.ext_price >= AN_MS_NAS_MIN;
+    if (isAerospacePN(s.ref_part_number)) return s.ext_price >= AN_MS_NAS_MIN;
     return s.ext_price >= MIN_ORDER_VALUE;
   }) : freshSols;
   const valueDrop = freshSols.length - valuedSols.length;

@@ -83,10 +83,18 @@
 
   // ── P/N PREFIX DETECTION ─────────────────────────────────────────────
   function detectPNPrefix(pn) {
+    // Aerospace standards (keep in sync with railway/src/blaster.js):
+    // NAS/NASM · AN · MS · MIL · AS · BAC · NSA · DIN
     const p = (pn || "").trim().toUpperCase();
-    if (/^AN[\d-]/.test(p)) return "AN";
-    if (/^MS[\d-]/.test(p)) return "MS";
-    if (/^NAS[\d-]/.test(p)) return "NAS";
+    if (/^NASM[\d-]/.test(p)) return "NASM";
+    if (/^NAS[\d-]/.test(p))  return "NAS";
+    if (/^NSA[\d-]/.test(p))  return "NSA";
+    if (/^AN[\d-]/.test(p))   return "AN";
+    if (/^MS[\d-]/.test(p))   return "MS";
+    if (/^MIL[\d-]/.test(p))  return "MIL";
+    if (/^AS[\d-]/.test(p))   return "AS";
+    if (/^BAC[A-Z]?\d/.test(p)) return "BAC";
+    if (/^DIN[\d-]/.test(p))  return "DIN";
     return null;
   }
 

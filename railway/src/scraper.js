@@ -254,11 +254,13 @@ async function scrape({ username, password, minPrice = 1000 }) {
     // Pass 3: last 30 days filtered to AN/MS/NAS piece part numbers — always runs.
     // Uses a lower floor ($1k) — these parts come in at small ext prices but route
     // to approved MFRs who can fulfill; the $10k gate in index.js is bypassed for them.
-    const AN_MS_NAS = /^(AN|MS|NAS)[\d-]/i;
-    const pass3Raw = await broadPass(page, 3, "Main_rbDateRange_3", "AN/MS/NAS 30-day", 1000);
+    // Canonical aerospace-hardware standards (mirror of blaster.js detectPNPrefix):
+    // NAS/NASM · AN · MS · MIL · AS · BAC · NSA · DIN
+    const AN_MS_NAS = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
+    const pass3Raw = await broadPass(page, 3, "Main_rbDateRange_3", "Aerospace-std 30-day", 1000);
     const seen12 = new Set([...pass1, ...pass2].map(s => s.sol_number));
-    const pass3 = pass3Raw.filter(s => AN_MS_NAS.test(s.ref_part_number || "") && !seen12.has(s.sol_number));
-    info("Pass 3 → " + pass3.length + " AN/MS/NAS sols (from " + pass3Raw.length + " on page)");
+    const pass3 = pass3Raw.filter(s => AN_MS_NAS.test((s.ref_part_number || "").trim().toUpperCase()) && !seen12.has(s.sol_number));
+    info("Pass 3 → " + pass3.length + " aerospace-std sols (from " + pass3Raw.length + " on page)");
 
     // Pass 4: reposts-only final sweep. Rescues reposts the broad passes buried
     // past the 200-row cap. New-only (not already in P1–P3) since earlier passes

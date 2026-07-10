@@ -23,13 +23,25 @@ async function saveRefMap(db, entries) {
   ));
 }
 
+// Canonical aerospace-hardware part-number standards. A P/N with one of these
+// prefixes routes to aerospace vendors regardless of FSC lane. Keep this list
+// as the single source of truth — scraper.js mirrors the same regex.
+//   NAS/NASM (Nat'l Aerospace Std) · AN (Army-Navy) · MS (Mil Std) · MIL (Mil-spec)
+//   AS (SAE Aerospace Std) · BAC (Boeing) · NSA · DIN
 function detectPNPrefix(pn) {
   const p = (pn || "").trim().toUpperCase();
-  if (/^AN[\d-]/.test(p)) return "AN";
-  if (/^MS[\d-]/.test(p)) return "MS";
-  if (/^NAS[\d-]/.test(p)) return "NAS";
+  if (/^NASM[\d-]/.test(p)) return "NASM";
+  if (/^NAS[\d-]/.test(p))  return "NAS";
+  if (/^NSA[\d-]/.test(p))  return "NSA";
+  if (/^AN[\d-]/.test(p))   return "AN";
+  if (/^MS[\d-]/.test(p))   return "MS";
+  if (/^MIL[\d-]/.test(p))  return "MIL";
+  if (/^AS[\d-]/.test(p))   return "AS";
+  if (/^BAC[A-Z]?\d/.test(p)) return "BAC";
+  if (/^DIN[\d-]/.test(p))  return "DIN";
   return null;
 }
+function isAerospacePN(pn) { return detectPNPrefix(pn) !== null; }
 
 // Select vendors for a set of sols, respecting FSC cap + tier ordering
 function buildBlastPlan(sols, dists) {
@@ -105,11 +117,9 @@ function buildBlastPlan(sols, dists) {
     plan.push({ vendor, sols: cappedSols, totalExt, fscs });
   }
 
-  // Approved-manufacturer vendors: receive ALL AN/MS/NAS sols regardless of FSC lane
-  const anmsNasSols = sols.filter(s => {
-    const prefix = detectPNPrefix(s.ref_part_number);
-    return prefix === "AN" || prefix === "MS" || prefix === "NAS";
-  });
+  // Approved-manufacturer vendors: receive ALL aerospace-standard sols regardless
+  // of FSC lane (NAS/NASM/AN/MS/MIL/AS/BAC/NSA/DIN).
+  const anmsNasSols = sols.filter(s => isAerospacePN(s.ref_part_number));
   if (anmsNasSols.length) {
     const approvedMfrs = dists.filter(d =>
       d.is_manufacturer &&
@@ -353,4 +363,4 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
   return results;
 }
 
-module.exports = { buildBlastPlan, runBlast };
+module.exports = { buildBlastPlan, runBlast, detectPNPrefix, isAerospacePN };
