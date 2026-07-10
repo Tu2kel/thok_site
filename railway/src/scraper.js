@@ -22,6 +22,7 @@ const HEADER_ALIASES = {
   delivery_days:         ["deldays", "deliverydays"],
   nsn:                   ["nsn"],
   piece_part_no:         ["piecepartno", "piecepartnumber"],
+  repost:                ["repost", "reposted"],
   jcp:                   ["jcpreqd", "jcprequired", "jcp"],
   set_aside:             ["setaside"],
   part_char:             ["partchar"],
@@ -94,6 +95,9 @@ async function scrapePage(page, colMap, passNum, passLabel, fscHint, minPrice) {
         nsn,
         fsc:                  _fh || nsn.slice(0, 4) || "",
         ref_part_number:      txt(cells, _COL.piece_part_no),
+        // Repost column is a per-row checkbox; checked = this sol was re-solicited
+        // (first round drew no/weak bids → less competition, buyer still needs it).
+        is_repost:            _COL.repost != null && !!(cells[_COL.repost] && cells[_COL.repost].querySelector("input") && cells[_COL.repost].querySelector("input").checked),
         jcp:                  txt(cells, _COL.jcp),
         set_aside:            txt(cells, _COL.set_aside),
         material:             "", // Navigator dropped the Material column; kept for schema parity
@@ -139,7 +143,10 @@ async function setCommonFilters(page) {
   await page.evaluate(() => { const el = document.querySelector("#Main_rbAwarded_2"); if (el) el.click(); });       // Not Already Awarded
   await page.evaluate(() => { const el = document.querySelector("#Main_chNotExpired"); if (el && !el.checked) el.click(); }); // Not Expired ✓
   await page.evaluate(() => { const el = document.querySelector("#Main_chExpired"); if (el && el.checked) el.click(); });     // Expired unchecked
-  await page.evaluate(() => { const el = document.querySelector("#Main_chRepost"); if (el && !el.checked) el.click(); });     // Repost ✓
+  // NOTE: the Repost filter (#Main_chReposted) is NOT set here. It means "only
+  // reposts", so setting it on every pass would drop all non-repost sols. The
+  // repost flag is captured per-row (is_repost) and reposts get a dedicated
+  // final sweep (repostSweep) instead.
   await page.evaluate(() => { const el = document.querySelector("#Main_chCPac"); if (el && !el.checked) el.click(); });
   await new Promise(r => setTimeout(r, 500));
 }
@@ -169,6 +176,32 @@ async function broadPass(page, passNum, dateId, label, minPrice) {
   await sortDesc(page, colMap);
   const sols = await scrapePage(page, colMap, passNum, label, "", minPrice);
   info("Pass " + passNum + " → " + sols.length + " sols");
+  return sols;
+}
+
+// Reposts-only final sweep. #Main_chReposted filters the grid to solicitations
+// that were re-issued (first round drew no/weak bids). These are lower-competition
+// money, but in a broad pass they get buried under higher-$ non-reposts past the
+// 200-row page cap — so they get their own top-200 budget here. Every row is a
+// repost, so is_repost is forced true on the way out.
+async function repostSweep(page, passNum, minPrice) {
+  info("Pass " + passNum + ": Reposts-only (30-day sweep)");
+  await goToSearch(page);
+  await page.waitForSelector("#Main_chCPac", { timeout: 30000 });
+  const fscInput = await page.$("#Main_NSN_Search");
+  if (fscInput) { await fscInput.click({ clickCount: 3 }); await page.keyboard.press("Backspace"); }
+  await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_3"); if (el) el.click(); }); // 30 days
+  await setCommonFilters(page);
+  await page.evaluate(() => { const el = document.querySelector("#Main_chReposted"); if (el && !el.checked) el.click(); }); // ONLY reposts
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
+    page.click("#Main_btnApplySelections"),
+  ]);
+  const colMap = await resolveColumns(page);
+  await sortDesc(page, colMap);
+  const sols = await scrapePage(page, colMap, passNum, "Reposts (30-day)", "", minPrice);
+  sols.forEach(s => { s.is_repost = true; });
+  info("Pass " + passNum + " → " + sols.length + " reposts");
   return sols;
 }
 
@@ -227,17 +260,26 @@ async function scrape({ username, password, minPrice = 1000 }) {
     const pass3 = pass3Raw.filter(s => AN_MS_NAS.test(s.ref_part_number || "") && !seen12.has(s.sol_number));
     info("Pass 3 → " + pass3.length + " AN/MS/NAS sols (from " + pass3Raw.length + " on page)");
 
+    // Pass 4: reposts-only final sweep. Rescues reposts the broad passes buried
+    // past the 200-row cap. New-only (not already in P1–P3) since earlier passes
+    // already carry is_repost from the column capture.
+    const seen123 = new Set([...pass1, ...pass2, ...pass3].map(s => s.sol_number));
+    const pass4Raw = await repostSweep(page, 4, minPrice);
+    const pass4 = pass4Raw.filter(s => !seen123.has(s.sol_number));
+    info("Pass 4 → " + pass4.length + " new reposts (from " + pass4Raw.length + " on page)");
+
     await browser.close();
 
     // Dedupe — pass1 wins
     const deduped = new Set();
     const all = [];
-    for (const sol of [...pass1, ...pass2, ...pass3]) {
+    for (const sol of [...pass1, ...pass2, ...pass3, ...pass4]) {
       if (!deduped.has(sol.sol_number)) { deduped.add(sol.sol_number); all.push(sol); }
     }
 
-    info("✅ Scrape complete — P1:" + pass1.length + " P2:" + pass2.length + " P3:" + pass3.length + " Total:" + all.length);
-    return { ok: true, sols: all, counts: { pass1: pass1.length, pass2: pass2.length, pass3: pass3.length, total: all.length } };
+    const repostTotal = all.filter(s => s.is_repost).length;
+    info("✅ Scrape complete — P1:" + pass1.length + " P2:" + pass2.length + " P3:" + pass3.length + " P4:" + pass4.length + " Total:" + all.length + " (" + repostTotal + " reposts)");
+    return { ok: true, sols: all, counts: { pass1: pass1.length, pass2: pass2.length, pass3: pass3.length, pass4: pass4.length, reposts: repostTotal, total: all.length } };
 
   } catch (e) {
     fail("Scrape error:", e.message);

@@ -73,6 +73,7 @@ const HEADER_ALIASES = {
   delivery_days:         ["deldays", "deliverydays"],
   nsn:                   ["nsn"],
   piece_part_no:         ["piecepartno", "piecepartnumber"],
+  repost:                ["repost", "reposted"],
   jcp:                   ["jcpreqd", "jcprequired", "jcp"],
   set_aside:             ["setaside"],
   part_char:             ["partchar"],
@@ -180,6 +181,8 @@ async function scrapePage(page, { colMap, passNum, passLabel, fscHint = "" }) {
           nsn: nsn,
           fsc: fscHint || nsn.slice(0, 4) || "",
           piece_part_no: getText(cells, colMap.piece_part_no),
+          // Repost column is a per-row checkbox; checked = re-solicited sol.
+          is_repost: colMap.repost != null && !!(cells[colMap.repost] && cells[colMap.repost].querySelector("input") && cells[colMap.repost].querySelector("input").checked),
           jcp: getText(cells, colMap.jcp),
           set_aside: getText(cells, colMap.set_aside),
           material: "", // Navigator dropped the Material column; kept for schema parity
