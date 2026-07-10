@@ -52,41 +52,74 @@ const log = (...a) => {
 const info = (...a) => console.log("[navigator-scraper]", ...a);
 const fail = (...a) => console.error("[navigator-scraper] ❌", ...a);
 
-// ── COLUMN MAP (0-indexed, verified from live table) ─────────────────────
-// Headers: Solicitation | AI | Sol.Type | Send | Save | Nomenclature |
-//   QTY | Unit Issue | Unit Price | Price Hist. | Extended Price |
-//   Quote Due | Del.(days) | NSN | Piece Part No. | Set Aside |
-//   Material | Part Char. | Supplier Restrictions | Quote | QA |
-//   Insp. | FOB | Com.Pack | NAICS | Suppliers | NSN Info |
-//   Resell Opp. | Supplier List | Exclude NSNs
-// Column layout as of 2026-06-26 (DIBBS added "Send" col at 3 and "JCP req'd" at 15):
-// Sol | AI | Sol.Type | Send | Nomenclature | Repost | QTY | Unit Issue | Unit Price |
-// Price Hist | Ext Price | Quote Due | Del.Days | NSN | Piece Part No | JCP(req'd) |
-// Set Aside | Material | Part Char | Supplier Restrictions | Quote | Basic Drawing |
-// Insp. | FOB | Com.Pack | NAICS | Suppliers | NSN Info | Resell Opp. | SA | AMSC | ...
-const COL = {
-  sol_number: 0,
-  ai: 1,
-  sol_type: 2,
-  nomenclature: 4,  // was 5 — DIBBS added "Send" col at 3, shifting Nomenclature left
-  qty: 6,
-  unit_issue: 7,
-  unit_price: 8,
-  hist_price: 9,
-  ext_price: 10,
-  quote_due: 11,
-  delivery_days: 12,
-  nsn: 13,
-  piece_part_no: 14,
-  set_aside: 16,    // was 15 — DIBBS added "JCP req'd" col at 15
-  material: 17,
-  part_char: 18,
-  supplier_restrictions: 19,
-  fob: 23,
-  com_pack: 24,
-  naics: 25,
-  supplier_list: 29,
+// ── COLUMN MAP ───────────────────────────────────────────────────────────
+// Resolved at runtime from the live <th> header text, never hardcoded.
+// Navigator reorders/adds/drops columns without notice; a positional map
+// silently misreads (e.g. reading Quote Due "08/06/26" as a $8 price, which
+// trips the minPrice break and yields 0 sols on every pass).
+// Each key lists accepted header spellings, normalized: lowercased, all
+// non-alphanumerics stripped. First match wins.
+const HEADER_ALIASES = {
+  sol_number:            ["solicitation"],
+  ai:                    ["ai"],
+  sol_type:              ["soltype"],
+  nomenclature:          ["nomenclature"],
+  qty:                   ["qty", "quantity"],
+  unit_issue:            ["unitissue"],
+  unit_price:            ["unitprice"],
+  hist_price:            ["pricehist", "pricehistory"],
+  ext_price:             ["extendedprice", "extprice"],
+  quote_due:             ["quotedue"],
+  delivery_days:         ["deldays", "deliverydays"],
+  nsn:                   ["nsn"],
+  piece_part_no:         ["piecepartno", "piecepartnumber"],
+  jcp:                   ["jcpreqd", "jcprequired", "jcp"],
+  set_aside:             ["setaside"],
+  part_char:             ["partchar"],
+  tech_docs:             ["techdocsdraw", "techdocs"],
+  supplier_restrictions: ["supplierrestrictions"],
+  qa:                    ["qa"],
+  fob:                   ["fob"],
+  com_pack:              ["compack"],
+  posted_date:           ["posteddate"],
+  naics:                 ["naics"],
+  amsc:                  ["amsc"],
+  supplier_list:         ["supplierlist"],
 };
+
+// Without these, a row cannot be identified or priced — resolving them wrong
+// is worse than not running, so a miss throws instead of scraping garbage.
+const REQUIRED_COLS = ["sol_number", "ext_price", "unit_price", "nsn", "quote_due"];
+
+// Reads the header row and maps logical field → column index.
+async function resolveColumns(page) {
+  const { colMap, header } = await page.evaluate((aliases) => {
+    const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const ths = Array.from(
+      document.querySelectorAll("#Main_GridView1 tr th"),
+    ).map((th) => norm(th.textContent));
+    const map = {};
+    for (const [key, names] of Object.entries(aliases)) {
+      for (const n of names) {
+        const idx = ths.indexOf(n);
+        if (idx !== -1) { map[key] = idx; break; }
+      }
+    }
+    return { colMap: map, header: ths };
+  }, HEADER_ALIASES);
+
+  const missing = REQUIRED_COLS.filter((k) => colMap[k] === undefined);
+  if (missing.length) {
+    throw new Error(
+      "Navigator table layout changed — could not locate required column(s): " +
+        missing.join(", ") +
+        ". Live headers: [" + header.join(", ") + "]. " +
+        "Add the new spelling to HEADER_ALIASES in navigator-scraper.js.",
+    );
+  }
+  log("Column map resolved:", JSON.stringify(colMap));
+  return colMap;
+}
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
 async function ensureChecked(page, selector) {
@@ -111,7 +144,7 @@ async function clickRadio(page, selector) {
 }
 
 // ── SHARED SCRAPE HELPER — scrapes current page, dedupes against seen set ─
-async function scrapePage(page, { passNum, passLabel, fscHint = "" }) {
+async function scrapePage(page, { colMap, passNum, passLabel, fscHint = "" }) {
   return await page.evaluate(
     (colMap, minPrice, passNum, passLabel, fscHint) => {
       const rows = Array.from(
@@ -147,13 +180,18 @@ async function scrapePage(page, { passNum, passLabel, fscHint = "" }) {
           nsn: nsn,
           fsc: fscHint || nsn.slice(0, 4) || "",
           piece_part_no: getText(cells, colMap.piece_part_no),
+          jcp: getText(cells, colMap.jcp),
           set_aside: getText(cells, colMap.set_aside),
-          material: getText(cells, colMap.material),
+          material: "", // Navigator dropped the Material column; kept for schema parity
           part_char: getText(cells, colMap.part_char),
+          tech_docs: getText(cells, colMap.tech_docs),
           supplier_restrictions: getText(cells, colMap.supplier_restrictions),
+          qa: getText(cells, colMap.qa),
           fob: getText(cells, colMap.fob),
           com_pack: getText(cells, colMap.com_pack),
+          posted_date: getText(cells, colMap.posted_date),
           naics: getText(cells, colMap.naics),
+          amsc: getText(cells, colMap.amsc),
           supplier_list: getText(cells, colMap.supplier_list),
           pass: passNum,
           pass_label: passLabel,
@@ -162,7 +200,7 @@ async function scrapePage(page, { passNum, passLabel, fscHint = "" }) {
       }
       return results;
     },
-    COL,
+    colMap,
     CONFIG.minExtPrice,
     passNum,
     passLabel,
@@ -175,7 +213,7 @@ async function scrapePage(page, { passNum, passLabel, fscHint = "" }) {
 // Function-form evaluate wraps the callback in a Puppeteer serializer that
 // accesses .caller/.arguments — banned on strict-mode functions → throws.
 // String-form skips serialization and runs as raw JS in page context.
-async function sortDescByExtPrice(page) {
+async function sortDescByExtPrice(page, colMap) {
   info("Sorting by Extended Price...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
@@ -194,7 +232,7 @@ async function sortDescByExtPrice(page) {
       if (!isNaN(val) && val > 0) return val;
     }
     return 0;
-  }, COL.ext_price);
+  }, colMap.ext_price);
 
   if (firstPrice > 0 && firstPrice < 5000) {
     info("Ascending — clicking sort again...");
@@ -273,9 +311,10 @@ async function runScrapePass(page, { passNum, dateRadioId, dateLabel }) {
   ]);
   info("✅ Results loaded");
 
-  await sortDescByExtPrice(page);
+  const colMap = await resolveColumns(page);
+  await sortDescByExtPrice(page, colMap);
 
-  const sols = await scrapePage(page, { passNum, passLabel: dateLabel });
+  const sols = await scrapePage(page, { colMap, passNum, passLabel: dateLabel });
   info(`✅ Pass ${passNum} scraped ${sols.length} sols`);
   return sols;
 }
@@ -313,9 +352,11 @@ async function runFscPass(page, { fsc, fscIndex, fscTotal, seen }) {
   ]);
   info("✅ Results loaded");
 
-  await sortDescByExtPrice(page);
+  const colMap = await resolveColumns(page);
+  await sortDescByExtPrice(page, colMap);
 
   const allOnPage = await scrapePage(page, {
+    colMap,
     passNum: 3,
     passLabel: `Phase 3 FSC ${fsc}`,
     fscHint: fsc,
@@ -590,9 +631,11 @@ async function runPnPass(page, { pnPrefix, seen, dateRadioId = "Main_rbDateRange
   ]);
   info("✅ Results loaded");
 
-  await sortDescByExtPrice(page);
+  const colMap = await resolveColumns(page);
+  await sortDescByExtPrice(page, colMap);
 
   const allOnPage = await scrapePage(page, {
+    colMap,
     passNum: 4,
     passLabel: `AN/MS ${pnPrefix}`,
     fscHint: "",

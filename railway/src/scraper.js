@@ -5,25 +5,68 @@
 const puppeteer = require("puppeteer-core");
 const fs        = require("fs");
 
-// Column indices verified against DibbsNavigator layout (screenshot 2026-07-03):
-// 0:Solicitation 1:AI 2:Sol.Type 3:Send 4:Nomenclature 5:Repost 6:QTY
-// 7:Sol.Issue 8:Unit Price 9:Price Hist. 10:Extended Price 11:Quote Due
-// 12:Del(days) 13:NSN 14:Piece Part No. 15:JCP 16:Set Aside
-// 17:Material 18:Part Char. 19:Supplier Restrictions 20:Quote 21:Basic Drawing
-// 22:Insp. 23:FOB 24:Com.Pack 25:NAICS 26:Suppliers 27:NSN Info
-// 28:Resell Opp. 29:SA 30:AMSC 31:Complete Materials 32:Buyer Info 33:CMMC
-const COL = {
-  sol_number: 0, nomenclature: 4, qty: 6, unit_issue: 7,
-  unit_price: 8, hist_price: 9, ext_price: 10, quote_due: 11,
-  delivery_days: 12, nsn: 13, piece_part_no: 14, jcp: 15, set_aside: 16,
-  material: 17, part_char: 18, supplier_restrictions: 19,
-  fob: 23, naics: 25, supplier_list: 26, amsc: 30,
+// Column indices are resolved at runtime from the live <th> header text.
+// Navigator adds/drops columns without notice; a positional map silently
+// misreads (e.g. Quote Due "08/06/26" parses as a $8 ext price, tripping the
+// minPrice break and yielding 0 sols — a blast that quietly sends nothing).
+// Header spellings, normalized: lowercased, non-alphanumerics stripped.
+const HEADER_ALIASES = {
+  sol_number:            ["solicitation"],
+  nomenclature:          ["nomenclature"],
+  qty:                   ["qty", "quantity"],
+  unit_issue:            ["unitissue"],
+  unit_price:            ["unitprice"],
+  hist_price:            ["pricehist", "pricehistory"],
+  ext_price:             ["extendedprice", "extprice"],
+  quote_due:             ["quotedue"],
+  delivery_days:         ["deldays", "deliverydays"],
+  nsn:                   ["nsn"],
+  piece_part_no:         ["piecepartno", "piecepartnumber"],
+  jcp:                   ["jcpreqd", "jcprequired", "jcp"],
+  set_aside:             ["setaside"],
+  part_char:             ["partchar"],
+  supplier_restrictions: ["supplierrestrictions"],
+  fob:                   ["fob"],
+  naics:                 ["naics"],
+  amsc:                  ["amsc"],
+  supplier_list:         ["supplierlist"],
 };
+
+// A row cannot be identified or priced without these. Throwing beats scraping
+// garbage — or worse, scraping nothing and reporting success.
+const REQUIRED_COLS = ["sol_number", "ext_price", "unit_price", "nsn", "quote_due"];
+
+async function resolveColumns(page) {
+  const { colMap, header } = await page.evaluate((aliases) => {
+    const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const ths = Array.from(document.querySelectorAll("#Main_GridView1 tr th"))
+      .map((th) => norm(th.textContent));
+    const map = {};
+    for (const [key, names] of Object.entries(aliases)) {
+      for (const n of names) {
+        const idx = ths.indexOf(n);
+        if (idx !== -1) { map[key] = idx; break; }
+      }
+    }
+    return { colMap: map, header: ths };
+  }, HEADER_ALIASES);
+
+  const missing = REQUIRED_COLS.filter((k) => colMap[k] === undefined);
+  if (missing.length) {
+    throw new Error(
+      "Navigator table layout changed — missing required column(s): " +
+        missing.join(", ") + ". Live headers: [" + header.join(", ") + "]. " +
+        "Add the new spelling to HEADER_ALIASES in railway/src/scraper.js.",
+    );
+  }
+  info("Column map resolved:", JSON.stringify(colMap));
+  return colMap;
+}
 
 function info(...a)  { console.log("[scraper]", ...a); }
 function fail(...a)  { console.error("[scraper] ❌", ...a); }
 
-async function scrapePage(page, passNum, passLabel, fscHint, minPrice) {
+async function scrapePage(page, colMap, passNum, passLabel, fscHint, minPrice) {
   return page.evaluate((_COL, _min, _pn, _pl, _fh) => {
     const rows = Array.from(document.querySelectorAll("#Main_GridView1 tbody tr"));
     const results = [];
@@ -53,7 +96,7 @@ async function scrapePage(page, passNum, passLabel, fscHint, minPrice) {
         ref_part_number:      txt(cells, _COL.piece_part_no),
         jcp:                  txt(cells, _COL.jcp),
         set_aside:            txt(cells, _COL.set_aside),
-        material:             txt(cells, _COL.material),
+        material:             "", // Navigator dropped the Material column; kept for schema parity
         part_char:            txt(cells, _COL.part_char),
         supplier_restrictions: txt(cells, _COL.supplier_restrictions),
         fob:                  txt(cells, _COL.fob),
@@ -66,10 +109,10 @@ async function scrapePage(page, passNum, passLabel, fscHint, minPrice) {
       });
     }
     return results;
-  }, COL, minPrice, passNum, passLabel, fscHint || "");
+  }, colMap, minPrice, passNum, passLabel, fscHint || "");
 }
 
-async function sortDesc(page) {
+async function sortDesc(page, colMap) {
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
     page.evaluate('__doPostBack("ctl00$Main$GridView1", "Sort$Extended")'),
@@ -83,7 +126,7 @@ async function sortDesc(page) {
       if (!isNaN(v) && v > 0) return v;
     }
     return 0;
-  }, COL.ext_price);
+  }, colMap.ext_price);
   if (firstPrice > 0 && firstPrice < 5000) {
     await Promise.all([
       page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
@@ -122,8 +165,9 @@ async function broadPass(page, passNum, dateId, label, minPrice) {
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
     page.click("#Main_btnApplySelections"),
   ]);
-  await sortDesc(page);
-  const sols = await scrapePage(page, passNum, label, "", minPrice);
+  const colMap = await resolveColumns(page);
+  await sortDesc(page, colMap);
+  const sols = await scrapePage(page, colMap, passNum, label, "", minPrice);
   info("Pass " + passNum + " → " + sols.length + " sols");
   return sols;
 }
