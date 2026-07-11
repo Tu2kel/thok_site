@@ -70,23 +70,16 @@ function buildBlastPlan(sols, dists) {
 
   for (const d of eligible) {
     const assignedFscs = (d.fsc || []).map(String).filter(Boolean);
-    const isMissingFsc = !assignedFscs.length;
-    const dFscs = isMissingFsc
-      ? [...goFscs] // no FSC set → match all active lanes
-      : assignedFscs.filter(f => goFscs.has(f));
+    // No FSC lanes assigned → DO NOT BLAST. (Previously this matched ALL active
+    // lanes, so blanking a vendor's FSC — meant to stop their RFQs — instead sent
+    // them every sol. Blank now means "hold until lanes are assigned".)
+    if (!assignedFscs.length) continue;
+    const dFscs = assignedFscs.filter(f => goFscs.has(f));
     if (!dFscs.length) continue;
 
-    // Fix #5: no-FSC vendors use their own cap bucket so they don't consume
-    // lane-specific slots and block FSC-assigned vendors from entering.
-    if (isMissingFsc) {
-      const nofscCount = fscVendorCount["__NOFSC__"] || 0;
-      if (nofscCount >= CAP) continue;
-      fscVendorCount["__NOFSC__"] = nofscCount + 1;
-    } else {
-      const underCap = dFscs.some(f => (fscVendorCount[f] || 0) < CAP);
-      if (!underCap) continue;
-      dFscs.forEach(f => { fscVendorCount[f] = (fscVendorCount[f] || 0) + 1; });
-    }
+    const underCap = dFscs.some(f => (fscVendorCount[f] || 0) < CAP);
+    if (!underCap) continue;
+    dFscs.forEach(f => { fscVendorCount[f] = (fscVendorCount[f] || 0) + 1; });
 
     const key = (d.name || "").toUpperCase().trim();
     if (seenNames.has(key)) continue;
