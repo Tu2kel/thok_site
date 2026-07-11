@@ -61,7 +61,7 @@ function makeImapClient() {
 function extractBody(source) {
   const raw = source.toString("utf-8");
   const sep = raw.indexOf("\r\n\r\n");
-  if (sep === -1) return raw.slice(0, 3000);
+  if (sep === -1) return raw.slice(0, 8000);
   const hdrs = raw.slice(0, sep).toLowerCase();
   let body = raw.slice(sep + 4);
   const isBase64 = hdrs.includes("content-transfer-encoding: base64");
@@ -78,14 +78,14 @@ function extractBody(source) {
       let pbody = part.slice(psep + 4).replace(/--$/, "").trim();
       if (phdr.includes("base64")) { try { pbody = Buffer.from(pbody.replace(/\s+/g, ""), "base64").toString("utf-8"); } catch {} }
       else if (phdr.includes("quoted-printable")) { pbody = pbody.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/gi, (_,h)=>String.fromCharCode(parseInt(h,16))); }
-      if (pl.includes("text/plain")) return pbody.slice(0, 3000);
+      if (pl.includes("text/plain")) return pbody.slice(0, 8000);
       if (pl.includes("text/html") && !fallback) fallback = pbody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     }
-    if (fallback) return fallback.slice(0, 3000);
+    if (fallback) return fallback.slice(0, 8000);
   }
   if (isBase64) { try { body = Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf-8"); } catch {} }
   else if (isQP) { body = body.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/gi, (_,h)=>String.fromCharCode(parseInt(h,16))); }
-  return body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 3000);
+  return body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000);
 }
 
 // Find vendor by sender email (exact, then domain) — mirrors scc-fsc-scrub.
@@ -97,6 +97,30 @@ async function findVendor(db, senderEmail) {
     if (domain) vendor = await dist.findOne({ email: new RegExp("@" + domain, "i") });
   }
   return vendor;
+}
+
+// Pull every "Ref #: IFL-…/sol" from the quoted RFQ inside the reply.
+function parseRefs(text) {
+  const refs = [];
+  const rx = /Ref\s*#\s*:\s*([A-Z0-9\-]+)/gi;
+  let m;
+  while ((m = rx.exec(text)) !== null) {
+    const v = m[1].trim().toUpperCase();
+    if (v && !refs.includes(v)) refs.push(v);
+  }
+  return refs;
+}
+
+// ref (IFL ref or sol number) → its FSC — mirrors scc-fsc-scrub.fscForRef.
+async function fscForRef(db, ref) {
+  let doc = await db.collection("rfq_refs").findOne({ ref });
+  if (!doc) doc = await db.collection("rfq_refs").findOne({ sol_number: ref });
+  if (!doc) {
+    const log = await db.collection("blast_log").findOne({ sol_number: ref });
+    if (log) doc = { fsc: log.fsc, item_name: log.item_name, sol_number: ref };
+  }
+  if (!doc || !doc.fsc) return null;
+  return { ref, fsc: String(doc.fsc), item_name: doc.item_name || "" };
 }
 
 // Auto-discover the Gmail label mailbox (e.g. "Change FSC to meet Customer").
@@ -112,33 +136,42 @@ async function findLabelMailbox(imap, override) {
   return paths.find(p => rx.test(p)) || paths.find(p => /fsc/i.test(p)) || null;
 }
 
-// Claude: which FSC codes does this vendor serve / not serve?
-async function classifyFsc(body, subject, vendorName, currentFsc) {
+// Claude: read the vendor's REPLY and decide which of the referenced RFQ items
+// they decline (no-bid / don't carry), plus any product lines they explicitly
+// DO/DON'T handle. The FSCs come from the referenced sols, not the prose — the
+// vendor usually just says "we don't carry the items below."
+async function classifyReply(body, subject, refItems) {
   const fscRef = Object.entries(FSC_NAMES).map(([c,n]) => c + "=" + n).join(", ");
+  const itemList = refItems.length
+    ? refItems.map(r => "  " + r.ref + " — " + (r.item_name || "(item)") + " [FSC " + r.fsc + "]").join("\n")
+    : "  (none parsed)";
   const prompt = [
-    "You classify a vendor's email about which FSC (Federal Supply Class) product",
-    "lines they handle. Return ONLY JSON: {\"serves\":[4-digit codes they DO handle],",
-    "\"not_serves\":[4-digit codes they explicitly do NOT handle]}.",
+    "A distributor replied to our RFQ. Decide which of the referenced items they",
+    "will NOT supply (no-bid / don't carry / not their line), and note any product",
+    "lines they explicitly DO or DON'T handle.",
+    "Return ONLY JSON:",
+    '{"no_bid_all": true|false, "no_bid_refs": ["REF",...],',
+    ' "serves_fsc": ["4-digit",...], "not_serves_fsc": ["4-digit",...]}',
     "Rules:",
-    "- Use 4-digit FSC codes. Map product words to codes with this reference:",
+    "- no_bid_all=true if they decline ALL the items (e.g. \"we do not carry the items below, all no bid\").",
+    "- no_bid_refs = specific refs they decline, if only some. Leave empty if no_bid_all.",
+    "- serves_fsc / not_serves_fsc = ONLY when they name a product line directly; map words to codes with:",
     "  " + fscRef,
-    "- serves = lines they say they carry/manufacture/stock/quote.",
-    "- not_serves = lines they say they don't do / aren't theirs / to remove.",
-    "- Only include codes you are confident about. Empty arrays are fine.",
-    "- Do not invent codes not in the reference unless the email states a 4-digit FSC directly.",
+    "- A generic \"no bid / don't carry these\" is NOT a product-line statement — express it via no_bid, not not_serves_fsc.",
+    "- Empty arrays / false are fine.",
     "",
-    "Vendor: " + vendorName,
-    "Their current FSC lanes: " + (currentFsc.join(", ") || "(none on file)"),
     "Subject: " + subject,
+    "Referenced items:",
+    itemList,
     "",
-    "Email:",
+    "Reply email:",
     (body || "").slice(0, 2500),
   ].join("\n");
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
   });
   const data = await res.json();
   const raw = data.content?.[0]?.text;
@@ -147,7 +180,13 @@ async function classifyFsc(body, subject, vendorName, currentFsc) {
   if (!m) throw new Error("No JSON in Claude response");
   const parsed = JSON.parse(m[0]);
   const norm = (arr) => [...new Set((arr || []).map(x => String(x).replace(/\D/g, "")).filter(x => x.length === 4))];
-  return { serves: norm(parsed.serves), not_serves: norm(parsed.not_serves) };
+  const upper = (arr) => [...new Set((arr || []).map(x => String(x).trim().toUpperCase()).filter(Boolean))];
+  return {
+    no_bid_all: !!parsed.no_bid_all,
+    no_bid_refs: upper(parsed.no_bid_refs),
+    serves_fsc: norm(parsed.serves_fsc),
+    not_serves_fsc: norm(parsed.not_serves_fsc),
+  };
 }
 
 async function run({ apply, limit, label }) {
@@ -183,18 +222,34 @@ async function run({ apply, limit, label }) {
         if (!vendor) { skipped.push({ email: from, reason: "vendor_not_in_db" }); continue; }
 
         const body = extractBody(msg.source);
+
+        // Map the referenced RFQ items (Ref #: …) to their FSCs — this is where
+        // "we don't carry the items below" gets its FSC codes from.
+        const refs = parseRefs(body);
+        const refItems = (await Promise.all(refs.map(r => fscForRef(db, r)))).filter(Boolean);
+        const fscByRef = {}; refItems.forEach(r => { fscByRef[r.ref] = r.fsc; });
+
         let cls;
-        try { cls = await classifyFsc(body, env.subject || "", vendor.name || vendor.company_name || from, (vendor.fsc || vendor.fsc_codes || []).map(String)); }
+        try { cls = await classifyReply(body, env.subject || "", refItems); }
         catch (e) { skipped.push({ email: from, reason: "claude_error: " + e.message.slice(0, 220) }); continue; }
 
+        // FSCs to remove: the no-bid items' FSCs (all referenced if no_bid_all,
+        // else the specific declined refs) plus any explicitly-declined lines.
+        const noBidRefs = cls.no_bid_all ? refItems.map(r => r.ref) : cls.no_bid_refs;
+        const removeFromRefs = noBidRefs.map(r => fscByRef[r]).filter(Boolean);
+        const removeAll = [...new Set([...removeFromRefs, ...cls.not_serves_fsc])];
+
         const cur = new Set((vendor.fsc || vendor.fsc_codes || []).map(String));
-        const add    = cls.serves.filter(f => !cur.has(f));
-        const remove = cls.not_serves.filter(f => cur.has(f));
-        if (!add.length && !remove.length) { skipped.push({ email: from, reason: "no_change" }); continue; }
+        const add    = cls.serves_fsc.filter(f => !cur.has(f));
+        const remove = removeAll.filter(f => cur.has(f));
+        if (!add.length && !remove.length) {
+          skipped.push({ email: from, reason: refItems.length ? "no_change (refs had no matching lanes on card)" : "no_change (no refs/lanes)" });
+          continue;
+        }
 
         const entry = {
           vendor: vendor.name || vendor.company_name, vendor_id: vendor.id, email: from,
-          add, remove, serves: cls.serves, not_serves: cls.not_serves,
+          add, remove, no_bid_all: cls.no_bid_all, refs: refs.length,
           add_names: add.map(f => FSC_NAMES[Number(f)] || f),
           remove_names: remove.map(f => FSC_NAMES[Number(f)] || f),
         };
