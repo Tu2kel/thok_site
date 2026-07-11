@@ -99,28 +99,19 @@ async function findVendor(db, senderEmail) {
   return vendor;
 }
 
-// Pull every "Ref #: IFL-…/sol" from the quoted RFQ inside the reply.
-function parseRefs(text) {
-  const refs = [];
-  const rx = /Ref\s*#\s*:\s*([A-Z0-9\-]+)/gi;
+// Pull the item nomenclatures ("Item:  TUBE ASSEMBLY,METAL") from the quoted RFQ.
+// These are always present in the email — unlike rfq_refs/blast_log FSC data,
+// which is missing for vendors blasted outside the pipeline.
+function parseItems(text) {
+  const items = [];
+  const rx = /Item(?:\s*\d+)?\s*:\s*([^\n\r]+)/gi;
   let m;
   while ((m = rx.exec(text)) !== null) {
-    const v = m[1].trim().toUpperCase();
-    if (v && !refs.includes(v)) refs.push(v);
+    const v = m[1].trim().replace(/\s+/g, " ");
+    // Skip the "Item N:" wrapper lines that have no nomenclature after them.
+    if (v && v.length > 2 && !/^\d+\s*:?$/.test(v) && !items.includes(v)) items.push(v);
   }
-  return refs;
-}
-
-// ref (IFL ref or sol number) → its FSC — mirrors scc-fsc-scrub.fscForRef.
-async function fscForRef(db, ref) {
-  let doc = await db.collection("rfq_refs").findOne({ ref });
-  if (!doc) doc = await db.collection("rfq_refs").findOne({ sol_number: ref });
-  if (!doc) {
-    const log = await db.collection("blast_log").findOne({ sol_number: ref });
-    if (log) doc = { fsc: log.fsc, item_name: log.item_name, sol_number: ref };
-  }
-  if (!doc || !doc.fsc) return null;
-  return { ref, fsc: String(doc.fsc), item_name: doc.item_name || "" };
+  return items.slice(0, 25);
 }
 
 // Auto-discover the Gmail label mailbox (e.g. "Change FSC to meet Customer").
@@ -140,39 +131,46 @@ async function findLabelMailbox(imap, override) {
 // they decline (no-bid / don't carry), plus any product lines they explicitly
 // DO/DON'T handle. The FSCs come from the referenced sols, not the prose — the
 // vendor usually just says "we don't carry the items below."
-async function classifyReply(body, subject, refItems) {
+async function classifyReply(body, subject, items, currentLanes) {
   const fscRef = Object.entries(FSC_NAMES).map(([c,n]) => c + "=" + n).join(", ");
-  const itemList = refItems.length
-    ? refItems.map(r => "  " + r.ref + " — " + (r.item_name || "(item)") + " [FSC " + r.fsc + "]").join("\n")
-    : "  (none parsed)";
+  const laneList = currentLanes.length
+    ? currentLanes.map(l => "  " + l.code + " (" + l.name + ")").join("\n")
+    : "  (none on file)";
+  const itemList = items.length ? items.map(i => "  - " + i).join("\n") : "  (none parsed)";
   const prompt = [
-    "A distributor replied to our RFQ. We ONLY want to change their product-lane",
-    "coverage when they signal an item is STRUCTURALLY outside their business — not",
-    "when they merely pass on this one request.",
-    "Return ONLY JSON:",
-    '{"decline_permanent": true|false, "decline_refs": ["REF",...],',
-    ' "reason": "short paraphrase", "serves_fsc": ["4-digit",...],',
-    ' "not_serves_fsc": ["4-digit",...], "prefers_aerospace": true|false}',
-    "Rules:",
-    "- decline_permanent=true ONLY if they say the item is outside their line/offering/",
-    "  wheelhouse or they don't carry/sell/stock it (e.g. \"outside our current offering\",",
-    "  \"out of our wheelhouse\", \"we don't sell that\", \"not our line\").",
-    "- A bare \"no bid\" / \"no quote\" / \"can't quote this time\" / \"pass\" with NO such reason",
-    "  is a ONE-TIME pass — set decline_permanent=false and change NOTHING.",
-    "- decline_refs = specific refs permanently declined; empty means ALL referenced items",
-    "  (use empty only when decline_permanent and they reject the whole RFQ).",
-    "- serves_fsc / not_serves_fsc = ONLY when they name a product line directly; map words",
-    "  to codes with: " + fscRef,
-    "- prefers_aerospace=true if they say they specialize in aerospace/mil hardware standards",
-    "  (AN/AS/MIL/MS/NAS/BAC/DIN/NA/NSA).",
-    "- Empty arrays / false are fine. reason must quote or closely paraphrase their words.",
+    "A distributor replied to our RFQ. We ONLY change their product-lane coverage",
+    "when they signal an item is STRUCTURALLY outside their business — not when they",
+    "merely pass on this one request.",
     "",
-    "Subject: " + subject,
-    "Referenced items:",
+    "Their CURRENT FSC lanes (code + name):",
+    laneList,
+    "",
+    "Items in the RFQ they replied to:",
     itemList,
     "",
-    "Reply email:",
-    (body || "").slice(0, 2500),
+    "Reply text:",
+    (body || "").slice(0, 2000),
+    "",
+    "Return ONLY JSON:",
+    '{"decline_permanent": true|false,',
+    ' "remove_fsc": ["4-digit codes FROM their current lanes above that match the',
+    '   declined items and should be removed"],',
+    ' "add_fsc": ["4-digit codes for lines they explicitly say they DO carry"],',
+    ' "reason": "short paraphrase of their words", "prefers_aerospace": true|false}',
+    "Rules:",
+    "- decline_permanent=true ONLY if they say the item is outside their line/offering/",
+    "  wheelhouse, or they don't carry/sell/stock it (\"outside our current offering\",",
+    "  \"out of our wheelhouse\", \"we don't sell that\", \"not our line\").",
+    "- A bare \"no bid\"/\"no quote\"/\"pass\"/\"can't quote this time\" with NO such reason is a",
+    "  ONE-TIME pass: decline_permanent=false, remove_fsc=[], add_fsc=[].",
+    "- remove_fsc MUST be chosen only from their current lanes above, and only those that",
+    "  correspond to the declined items. Match items to lanes by meaning (e.g. \"TUBE",
+    "  ASSEMBLY\"→4710 Pipe/Tube, \"PADLOCK\"→5340 Hardware). If none of their lanes match",
+    "  the declined items, remove_fsc=[].",
+    "- add_fsc: only when they name a line they DO carry. Map words with: " + fscRef,
+    "- prefers_aerospace=true if they say they specialize in aerospace/mil hardware",
+    "  (AN/AS/MIL/MS/NAS/BAC/DIN/NA/NSA).",
+    "- reason must quote or closely paraphrase their actual words.",
   ].join("\n");
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -187,13 +185,11 @@ async function classifyReply(body, subject, refItems) {
   if (!m) throw new Error("No JSON in Claude response");
   const parsed = JSON.parse(m[0]);
   const norm = (arr) => [...new Set((arr || []).map(x => String(x).replace(/\D/g, "")).filter(x => x.length === 4))];
-  const upper = (arr) => [...new Set((arr || []).map(x => String(x).trim().toUpperCase()).filter(Boolean))];
   return {
     decline_permanent: !!parsed.decline_permanent,
-    decline_refs: upper(parsed.decline_refs),
+    remove_fsc: norm(parsed.remove_fsc),
+    add_fsc: norm(parsed.add_fsc),
     reason: String(parsed.reason || "").slice(0, 140),
-    serves_fsc: norm(parsed.serves_fsc),
-    not_serves_fsc: norm(parsed.not_serves_fsc),
     prefers_aerospace: !!parsed.prefers_aerospace,
   };
 }
@@ -231,34 +227,27 @@ async function run({ apply, limit, label }) {
         if (!vendor) { skipped.push({ email: from, reason: "vendor_not_in_db" }); continue; }
 
         const body = extractBody(msg.source);
+        const items = parseItems(body);
 
-        // Map the referenced RFQ items (Ref #: …) to their FSCs — this is where
-        // "we don't carry the items below" gets its FSC codes from.
-        const refs = parseRefs(body);
-        const refItems = (await Promise.all(refs.map(r => fscForRef(db, r)))).filter(Boolean);
-        const fscByRef = {}; refItems.forEach(r => { fscByRef[r.ref] = r.fsc; });
+        // Give Claude the vendor's ACTUAL current lanes (code + name) and the items
+        // they replied to. It picks which of THOSE lanes to drop for a permanent
+        // decline — no rfq_refs/blast_log dependency (that data is often missing).
+        const curArr = (vendor.fsc || vendor.fsc_codes || []).map(String);
+        const cur = new Set(curArr);
+        const currentLanes = curArr.map(c => ({ code: c, name: FSC_NAMES[Number(c)] || ("FSC " + c) }));
 
         let cls;
-        try { cls = await classifyReply(body, env.subject || "", refItems); }
+        try { cls = await classifyReply(body, env.subject || "", items, currentLanes); }
         catch (e) { skipped.push({ email: from, reason: "claude_error: " + e.message.slice(0, 220) }); continue; }
 
-        // Only strip lanes on a PERMANENT decline (item outside their line). A bare
-        // one-time no-bid changes nothing. FSCs come from the declined refs' sols
-        // (all referenced if decline_refs empty) plus any explicitly-named lines.
-        const declineRefs = cls.decline_permanent
-          ? (cls.decline_refs.length ? cls.decline_refs : refItems.map(r => r.ref))
-          : [];
-        const removeFromRefs = declineRefs.map(r => fscByRef[r]).filter(Boolean);
-        const removeAll = [...new Set([...removeFromRefs, ...cls.not_serves_fsc])];
-
-        const cur = new Set((vendor.fsc || vendor.fsc_codes || []).map(String));
-        const add    = cls.serves_fsc.filter(f => !cur.has(f));
-        const remove = removeAll.filter(f => cur.has(f));
+        // Validate against the card: only strip lanes that are actually on it, and
+        // only on a permanent decline. add_fsc must be new.
+        const remove = cls.decline_permanent ? cls.remove_fsc.filter(f => cur.has(f)) : [];
+        const add    = cls.add_fsc.filter(f => !cur.has(f));
         if (!add.length && !remove.length) {
           const why = !cls.decline_permanent
             ? "no_change (one-time no-bid, not a line change)"
-            : refItems.length ? "no_change (declined refs had no matching lanes on card)"
-            : "no_change (no refs/lanes)";
+            : "no_change (no current lanes matched the declined items)";
           skipped.push({ email: from, reason: why });
           continue;
         }
