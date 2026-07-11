@@ -286,7 +286,14 @@ async function run({ apply, limit, label }) {
     throw e;
   }
 
-  return { label: labelPath, mode: apply ? "apply" : "preview", scanned, changes, skipped };
+  const result = { label: labelPath, mode: apply ? "apply" : "preview", scanned, changes, skipped };
+  // Persist so the run is inspectable (background functions return no body).
+  await db.collection("_meta").updateOne(
+    { _id: "fsc_last_run" },
+    { $set: { result, at: new Date().toISOString() } },
+    { upsert: true },
+  ).catch(() => {});
+  return result;
 }
 
 async function sendSummary(result) {
