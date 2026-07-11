@@ -269,15 +269,21 @@ async function run({ apply, limit, label, removeOnly }) {
       changes.push(c);
       if (apply) {
         const doAdd = !removeOnly && c.add.length;
-        const upd = {};
-        if (doAdd)           upd.$addToSet = { fsc: { $each: c.add } };
-        if (c.remove.length) upd.$pull     = { fsc: { $in: c.remove }, fsc_codes: { $in: c.remove } };
-        if (!Object.keys(upd).length) continue; // remove-only run with an add-only change → skip
-        await db.collection("distributors").updateOne({ id: c.vendor_id }, upd);
-        await db.collection("fsc_update_log").insertOne({
-          message_id: c._messageId, vendor_id: c.vendor_id, vendor_name: c.vendor, email: c.email,
-          added: doAdd ? c.add : [], removed: c.remove, applied_at: new Date().toISOString(),
-        });
+        if (!c.remove.length && !doAdd) continue; // add-only change in remove-only run → skip
+        try {
+          // Separate ops — never $pull and $addToSet the same path in one update
+          // (Mongo rejects that as a conflict). fsc and fsc_codes pulled separately.
+          const dist = db.collection("distributors");
+          if (c.remove.length) {
+            await dist.updateOne({ id: c.vendor_id }, { $pull: { fsc:       { $in: c.remove } } });
+            await dist.updateOne({ id: c.vendor_id }, { $pull: { fsc_codes: { $in: c.remove } } });
+          }
+          if (doAdd) await dist.updateOne({ id: c.vendor_id }, { $addToSet: { fsc: { $each: c.add } } });
+          await db.collection("fsc_update_log").insertOne({
+            message_id: c._messageId, vendor_id: c.vendor_id, vendor_name: c.vendor, email: c.email,
+            added: doAdd ? c.add : [], removed: c.remove, applied_at: new Date().toISOString(),
+          });
+        } catch (e) { c._apply_error = e.message; }
       }
     }
   } catch (e) {
