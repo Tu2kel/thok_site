@@ -202,7 +202,7 @@ async function classifyReply(body, subject, items, currentLanes) {
   };
 }
 
-async function run({ apply, limit, label }) {
+async function run({ apply, limit, label, removeOnly }) {
   const db   = await getDb();
   const imap = makeImapClient();
   const changes = [];
@@ -268,13 +268,15 @@ async function run({ apply, limit, label }) {
       const c = e.change;
       changes.push(c);
       if (apply) {
+        const doAdd = !removeOnly && c.add.length;
         const upd = {};
-        if (c.add.length)    upd.$addToSet = { fsc: { $each: c.add } };
+        if (doAdd)           upd.$addToSet = { fsc: { $each: c.add } };
         if (c.remove.length) upd.$pull     = { fsc: { $in: c.remove }, fsc_codes: { $in: c.remove } };
-        if (Object.keys(upd).length) await db.collection("distributors").updateOne({ id: c.vendor_id }, upd);
+        if (!Object.keys(upd).length) continue; // remove-only run with an add-only change → skip
+        await db.collection("distributors").updateOne({ id: c.vendor_id }, upd);
         await db.collection("fsc_update_log").insertOne({
           message_id: c._messageId, vendor_id: c.vendor_id, vendor_name: c.vendor, email: c.email,
-          added: c.add, removed: c.remove, applied_at: new Date().toISOString(),
+          added: doAdd ? c.add : [], removed: c.remove, applied_at: new Date().toISOString(),
         });
       }
     }
@@ -324,7 +326,7 @@ exports.handler = async (ev) => {
   const ok  = (d) => ({ statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, result: d }) });
   const fail = (m) => ({ statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: false, error: m }) });
   try {
-    const result = await run({ apply: action === "apply", limit, label });
+    const result = await run({ apply: action === "apply", limit, label, removeOnly: body.removeOnly !== false });
     if (body.emailSummary !== false) await sendSummary(result);
     return ok(result);
   } catch (e) {
