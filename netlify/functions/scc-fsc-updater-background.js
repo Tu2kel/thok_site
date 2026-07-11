@@ -208,7 +208,7 @@ async function run({ apply, limit, label }) {
   const imap = makeImapClient();
   const changes = [];   // { vendor, email, add[], remove[], serves[], not_serves[] }
   const skipped = [];   // { email, reason }
-  let labelPath = null, scanned = 0;
+  let labelPath = null, scanned = 0, runError = null;
 
   await imap.connect();
   try {
@@ -284,12 +284,13 @@ async function run({ apply, limit, label }) {
     } finally { lock.release(); }
     await imap.logout();
   } catch (e) {
+    runError = e.message;
     try { await imap.logout(); } catch {}
-    throw e;
   }
 
-  const result = { label: labelPath, mode: apply ? "apply" : "preview", scanned, changes, skipped };
-  // Persist so the run is inspectable (background functions return no body).
+  const result = { label: labelPath, mode: apply ? "apply" : "preview", scanned, changes, skipped, error: runError };
+  // ALWAYS persist — even on partial/errored runs — so the run is inspectable
+  // (background functions return no body). Captures where it died.
   await db.collection("_meta").updateOne(
     { _id: "fsc_last_run" },
     { $set: { result, at: new Date().toISOString() } },
