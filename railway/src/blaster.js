@@ -60,8 +60,10 @@ function buildBlastPlan(sols, dists) {
   const fscVendorCount = {};
   const seenNames = new Set();
 
+  // Exclude manufacturers AND aerospace companies from FSC-lane routing — both get
+  // their own part-number-based path below and receive ONLY those sols.
   const eligible = dists
-    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_manufacturer)
+    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_manufacturer && !isAerospaceVendor(d))
     .sort((a, b) => (a.tier || 9) - (b.tier || 9));
 
   const vendorFscMap = [];
@@ -103,17 +105,6 @@ function buildBlastPlan(sols, dists) {
       return vendorFscSet.has(solFsc) || (solNsn && vendorNsns.has(solNsn));
     });
 
-    // Aerospace companies also receive aerospace-standard parts (NAS/AN/MS/MIL/AS/
-    // BAC/NSA/DIN) regardless of FSC lane — appended on top of their FSC matches.
-    if (isAerospaceVendor(vendor)) {
-      const have = new Set(matchedSols.map(s => s.sol_number));
-      for (const s of sols) {
-        if (isAerospacePN(s.ref_part_number) && !have.has(s.sol_number)) {
-          matchedSols.push(s); have.add(s.sol_number);
-        }
-      }
-    }
-
     if (!matchedSols.length) continue;
 
     // Rank by extended order value (unit_price × qty, falling back to ext_price)
@@ -138,24 +129,26 @@ function buildBlastPlan(sols, dists) {
     plan.push({ vendor, sols: cappedSols, totalExt, fscs });
   }
 
-  // Approved-manufacturer vendors: receive ALL aerospace-standard sols regardless
-  // of FSC lane (NAS/NASM/AN/MS/MIL/AS/BAC/NSA/DIN).
+  // Aerospace path: approved manufacturers AND aerospace companies receive ALL
+  // aerospace-standard sols (NAS/NASM/AN/MS/MIL/AS/BAC/NSA/DIN) regardless of FSC
+  // lane — and NOTHING else. Both were excluded from the FSC-lane loop above, so
+  // this is the only path they appear in.
   const anmsNasSols = sols.filter(s => isAerospacePN(s.ref_part_number));
   if (anmsNasSols.length) {
-    const approvedMfrs = dists.filter(d =>
-      d.is_manufacturer &&
+    const aeroRecipients = dists.filter(d =>
+      (d.is_manufacturer || isAerospaceVendor(d)) &&
       d.email && !d.is_dns && !d.email_invalid,
     );
-    for (const mfr of approvedMfrs) {
-      const key = (mfr.name || "").toUpperCase().trim();
+    for (const av of aeroRecipients) {
+      const key = (av.name || "").toUpperCase().trim();
       if (seenNames.has(key)) continue;
       seenNames.add(key);
       const totalExt = anmsNasSols.reduce((s, r) => {
         return s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1) || parseFloat(r.ext_price || 0) || 0);
       }, 0);
       if (totalExt >= 1000) {
-        plan.push({ vendor: mfr, sols: anmsNasSols, totalExt, fscs: [...goFscs] });
-        info(mfr.name + " (approved-mfr) → " + anmsNasSols.length + " AN/MS/NAS sol(s) queued");
+        plan.push({ vendor: av, sols: anmsNasSols, totalExt, fscs: [...goFscs] });
+        info(av.name + (av.is_manufacturer ? " (approved-mfr)" : " (aerospace)") + " → " + anmsNasSols.length + " aerospace-std sol(s) queued");
       }
     }
   }
