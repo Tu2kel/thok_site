@@ -12,7 +12,17 @@ exports.handler = async () => {
   try {
     const db = await getDb();
     const doc = await db.collection("_meta").findOne({ _id: "fsc_last_run" });
-    return { statusCode: 200, headers: hdrs, body: JSON.stringify(doc || { note: "no run stored yet" }) };
+    if (doc) return { statusCode: 200, headers: hdrs, body: JSON.stringify(doc) };
+    // Diagnostic: which db are we on, and does a write even work here?
+    const dbName = db.databaseName;
+    const metaIds = (await db.collection("_meta").find({}, { projection: { _id: 1 } }).limit(30).toArray()).map(d => d._id);
+    let writeTest = "untested";
+    try {
+      await db.collection("_meta").updateOne({ _id: "fsc_writetest" }, { $set: { at: new Date().toISOString() } }, { upsert: true });
+      const back = await db.collection("_meta").findOne({ _id: "fsc_writetest" });
+      writeTest = back ? "ok" : "wrote-but-not-read";
+    } catch (e) { writeTest = "FAILED: " + e.message; }
+    return { statusCode: 200, headers: hdrs, body: JSON.stringify({ note: "no fsc_last_run", db: dbName, meta_ids: metaIds, writeTest }) };
   } catch (e) {
     return { statusCode: 200, headers: hdrs, body: JSON.stringify({ error: e.message }) };
   }
