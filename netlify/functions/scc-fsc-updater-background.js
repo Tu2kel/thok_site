@@ -1,12 +1,17 @@
-// netlify/functions/scc-fsc-updater.js — FSC Updater agent
+// netlify/functions/scc-fsc-updater-background.js — FSC Updater agent
 // Reads the "Change FSC…" Gmail label on anthony@ifedlog.com, and for each vendor
 // email figures out which FSC lanes they DO and DON'T serve, then updates that
 // vendor's distributor card ($addToSet the ones they serve, $pull the ones they
 // don't). Separate from SCRUBBER, which only strips no-bid lanes on quotes.
 //
+// BACKGROUND function: returns 202 immediately, runs up to 15 min (a full-label
+// pass makes a Claude call per email and exceeds the 10s sync limit). The RESULT
+// is delivered as a summary email to anthony@ifedlog.com via Resend — there is no
+// synchronous response body.
+//
 // Actions (POST JSON):
-//   { "action": "preview" }  → read label, report proposed changes, NO DB writes
-//   { "action": "apply" }    → apply the changes + mark messages processed
+//   { "action": "preview" }  → read label, EMAIL proposed changes, NO DB writes
+//   { "action": "apply" }    → apply the changes + mark messages processed, EMAIL summary
 //   optional: "limit" (default 40), "label" (override auto-discovery)
 //
 // Auth is IFEDLOG_APP_PASSWORD (same mailbox SCRUBBER reads). Vendor match is by
