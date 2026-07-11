@@ -4,15 +4,14 @@
 // vendor's distributor card ($addToSet the ones they serve, $pull the ones they
 // don't). Separate from SCRUBBER, which only strips no-bid lanes on quotes.
 //
-// BACKGROUND function: returns 202 immediately, runs up to 15 min (a full-label
-// pass makes a Claude call per email and exceeds the 10s sync limit). The RESULT
-// is delivered as a summary email to anthony@ifedlog.com via Resend — there is no
-// synchronous response body.
+// SYNCHRONOUS function (background functions don't execute on this Netlify plan).
+// Classifies all labeled emails CONCURRENTLY so they fit the 10s sync budget, and
+// returns the result in the response body. Also persists to _meta.fsc_last_run.
 //
 // Actions (POST JSON):
-//   { "action": "preview" }  → read label, EMAIL proposed changes, NO DB writes
-//   { "action": "apply" }    → apply the changes + mark messages processed, EMAIL summary
-//   optional: "limit" (default 40), "label" (override auto-discovery)
+//   { "action": "preview" }  → return proposed changes, NO DB writes
+//   { "action": "apply" }    → apply changes to distributor cards, log to fsc_update_log
+//   optional: "limit" (default 40), "label" (override), "emailSummary": false
 //
 // Auth is IFEDLOG_APP_PASSWORD (same mailbox SCRUBBER reads). Vendor match is by
 // sender email (exact, then domain). Processed message-ids are logged to
@@ -206,95 +205,87 @@ async function classifyReply(body, subject, items, currentLanes) {
 async function run({ apply, limit, label }) {
   const db   = await getDb();
   const imap = makeImapClient();
-  const changes = [];   // { vendor, email, add[], remove[], serves[], not_serves[] }
-  const skipped = [];   // { email, reason }
+  const changes = [];
+  const skipped = [];
   let labelPath = null, scanned = 0, runError = null;
 
-  await imap.connect();
   try {
+    await imap.connect();
     labelPath = await findLabelMailbox(imap, label);
     if (!labelPath) throw new Error("Could not find a Gmail label matching FSC. Pass \"label\" explicitly.");
 
-    const lock = await imap.getMailboxLock(labelPath);
     const processedIds = new Set(
       (await db.collection("fsc_update_log").find({}, { projection: { message_id: 1 } }).toArray())
         .map(d => d.message_id).filter(Boolean),
     );
+
+    // 1) Pull the messages (fast), then release IMAP.
+    const msgs = [];
+    const lock = await imap.getMailboxLock(labelPath);
     try {
       const uids = await imap.search({ all: true }).catch(() => []);
-      const recent = uids.slice(-limit); // newest N
-      for await (const msg of imap.fetch(recent, { source: true, envelope: true })) {
-        const env  = msg.envelope || {};
-        const fromA = (env.from && env.from[0]) || {};
-        const from = (fromA.address || (fromA.mailbox && fromA.host ? fromA.mailbox + "@" + fromA.host : "")) || "";
-        const messageId = env.messageId || String(msg.uid);
-        if (!from) { skipped.push({ email: "(no sender)", reason: "no_from" }); continue; }
-        if (processedIds.has(messageId)) continue;
-        scanned++;
-
-        const vendor = await findVendor(db, from);
-        if (!vendor) { skipped.push({ email: from, reason: "vendor_not_in_db" }); continue; }
-
-        const body = extractBody(msg.source);
-        const items = parseItems(body);
-
-        // Give Claude the vendor's ACTUAL current lanes (code + name) and the items
-        // they replied to. It picks which of THOSE lanes to drop for a permanent
-        // decline — no rfq_refs/blast_log dependency (that data is often missing).
-        const curArr = (vendor.fsc || vendor.fsc_codes || []).map(String);
-        const cur = new Set(curArr);
-        const currentLanes = curArr.map(c => ({ code: c, name: FSC_NAMES[Number(c)] || ("FSC " + c) }));
-
-        let cls;
-        try { cls = await classifyReply(body, env.subject || "", items, currentLanes); }
-        catch (e) { skipped.push({ email: from, reason: "claude_error: " + e.message.slice(0, 220) }); continue; }
-
-        // Validate against the card: only strip lanes that are actually on it, and
-        // only on a permanent decline. add_fsc must be new.
-        const remove = cls.decline_permanent ? cls.remove_fsc.filter(f => cur.has(f)) : [];
-        const add    = cls.add_fsc.filter(f => !cur.has(f));
-        if (!add.length && !remove.length) {
-          const why = !cls.decline_permanent
-            ? "no_change (one-time no-bid, not a line change)"
-            : "no_change (no current lanes matched the declined items)";
-          skipped.push({ email: from, reason: why });
-          continue;
-        }
-
-        const entry = {
-          vendor: vendor.name || vendor.company_name, vendor_id: vendor.id, email: from,
-          add, remove, reason: cls.reason, prefers_aerospace: cls.prefers_aerospace, refs: refs.length,
-          add_names: add.map(f => FSC_NAMES[Number(f)] || f),
-          remove_names: remove.map(f => FSC_NAMES[Number(f)] || f),
-        };
-        changes.push(entry);
-
-        if (apply) {
-          const upd = {};
-          if (add.length)    upd.$addToSet = { fsc: { $each: add } };
-          if (remove.length) upd.$pull     = { fsc: { $in: remove }, fsc_codes: { $in: remove } };
-          if (Object.keys(upd).length) await db.collection("distributors").updateOne({ id: vendor.id }, upd);
-          await db.collection("fsc_update_log").insertOne({
-            message_id: messageId, vendor_id: vendor.id, vendor_name: entry.vendor, email: from,
-            added: add, removed: remove, applied_at: new Date().toISOString(),
-          });
-          try { await imap.messageFlagsAdd(msg.uid, ["\\Seen"], { uid: true }); } catch {}
-        }
+      for await (const msg of imap.fetch(uids.slice(-limit), { source: true, envelope: true })) {
+        const env = msg.envelope || {};
+        const fa = (env.from && env.from[0]) || {};
+        const from = (fa.address || (fa.mailbox && fa.host ? fa.mailbox + "@" + fa.host : "")) || "";
+        msgs.push({ from, messageId: env.messageId || String(msg.uid), subject: env.subject || "", body: extractBody(msg.source) });
       }
     } finally { lock.release(); }
     await imap.logout();
+
+    // 2) Classify all messages CONCURRENTLY (Claude calls in parallel fit the 10s
+    //    sync budget where a sequential loop would not).
+    const pending = msgs.filter(m => m.from && !processedIds.has(m.messageId));
+    scanned = pending.length;
+    const evals = await Promise.all(pending.map(async (m) => {
+      const vendor = await findVendor(db, m.from);
+      if (!vendor) return { skip: { email: m.from, reason: "vendor_not_in_db" } };
+      const curArr = (vendor.fsc || vendor.fsc_codes || []).map(String);
+      const cur = new Set(curArr);
+      const currentLanes = curArr.map(c => ({ code: c, name: FSC_NAMES[Number(c)] || ("FSC " + c) }));
+      let cls;
+      try { cls = await classifyReply(m.body, m.subject, parseItems(m.body), currentLanes); }
+      catch (e) { return { skip: { email: m.from, reason: "claude_error: " + e.message.slice(0, 200) } }; }
+      const remove = cls.decline_permanent ? cls.remove_fsc.filter(f => cur.has(f)) : [];
+      const add    = cls.add_fsc.filter(f => !cur.has(f));
+      if (!add.length && !remove.length) {
+        return { skip: { email: m.from, reason: !cls.decline_permanent
+          ? "no_change (one-time pass, not a line change)"
+          : "no_change (no current lanes matched the declined items)" } };
+      }
+      return { change: {
+        vendor: vendor.name || vendor.company_name, vendor_id: vendor.id, email: m.from,
+        add, remove, reason: cls.reason, prefers_aerospace: cls.prefers_aerospace,
+        add_names: add.map(f => FSC_NAMES[Number(f)] || f),
+        remove_names: remove.map(f => FSC_NAMES[Number(f)] || f),
+        _messageId: m.messageId,
+      } };
+    }));
+
+    // 3) Collect, and apply if requested.
+    for (const e of evals) {
+      if (e.skip) { skipped.push(e.skip); continue; }
+      const c = e.change;
+      changes.push(c);
+      if (apply) {
+        const upd = {};
+        if (c.add.length)    upd.$addToSet = { fsc: { $each: c.add } };
+        if (c.remove.length) upd.$pull     = { fsc: { $in: c.remove }, fsc_codes: { $in: c.remove } };
+        if (Object.keys(upd).length) await db.collection("distributors").updateOne({ id: c.vendor_id }, upd);
+        await db.collection("fsc_update_log").insertOne({
+          message_id: c._messageId, vendor_id: c.vendor_id, vendor_name: c.vendor, email: c.email,
+          added: c.add, removed: c.remove, applied_at: new Date().toISOString(),
+        });
+      }
+    }
   } catch (e) {
     runError = e.message;
     try { await imap.logout(); } catch {}
   }
 
   const result = { label: labelPath, mode: apply ? "apply" : "preview", scanned, changes, skipped, error: runError };
-  // ALWAYS persist — even on partial/errored runs — so the run is inspectable
-  // (background functions return no body). Captures where it died.
   await db.collection("_meta").updateOne(
-    { _id: "fsc_last_run" },
-    { $set: { result, at: new Date().toISOString() } },
-    { upsert: true },
+    { _id: "fsc_last_run" }, { $set: { result, at: new Date().toISOString() } }, { upsert: true },
   ).catch(() => {});
   return result;
 }
