@@ -146,19 +146,26 @@ async function classifyReply(body, subject, refItems) {
     ? refItems.map(r => "  " + r.ref + " — " + (r.item_name || "(item)") + " [FSC " + r.fsc + "]").join("\n")
     : "  (none parsed)";
   const prompt = [
-    "A distributor replied to our RFQ. Decide which of the referenced items they",
-    "will NOT supply (no-bid / don't carry / not their line), and note any product",
-    "lines they explicitly DO or DON'T handle.",
+    "A distributor replied to our RFQ. We ONLY want to change their product-lane",
+    "coverage when they signal an item is STRUCTURALLY outside their business — not",
+    "when they merely pass on this one request.",
     "Return ONLY JSON:",
-    '{"no_bid_all": true|false, "no_bid_refs": ["REF",...],',
-    ' "serves_fsc": ["4-digit",...], "not_serves_fsc": ["4-digit",...]}',
+    '{"decline_permanent": true|false, "decline_refs": ["REF",...],',
+    ' "reason": "short paraphrase", "serves_fsc": ["4-digit",...],',
+    ' "not_serves_fsc": ["4-digit",...], "prefers_aerospace": true|false}',
     "Rules:",
-    "- no_bid_all=true if they decline ALL the items (e.g. \"we do not carry the items below, all no bid\").",
-    "- no_bid_refs = specific refs they decline, if only some. Leave empty if no_bid_all.",
-    "- serves_fsc / not_serves_fsc = ONLY when they name a product line directly; map words to codes with:",
-    "  " + fscRef,
-    "- A generic \"no bid / don't carry these\" is NOT a product-line statement — express it via no_bid, not not_serves_fsc.",
-    "- Empty arrays / false are fine.",
+    "- decline_permanent=true ONLY if they say the item is outside their line/offering/",
+    "  wheelhouse or they don't carry/sell/stock it (e.g. \"outside our current offering\",",
+    "  \"out of our wheelhouse\", \"we don't sell that\", \"not our line\").",
+    "- A bare \"no bid\" / \"no quote\" / \"can't quote this time\" / \"pass\" with NO such reason",
+    "  is a ONE-TIME pass — set decline_permanent=false and change NOTHING.",
+    "- decline_refs = specific refs permanently declined; empty means ALL referenced items",
+    "  (use empty only when decline_permanent and they reject the whole RFQ).",
+    "- serves_fsc / not_serves_fsc = ONLY when they name a product line directly; map words",
+    "  to codes with: " + fscRef,
+    "- prefers_aerospace=true if they say they specialize in aerospace/mil hardware standards",
+    "  (AN/AS/MIL/MS/NAS/BAC/DIN/NA/NSA).",
+    "- Empty arrays / false are fine. reason must quote or closely paraphrase their words.",
     "",
     "Subject: " + subject,
     "Referenced items:",
@@ -182,10 +189,12 @@ async function classifyReply(body, subject, refItems) {
   const norm = (arr) => [...new Set((arr || []).map(x => String(x).replace(/\D/g, "")).filter(x => x.length === 4))];
   const upper = (arr) => [...new Set((arr || []).map(x => String(x).trim().toUpperCase()).filter(Boolean))];
   return {
-    no_bid_all: !!parsed.no_bid_all,
-    no_bid_refs: upper(parsed.no_bid_refs),
+    decline_permanent: !!parsed.decline_permanent,
+    decline_refs: upper(parsed.decline_refs),
+    reason: String(parsed.reason || "").slice(0, 140),
     serves_fsc: norm(parsed.serves_fsc),
     not_serves_fsc: norm(parsed.not_serves_fsc),
+    prefers_aerospace: !!parsed.prefers_aerospace,
   };
 }
 
@@ -233,23 +242,30 @@ async function run({ apply, limit, label }) {
         try { cls = await classifyReply(body, env.subject || "", refItems); }
         catch (e) { skipped.push({ email: from, reason: "claude_error: " + e.message.slice(0, 220) }); continue; }
 
-        // FSCs to remove: the no-bid items' FSCs (all referenced if no_bid_all,
-        // else the specific declined refs) plus any explicitly-declined lines.
-        const noBidRefs = cls.no_bid_all ? refItems.map(r => r.ref) : cls.no_bid_refs;
-        const removeFromRefs = noBidRefs.map(r => fscByRef[r]).filter(Boolean);
+        // Only strip lanes on a PERMANENT decline (item outside their line). A bare
+        // one-time no-bid changes nothing. FSCs come from the declined refs' sols
+        // (all referenced if decline_refs empty) plus any explicitly-named lines.
+        const declineRefs = cls.decline_permanent
+          ? (cls.decline_refs.length ? cls.decline_refs : refItems.map(r => r.ref))
+          : [];
+        const removeFromRefs = declineRefs.map(r => fscByRef[r]).filter(Boolean);
         const removeAll = [...new Set([...removeFromRefs, ...cls.not_serves_fsc])];
 
         const cur = new Set((vendor.fsc || vendor.fsc_codes || []).map(String));
         const add    = cls.serves_fsc.filter(f => !cur.has(f));
         const remove = removeAll.filter(f => cur.has(f));
         if (!add.length && !remove.length) {
-          skipped.push({ email: from, reason: refItems.length ? "no_change (refs had no matching lanes on card)" : "no_change (no refs/lanes)" });
+          const why = !cls.decline_permanent
+            ? "no_change (one-time no-bid, not a line change)"
+            : refItems.length ? "no_change (declined refs had no matching lanes on card)"
+            : "no_change (no refs/lanes)";
+          skipped.push({ email: from, reason: why });
           continue;
         }
 
         const entry = {
           vendor: vendor.name || vendor.company_name, vendor_id: vendor.id, email: from,
-          add, remove, no_bid_all: cls.no_bid_all, refs: refs.length,
+          add, remove, reason: cls.reason, prefers_aerospace: cls.prefers_aerospace, refs: refs.length,
           add_names: add.map(f => FSC_NAMES[Number(f)] || f),
           remove_names: remove.map(f => FSC_NAMES[Number(f)] || f),
         };
@@ -284,10 +300,13 @@ async function sendSummary(result) {
     "Label: " + result.label + " · scanned " + result.scanned,
     "",
     result.changes.length ? "CHANGES (" + result.changes.length + "):" : "No changes.",
-    ...result.changes.map(c =>
+    ...result.changes.flatMap(c => [
       "• " + c.vendor + " <" + c.email + ">" +
-      (c.add.length ? "  +[" + c.add_names.join(", ") + "]" : "") +
-      (c.remove.length ? "  -[" + c.remove_names.join(", ") + "]" : "")),
+        (c.add.length ? "  +[" + c.add_names.join(", ") + "]" : "") +
+        (c.remove.length ? "  -[" + c.remove_names.join(", ") + "]" : "") +
+        (c.prefers_aerospace ? "  ✈AEROSPACE" : ""),
+      c.reason ? "    reason: " + c.reason : null,
+    ].filter(Boolean)),
     "",
     result.skipped.length ? "SKIPPED (" + result.skipped.length + "): " +
       result.skipped.slice(0, 20).map(s => s.email + " (" + s.reason + ")").join("; ") : "",
