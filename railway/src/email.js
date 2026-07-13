@@ -96,19 +96,27 @@ function buildBodyForSender(vendor, sols, sender) {
     "anthony@ifedlog.com | ifedlog.com",
   ];
 
+  // Opener rotates by weekday so repeat recipients don't get the same line twice:
+  //   Mon/Wed/Fri → A ("open a wholesale account"), Tue/Thu → B ("source through you").
+  // Both position us as a RESELLER / CHANNEL — a buyer that moves volume THROUGH the
+  // distributor — not a government end-user, which reads as a competitor and makes
+  // them hold back distributor pricing. Each opener leads straight into the item list.
+  const openerA = "My name is Anthony Kelley with Imperio Federal Logistics (CAGE 152U4). We're a reseller that places steady, repeat volume, and we'd like to open a wholesale account with you as one of our suppliers. Our resale certificate and tax-exempt documentation are ready to send. We'd appreciate your distributor-level pricing and availability on the following:";
+  const openerB = "Anthony Kelley here with Imperio Federal Logistics (CAGE 152U4). We're a distribution and resale company looking to source the items below through you on an ongoing basis — not a one-off. Glad to set up an account and provide our resale certificate and tax exemption up front. Could you extend your wholesale / distributor pricing, lead time, and availability on:";
+  const dow = new Date().getDay(); // 0 Sun … 6 Sat
+  const opener = (dow === 2 || dow === 4) ? openerB : openerA;
+
   return [
     "Hi " + greeting + ",",
     "",
-    "My name is Anthony Kelley, Founder and CEO of Imperio Federal Logistics (CAGE 152U4 · SDVOSB · VetHUB). We are a DLA-registered reseller and defense supply chain partner. We'd appreciate being extended your wholesale / distributor-level pricing — we can provide a resale certificate or tax exemption documentation on request.",
-    "",
-    "I have active government procurement needs in your lane and need pricing and availability on the following:",
+    opener,
     "",
     itemLines,
     "",
     "Requirements:",
     packagingLine,
-    "- Payment: Immediate PO upon award. Wire payment prior to shipment.",
-    "- Compliance: BAA/TAA required — please confirm country of origin" + (isMulti ? " for each item" : ""),
+    "- Payment: We issue POs quickly and wire payment prior to shipment.",
+    "- Country of origin: please confirm" + (isMulti ? " for each item" : "") + " (some of our customers require TAA-compliant sourcing).",
     "- Condition: New/unused only. No substitutions without prior approval.",
     "",
     "Please provide unit price, lead time, and country of origin. We move fast.",
