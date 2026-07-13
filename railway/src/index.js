@@ -900,6 +900,20 @@ if (runNow) {
     getDb().then(db => runHealthCheck(db, { emailOnFailure: true })).catch(e => err("Health check failed:", e.message));
   }, { timezone: "America/Chicago" });
 
+  // FSC Updater — 5 PM Central daily. Reads the "Change FSC to meet Customer" label
+  // and applies lane removals to vendor cards (remove-only), then emails a summary.
+  cron.schedule("0 17 * * *", () => {
+    log("FSC Updater cron firing (5 PM CT)…");
+    fetch("https://thehouseofkel.com/.netlify/functions/scc-fsc-updater", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "apply" }),
+    })
+      .then(r => r.json())
+      .then(d => log("FSC Updater: " + (d.ok ? ((d.result.changes || []).length + " applied, " + (d.result.skipped || []).length + " skipped") : ("error: " + d.error))))
+      .catch(e => err("FSC Updater cron failed:", e.message));
+  }, { timezone: "America/Chicago" });
+
   // Keep process alive
   process.on("SIGTERM", () => { log("SIGTERM — shutting down"); process.exit(0); });
   process.on("SIGINT",  () => { log("SIGINT — shutting down");  process.exit(0); });
