@@ -78,6 +78,23 @@ function extractBody(source) {
   return body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 3000);
 }
 
+// Detect a real document attachment (quote PDF / spreadsheet), not an inline
+// signature logo. Vendors put their numbers in the PDF, so its presence is a
+// strong "this is a quote" signal even when the email text has no price.
+function hasDocAttachment(source) {
+  const raw = (source ? source.toString("latin1") : "").slice(0, 300000);
+  return /content-type:\s*application\/pdf/i.test(raw)
+    || /(?:filename|name)\s*=\s*"?[^"\r\n]+\.(?:pdf|xlsx?|docx?|csv)/i.test(raw);
+}
+
+// Vendor is pointing at an attached/enclosed quote ("please find our quote",
+// "quote attached", "see attached pricing", etc.) — numbers are in the file.
+function mentionsAttachedQuote(body) {
+  return /\b(?:attach(?:ed|ment)?|enclos(?:ed|ure)|see|find|please\s+find)\b[^.]{0,40}\bquot(?:e|es|ation)\b/i.test(body)
+    || /\bquot(?:e|es|ation)\b[^.]{0,20}\battach/i.test(body)
+    || /\b(?:pricing|price\s+list|our\s+quote)\b[^.]{0,20}\battach/i.test(body);
+}
+
 // ── SOL EXTRACTION ─────────────────────────────────────────────────────────
 const SOL_RE = /\b([A-Z]{2,7}[\dA-Z]{0,5}-\d{2,4}-[A-Z]-\d{3,7})\b/g;
 function extractSol(text) {
@@ -101,7 +118,7 @@ async function sendSummary(subject, text) {
 // ── CLAUDE PARSER ──────────────────────────────────────────────────────────
 // Returns per-item results so a mixed reply ("can quote rivets, don't stock the rest")
 // correctly strips only the no-bid items' FSC lanes, not the ones they quoted.
-async function claudeParse(body, vendorName, subject, targets) {
+async function claudeParse(body, vendorName, subject, targets, docAttached) {
   const itemList = targets.map((t, i) =>
     (i + 1) + ". " + (t.item_name || t.sol_number) + " (Ref: " + t.sol_number + ")"
   ).join("\n");
@@ -116,10 +133,14 @@ async function claudeParse(body, vendorName, subject, targets) {
     "Return ONLY a JSON object in this exact shape:",
     '{"items":[{"ref":"sol_or_ref_number","type":"quote|no_bid","unit_price":number|null,"lead_time_days":number|null,"country_of_origin":"string"|null,"no_bid_reason":"string"|null,"notes":"string"|null}]}',
     "",
+    "A document attachment (PDF/spreadsheet) " + (docAttached ? "IS" : "is NOT") + " present on this email."
+      + (docAttached ? " Vendors put their pricing inside that file, so the numbers will NOT appear in the text below." : ""),
+    "",
     "Rules:",
     "- Match each item by its ref number or item name mentioned in the email",
     "- type=no_bid if vendor says for that item: unable, no bid, don't stock, don't carry, not available, EOL, discontinued, pass, NB, no quote",
     "- type=quote if vendor provides a price OR confirms availability for that item",
+    "- type=quote (unit_price null) if the vendor points to an attached/enclosed quote or pricing (e.g. 'please find our quote', 'quote attached', 'see attached pricing') OR a document attachment is present and the email is NOT an explicit no-bid — EVEN IF no number appears in the text. Set notes to 'Quote in attachment — price not in email text'. Apply this to the item(s) the vendor names; if they name none but attached a quote, apply it to the single requested item.",
     "- If vendor gives one blanket no-bid ('we don't sell any of these'), mark ALL items no_bid",
     "- If vendor quotes some and declines others, mark each correctly",
     "- If vendor doesn't mention an item at all, default to no_bid",
@@ -600,6 +621,7 @@ exports.handler = async (event) => {
         }
 
         const body      = extractBody(msg.source);
+        const docAttach = hasDocAttachment(msg.source);
         let solNumber   = extractSol(subject) || extractSol(body);
 
         // Fallback: no sol in email — look up via blast_log for this vendor
@@ -664,11 +686,29 @@ exports.handler = async (event) => {
         let parseError = null;
         try {
           const [pr, solRecs] = await Promise.all([
-            claudeParse(body, vendorName, subject, targets),
+            claudeParse(body, vendorName, subject, targets, docAttach),
             db.collection("solicitations").find({ sol_number: { $in: targetSolNums } }).toArray(),
           ]);
           parsedResult = pr;
           solRecMap = Object.fromEntries(solRecs.map(s => [s.sol_number, s]));
+
+          // Deterministic backstop: a quote clearly arrived as an attachment but
+          // Haiku found no numbers in the text and defaulted everything to no_bid.
+          // Never let a real quote be logged as zero — flag it for manual pricing.
+          if (docAttach && mentionsAttachedQuote(body)
+              && parsedResult.items?.length && parsedResult.items.every(it => it.type !== "quote")) {
+            const flip = parsedResult.items.length === 1
+              ? parsedResult.items[0]
+              : (parsedResult.items.find(it => {
+                  const t = targets.find(x => x.sol_number === it.ref);
+                  const name = (t?.item_name || "").toLowerCase().split(/\s+/).filter(w => w.length > 3);
+                  return name.length && name.some(w => body.toLowerCase().includes(w));
+                }) || parsedResult.items[0]);
+            flip.type = "quote";
+            flip.no_bid_reason = null;
+            flip.notes = (flip.notes ? flip.notes + " | " : "") + "Quote in attachment — needs manual price entry";
+            addLog("ATTACH-QUOTE override: " + vendorEmail + " → quote (PDF attached, price pending) ref " + flip.ref);
+          }
         } catch (e) {
           parseError = e.message;
           addLog("Parse failed (" + vendorEmail + "): " + e.message + " — saving raw");
