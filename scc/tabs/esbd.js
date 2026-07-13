@@ -89,6 +89,9 @@
     return {
       id: newId(),
       sol_id: "",
+      state: "",           // SLED: TX, FL, county/city, school district, etc.
+      source: "SLED",      // lane tag (SLED vs federal)
+      est_cost: "",        // SLED: manual cost basis when not sourcing suppliers
       agency: "",
       agency_num: "",
       nigp_code: "",

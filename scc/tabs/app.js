@@ -438,6 +438,8 @@
       MemoTab,
       FUTab,
       EsbdTab,
+      SledPipelineTab,
+      SledSubmissionsTab,
       LHFCheckTab,
     } = window.SCC_TABS;
 
@@ -447,8 +449,8 @@
     const [openGroups, setOpenGroups] = useState(() => {
       try {
         const saved = localStorage.getItem("scc-open-groups");
-        return saved ? JSON.parse(saved) : ["workflow", "tools"];
-      } catch { return ["workflow", "tools"]; }
+        return saved ? JSON.parse(saved) : ["workflow", "tools", "sled"];
+      } catch { return ["workflow", "tools", "sled"]; }
     });
     const [boxA, setBoxA] = useState("");
     const [boxB, setBoxB] = useState("");
@@ -803,11 +805,19 @@
                   { id: "rolodex", label: "NSN Intel", icon: "◈ " },
                   { id: "calllist", label: "Outreach", icon: "📞 " },
                   { id: "intake", label: "Intake", icon: "" },
-                  { id: "esbd", label: "State/Fed", icon: "🏛 " },
                   { id: "archive", label: "Archive", icon: "⬇ " },
                   { id: "backup", label: "Backup", icon: "↓ " },
                   { id: "manual", label: "Manual", icon: "📋 " },
                   { id: "sbaimport", label: "SBA Import", icon: "📥 " },
+                ],
+              },
+              {
+                id: "sled",
+                label: "SLED",
+                tabs: [
+                  { id: "sled-pipeline", label: "Pipeline", icon: "🏛 " },
+                  { id: "sled-intake", label: "Intake", icon: "✎ " },
+                  { id: "sled-submissions", label: "Submissions", icon: "📤 " },
                 ],
               },
             ];
@@ -1152,6 +1162,17 @@
         tab === "lhf" && hA(LHFCheckTab, { onSendToIntake: null }),
 
         tab === "esbd" && hA(EsbdTab, { goAward: goEsbdAward }),
+
+        tab === "sled-pipeline" &&
+          hA(SledPipelineTab, {
+            goIntake: () => setTab("sled-intake"),
+            goSubmissions: () => setTab("sled-submissions"),
+            showToast,
+          }),
+
+        tab === "sled-intake" && hA(EsbdTab, { goAward: goEsbdAward }),
+
+        tab === "sled-submissions" && hA(SledSubmissionsTab, { goAward: goEsbdAward }),
 
         tab === "rolodex" &&
           (window.SCC_TABS && window.SCC_TABS.SupplierRolodexTab
