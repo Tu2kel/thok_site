@@ -16,11 +16,36 @@ async function saveRefMap(db, entries) {
   if (!db || !entries.length) return;
   await Promise.all(entries.map(e =>
     db.collection("rfq_refs").updateOne(
-      { ref: e.ref },
-      { $set: e },
-      { upsert: true }
+      { sol_number: e.sol_number },
+      {
+        // A sol's ref is permanent once minted — $setOnInsert so a later run can
+        // never rewrite it (that overwrite was the ref/sol mismatch bug).
+        $setOnInsert: { ref: e.ref },
+        $set: {
+          item_name:       e.item_name,
+          fsc:             e.fsc,
+          nsn:             e.nsn,
+          ref_part_number: e.ref_part_number,
+          blast_date:      e.blast_date,
+        },
+      },
+      { upsert: true },
     ).catch(() => {})
   ));
+}
+
+// Atomic, day-scoped ref counter. It never resets per run, so same-day re-blasts
+// keep minting fresh sequence numbers instead of re-issuing IFL-<date>-001 to a
+// different sol. Seed with $max (below) before first use so it clears any refs
+// already minted for the day.
+async function nextRefSeq(db, blastDate) {
+  const res = await db.collection("_meta").findOneAndUpdate(
+    { _id: "rfq_ref_seq_" + blastDate },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: "after" },
+  );
+  const doc = res && res.value !== undefined ? res.value : res;
+  return doc && doc.seq ? doc.seq : 1;
 }
 
 // Canonical aerospace-hardware part-number standards. A P/N with one of these
@@ -243,23 +268,63 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
   }
 
   // Build global sol → IFL ref map ONCE before vendor loop.
-  // Same sol number always gets the same ref for this blast date, regardless of
-  // how many vendors receive it. Prevents collision from per-vendor indexing.
+  // A ref belongs to a sol permanently: the same sol always keeps the same ref
+  // (this run, later same-day re-blasts, or weeks later), and a ref string is
+  // never reused for a different sol. That eliminates the ref/sol mismatch where
+  // a rotated re-run re-minted IFL-<date>-006 onto a different sol.
   const blastDate = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+  const blastDay  = new Date().toISOString().slice(0, 10);
   const solRefMap = new Map(); // sol_number → IFL ref
-  let refSeq = 0;
-  const allRefEntries = [];
-  for (const entry of rotatedPlan) {
-    for (const s of entry.sols) {
-      if (!solRefMap.has(s.sol_number)) {
-        const ref = "IFL-" + blastDate + "-" + String(++refSeq).padStart(3, "0");
+
+  if (db) {
+    // Unique sols in this plan (in plan order)
+    const planSolNums = [];
+    for (const entry of rotatedPlan)
+      for (const s of entry.sols)
+        if (!planSolNums.includes(s.sol_number)) planSolNums.push(s.sol_number);
+
+    // Reuse any ref these sols already own.
+    const existing = await db.collection("rfq_refs")
+      .find({ sol_number: { $in: planSolNums } }).project({ sol_number: 1, ref: 1 }).toArray();
+    const refBySol = new Map(existing.map(d => [d.sol_number, d.ref]));
+
+    // Seed the day counter past any IFL-<date>-NNN already on record (incl. those
+    // minted before this counter existed) so we can never re-issue an old number.
+    const dayRefs = await db.collection("rfq_refs")
+      .find({ ref: { $regex: "^IFL-" + blastDate + "-" } }).project({ ref: 1 }).toArray();
+    let maxSeq = 0;
+    for (const d of dayRefs) {
+      const n = parseInt((d.ref.split("-")[2] || "0"), 10);
+      if (n > maxSeq) maxSeq = n;
+    }
+    await db.collection("_meta").updateOne(
+      { _id: "rfq_ref_seq_" + blastDate }, { $max: { seq: maxSeq } }, { upsert: true },
+    );
+
+    const newRefEntries = [];
+    for (const entry of rotatedPlan) {
+      for (const s of entry.sols) {
+        if (solRefMap.has(s.sol_number)) continue;
+        let ref = refBySol.get(s.sol_number);
+        if (!ref) {
+          const seq = await nextRefSeq(db, blastDate);
+          ref = "IFL-" + blastDate + "-" + String(seq).padStart(3, "0");
+          refBySol.set(s.sol_number, ref);
+          newRefEntries.push({ ref, sol_number: s.sol_number, item_name: s.item_name || "", fsc: s.fsc || "", nsn: s.nsn || "", ref_part_number: s.ref_part_number || "", blast_date: blastDay });
+        }
         solRefMap.set(s.sol_number, ref);
-        allRefEntries.push({ ref, sol_number: s.sol_number, item_name: s.item_name || "", fsc: s.fsc || "", nsn: s.nsn || "", ref_part_number: s.ref_part_number || "", blast_date: new Date().toISOString().slice(0, 10) });
       }
     }
+    await saveRefMap(db, newRefEntries);
+    info("IFL refs: " + solRefMap.size + " sols mapped (" + newRefEntries.length + " newly minted) for " + blastDate);
+  } else {
+    // Dry run / no DB — nothing to persist or collide with; simple in-memory seq.
+    let refSeq = 0;
+    for (const entry of rotatedPlan)
+      for (const s of entry.sols)
+        if (!solRefMap.has(s.sol_number))
+          solRefMap.set(s.sol_number, "IFL-" + blastDate + "-" + String(++refSeq).padStart(3, "0"));
   }
-  await saveRefMap(db, allRefEntries);
-  info("IFL refs assigned: " + solRefMap.size + " unique sols → IFL-" + blastDate + "-001 through IFL-" + blastDate + "-" + String(refSeq).padStart(3, "0"));
 
   let lastSentVendorId = null;
   const senderCache = makeSenderCache(db);
@@ -332,7 +397,7 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
         Promise.all(sols.map(sol =>
           db.collection("blast_log").updateOne(
             { sol_number: sol.sol_number, vendor_email: (vendor.email || "").toLowerCase() },
-            { $set: { sol_number: sol.sol_number, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, sender: effectiveSender, status: "sent", sent_at: sentAt } },
+            { $set: { sol_number: sol.sol_number, ref_code: solRefMap.get(sol.sol_number) || null, item_name: sol.item_name || "", fsc: sol.fsc || "", quote_due: sol.quote_due || "", vendor_name: vendor.name, vendor_email: (vendor.email || "").toLowerCase(), vendor_id: vendor.id || null, sender: effectiveSender, status: "sent", sent_at: sentAt } },
             { upsert: true },
           )
         )).catch(e => info("blast_log save err:", e.message));
