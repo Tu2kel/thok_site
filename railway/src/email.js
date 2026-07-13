@@ -62,14 +62,14 @@ function buildBodyForSender(vendor, sols, sender) {
     const shipTo = [s.ship_to_name, s.ship_to_street, s.ship_to_csz].filter(Boolean).join(", ");
     const fob    = (s.fob || "").toUpperCase();
     const fobStr = fob === "ORIGIN"
-      ? "FOB Origin — government-arranged transport (FDT). Pack per MIL-STD-129, we coordinate pickup."
+      ? "FOB Origin, we coordinate pickup (FDT). Pack per MIL-STD-129."
       : fob === "DESTINATION"
-      ? "FOB Destination — deliver to: " + (shipTo || "government depot (details on PO)")
+      ? "FOB Destination, deliver to: " + (shipTo || "ship-to on the PO")
       : shipTo ? "Ship to: " + shipTo : null;
 
     return [
       isMulti ? ("Item " + (i + 1) + ":") : null,
-      "  Item:          " + (s.item_name || "—"),
+      "  Item:          " + (s.item_name || "n/a"),
       s.ref_part_number
         ? "  Part Number:   " + s.ref_part_number + (s.manufacturer_cage ? "  (Mfr CAGE: " + s.manufacturer_cage + ")" : "")
         : null,
@@ -77,7 +77,7 @@ function buildBodyForSender(vendor, sols, sender) {
       s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
       dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       fobStr             ? "  Shipping:      " + fobStr : null,
-      isSourceRestricted(s.supplier_restrictions) ? "  ⚠ Source:       " + s.supplier_restrictions + " — please confirm manufacturer CAGE, lot date, and C of C" : null,
+      isSourceRestricted(s.supplier_restrictions) ? "  ⚠ Source:       " + s.supplier_restrictions + ", please confirm manufacturer CAGE, lot date, and C of C" : null,
       s.jcp_required === true ? "  ⚠ JCP Required: Joint Certification Program certification required to submit quote" : null,
       "  Ref #:         " + (s.ref_code || s.sol_number),
     ].filter(Boolean).join("\n");
@@ -96,18 +96,19 @@ function buildBodyForSender(vendor, sols, sender) {
     "anthony@ifedlog.com | ifedlog.com",
   ];
 
-  // Opener rotates by weekday so repeat recipients don't get the same line twice:
-  //   Mon/Wed/Fri → A ("open a wholesale account"), Tue/Thu → B ("source through you").
-  // Both position us as a RESELLER / CHANNEL — a buyer that moves volume THROUGH the
-  // distributor — not a government end-user, which reads as a competitor and makes
-  // them hold back distributor pricing. Each opener leads straight into the item list.
-  const openerA = "My name is Anthony Kelley with Imperio Federal Logistics (CAGE 152U4). We're a reseller that places steady, repeat volume, and we'd like to open a wholesale account with you as one of our suppliers. Our resale certificate and tax-exempt documentation are ready to send. We'd appreciate your distributor-level pricing and availability on the following:";
-  const openerB = "Anthony Kelley here with Imperio Federal Logistics (CAGE 152U4). We're a distribution and resale company looking to source the items below through you on an ongoing basis — not a one-off. Glad to set up an account and provide our resale certificate and tax exemption up front. Could you extend your wholesale / distributor pricing, lead time, and availability on:";
-  const dow = new Date().getDay(); // 0 Sun … 6 Sat
-  const opener = (dow === 2 || dow === 4) ? openerB : openerA;
+  // Time-aware greeting + weekday-rotating opener. Casual and human, positions us as
+  // a reseller after distributor/wholesale pricing. No account-opening ask (Finance
+  // sets up payment later once they are interested), and no em dashes.
+  //   Mon/Wed/Fri -> A, Tue/Thu -> B, so repeat recipients don't see the same line.
+  const hourCT = parseInt(new Date().toLocaleString("en-US", { timeZone: "America/Chicago", hour: "2-digit", hour12: false }), 10);
+  const greet  = hourCT < 12 ? "Good morning" : hourCT < 17 ? "Good afternoon" : "Good evening";
+  const dow    = new Date().getDay(); // 0 Sun .. 6 Sat
+  const openerA = "Here are today's RFQs. As always, we're a reseller looking for distributor / wholesale pricing, so please send your best price, lead time, and availability on the following:";
+  const openerB = "Sending over a few RFQs today. As always, we buy at reseller / distributor pricing, not retail, so whatever you can do on price, lead time, and availability is appreciated:";
+  const opener  = (dow === 2 || dow === 4) ? openerB : openerA;
 
   return [
-    "Hi " + greeting + ",",
+    greet + (greeting ? " " + greeting : "") + ",",
     "",
     opener,
     "",
