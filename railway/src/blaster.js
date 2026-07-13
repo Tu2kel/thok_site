@@ -311,7 +311,7 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
     // Build subject + body
     const firstSol = solsWithRefs[0];
     const { subject: baseSubject } = buildRFQBody(vendor, firstSol);
-    const subject = baseSubject + (solsWithRefs.length > 1 ? " +" + (solsWithRefs.length - 1) + " more" : "");
+    const subject = baseSubject;
     const body    = buildBodyForSender(vendor, solsWithRefs, sender);
 
     try {
