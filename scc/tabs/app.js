@@ -440,6 +440,7 @@
       EsbdTab,
       SledPipelineTab,
       SledSubmissionsTab,
+      SledImportTab,
       LHFCheckTab,
     } = window.SCC_TABS;
 
@@ -1170,7 +1171,11 @@
             showToast,
           }),
 
-        tab === "sled-intake" && hA(EsbdTab, { goAward: goEsbdAward }),
+        tab === "sled-intake" &&
+          hA(SledImportTab, {
+            goPipeline: () => setTab("sled-pipeline"),
+            showToast,
+          }),
 
         tab === "sled-submissions" && hA(SledSubmissionsTab, { goAward: goEsbdAward }),
 
