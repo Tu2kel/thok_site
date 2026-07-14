@@ -90,6 +90,41 @@
     "855": ["8345", "8455"],                          // flags / badges
     "880": ["5836", "6730"],                          // AV equipment
     "890": ["4610", "4630", "6630"],                  // water treatment/filtration equip
+    // ── expansion from live ESBD export (unmapped product classes) ──
+    "035": ["1560", "1680", "1730"],                  // aircraft/airport equipment
+    "055": ["2540", "2590"],                          // automotive accessories
+    "060": ["1650", "4320"],                          // hydraulic system components
+    "065": ["3950", "3990", "2590"],                  // winches / automotive cranes
+    "075": ["4940", "3610"],                          // vehicle washing systems
+    "155": ["5410", "5411"],                          // modular/portable buildings
+    "180": ["6810"],                                  // surfactants/chemicals
+    "206": ["5895", "7025", "5985"],                  // network components (IT hardware)
+    "269": ["6505"],                                  // drugs/pharma
+    "280": ["6145", "6150"],                          // high-voltage cable & wire
+    "287": ["6665", "5855"],                          // detectors
+    "305": ["6675"],                                  // survey/GIS instruments
+    "325": ["8710"],                                  // animal feed
+    "470": ["6530"],                                  // wheelchairs/mobility
+    "485": ["7920", "7930"],                          // brushes
+    "493": ["6665", "6640"],                          // water-quality lab equipment
+    "515": ["3750"],                                  // riding lawn mowers
+    "557": ["9905", "8345"],                          // signage
+    "560": ["3930"],                                  // forklifts / lift trucks
+    "600": ["7530"],                                  // envelopes
+    "645": ["7530"],                                  // copy paper
+    "652": ["6508"],                                  // toothbrushes
+    "658": ["4710"],                                  // brass/copper tubing
+    "715": ["7690", "9905"],                          // promotional/souvenirs
+    "037": ["7690", "9905"],                          // promotional
+    "720": ["4320"],                                  // well pumps
+    "726": ["5825", "5826"],                          // wildlife tracking equipment
+    "765": ["2410", "3805"],                          // crawler tractors
+    "785": ["6910"],                                  // teaching/electronic kits
+    "790": ["8710"],                                  // seeds
+    "801": ["7290", "7690"],                          // picture frames/framing
+    "838": ["5895", "6145"],                          // comms networking/cabling
+    "839": ["6145", "5895"],                          // copper cat5/6 cable
+    "885": ["6810"],                                  // water treatment chemicals
   };
 
   const CLASS_LABEL = {
@@ -117,6 +152,17 @@
     "760": "Excavating/Cranes", "800": "Shoes", "805": "Sound/AV", "840": "AV Equipment",
     "845": "Signal/Warning", "850": "Soft Goods", "855": "Flags/Badges",
     "880": "AV Equipment", "890": "Water Treatment Equip",
+    "035": "Aircraft/Airport Equip", "055": "Automotive Accessories", "060": "Hydraulic Components",
+    "065": "Winches/Cranes", "075": "Vehicle Wash Systems", "155": "Modular Buildings",
+    "180": "Surfactants", "206": "Network Components", "269": "Pharma/Drugs",
+    "280": "HV Cable & Wire", "287": "Detectors", "305": "Survey/GIS Instruments",
+    "325": "Animal Feed", "470": "Wheelchairs/Mobility", "485": "Brushes",
+    "493": "Water-Quality Lab Equip", "515": "Riding Mowers", "557": "Signage",
+    "560": "Forklifts", "600": "Envelopes", "645": "Copy Paper", "652": "Toothbrushes",
+    "658": "Brass/Copper Tubing", "715": "Promotional", "037": "Promotional",
+    "720": "Well Pumps", "726": "Wildlife Tracking Equip", "765": "Crawler Tractors",
+    "785": "Teaching/Electronic Kits", "790": "Seeds", "801": "Picture Frames",
+    "838": "Comms Networking", "839": "Copper Cable", "885": "Water Treatment Chemicals",
   };
 
   // NIGP class >= 900 is a service (construction, maintenance, IT, professional,
