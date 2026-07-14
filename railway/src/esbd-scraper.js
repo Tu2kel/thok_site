@@ -90,26 +90,57 @@ async function reportState(set) {
   } catch (e) { err("state report failed:", e.message); }
 }
 
-// Click a button/element by visible text — resilient to NetSuite's generated ids.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Click a control by visible text via an IN-PAGE DOM click (not Puppeteer's
+// native click) — SPA buttons are often spans/overlaid and fail el.click() with
+// "not clickable". A DOM .click() works regardless of visibility/overlay.
 async function clickByText(page, texts) {
   const arr = Array.isArray(texts) ? texts : [texts];
-  const handle = await page.evaluateHandle((labels) => {
-    const els = Array.from(document.querySelectorAll("button, a, input[type=button], input[type=submit], span"));
+  return await page.evaluate((labels) => {
+    const els = Array.from(document.querySelectorAll("button, a, input[type=button], input[type=submit], [role=button], [onclick]"));
     const norm = (t) => (t || "").replace(/\s+/g, " ").trim().toLowerCase();
-    for (const lab of labels) {
-      const el = els.find((e) => norm(e.textContent) === norm(lab) || norm(e.value) === norm(lab));
-      if (el) return el;
-    }
-    for (const lab of labels) {
-      const el = els.find((e) => norm(e.textContent).includes(norm(lab)));
-      if (el) return el;
-    }
-    return null;
+    let el = null;
+    for (const lab of labels) { el = els.find((e) => norm(e.textContent) === norm(lab) || norm(e.value) === norm(lab)); if (el) break; }
+    if (!el) for (const lab of labels) { el = els.find((e) => norm(e.textContent).includes(norm(lab)) || norm(e.value).includes(norm(lab))); if (el) break; }
+    if (!el) return false;
+    if (el.scrollIntoView) el.scrollIntoView();
+    el.click();
+    return true;
   }, arr);
-  const el = handle.asElement();
-  if (!el) return false;
-  await el.click();
-  return true;
+}
+
+// Poll until any of `texts` appears in the page body (SPA renders async).
+async function waitForText(page, texts, timeoutMs) {
+  const arr = Array.isArray(texts) ? texts : [texts];
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const found = await page.evaluate((labels) => {
+      const t = (document.body && document.body.innerText || "").toLowerCase();
+      return labels.some((l) => t.includes(l.toLowerCase()));
+    }, arr).catch(() => false);
+    if (found) return true;
+    await sleep(1500);
+  }
+  return false;
+}
+
+// DOM inventory reported through syncState so failures are diagnosable remotely
+// (Railway disk snapshots aren't reachable, but Mongo syncState is).
+async function collectDiag(page) {
+  try {
+    return await page.evaluate(() => {
+      const norm = (t) => (t || "").replace(/\s+/g, " ").trim();
+      const ctrls = Array.from(document.querySelectorAll("button, a, input[type=button], input[type=submit], [role=button]"))
+        .map((e) => norm(e.textContent || e.value)).filter(Boolean);
+      return {
+        title: document.title, url: location.href,
+        bodyLen: (document.body && document.body.innerText || "").length,
+        hasExport: /export/i.test(document.body && document.body.innerText || ""),
+        controls: [...new Set(ctrls)].slice(0, 30),
+      };
+    });
+  } catch (e) { return { error: e.message }; }
 }
 
 // ── Core: one scrape run ────────────────────────────────────────────────────────
@@ -137,22 +168,30 @@ async function extractRows(page) {
   const title = (await page.title().catch(() => "")) || "";
   if (/sign in|log ?in|access denied|forbidden/i.test(title)) throw classified("SESSION", "ESBD returned a login/denied page: " + title);
 
-  // optional filters (best-effort, non-fatal)
-  if (process.env.ESBD_KEYWORD) {
-    try { const kw = await page.$('input[name*=keyword i], input[placeholder*="Keyword" i]'); if (kw) { await kw.type(String(process.env.ESBD_KEYWORD), { delay: 30 }); } } catch {}
-  }
-  try { await clickByText(page, ["Search"]); await page.waitForTimeout(4000); } catch {}
+  // wait for the SPA to render results + the Export control (it renders async)
+  const ready = await waitForText(page, ["Export to CSV", "Export"], 45000);
+  if (!ready) { const e = classified("SELECTOR", "ESBD results/Export not rendered within 45s"); e.diag = await collectDiag(page); throw e; }
 
-  // trigger the CSV export
+  // optional keyword filter → Search → wait for results to re-render
+  if (process.env.ESBD_KEYWORD) {
+    try {
+      const kw = await page.$('input[name*=keyword i], input[placeholder*="Keyword" i]');
+      if (kw) { await kw.type(String(process.env.ESBD_KEYWORD), { delay: 30 }); await clickByText(page, ["Search"]); await sleep(5000); await waitForText(page, ["Export"], 30000); }
+    } catch {}
+  }
+
+  // trigger the CSV export (in-page DOM click)
   const clicked = await clickByText(page, ["Export to CSV", "Export CSV", "Export"]);
-  if (!clicked) throw classified("SELECTOR", "Could not find the 'Export to CSV' control — page layout may have changed");
+  if (!clicked) { const e = classified("SELECTOR", "Could not find the 'Export to CSV' control"); e.diag = await collectDiag(page); throw e; }
 
   // wait for the download to land
-  const csvPath = await waitForDownload(downloadDir, 90000);
+  const csvPath = await waitForDownload(downloadDir, 120000);
   if (!csvPath) {
-    // fallback: did we capture service JSON?
-    if (serviceHits.length) throw classified("EXPORT", "CSV download did not complete, but " + serviceHits.length + " ESBD.Service.ss responses were captured (JSON fallback mapping not yet finalized)");
-    throw classified("EXPORT", "CSV export produced no downloadable file (blocked download or empty result)");
+    const e = classified("EXPORT", serviceHits.length
+      ? "CSV download did not complete, but " + serviceHits.length + " ESBD.Service.ss responses were captured (JSON fallback available)"
+      : "CSV export produced no downloadable file (blocked download or empty result)");
+    e.diag = await collectDiag(page);
+    throw e;
   }
   const text = fs.readFileSync(csvPath, "utf-8");
   const rows = parseCsv(text);
@@ -226,7 +265,9 @@ async function runEsbdSync({ maxRetries = 2 } = {}) {
   }
 
   const duration = Date.now() - startedAt;
-  const fail = { ok: false, running: false, last_run_at: new Date(), last_duration_ms: duration, last_error: (lastErr && (lastErr.code ? lastErr.code + ": " : "") + lastErr.message) || "unknown" };
+  const fail = { ok: false, running: false, last_run_at: new Date(), last_duration_ms: duration,
+    last_error: (lastErr && (lastErr.code ? lastErr.code + ": " : "") + lastErr.message) || "unknown",
+    diag: (lastErr && lastErr.diag) || null };
   await reportState(fail);
   err("❌ sync failed after", attempt, "attempt(s):", fail.last_error);
   return fail;
