@@ -238,8 +238,44 @@ exports.handler = async (ev) => {
       }
       // service hint from the description (webcast/broadcasting/services/etc.)
       detail.service_hint = /\b(services?|webcast|broadcast(?:ing)?|maintenance|installation|repair|consulting|hosting|management|training|support)\b/i.test(detail.description || "");
+
+      // CMBL vendor lists — Texas attaches its registered-vendor CSVs per class/item
+      // (Company, City, State, Zip, Email, Phone, Small Business, VetHUB). Clean
+      // location data our own distributor DB lacks → enables Texas-first sourcing.
+      const cmblAtts = (detail.attachments || []).filter((a) => /cmbl/i.test(a.name));
+      const cmblVendors = [];
+      const seen = new Set();
+      const csvTexts = await Promise.all(cmblAtts.slice(0, 12).map((a) =>
+        fetch(a.url.replace(/&amp;/g, "&"), { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://www.txsmartbuy.gov/esbd/" + solId } })
+          .then((r) => r.text()).catch(() => "")));
+      for (const txt of csvTexts) {
+        for (const row of parseCsvRows(txt)) {
+          const name = (row["Company Name"] || "").trim();
+          if (!name) continue;
+          const email = (row["Email"] || "").trim().toLowerCase();
+          const key = email || name.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          cmblVendors.push({
+            name, email, phone: (row["Phone"] || "").trim(),
+            city: (row["City"] || "").trim(), state: (row["State"] || "").trim().toUpperCase(), zip: (row["Zip"] || "").trim(),
+            small_business: /yes/i.test(row["Small Business"] || ""), vethub: /yes/i.test(row["VetHUB Status"] || ""),
+          });
+        }
+      }
+      detail.cmbl_vendors = cmblVendors;
+
+      // Persist only the lightweight scalars (not the vendor list — keeps the doc small).
       if (body.id) {
-        try { await opps.updateOne({ _id: mongoId(body.id) }, { $set: { ...prefixed(detail, "esbd_"), enriched_at: new Date() } }); } catch (e) {}
+        const persist = {
+          esbd_description: detail.description, esbd_bid_response_email: detail.bid_response_email,
+          esbd_contact_name: detail.contact_name, esbd_contact_email: detail.contact_email, esbd_contact_number: detail.contact_number,
+          esbd_response_due_time: detail.response_due_time, esbd_class_item: detail.class_item,
+          esbd_service_hint: detail.service_hint, esbd_cmbl_count: cmblVendors.length,
+          attachments: (detail.attachments || []).map((a) => ({ name: a.name, url: a.url })).slice(0, 20),
+          enriched_at: new Date(),
+        };
+        try { await opps.updateOne({ _id: mongoId(body.id) }, { $set: persist }); } catch (e) {}
       }
       return ok({ ok: true, detail });
     }
@@ -322,6 +358,32 @@ function prefixed(obj, pre) {
   const o = {};
   for (const k of Object.keys(obj)) o[pre + k] = obj[k];
   return o;
+}
+
+// RFC4180 CSV → array of objects keyed by header (handles quoted commas/newlines).
+function parseCsvRows(text) {
+  if (!text) return [];
+  const rows = [];
+  let row = [], field = "", i = 0, q = false;
+  const s = String(text).replace(/^﻿/, "");
+  while (i < s.length) {
+    const c = s[i];
+    if (q) {
+      if (c === '"') { if (s[i + 1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; }
+      field += c; i++; continue;
+    }
+    if (c === '"') { q = true; i++; continue; }
+    if (c === ",") { row.push(field); field = ""; i++; continue; }
+    if (c === "\r") { i++; continue; }
+    if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+    field += c; i++;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (rows.length < 2) return [];
+  const header = rows[0].map((h) => h.trim());
+  return rows.slice(1).filter((r) => r.some((c) => c && c.trim())).map((r) => {
+    const o = {}; header.forEach((h, idx) => { o[h] = r[idx] != null ? r[idx] : ""; }); return o;
+  });
 }
 
 // Parse the txsmartbuy ESBD detail page. Fields are rendered as
