@@ -80,7 +80,7 @@
     const c = STAGE_COLOR[status] || FAINT;
     return h("span", {
       style: {
-        fontFamily: MONO, fontSize: "9px", letterSpacing: ".08em", textTransform: "uppercase",
+        fontFamily: MONO, fontSize: "12px", letterSpacing: ".08em", textTransform: "uppercase",
         padding: "2px 8px", borderRadius: "3px", border: "1px solid " + c, color: c, whiteSpace: "nowrap",
       },
     }, status);
@@ -90,9 +90,9 @@
     const [v, setV] = useState(value == null ? "" : String(value));
     useEffect(() => { setV(value == null ? "" : String(value)); }, [value]);
     return h("label", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-      h("span", { style: { fontFamily: MONO, fontSize: "8px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, label),
+      h("span", { style: { fontFamily: MONO, fontSize: "11px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, label),
       h("div", { style: { display: "flex", alignItems: "center", gap: "3px" } },
-        prefix ? h("span", { style: { color: FAINT, fontSize: "11px" } }, prefix) : null,
+        prefix ? h("span", { style: { color: FAINT, fontSize: "14px" } }, prefix) : null,
         h("input", {
           value: v,
           inputMode: "decimal",
@@ -101,11 +101,11 @@
           onKeyDown: (e) => { if (e.key === "Enter") e.target.blur(); },
           style: {
             width: (width || 62) + "px", background: "rgba(0,0,0,.35)", border: "1px solid rgba(201,168,76,.25)",
-            borderRadius: "4px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "12px",
+            borderRadius: "4px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "15px",
             padding: "4px 6px", outline: "none",
           },
         }),
-        suffix ? h("span", { style: { color: FAINT, fontSize: "11px" } }, suffix) : null,
+        suffix ? h("span", { style: { color: FAINT, fontSize: "14px" } }, suffix) : null,
       ),
     );
   }
@@ -135,12 +135,12 @@
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "10px" } },
         h("div", { style: { minWidth: 0 } },
           h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } },
-            bid.state ? h("span", { style: { fontFamily: MONO, fontSize: "10px", color: GOLD, border: "1px solid rgba(201,168,76,.4)", borderRadius: "3px", padding: "1px 6px" } }, bid.state) : null,
-            h("span", { style: { color: "var(--body,#f5f0e8)", fontSize: "14px", fontWeight: 600 } }, bid.title || bid.item_desc || "Untitled bid"),
+            bid.state ? h("span", { style: { fontFamily: MONO, fontSize: "13px", color: GOLD, border: "1px solid rgba(201,168,76,.4)", borderRadius: "3px", padding: "1px 6px" } }, bid.state) : null,
+            h("span", { style: { color: "var(--body,#f5f0e8)", fontSize: "17px", fontWeight: 600 } }, bid.title || bid.item_desc || "Untitled bid"),
           ),
-          h("div", { style: { fontFamily: MONO, fontSize: "11px", color: DIM, marginTop: "3px" } },
+          h("div", { style: { fontFamily: MONO, fontSize: "14px", color: DIM, marginTop: "3px" } },
             [bid.agency, bid.agency_num, bid.nigp_code ? "NIGP " + bid.nigp_code : null].filter(Boolean).join(" · ") || "—"),
-          h("div", { style: { fontFamily: MONO, fontSize: "10px", color: FAINT, marginTop: "2px" } },
+          h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT, marginTop: "2px" } },
             [bid.qty ? "Qty " + bid.qty + (bid.uom ? " " + bid.uom : "") : null, bid.mfr_pn ? "P/N " + bid.mfr_pn : null, bid.due_date ? "Due " + bid.due_date : null].filter(Boolean).join("  ·  ") || "—"),
         ),
         h("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" } },
@@ -148,7 +148,7 @@
           h("select", {
             value: bid.status,
             onChange: (e) => onPatch(bid, { status: e.target.value }),
-            style: { background: "rgba(0,0,0,.4)", color: DIM, border: "1px solid rgba(201,168,76,.25)", borderRadius: "4px", fontFamily: MONO, fontSize: "10px", padding: "2px 4px" },
+            style: { background: "rgba(0,0,0,.4)", color: DIM, border: "1px solid rgba(201,168,76,.25)", borderRadius: "4px", fontFamily: MONO, fontSize: "13px", padding: "2px 4px" },
           }, ALL_STATUSES.map((s) => h("option", { key: s, value: s }, s))),
         ),
       ),
@@ -158,18 +158,18 @@
         h(NumField, { label: "Cost / unit", prefix: "$", value: bid.est_cost, onCommit: (v) => onPatch(bid, { est_cost: v }) }),
         h(NumField, { label: "Margin", suffix: "%", value: bid.margin_pct === "" || bid.margin_pct == null ? DEFAULT_MARGIN : bid.margin_pct, width: 46, onCommit: (v) => onPatch(bid, { margin_pct: v }) }),
         h("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-          h("span", { style: { fontFamily: MONO, fontSize: "8px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Bid / unit"),
-          h("span", { style: { fontFamily: MONO, fontSize: "13px", color: GOLD } }, m.bidUnit ? money(m.bidUnit) : "—"),
+          h("span", { style: { fontFamily: MONO, fontSize: "11px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Bid / unit"),
+          h("span", { style: { fontFamily: MONO, fontSize: "16px", color: GOLD } }, m.bidUnit ? money(m.bidUnit) : "—"),
         ),
         h("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-          h("span", { style: { fontFamily: MONO, fontSize: "8px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Bid total"),
-          h("span", { style: { fontFamily: MONO, fontSize: "13px", color: "var(--body,#f5f0e8)", fontWeight: 600 } }, m.bidTotal ? money(m.bidTotal) : "—"),
+          h("span", { style: { fontFamily: MONO, fontSize: "11px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Bid total"),
+          h("span", { style: { fontFamily: MONO, fontSize: "16px", color: "var(--body,#f5f0e8)", fontWeight: 600 } }, m.bidTotal ? money(m.bidTotal) : "—"),
         ),
         h("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-          h("span", { style: { fontFamily: MONO, fontSize: "8px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Gross profit"),
-          h("span", { style: { fontFamily: MONO, fontSize: "12px", color: m.gp > 0 ? "rgba(61,214,140,.9)" : FAINT } }, m.gp ? money(m.gp) + " (" + pct(m.margin) + ")" : "—"),
+          h("span", { style: { fontFamily: MONO, fontSize: "11px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Gross profit"),
+          h("span", { style: { fontFamily: MONO, fontSize: "15px", color: m.gp > 0 ? "rgba(61,214,140,.9)" : FAINT } }, m.gp ? money(m.gp) + " (" + pct(m.margin) + ")" : "—"),
         ),
-        h("span", { style: { fontFamily: MONO, fontSize: "9px", color: FAINT, marginLeft: "auto" } },
+        h("span", { style: { fontFamily: MONO, fontSize: "12px", color: FAINT, marginLeft: "auto" } },
           "cost: " + (m.costSource === "manual" ? "manual" : m.costSource === "supplier" ? "supplier quote" : "not set")),
       ),
 
@@ -188,14 +188,14 @@
         (function () {
           const bench = parseFloat(bid.benchmark_price);
           if (!(bench > 0) || !(m.bidUnit > 0)) {
-            return h("span", { style: { fontFamily: MONO, fontSize: "10px", color: FAINT } },
+            return h("span", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT } },
               bid.benchmark_source ? "benchmark src: " + bid.benchmark_source : "set a benchmark to gauge competitiveness");
           }
           const deltaPct = (m.bidUnit - bench) / bench * 100;
           const over = deltaPct > 0.5;
           return h("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
-            h("span", { style: { fontFamily: MONO, fontSize: "8px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Bid vs benchmark"),
-            h("span", { style: { fontFamily: MONO, fontSize: "13px", color: over ? "rgba(232,116,116,.95)" : "rgba(61,214,140,.95)" } },
+            h("span", { style: { fontFamily: MONO, fontSize: "11px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Bid vs benchmark"),
+            h("span", { style: { fontFamily: MONO, fontSize: "16px", color: over ? "rgba(232,116,116,.95)" : "rgba(61,214,140,.95)" } },
               (deltaPct >= 0 ? "+" : "") + deltaPct.toFixed(1) + "% " + (over ? "over — likely uncompetitive" : "at/under — competitive")),
           );
         })(),
@@ -204,10 +204,10 @@
       // quick-source (optional)
       srcOpen ? h("div", { style: { display: "flex", gap: "8px", alignItems: "center", marginTop: "10px" } },
         h("input", { value: supName, onChange: (e) => setSupName(e.target.value), placeholder: "Supplier",
-          style: { flex: "1", background: "rgba(0,0,0,.35)", border: "1px solid rgba(135,206,235,.3)", borderRadius: "4px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "12px", padding: "5px 8px", outline: "none" } }),
+          style: { flex: "1", background: "rgba(0,0,0,.35)", border: "1px solid rgba(135,206,235,.3)", borderRadius: "4px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "15px", padding: "5px 8px", outline: "none" } }),
         h("input", { value: supPrice, onChange: (e) => setSupPrice(e.target.value), placeholder: "$ / unit", inputMode: "decimal",
           onKeyDown: (e) => { if (e.key === "Enter") addSupplier(); },
-          style: { width: "90px", background: "rgba(0,0,0,.35)", border: "1px solid rgba(135,206,235,.3)", borderRadius: "4px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "12px", padding: "5px 8px", outline: "none" } }),
+          style: { width: "90px", background: "rgba(0,0,0,.35)", border: "1px solid rgba(135,206,235,.3)", borderRadius: "4px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "15px", padding: "5px 8px", outline: "none" } }),
         h("button", { onClick: addSupplier, style: btn("rgba(135,206,235,.85)") }, "Add quote"),
         h("button", { onClick: () => setSrcOpen(false), style: btnGhost() }, "×"),
       ) : null,
@@ -233,12 +233,12 @@
   function btn(color, disabled) {
     return {
       background: "transparent", border: "1px solid " + color, color: color, borderRadius: "5px",
-      fontFamily: MONO, fontSize: "11px", letterSpacing: ".03em", padding: "6px 12px",
+      fontFamily: MONO, fontSize: "14px", letterSpacing: ".03em", padding: "6px 12px",
       cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
     };
   }
   function btnGhost() {
-    return { background: "transparent", border: "1px solid rgba(201,168,76,.25)", color: DIM, borderRadius: "5px", fontFamily: MONO, fontSize: "11px", padding: "6px 12px", cursor: "pointer" };
+    return { background: "transparent", border: "1px solid rgba(201,168,76,.25)", color: DIM, borderRadius: "5px", fontFamily: MONO, fontSize: "14px", padding: "6px 12px", cursor: "pointer" };
   }
 
   // ── data hook ────────────────────────────────────────────────────────────────
@@ -303,29 +303,29 @@
       // header
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "6px", flexWrap: "wrap", gap: "10px" } },
         h("div", null,
-          h("div", { style: { fontFamily: MONO, fontSize: "10px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "STATE · LOCAL · EDUCATION"),
-          h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "24px", color: "var(--body,#f5f0e8)", letterSpacing: ".02em" } }, "SLED Pipeline Router"),
+          h("div", { style: { fontFamily: MONO, fontSize: "13px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "STATE · LOCAL · EDUCATION"),
+          h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "27px", color: "var(--body,#f5f0e8)", letterSpacing: ".02em" } }, "SLED Pipeline Router"),
         ),
         h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } },
-          h("span", { style: { fontFamily: MONO, fontSize: "11px", color: DIM } }, active.length + " active · " + money(totalPipeline) + " staged"),
+          h("span", { style: { fontFamily: MONO, fontSize: "14px", color: DIM } }, active.length + " active · " + money(totalPipeline) + " staged"),
           h("button", { onClick: reload, style: btnGhost() }, "↻ Refresh"),
           h("button", { onClick: () => goIntake && goIntake(), style: btn(GOLD) }, "＋ New / Intake"),
         ),
       ),
-      h("p", { style: { fontFamily: MONO, fontSize: "11px", color: FAINT, margin: "0 0 22px", lineHeight: 1.5 } },
+      h("p", { style: { fontFamily: MONO, fontSize: "14px", color: FAINT, margin: "0 0 22px", lineHeight: 1.5 } },
         "Manual cost by default — type what it lands at, set your margin, submit. Quick-source a supplier only when you need a number."),
 
-      loading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "13px", padding: "40px", textAlign: "center" } }, "Loading…")
-        : active.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "13px", padding: "50px 20px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } },
+      loading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "16px", padding: "40px", textAlign: "center" } }, "Loading…")
+        : active.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "16px", padding: "50px 20px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } },
             "No active SLED bids. Hit ＋ New / Intake to add a state/local solicitation.")
         : byStage.map(({ stage, items }) => h("div", { key: stage, style: { marginBottom: "26px" } },
             h("div", { style: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" } },
               h(Badge, { status: stage }),
-              h("span", { style: { fontFamily: MONO, fontSize: "11px", color: FAINT } }, items.length + " bid" + (items.length === 1 ? "" : "s")),
+              h("span", { style: { fontFamily: MONO, fontSize: "14px", color: FAINT } }, items.length + " bid" + (items.length === 1 ? "" : "s")),
               h("div", { style: { flex: 1, height: "1px", background: "linear-gradient(90deg,rgba(201,168,76,.2),transparent)" } }),
             ),
             items.length === 0
-              ? h("div", { style: { fontFamily: MONO, fontSize: "11px", color: FAINT, paddingLeft: "4px" } }, "—")
+              ? h("div", { style: { fontFamily: MONO, fontSize: "14px", color: FAINT, paddingLeft: "4px" } }, "—")
               : items.map((b) => h(BidCard, { key: b.id, bid: b, onPatch: patch, onQuickSource: quickSource, onSubmitBid: submitBid, onOpen: openIntake, showToast })),
           )),
     );
@@ -340,27 +340,27 @@
     return h("div", { style: { animation: "fadeUp .4s ease both", maxWidth: "980px", margin: "0 auto", padding: "8px 4px 40px" } },
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "22px", flexWrap: "wrap", gap: "10px" } },
         h("div", null,
-          h("div", { style: { fontFamily: MONO, fontSize: "10px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "STATE · LOCAL · EDUCATION"),
-          h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "24px", color: "var(--body,#f5f0e8)" } }, "SLED Submissions"),
+          h("div", { style: { fontFamily: MONO, fontSize: "13px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "STATE · LOCAL · EDUCATION"),
+          h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "27px", color: "var(--body,#f5f0e8)" } }, "SLED Submissions"),
         ),
         h("button", { onClick: reload, style: btnGhost() }, "↻ Refresh"),
       ),
-      loading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "13px", padding: "40px", textAlign: "center" } }, "Loading…")
-        : rows.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "13px", padding: "50px 20px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } }, "Nothing submitted yet.")
+      loading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "16px", padding: "40px", textAlign: "center" } }, "Loading…")
+        : rows.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "16px", padding: "50px 20px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } }, "Nothing submitted yet.")
         : rows.map((b) => {
             const m = calcRow(b);
             return h("div", { key: b.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", border: "1px solid rgba(201,168,76,.15)", borderRadius: "8px", padding: "12px 14px", marginBottom: "8px" } },
               h("div", { style: { minWidth: 0 } },
                 h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } },
-                  b.state ? h("span", { style: { fontFamily: MONO, fontSize: "10px", color: GOLD } }, b.state) : null,
-                  h("span", { style: { color: "var(--body,#f5f0e8)", fontSize: "13px", fontWeight: 600 } }, b.title || b.item_desc || "Untitled"),
+                  b.state ? h("span", { style: { fontFamily: MONO, fontSize: "13px", color: GOLD } }, b.state) : null,
+                  h("span", { style: { color: "var(--body,#f5f0e8)", fontSize: "16px", fontWeight: 600 } }, b.title || b.item_desc || "Untitled"),
                 ),
-                h("div", { style: { fontFamily: MONO, fontSize: "11px", color: DIM, marginTop: "2px" } }, [b.agency, b.agency_num].filter(Boolean).join(" · ") || "—"),
+                h("div", { style: { fontFamily: MONO, fontSize: "14px", color: DIM, marginTop: "2px" } }, [b.agency, b.agency_num].filter(Boolean).join(" · ") || "—"),
               ),
               h("div", { style: { display: "flex", gap: "16px", alignItems: "center" } },
-                h("span", { style: { fontFamily: MONO, fontSize: "12px", color: "var(--body,#f5f0e8)" } }, b.bid_total ? money(b.bid_total) : (m.bidTotal ? money(m.bidTotal) : "—")),
+                h("span", { style: { fontFamily: MONO, fontSize: "15px", color: "var(--body,#f5f0e8)" } }, b.bid_total ? money(b.bid_total) : (m.bidTotal ? money(m.bidTotal) : "—")),
                 h("select", { value: b.status, onChange: (e) => { const v = e.target.value; patch(b, { status: v }); if (v === "Awarded" && goAward) goAward(b); },
-                  style: { background: "rgba(0,0,0,.4)", color: DIM, border: "1px solid rgba(201,168,76,.25)", borderRadius: "4px", fontFamily: MONO, fontSize: "10px", padding: "3px 5px" } },
+                  style: { background: "rgba(0,0,0,.4)", color: DIM, border: "1px solid rgba(201,168,76,.25)", borderRadius: "4px", fontFamily: MONO, fontSize: "13px", padding: "3px 5px" } },
                   ALL_STATUSES.map((s) => h("option", { key: s, value: s }, s))),
               ),
             );

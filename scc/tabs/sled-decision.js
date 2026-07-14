@@ -44,7 +44,7 @@
     return { subject, body };
   }
 
-  const btn = (c, disabled) => ({ background: "transparent", border: "1px solid " + c, color: c, borderRadius: "6px", fontFamily: MONO, fontSize: "11px", padding: "6px 12px", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1 });
+  const btn = (c, disabled) => ({ background: "transparent", border: "1px solid " + c, color: c, borderRadius: "6px", fontFamily: MONO, fontSize: "14px", padding: "6px 12px", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1 });
 
   function SledDecisionTab({ goPipeline, showToast }) {
     const [rows, setRows] = useState([]);
@@ -118,8 +118,8 @@
 
     // ── LEFT: opportunity list ───────────────────────────────────────────────
     const left = h("div", { style: { flex: "1 1 520px", minWidth: 0 } },
-      loading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "13px", padding: "40px", textAlign: "center" } }, "Loading…")
-      : rows.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "13px", padding: "50px 20px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } }, "Queue clear.")
+      loading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "16px", padding: "40px", textAlign: "center" } }, "Loading…")
+      : rows.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "16px", padding: "50px 20px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } }, "Queue clear.")
       : rows.map((o) => {
           const isSel = sel && sel.id === o.id;
           const rfqCount = (o.rfq_sent || []).length;
@@ -129,12 +129,12 @@
           },
             h("div", { style: { minWidth: 0, flex: 1 } },
               h("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } },
-                h("span", { style: { fontFamily: MONO, fontSize: "10px", color: GOLD, border: "1px solid rgba(201,168,76,.4)", borderRadius: "3px", padding: "1px 6px" } }, o.lane_label || "—"),
-                h("span", { style: { fontFamily: MONO, fontSize: "10px", color: GREEN } }, o.distributor_coverage + "v"),
-                rfqCount ? h("span", { style: { fontFamily: MONO, fontSize: "10px", color: BLUE } }, "✉ " + rfqCount + " RFQ") : null,
-                h("span", { style: { color: "var(--body,#f5f0e8)", fontSize: "13px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" } }, o.name),
+                h("span", { style: { fontFamily: MONO, fontSize: "13px", color: GOLD, border: "1px solid rgba(201,168,76,.4)", borderRadius: "3px", padding: "1px 6px" } }, o.lane_label || "—"),
+                h("span", { style: { fontFamily: MONO, fontSize: "13px", color: GREEN } }, o.distributor_coverage + "v"),
+                rfqCount ? h("span", { style: { fontFamily: MONO, fontSize: "13px", color: BLUE } }, "✉ " + rfqCount + " RFQ") : null,
+                h("span", { style: { color: "var(--body,#f5f0e8)", fontSize: "16px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" } }, o.name),
               ),
-              h("div", { style: { fontFamily: MONO, fontSize: "10px", color: DIM, marginTop: "3px" } }, [o.sol_id, "Agy " + o.agency_num, o.due_date ? "Due " + o.due_date : null].filter(Boolean).join(" · ")),
+              h("div", { style: { fontFamily: MONO, fontSize: "13px", color: DIM, marginTop: "3px" } }, [o.sol_id, "Agy " + o.agency_num, o.due_date ? "Due " + o.due_date : null].filter(Boolean).join(" · ")),
             ),
             h("button", { onClick: (e) => { e.stopPropagation(); decide(o, "PASS"); }, style: btn(RED) }, "Pass"),
             h("button", { onClick: (e) => { e.stopPropagation(); decide(o, "BID"); }, style: btn(GREEN) }, "Bid ▸"),
@@ -144,33 +144,33 @@
 
     // ── RIGHT: matching vendors + send RFQ ───────────────────────────────────
     const right = h("div", { style: { flex: "1 1 380px", minWidth: 0, borderLeft: "1px solid rgba(201,168,76,.12)", paddingLeft: "18px" } },
-      !sel ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "12px", padding: "50px 16px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } }, "Select an opportunity to see matching distributors and send RFQs.")
+      !sel ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "15px", padding: "50px 16px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } }, "Select an opportunity to see matching distributors and send RFQs.")
       : h("div", null,
           h("div", { style: { marginBottom: "10px" } },
-            h("div", { style: { fontFamily: MONO, fontSize: "10px", color: FAINT, letterSpacing: ".1em" } }, "MATCHING VENDORS · FSC " + (sel.fsc_lanes || []).join("/")),
-            h("div", { style: { color: "var(--body,#f5f0e8)", fontSize: "13px", fontWeight: 600, marginTop: "2px" } }, sel.name),
+            h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT, letterSpacing: ".1em" } }, "MATCHING VENDORS · Class/Item " + ((sel.nigp || "").split(/[;\n]/).map((s) => s.trim().split("-")[0]).filter(Boolean).slice(0, 4).join(", ") || (sel.lane_label || ""))),
+            h("div", { style: { color: "var(--body,#f5f0e8)", fontSize: "16px", fontWeight: 600, marginTop: "2px" } }, sel.name),
           ),
-          vLoading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "12px", padding: "24px", textAlign: "center" } }, "Matching vendors…")
-          : vendors.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "12px", padding: "24px", textAlign: "center" } }, "No distributors on record for these lanes.")
+          vLoading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "15px", padding: "24px", textAlign: "center" } }, "Matching vendors…")
+          : vendors.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "15px", padding: "24px", textAlign: "center" } }, "No distributors on record for these lanes.")
           : h("div", null,
-              h("div", { style: { fontFamily: MONO, fontSize: "10px", color: DIM, margin: "0 0 8px" } }, vendors.length + " matched · " + emailable + " emailable" + (vendors.length >= 40 ? " (top 40)" : "")),
+              h("div", { style: { fontFamily: MONO, fontSize: "13px", color: DIM, margin: "0 0 8px" } }, vendors.length + " matched · " + emailable + " emailable" + (vendors.length >= 40 ? " (top 40)" : "")),
               h("div", { style: { maxHeight: "440px", overflowY: "auto", marginBottom: "12px" } },
                 vendors.map((v) => h("label", {
                   key: v.id, style: { display: "flex", gap: "8px", alignItems: "center", padding: "6px 4px", borderBottom: "1px solid rgba(201,168,76,.07)", cursor: v.email ? "pointer" : "default", opacity: v.email ? 1 : 0.45 },
                 },
                   h("input", { type: "checkbox", disabled: !v.email, checked: picked.has(v.id), onChange: () => toggle(v.id) }),
                   h("div", { style: { minWidth: 0, flex: 1 } },
-                    h("div", { style: { fontSize: "12px", color: "var(--body,#f5f0e8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, (v.name || v.id) + (v.tier ? "  ·T" + v.tier : "")),
-                    h("div", { style: { fontFamily: MONO, fontSize: "10px", color: v.email ? DIM : FAINT } }, v.email || "no email on file"),
+                    h("div", { style: { fontSize: "15px", color: "var(--body,#f5f0e8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, (v.name || v.id) + (v.tier ? "  ·T" + v.tier : "")),
+                    h("div", { style: { fontFamily: MONO, fontSize: "13px", color: v.email ? DIM : FAINT } }, v.email || "no email on file"),
                   ),
                 )),
               ),
               h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } },
-                h("span", { style: { fontFamily: MONO, fontSize: "11px", color: DIM } }, picked.size + " selected"),
+                h("span", { style: { fontFamily: MONO, fontSize: "14px", color: DIM } }, picked.size + " selected"),
                 h("div", { style: { flex: 1 } }),
                 h("button", { onClick: sendRfqs, disabled: sending || !picked.size, style: btn(sending || !picked.size ? FAINT : BLUE, sending || !picked.size) }, sending ? "Sending…" : "✉ Send RFQ to " + picked.size),
               ),
-              (sel.rfq_sent || []).length ? h("div", { style: { fontFamily: MONO, fontSize: "10px", color: BLUE, marginTop: "10px" } }, "Already RFQ'd: " + sel.rfq_sent.map((r) => r.name || r.email).slice(0, 6).join(", ")) : null,
+              (sel.rfq_sent || []).length ? h("div", { style: { fontFamily: MONO, fontSize: "13px", color: BLUE, marginTop: "10px" } }, "Already RFQ'd: " + sel.rfq_sent.map((r) => r.name || r.email).slice(0, 6).join(", ")) : null,
             ),
         ),
     );
@@ -178,21 +178,21 @@
     return h("div", { style: { animation: "fadeUp .4s ease both", maxWidth: "1240px", margin: "0 auto", padding: "8px 4px 40px" } },
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "6px", flexWrap: "wrap", gap: "10px" } },
         h("div", null,
-          h("div", { style: { fontFamily: MONO, fontSize: "10px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "STATE · LOCAL · EDUCATION"),
-          h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "24px", color: "var(--body,#f5f0e8)" } }, "Decide — Bid, Pass, or RFQ"),
+          h("div", { style: { fontFamily: MONO, fontSize: "13px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "STATE · LOCAL · EDUCATION"),
+          h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "27px", color: "var(--body,#f5f0e8)" } }, "Decide — Bid, Pass, or RFQ"),
         ),
         h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } },
           h("button", { onClick: reload, style: btn(FAINT) }, "↻ Refresh"),
           goPipeline ? h("button", { onClick: goPipeline, style: btn(GOLD) }, "Pipeline →") : null,
         ),
       ),
-      stats ? h("div", { style: { display: "flex", gap: "16px", flexWrap: "wrap", fontFamily: MONO, fontSize: "11px", color: DIM, margin: "6px 0 16px" } },
+      stats ? h("div", { style: { display: "flex", gap: "16px", flexWrap: "wrap", fontFamily: MONO, fontSize: "14px", color: DIM, margin: "6px 0 16px" } },
         h("span", null, (stats.verdictCounts.PRODUCT || 0) + " product"),
         h("span", { style: { color: FAINT } }, (stats.verdictCounts.SERVICE || 0) + " service (skipped)"),
         h("span", { style: { color: GREEN } }, stats.biddable + " biddable"),
         h("span", { style: { color: GOLD } }, stats.committed + " committed"),
       ) : null,
-      h("p", { style: { fontFamily: MONO, fontSize: "11px", color: FAINT, margin: "0 0 18px", lineHeight: 1.5 } },
+      h("p", { style: { fontFamily: MONO, fontSize: "14px", color: FAINT, margin: "0 0 18px", lineHeight: 1.5 } },
         "Click an opportunity → matching distributors load on the right → RFQ the ones you want. When a vendor replies with a price, Bid it into the Pipeline."),
 
       h("div", { style: { display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "flex-start" } }, left, right),

@@ -114,31 +114,31 @@
       if (mongo && mongo.ok && goPipeline) goPipeline();
     };
 
-    const btn = (c, disabled) => ({ background: "transparent", border: "1px solid " + c, color: c, borderRadius: "6px", fontFamily: MONO, fontSize: "11px", padding: "7px 14px", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1 });
-    const chip = (active, c) => ({ background: active ? c : "transparent", border: "1px solid " + c, color: active ? "#1a0f0a" : c, borderRadius: "20px", fontFamily: MONO, fontSize: "10px", padding: "4px 12px", cursor: "pointer" });
+    const btn = (c, disabled) => ({ background: "transparent", border: "1px solid " + c, color: c, borderRadius: "6px", fontFamily: MONO, fontSize: "14px", padding: "7px 14px", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1 });
+    const chip = (active, c) => ({ background: active ? c : "transparent", border: "1px solid " + c, color: active ? "#1a0f0a" : c, borderRadius: "20px", fontFamily: MONO, fontSize: "13px", padding: "4px 12px", cursor: "pointer" });
 
     return h("div", { style: { animation: "fadeUp .4s ease both", maxWidth: "1020px", margin: "0 auto", padding: "8px 4px 40px" } },
       h("div", { style: { marginBottom: "4px" } },
-        h("div", { style: { fontFamily: MONO, fontSize: "10px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "TEXAS ESBD · txsmartbuy.gov"),
-        h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "24px", color: "var(--body,#f5f0e8)" } }, "ESBD Import & Triage"),
+        h("div", { style: { fontFamily: MONO, fontSize: "13px", letterSpacing: ".18em", color: "rgba(201,168,76,.6)" } }, "TEXAS ESBD · txsmartbuy.gov"),
+        h("div", { style: { fontFamily: "var(--font-serif,Georgia,serif)", fontSize: "27px", color: "var(--body,#f5f0e8)" } }, "ESBD Import & Triage"),
       ),
-      h("p", { style: { fontFamily: MONO, fontSize: "11px", color: FAINT, margin: "6px 0 16px", lineHeight: 1.5 } },
+      h("p", { style: { fontFamily: MONO, fontSize: "14px", color: FAINT, margin: "6px 0 16px", lineHeight: 1.5 } },
         "Paste the ESBD 'Export to CSV'. The router keeps product buys we can resell, drops services / road / construction, and crosswalks NIGP → FSC lanes."),
 
       !rows ? h("div", null,
         h("textarea", {
           value: csv, onChange: (e) => setCsv(e.target.value),
           placeholder: "Paste ESBD CSV export here (include the header row)...",
-          style: { width: "100%", minHeight: "220px", background: "rgba(0,0,0,.35)", border: "1px solid rgba(201,168,76,.25)", borderRadius: "8px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "12px", padding: "12px", outline: "none", resize: "vertical" },
+          style: { width: "100%", minHeight: "220px", background: "rgba(0,0,0,.35)", border: "1px solid rgba(201,168,76,.25)", borderRadius: "8px", color: "var(--body,#f5f0e8)", fontFamily: MONO, fontSize: "15px", padding: "12px", outline: "none", resize: "vertical" },
         }),
-        err ? h("div", { style: { color: "rgba(232,116,116,.9)", fontFamily: MONO, fontSize: "12px", margin: "8px 0" } }, err) : null,
+        err ? h("div", { style: { color: "rgba(232,116,116,.9)", fontFamily: MONO, fontSize: "15px", margin: "8px 0" } }, err) : null,
         h("div", { style: { marginTop: "12px" } }, h("button", { onClick: runTriage, style: btn(GOLD) }, "Triage →")),
       ) : h("div", null,
         // summary
         h("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" } },
-          h("span", { style: { fontFamily: MONO, fontSize: "12px", color: DIM } }, rows.length + " sols · "),
+          h("span", { style: { fontFamily: MONO, fontSize: "15px", color: DIM } }, rows.length + " sols · "),
           ["PRODUCT", "MIXED", "SERVICE", "UNKNOWN"].map((v) => counts[v]
-            ? h("span", { key: v, style: { fontFamily: MONO, fontSize: "11px", color: VERDICT_COLOR[v] } }, counts[v] + " " + v)
+            ? h("span", { key: v, style: { fontFamily: MONO, fontSize: "14px", color: VERDICT_COLOR[v] } }, counts[v] + " " + v)
             : null),
           h("div", { style: { flex: 1 } }),
           h("button", { onClick: () => { setRows(null); setSel(new Set()); }, style: btn(FAINT) }, "↺ New paste"),
@@ -158,21 +158,21 @@
             (r.verdict === "PRODUCT" || r.verdict === "MIXED")
               ? h("input", { type: "checkbox", checked: sel.has(r.i), onChange: () => toggle(r.i), onClick: (e) => e.stopPropagation() })
               : h("span", { style: { width: "13px", display: "inline-block" } }),
-            h("span", { style: { fontFamily: MONO, fontSize: "9px", color: VERDICT_COLOR[r.verdict], width: "58px", flexShrink: 0 } }, r.verdict),
+            h("span", { style: { fontFamily: MONO, fontSize: "12px", color: VERDICT_COLOR[r.verdict], width: "58px", flexShrink: 0 } }, r.verdict),
             h("div", { style: { minWidth: 0, flex: 1 } },
-              h("div", { style: { fontSize: "12px", color: "var(--body,#f5f0e8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.name),
-              h("div", { style: { fontFamily: MONO, fontSize: "10px", color: FAINT } }, [r.sol_id, "Agy " + r.agency_num, r.due_date].filter(Boolean).join(" · ")),
+              h("div", { style: { fontSize: "15px", color: "var(--body,#f5f0e8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.name),
+              h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT } }, [r.sol_id, "Agy " + r.agency_num, r.due_date].filter(Boolean).join(" · ")),
             ),
             h("div", { style: { textAlign: "right", flexShrink: 0 } },
-              h("div", { style: { fontFamily: MONO, fontSize: "11px", color: GOLD } }, r.lane || "—"),
-              h("div", { style: { fontFamily: MONO, fontSize: "10px", color: FAINT } }, r.fscLanes.length ? "FSC " + r.fscLanes.slice(0, 4).join("/") : (r.verdict === "MIXED" ? "no product lane" : "")),
+              h("div", { style: { fontFamily: MONO, fontSize: "14px", color: GOLD } }, r.lane || "—"),
+              h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT } }, r.fscLanes.length ? "FSC " + r.fscLanes.slice(0, 4).join("/") : (r.verdict === "MIXED" ? "no product lane" : "")),
             ),
           )),
-          shown.length > 400 ? h("div", { style: { padding: "10px", textAlign: "center", fontFamily: MONO, fontSize: "10px", color: FAINT } }, "Showing first 400 of " + shown.length + " — narrow with filters or push in batches") : null,
+          shown.length > 400 ? h("div", { style: { padding: "10px", textAlign: "center", fontFamily: MONO, fontSize: "13px", color: FAINT } }, "Showing first 400 of " + shown.length + " — narrow with filters or push in batches") : null,
         ),
         // action bar
         h("div", { style: { position: "sticky", bottom: 0, marginTop: "14px", display: "flex", gap: "10px", alignItems: "center" } },
-          h("span", { style: { fontFamily: MONO, fontSize: "12px", color: DIM } }, sel.size + " selected"),
+          h("span", { style: { fontFamily: MONO, fontSize: "15px", color: DIM } }, sel.size + " selected"),
           h("div", { style: { flex: 1 } }),
           h("button", { onClick: pushSelected, disabled: !sel.size, style: btn(sel.size ? "rgba(61,214,140,.9)" : FAINT, !sel.size) }, "Push " + sel.size + " → SLED Pipeline"),
         ),
