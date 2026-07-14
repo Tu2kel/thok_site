@@ -77,6 +77,38 @@ exports.handler = async (event) => {
       return ok(logs);
     }
 
+    // ── blastAudit — coverage + cursor + a specific vendor's send/reply history ─
+    if (action === "blastAudit") {
+      const cursor = await db.collection("_meta").findOne({ _id: "blast_cursor" }).catch(() => null);
+      const totalSends = await db.collection("blast_log").countDocuments({ status: "sent" });
+      const distinctVendors = (await db.collection("blast_log").distinct("vendor_email", { status: "sent" })).length;
+      const totalDist = await db.collection("distributors").countDocuments({});
+      const distWithEmail = await db.collection("distributors").countDocuments({ email: { $nin: ["", null] } });
+
+      // optional vendor lookup by name regex (e.g. "g-fast")
+      let vendor = null, sends = [], replies = [];
+      if (payload.vendorName) {
+        const rx = new RegExp(payload.vendorName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]?"), "i");
+        vendor = await db.collection("distributors").findOne({ name: rx });
+        if (vendor) {
+          const em = (vendor.email || "").toLowerCase();
+          const dom = em.split("@")[1];
+          const q = em ? { vendor_email: em } : (dom ? { vendor_email: { $regex: "@" + dom.replace(/\./g, "\\.") + "$", $options: "i" } } : { vendor_id: vendor.id });
+          sends = await db.collection("blast_log").find(q).sort({ sent_at: -1 }).limit(50).toArray();
+          replies = await db.collection("rfq_responses").find(q).sort({ scanned_at: -1 }).limit(50).toArray().catch(() => []);
+        }
+      }
+      return ok({
+        cursor: cursor ? { last_vendor_id: cursor.last_vendor_id, updated_at: cursor.updated_at } : null,
+        coverage: { totalSends, distinctVendorsEmailed: distinctVendors, totalDistributors: totalDist, distributorsWithEmail: distWithEmail },
+        vendor: vendor ? { name: vendor.name, email: vendor.email, id: vendor.id, cage: vendor.cage } : (payload.vendorName ? "NOT FOUND" : null),
+        vendorSends: sends.length,
+        vendorLastSends: sends.slice(0, 8).map((s) => ({ sol: s.sol_number, at: s.sent_at, status: s.status })),
+        vendorReplies: replies.length,
+        vendorReplyDetail: replies.slice(0, 8).map((r) => ({ sol: r.sol_number, type: r.type, at: r.scanned_at || r.date })),
+      });
+    }
+
     // ── reBlast — retired ──────────────────────────────────────────────
     // Sent via the Gmail API as a personal placeholder address (pre-Resend). The
     // Railway pipeline (Resend, from anthony@ifedlog.com) is the sole blaster.
