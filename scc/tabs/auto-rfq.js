@@ -144,11 +144,7 @@
       }
     }
 
-    // AN/MS prefix → G-Fast gets daily batch of these (NAS stays in normal chain)
-    if (pnPrefix === "AN" || pnPrefix === "MS") {
-      const gfast = dists.find(d => /g[\s-]?fast/i.test(d.name));
-      if (gfast) addDist(gfast, "P/N prefix " + pnPrefix + " → G-Fast");
-    }
+    // G-Fast dropped 2026-07-14 — 19 RFQs sent, 0 replies. Deleted from DB.
 
     for (const d of dists) {
       if (d.is_manufacturer && d.has_jcp)  addDist(d, "MFR · JCP");
