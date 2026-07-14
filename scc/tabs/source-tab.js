@@ -6,7 +6,7 @@
   //  Exports: window.SCC_TABS.SourceTab
   // ═══════════════════════════════════════════════════════════════════════
 
-  const { createElement: h, useState, useEffect, useCallback } = React;
+  const { createElement: h, useState, useEffect, useCallback, useMemo, useDeferredValue } = React;
 
   // ── USASPENDING INTELLIGENCE FEED ────────────────────────────────────
   function USASpendingIntel({ dists, onRefresh }) {
@@ -976,28 +976,28 @@
       [distReloadCache],
     );
 
-    const allFiltered = dists.filter((d) => {
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      // Search every text-bearing field, not just name/FSC/tag — a POC name,
-      // email, website, phone, or note should all find the record.
-      const hay = [
+    // Precompute the search haystack ONCE per distributor set (was rebuilt +
+    // lowercased for all 2.4k records on every keystroke — the lag). Rebuilds
+    // only when `dists` changes.
+    const index = useMemo(() => dists.map((d) => ({
+      d,
+      hay: [
         d.name, d.id, d.poc_name, d.email, d.phone, d.website, d.notes, d.cage,
-        ...(d.tags || []),
-        ...(d.fsc || []),
-        ...(d.item_keywords || []),
-        ...(d.known_nsns || []),
-      ].filter(Boolean).join("  ").toLowerCase();
-      if (hay.includes(q)) return true;
-      // Phone: match on digits so "5041967" or "2145041967" finds "(214) 504-1967".
-      const qDigits = q.replace(/\D/g, "");
-      if (qDigits && (d.phone || "").replace(/\D/g, "").includes(qDigits)) return true;
-      return false;
-    });
+        ...(d.tags || []), ...(d.fsc || []), ...(d.item_keywords || []), ...(d.known_nsns || []),
+      ].filter(Boolean).join("  ").toLowerCase(),
+      phoneDigits: (d.phone || "").replace(/\D/g, ""),
+    })), [dists]);
+    // Defer the filter behind typing so the input never stutters (React 18).
+    const deferredSearch = useDeferredValue(search);
+    const qStr = deferredSearch.trim().toLowerCase();
+    const qDig = qStr.replace(/\D/g, "");
+    const allFiltered = !qStr
+      ? dists
+      : index.filter((x) => x.hay.includes(qStr) || (qDig && x.phoneDigits.includes(qDig))).map((x) => x.d);
     const DISPLAY_CAP = 500;
-    const filtered = search ? allFiltered : allFiltered.slice(0, DISPLAY_CAP);
-    const cappedMsg = !search && allFiltered.length > DISPLAY_CAP
-      ? `Showing ${DISPLAY_CAP} of ${allFiltered.length.toLocaleString()} — search or filter to narrow`
+    const filtered = allFiltered.slice(0, DISPLAY_CAP);
+    const cappedMsg = allFiltered.length > DISPLAY_CAP
+      ? "Showing " + DISPLAY_CAP + " of " + allFiltered.length.toLocaleString() + " vendors, narrow your search"
       : null;
 
     const card = {
