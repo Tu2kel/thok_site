@@ -40,7 +40,8 @@ const SCRAPED = ["name", "agency_num", "esbd_status", "due_date", "due_at", "due
   "source_url", "last_modified"];
 // Fields WE own — set once, never clobbered by re-sync (only via `update`).
 const INTERNAL = ["internal_status", "notes", "suppliers", "est_cost", "margin_pct",
-  "bid_unit_price", "bid_total", "decision", "submission_result", "award_result", "assigned_to"];
+  "bid_unit_price", "bid_total", "decision", "submission_result", "award_result", "assigned_to",
+  "benchmark_price", "benchmark_source", "benchmark_note"];
 
 function keyOf(r) { return String(r.sol_id || "").trim().toUpperCase() + "|" + String(r.agency_num || "").trim().toUpperCase(); }
 
@@ -217,6 +218,34 @@ exports.handler = async (ev) => {
       const rows = await db.collection(LOG).find({}).sort({ started_at: -1 }).limit(Math.min(body.limit || 20, 100)).toArray();
       const last = rows.find((r) => r.ok);
       return ok({ ok: true, last_success: last || null, runs: rows });
+    }
+
+    // ── BENCHMARK (Phase 3 pricing intel) ────────────────────────────────────
+    // Suggest a per-unit benchmark for an opportunity's lanes from OUR OWN bid
+    // history (submitted/awarded bids in the same FSC lane). Sources 3 (federal
+    // NSN) and 4 (ESBD awards) plug in here later.
+    if (action === "benchmark") {
+      const lanes = body.fsc_lanes || [];
+      const classes = body.nigp_classes || [];
+      const match = { internal_status: { $in: ["Submitted", "Pending Award", "Awarded"] } };
+      if (lanes.length) match.fsc_lanes = { $in: lanes };
+      else if (classes.length) match.nigp_classes = { $in: classes };
+      else return bad(400, "fsc_lanes or nigp_classes required");
+      const agg = await opps.aggregate([
+        { $match: match },
+        { $addFields: { bu: { $convert: { input: "$bid_unit_price", to: "double", onError: null, onNull: null } } } },
+        { $match: { bu: { $gt: 0 } } },
+        { $group: { _id: null, n: { $sum: 1 }, avg: { $avg: "$bu" }, min: { $min: "$bu" }, max: { $max: "$bu" },
+          won: { $sum: { $cond: [{ $eq: ["$internal_status", "Awarded"] }, 1, 0] } },
+          wonAvg: { $avg: { $cond: [{ $eq: ["$internal_status", "Awarded"] }, "$bu", null] } } } },
+      ]).toArray();
+      const h = agg[0];
+      // Prefer the average of bids we actually WON as the benchmark; else all-bid avg.
+      const suggestion = h && h.won ? h.wonAvg : (h && h.n ? h.avg : null);
+      return ok({ ok: true,
+        history: h ? { n: h.n, won: h.won, avg: h.avg, wonAvg: h.wonAvg, min: h.min, max: h.max } : { n: 0, won: 0 },
+        source: suggestion != null ? (h.won ? "bid-history-won" : "bid-history") : null,
+        suggestion });
     }
 
     // ── SYNC STATE (scraper run metadata: next run, last success, duration…) ──

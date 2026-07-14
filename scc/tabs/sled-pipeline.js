@@ -111,7 +111,7 @@
   }
 
   // ── one bid card ────────────────────────────────────────────────────────────
-  function BidCard({ bid, onPatch, onQuickSource, onSubmitBid, onOpen }) {
+  function BidCard({ bid, onPatch, onQuickSource, onSubmitBid, onOpen, showToast }) {
     const m = calcRow(bid);
     const [srcOpen, setSrcOpen] = useState(false);
     const [supName, setSupName] = useState("");
@@ -173,6 +173,34 @@
           "cost: " + (m.costSource === "manual" ? "manual" : m.costSource === "supplier" ? "supplier quote" : "not set")),
       ),
 
+      // benchmark / competitiveness (Phase 3 pricing intel) — is our bid winnable?
+      h("div", { style: { display: "flex", gap: "14px", alignItems: "flex-end", marginTop: "10px", flexWrap: "wrap" } },
+        h(NumField, { label: "Benchmark $/unit", prefix: "$", value: bid.benchmark_price,
+          onCommit: (v) => onPatch(bid, { benchmark_price: v, benchmark_source: v ? (/bid-history/.test(bid.benchmark_source || "") ? bid.benchmark_source : "manual") : "" }) }),
+        h("button", { onClick: async () => {
+            try {
+              const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "benchmark", fsc_lanes: bid.fsc_lanes || [] }) });
+              const j = await r.json();
+              if (j.ok && j.suggestion != null) onPatch(bid, { benchmark_price: j.suggestion.toFixed(2), benchmark_source: j.source, benchmark_note: (j.history.won ? j.history.won + " won" : j.history.n + " bids") + " in lane" });
+              else if (showToast) showToast("No bid history in this lane yet");
+            } catch (e) {}
+          }, style: btnGhost() }, "Suggest from history"),
+        (function () {
+          const bench = parseFloat(bid.benchmark_price);
+          if (!(bench > 0) || !(m.bidUnit > 0)) {
+            return h("span", { style: { fontFamily: MONO, fontSize: "10px", color: FAINT } },
+              bid.benchmark_source ? "benchmark src: " + bid.benchmark_source : "set a benchmark to gauge competitiveness");
+          }
+          const deltaPct = (m.bidUnit - bench) / bench * 100;
+          const over = deltaPct > 0.5;
+          return h("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } },
+            h("span", { style: { fontFamily: MONO, fontSize: "8px", letterSpacing: ".08em", color: FAINT, textTransform: "uppercase" } }, "Bid vs benchmark"),
+            h("span", { style: { fontFamily: MONO, fontSize: "13px", color: over ? "rgba(232,116,116,.95)" : "rgba(61,214,140,.95)" } },
+              (deltaPct >= 0 ? "+" : "") + deltaPct.toFixed(1) + "% " + (over ? "over — likely uncompetitive" : "at/under — competitive")),
+          );
+        })(),
+      ),
+
       // quick-source (optional)
       srcOpen ? h("div", { style: { display: "flex", gap: "8px", alignItems: "center", marginTop: "10px" } },
         h("input", { value: supName, onChange: (e) => setSupName(e.target.value), placeholder: "Supplier",
@@ -214,7 +242,7 @@
   }
 
   // ── data hook ────────────────────────────────────────────────────────────────
-  const INTERNAL_FIELDS = ["est_cost", "margin_pct", "suppliers", "bid_unit_price", "bid_total", "notes", "decision", "submission_result", "award_result"];
+  const INTERNAL_FIELDS = ["est_cost", "margin_pct", "suppliers", "bid_unit_price", "bid_total", "notes", "decision", "submission_result", "award_result", "benchmark_price", "benchmark_source", "benchmark_note"];
 
   function useBids() {
     const [bids, setBids] = useState(() => readCache());
@@ -298,7 +326,7 @@
             ),
             items.length === 0
               ? h("div", { style: { fontFamily: MONO, fontSize: "11px", color: FAINT, paddingLeft: "4px" } }, "—")
-              : items.map((b) => h(BidCard, { key: b.id, bid: b, onPatch: patch, onQuickSource: quickSource, onSubmitBid: submitBid, onOpen: openIntake })),
+              : items.map((b) => h(BidCard, { key: b.id, bid: b, onPatch: patch, onQuickSource: quickSource, onSubmitBid: submitBid, onOpen: openIntake, showToast })),
           )),
     );
   }
