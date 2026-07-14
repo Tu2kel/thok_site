@@ -35,7 +35,7 @@ const ok  = (b) => ({ statusCode: 200, headers: H, body: JSON.stringify(b) });
 const bad = (c, e) => ({ statusCode: c, headers: H, body: JSON.stringify({ ok: false, error: e }) });
 
 // Fields the scraper/import owns (safe to overwrite every sync).
-const SCRAPED = ["name", "agency_num", "esbd_status", "due_date", "due_time", "posted_date",
+const SCRAPED = ["name", "agency_num", "esbd_status", "due_date", "due_at", "due_time", "posted_date",
   "nigp", "contact_name", "contact_email", "contact_phone", "delivery_addr", "documents",
   "source_url", "last_modified"];
 // Fields WE own — set once, never clobbered by re-sync (only via `update`).
@@ -43,6 +43,14 @@ const INTERNAL = ["internal_status", "notes", "suppliers", "est_cost", "margin_p
   "bid_unit_price", "bid_total", "decision", "submission_result", "award_result", "assigned_to"];
 
 function keyOf(r) { return String(r.sol_id || "").trim().toUpperCase() + "|" + String(r.agency_num || "").trim().toUpperCase(); }
+
+// "M/D/YYYY" → Date (UTC midnight) for open/closed filtering + deadline sort.
+function parseDue(s) {
+  const m = String(s || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[3], +m[1] - 1, +m[2], 23, 59));
+  return isNaN(d.getTime()) ? null : d;
+}
 
 function normalizeRow(r) {
   const nigp = r.nigp || r.nigp_codes || r["NIGP Codes"] || "";
@@ -54,6 +62,7 @@ function normalizeRow(r) {
     name: r.name || r["Name"] || "",
     esbd_status: r.status || r.esbd_status || r["Status"] || "",
     due_date: r.due_date || r["Due Date"] || "",
+    due_at: parseDue(r.due_date || r["Due Date"] || ""),
     due_time: r.due_time || r["Due Time"] || "",
     posted_date: r.posted_date || r.posted || r["Posting Date"] || "",
     last_modified: r.last_modified || r["Last Modified"] || "",
@@ -162,7 +171,8 @@ exports.handler = async (ev) => {
       let sort = { last_synced: -1 };
       if (body.biddable) {
         q.verdict = "PRODUCT"; q.distributor_coverage = { $gt: 0 }; q.decision = { $in: ["", null] };
-        sort = { distributor_coverage: -1, due_date: 1 };
+        q.due_at = { $gte: new Date() };        // OPEN only — never surface expired sols
+        sort = { due_at: 1 };                    // soonest deadline first
       }
       const rows = await opps.find(q).sort(sort).limit(Math.min(body.limit || 500, 2000)).toArray();
       return ok({ ok: true, count: rows.length, opportunities: rows });
@@ -172,7 +182,7 @@ exports.handler = async (ev) => {
     if (action === "stats") {
       const vAgg = await opps.aggregate([{ $group: { _id: "$verdict", n: { $sum: 1 } } }]).toArray();
       const verdictCounts = Object.fromEntries(vAgg.map((v) => [v._id || "UNKNOWN", v.n]));
-      const biddable = await opps.countDocuments({ verdict: "PRODUCT", distributor_coverage: { $gt: 0 }, decision: { $in: ["", null] } });
+      const biddable = await opps.countDocuments({ verdict: "PRODUCT", distributor_coverage: { $gt: 0 }, decision: { $in: ["", null] }, due_at: { $gte: new Date() } });
       const committed = await opps.countDocuments({ decision: "BID" });
       const productNoLane = await opps.countDocuments({ verdict: "PRODUCT", $or: [{ fsc_lanes: { $size: 0 } }, { fsc_lanes: { $exists: false } }] });
       const unmapped = await opps.aggregate([
