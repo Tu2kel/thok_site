@@ -221,7 +221,8 @@
     const [loading, setLoading] = useState(true);
     const reload = useCallback(() => {
       setLoading(true);
-      fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list", limit: 1500 }) })
+      // Pipeline shows only opportunities you chose to BID (decided in the Decide tab).
+      fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list", decision: "BID", limit: 1500 }) })
         .then((r) => r.json())
         .then((j) => {
           const rows = (j.opportunities || []).map(mapOpp);

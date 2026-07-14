@@ -441,6 +441,7 @@
       SledPipelineTab,
       SledSubmissionsTab,
       SledImportTab,
+      SledDecisionTab,
       LHFCheckTab,
     } = window.SCC_TABS;
 
@@ -816,6 +817,7 @@
                 id: "sled",
                 label: "SLED",
                 tabs: [
+                  { id: "sled-decide", label: "Decide", icon: "⚖ " },
                   { id: "sled-pipeline", label: "Pipeline", icon: "🏛 " },
                   { id: "sled-intake", label: "Intake", icon: "✎ " },
                   { id: "sled-submissions", label: "Submissions", icon: "📤 " },
@@ -1163,6 +1165,9 @@
         tab === "lhf" && hA(LHFCheckTab, { onSendToIntake: null }),
 
         tab === "esbd" && hA(EsbdTab, { goAward: goEsbdAward }),
+
+        tab === "sled-decide" &&
+          hA(SledDecisionTab, { goPipeline: () => setTab("sled-pipeline"), showToast }),
 
         tab === "sled-pipeline" &&
           hA(SledPipelineTab, {

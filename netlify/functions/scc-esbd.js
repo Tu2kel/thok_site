@@ -156,9 +156,33 @@ exports.handler = async (ev) => {
       if (body.verdict) q.verdict = body.verdict;
       if (body.state) q.state = body.state;
       if (body.status) q.internal_status = body.status;
+      if (body.decision !== undefined) q.decision = body.decision;
       if (body.changedOnly) q.$or = [{ is_new: true }, { changed: true }];
-      const rows = await opps.find(q).sort({ last_synced: -1 }).limit(Math.min(body.limit || 500, 2000)).toArray();
+      // biddable = product we can route (have vendor coverage) and haven't decided yet
+      let sort = { last_synced: -1 };
+      if (body.biddable) {
+        q.verdict = "PRODUCT"; q.distributor_coverage = { $gt: 0 }; q.decision = { $in: ["", null] };
+        sort = { distributor_coverage: -1, due_date: 1 };
+      }
+      const rows = await opps.find(q).sort(sort).limit(Math.min(body.limit || 500, 2000)).toArray();
       return ok({ ok: true, count: rows.length, opportunities: rows });
+    }
+
+    // ── STATS (coverage/verdict mix + unmapped NIGP classes to expand crosswalk) ─
+    if (action === "stats") {
+      const vAgg = await opps.aggregate([{ $group: { _id: "$verdict", n: { $sum: 1 } } }]).toArray();
+      const verdictCounts = Object.fromEntries(vAgg.map((v) => [v._id || "UNKNOWN", v.n]));
+      const biddable = await opps.countDocuments({ verdict: "PRODUCT", distributor_coverage: { $gt: 0 }, decision: { $in: ["", null] } });
+      const committed = await opps.countDocuments({ decision: "BID" });
+      const productNoLane = await opps.countDocuments({ verdict: "PRODUCT", $or: [{ fsc_lanes: { $size: 0 } }, { fsc_lanes: { $exists: false } }] });
+      const unmapped = await opps.aggregate([
+        { $match: { verdict: "PRODUCT", $or: [{ fsc_lanes: { $size: 0 } }, { fsc_lanes: { $exists: false } }] } },
+        { $unwind: "$nigp_classes" },
+        { $group: { _id: "$nigp_classes", n: { $sum: 1 }, sample: { $first: "$name" }, nigp: { $first: "$nigp" } } },
+        { $sort: { n: -1 } }, { $limit: 45 },
+      ]).toArray();
+      return ok({ ok: true, verdictCounts, biddable, committed, productNoLane,
+        unmappedClasses: unmapped.map((u) => ({ cls: u._id, n: u.n, sample: u.sample, nigp: (u.nigp || "").split(/[;\n]/)[0] })) });
     }
 
     if (action === "get") {
