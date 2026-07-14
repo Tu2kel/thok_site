@@ -185,6 +185,17 @@ exports.handler = async (ev) => {
       return ok({ ok: true, last_success: last || null, runs: rows });
     }
 
+    // ── SYNC STATE (scraper run metadata: next run, last success, duration…) ──
+    if (action === "syncState") {
+      const meta = db.collection("_meta");
+      if (body.set) {
+        await meta.updateOne({ _id: "esbd_scraper_state" }, { $set: { ...body.set, updated_at: new Date() } }, { upsert: true });
+        return ok({ ok: true });
+      }
+      const doc = await meta.findOne({ _id: "esbd_scraper_state" });
+      return ok({ ok: true, state: doc || null });
+    }
+
     // ── DELETE ────────────────────────────────────────────────────────────────
     if (action === "delete") {
       if (Array.isArray(body.ids) && body.ids.length) {

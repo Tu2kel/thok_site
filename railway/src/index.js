@@ -12,6 +12,9 @@ const { fetchDibbsDailySols }  = require("./dibbs-daily-fetcher");
 const { fetchDibbsDailySols: fetchDibbsPuppet } = require("./dibbs-puppet-fetcher");
 const { screenBatch }      = require("./screener");
 const { buildBlastPlan, runBlast, isAerospacePN } = require("./blaster");
+const { runEsbdSync } = require("./esbd-scraper");
+let esbdRunning = false;
+const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
 const { getDb, getDistributors, getNsnWatchList, getAlreadyActedSols, saveSol, upsertNsnWatch, saveDailyBrief } = require("./db");
@@ -855,6 +858,21 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // ── ESBD scrape trigger (manual "Run ESBD Sync Now") ──────────────────────
+  if (u === "/esbd-sync" && req.method === "POST") {
+    if (esbdRunning) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "ESBD sync already running" }));
+      return;
+    }
+    res.writeHead(202, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, message: "ESBD sync triggered" }));
+    log("Manual ESBD sync via HTTP /esbd-sync");
+    esbdRunning = true;
+    runEsbdSync().catch(e => err("ESBD sync error:", e.message)).finally(() => { esbdRunning = false; });
+    return;
+  }
+
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok: false, error: "Not found" }));
 });
@@ -881,8 +899,12 @@ async function runPipelineTracked(liveModeOverride, maxVendors = 0) {
 
 // ── CRON SCHEDULE ────────────────────────────────────────────────────────
 const runNow = process.argv.includes("--run-now");
+const esbdNow = process.argv.includes("--esbd-now");
 
-if (runNow) {
+if (esbdNow) {
+  log("--esbd-now flag detected — running ESBD sync only");
+  runEsbdSync().then(r => { log("ESBD sync result:", JSON.stringify(r)); process.exit(r.ok ? 0 : 1); }).catch(e => { err("Fatal ESBD:", e.message); process.exit(1); });
+} else if (runNow) {
   log("--run-now flag detected — firing immediately");
   runPipelineTracked().catch(e => { err("Fatal:", e.message); process.exit(1); });
 } else {
@@ -893,6 +915,15 @@ if (runNow) {
     log("Cron fired — starting pipeline…");
     runPipelineTracked().catch(e => err("Pipeline error:", e.message));
   }, { timezone: "America/Chicago" });
+
+  // ESBD scrape — unattended daily pull → scc-esbd ingest
+  cron.schedule(ESBD_CRON, () => {
+    if (esbdRunning) { log("ESBD cron skipped — already running"); return; }
+    log("ESBD cron fired — starting ESBD sync…");
+    esbdRunning = true;
+    runEsbdSync().catch(e => err("ESBD sync error:", e.message)).finally(() => { esbdRunning = false; });
+  }, { timezone: "America/Chicago" });
+  log("ESBD sync cron: \"" + ESBD_CRON + "\" (America/Chicago)");
 
   // Health check every 6 hours — emails anthony@ifedlog.com if anything is red
   cron.schedule("0 6,12,18,0 * * *", () => {
