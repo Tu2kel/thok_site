@@ -176,5 +176,9 @@
     };
   }
 
-  window.SCC_NIGP = { classify, parseCodes, isServiceClass, NIGP_CLASS_TO_FSC, CLASS_LABEL };
+  var API = { classify, parseCodes, isServiceClass, NIGP_CLASS_TO_FSC, CLASS_LABEL };
+  // Dual export: browser (window.SCC_NIGP) + Node (require) so the Netlify
+  // ingestion function and the frontend share ONE crosswalk — never drift.
+  if (typeof module !== "undefined" && module.exports) module.exports = API;
+  if (typeof window !== "undefined") window.SCC_NIGP = API;
 })();

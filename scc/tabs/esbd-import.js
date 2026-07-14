@@ -93,7 +93,21 @@
       if (!rows) return;
       const chosen = rows.filter((r) => sel.has(r.i));
       if (!chosen.length) { if (showToast) showToast("Nothing selected"); return; }
-      let saved = 0;
+
+      // Primary: ingest into Mongo (source of truth) — dedup/merge/triage/coverage.
+      let mongo = null;
+      try {
+        const res = await fetch("/.netlify/functions/scc-esbd", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "ingest", source: "csv-import", rows: chosen.map((r) => ({
+            sol_id: r.sol_id, agency_num: r.agency_num, name: r.name, status: r.status,
+            due_date: r.due_date, due_time: r.due_time, posted_date: r.posted, nigp: r.nigp,
+          })) }),
+        });
+        mongo = await res.json();
+      } catch (e) { mongo = { ok: false, error: e.message }; }
+
+      // Mirror into the local pipeline store so the board shows them immediately.
       for (const r of chosen) {
         const bid = {
           id: "esbd_" + r.sol_id + "_" + r.i,
@@ -104,9 +118,12 @@
           suppliers: [], est_cost: "", margin_pct: "", bid_total: "",
           date_added: new Date().toLocaleDateString(),
         };
-        if (DB.esbdSave) { try { await DB.esbdSave(bid); saved++; } catch (e) {} }
+        if (DB.esbdSave) { try { await DB.esbdSave(bid); } catch (e) {} }
       }
-      if (showToast) showToast(saved + " sol" + (saved === 1 ? "" : "s") + " → SLED pipeline");
+      if (showToast) showToast(
+        mongo && mongo.ok
+          ? "Ingested → Mongo (" + mongo.added + " new, " + mongo.updated + " updated) · " + chosen.length + " → pipeline"
+          : "Saved " + chosen.length + " to pipeline (Mongo sync failed" + (mongo && mongo.error ? ": " + mongo.error : "") + ")");
       if (goPipeline) goPipeline();
     };
 
