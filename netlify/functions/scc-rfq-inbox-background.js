@@ -275,8 +275,14 @@ function buildSummaryText(report, stats, fscScrubLog = []) {
     "",
     "Scan:    " + stats.scanned + " checked · " + stats.new_count + " new · " + stats.errors + " error(s)",
     "No-bids: " + report.total_no_bids + " processed — FSC auto-scrubbed for " + fscScrubLog.length + " vendor(s)",
-    "",
   ];
+  // Name exactly WHO got scrubbed and which lanes were stripped.
+  for (const s of fscScrubLog) {
+    lines.push("   • " + (s.vendor_name || s.vendor_email || "unknown vendor")
+      + " — removed FSC " + (s.removed || []).join(", ")
+      + " (" + (s.sol_numbers || []).length + " item" + ((s.sol_numbers || []).length === 1 ? "" : "s") + " declined)");
+  }
+  lines.push("");
 
   if (!solsWithQuotes.length) {
     lines.push("No quotes received this scan.");
