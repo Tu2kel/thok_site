@@ -41,7 +41,7 @@ const SCRAPED = ["name", "agency_num", "esbd_status", "due_date", "due_at", "due
 // Fields WE own — set once, never clobbered by re-sync (only via `update`).
 const INTERNAL = ["internal_status", "notes", "suppliers", "est_cost", "margin_pct",
   "bid_unit_price", "bid_total", "decision", "submission_result", "award_result", "assigned_to",
-  "benchmark_price", "benchmark_source", "benchmark_note"];
+  "benchmark_price", "benchmark_source", "benchmark_note", "rfq_sent"];
 
 function keyOf(r) { return String(r.sol_id || "").trim().toUpperCase() + "|" + String(r.agency_num || "").trim().toUpperCase(); }
 
