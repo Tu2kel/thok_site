@@ -26,6 +26,7 @@
 
   function buildRfq(opp, vendor) {
     const item = opp.name || "the item below";
+    const d = opp._detail || {};
     const subject = "RFQ — " + item.slice(0, 60) + " — Imperio Federal Logistics";
     const body = [
       "Good morning,", "",
@@ -33,8 +34,10 @@
       "  Solicitation: " + (opp.sol_id || "") + (opp.agency_num ? "  (Agency " + opp.agency_num + ")" : ""),
       "  Item: " + item,
       opp.due_date ? "  Response due: " + opp.due_date : null,
+      d.description ? "" : null,
+      d.description ? "Scope: " + d.description.slice(0, 500) : null,
       "",
-      "As a reseller we buy at distributor / wholesale pricing, not retail. Please send your best price, lead time, and availability. Full specifications are on the Texas ESBD — txsmartbuy.gov/esbd, search " + (opp.sol_id || "the solicitation ID above") + ".", "",
+      "As a reseller we buy at distributor / wholesale pricing, not retail. Please send your best price, lead time, and availability. Full specifications are on the Texas ESBD — txsmartbuy.gov/esbd/" + (opp.sol_id || "") + ".", "",
       "Thank you,",
       "Anthony K Kelley | Founder and CEO",
       "Imperio Federal Logistics · The House of Kel LLC · CAGE 152U4",
@@ -67,6 +70,11 @@
     // Select an opp → load distributors matching its FSC lanes (emailable first).
     const selectOpp = async (opp) => {
       setSel(opp); setVendors([]); setPicked(new Set()); setVLoading(true);
+      // Enrich from the ESBD detail page (real description, bid-response email,
+      // attachments, service hint) — runs in parallel with the vendor match.
+      post(ESBD, { action: "enrich", sol_id: opp.sol_id, id: opp._id })
+        .then((j) => { if (j.ok && j.detail) setSel((s) => (s && s.id === opp.id) ? { ...s, _detail: j.detail } : s); })
+        .catch(() => {});
       const lanes = opp.fsc_lanes || [];
       const byId = new Map();
       for (const fsc of lanes) {
@@ -147,9 +155,18 @@
       !sel ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "15px", padding: "50px 16px", textAlign: "center", border: "1px dashed rgba(201,168,76,.2)", borderRadius: "10px" } }, "Select an opportunity to see matching distributors and send RFQs.")
       : h("div", null,
           h("div", { style: { marginBottom: "10px" } },
-            h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT, letterSpacing: ".1em" } }, "MATCHING VENDORS · Class/Item " + ((sel.nigp || "").split(/[;\n]/).map((s) => s.trim().split("-")[0]).filter(Boolean).slice(0, 4).join(", ") || (sel.lane_label || ""))),
+            h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT, letterSpacing: ".1em" } }, "Class/Item " + ((sel.nigp || "").split(/[;\n]/).map((s) => s.trim().split("-")[0]).filter(Boolean).slice(0, 4).join(", ") || (sel.lane_label || ""))),
             h("div", { style: { color: "var(--body,#f5f0e8)", fontSize: "16px", fontWeight: 600, marginTop: "2px" } }, sel.name),
           ),
+          // ── enriched detail from the ESBD detail page ──
+          sel._detail ? h("div", { style: { border: "1px solid rgba(201,168,76,.14)", borderRadius: "8px", padding: "10px 12px", marginBottom: "14px", background: "rgba(0,0,0,.15)" } },
+            sel._detail.service_hint ? h("div", { style: { fontFamily: MONO, fontSize: "14px", color: RED, marginBottom: "6px" } }, "⚠ Reads like a SERVICE — consider Pass") : null,
+            sel._detail.description ? h("div", { style: { fontSize: "15px", color: DIM, lineHeight: 1.45, marginBottom: "8px", maxHeight: "120px", overflowY: "auto" } }, sel._detail.description) : null,
+            sel._detail.bid_response_email ? h("div", { style: { fontFamily: MONO, fontSize: "14px", color: DIM } }, "Bid to: ", h("span", { style: { color: GOLD } }, sel._detail.bid_response_email)) : null,
+            sel._detail.response_due_date ? h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT, marginTop: "2px" } }, "Due " + sel._detail.response_due_date + (sel._detail.response_due_time ? " " + sel._detail.response_due_time : "")) : null,
+            (sel._detail.attachments || []).length ? h("div", { style: { marginTop: "6px" } },
+              (sel._detail.attachments || []).slice(0, 4).map((a, i) => h("a", { key: i, href: a.url, target: "_blank", rel: "noopener", style: { display: "block", fontFamily: MONO, fontSize: "13px", color: BLUE, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, "📎 " + a.name))) : null,
+          ) : h("div", { style: { fontFamily: MONO, fontSize: "13px", color: FAINT, marginBottom: "12px" } }, "Loading solicitation detail…"),
           vLoading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "15px", padding: "24px", textAlign: "center" } }, "Matching vendors…")
           : vendors.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "15px", padding: "24px", textAlign: "center" } }, "No distributors on record for these lanes.")
           : h("div", null,

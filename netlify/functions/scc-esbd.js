@@ -220,6 +220,30 @@ exports.handler = async (ev) => {
       return ok({ ok: true, last_success: last || null, runs: rows });
     }
 
+    // ── ENRICH: fetch the ESBD detail page (server-rendered, HTTP-fetchable) ──
+    // Pulls the real description, bid-response email, contact, class/item, and
+    // attachments — none of which are in the CSV export. Also lets us catch
+    // service sols that slipped past NIGP-only triage (their description says so).
+    if (action === "enrich") {
+      const solId = body.sol_id;
+      if (!solId) return bad(400, "sol_id required");
+      let html;
+      try {
+        const r = await fetch("https://www.txsmartbuy.gov/esbd/" + encodeURIComponent(solId), { headers: { "User-Agent": "Mozilla/5.0" } });
+        html = await r.text();
+      } catch (e) { return bad(502, "detail fetch failed: " + e.message); }
+      const detail = parseEsbdDetail(html);
+      if (!detail.description && !detail.bid_response_email && !detail.contact_email) {
+        return ok({ ok: false, error: "detail page had no parseable fields (layout may have changed)", detail });
+      }
+      // service hint from the description (webcast/broadcasting/services/etc.)
+      detail.service_hint = /\b(services?|webcast|broadcast(?:ing)?|maintenance|installation|repair|consulting|hosting|management|training|support)\b/i.test(detail.description || "");
+      if (body.id) {
+        try { await opps.updateOne({ _id: mongoId(body.id) }, { $set: { ...prefixed(detail, "esbd_"), enriched_at: new Date() } }); } catch (e) {}
+      }
+      return ok({ ok: true, detail });
+    }
+
     // ── BENCHMARK (Phase 3 pricing intel) ────────────────────────────────────
     // Suggest a per-unit benchmark for an opportunity's lanes from OUR OWN bid
     // history (submitted/awarded bids in the same FSC lane). Sources 3 (federal
@@ -292,4 +316,40 @@ exports.handler = async (ev) => {
 function mongoId(id) {
   try { const { ObjectId } = require("mongodb"); return new ObjectId(String(id)); }
   catch (e) { return id; }
+}
+
+function prefixed(obj, pre) {
+  const o = {};
+  for (const k of Object.keys(obj)) o[pre + k] = obj[k];
+  return o;
+}
+
+// Parse the txsmartbuy ESBD detail page. Fields are rendered as
+// <strong>Label: &nbsp;</strong><p>value</p>; description is a rich-text div.
+function parseEsbdDetail(html) {
+  const strip = (s) => (s || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&#39;|&rsquo;/g, "'").replace(/\s+/g, " ").trim();
+  const cell = (label) => {
+    const re = new RegExp("<strong>\\s*" + label.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + "\\s*:\\s*(?:&nbsp;)?\\s*</strong>\\s*<p>([\\s\\S]*?)</p>", "i");
+    const m = html.match(re);
+    return m ? strip(m[1]) : "";
+  };
+  const descM = html.match(/Solicitation Description\s*:\s*(?:&nbsp;)?\s*<\/strong>\s*<div class="rich-text-editor-content">([\s\S]*?)<\/div>\s*<\/div>/i);
+  const attachments = [];
+  const attRe = /<a[^>]+href="([^"]+)"[^>]*>\s*([^<]*ESBD_[^<]+)<\/a>/gi;
+  let am;
+  while ((am = attRe.exec(html)) !== null && attachments.length < 20) {
+    attachments.push({ name: am[2].trim(), url: am[1].startsWith("http") ? am[1] : "https://www.txsmartbuy.gov" + am[1] });
+  }
+  return {
+    contact_name: cell("Contact Name"),
+    contact_number: cell("Contact Number"),
+    contact_email: cell("Contact Email"),
+    bid_response_email: cell("Bid Response Email"),
+    response_due_date: cell("Response Due Date"),
+    response_due_time: cell("Response Due Time"),
+    class_item: cell("Class/Item Code"),
+    status: cell("Status"),
+    description: descM ? strip(descM[1]) : "",
+    attachments,
+  };
 }
