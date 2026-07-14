@@ -859,15 +859,30 @@ const httpServer = http.createServer((req, res) => {
   }
 
   // ── ESBD scrape trigger (manual "Run ESBD Sync Now") ──────────────────────
+  // Admin-only: requires x-esbd-secret == ESBD_SYNC_SECRET. Fails closed if the
+  // secret isn't configured, so the public can never trigger Chromium jobs.
   if (u === "/esbd-sync" && req.method === "POST") {
-    if (esbdRunning) {
+    const secret = process.env.ESBD_SYNC_SECRET;
+    if (!secret) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "ESBD sync disabled — set ESBD_SYNC_SECRET in Railway env" }));
+      return;
+    }
+    const qsecret = new URLSearchParams(req.url.split("?")[1] || "").get("secret") || "";
+    const provided = req.headers["x-esbd-secret"] || qsecret || "";
+    if (provided !== secret) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "unauthorized" }));
+      return;
+    }
+    if (esbdRunning) {  // job lock — no overlapping runs
       res.writeHead(409, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: "ESBD sync already running" }));
       return;
     }
     res.writeHead(202, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, message: "ESBD sync triggered" }));
-    log("Manual ESBD sync via HTTP /esbd-sync");
+    log("Manual ESBD sync via HTTP /esbd-sync (authorized)");
     esbdRunning = true;
     runEsbdSync().catch(e => err("ESBD sync error:", e.message)).finally(() => { esbdRunning = false; });
     return;
