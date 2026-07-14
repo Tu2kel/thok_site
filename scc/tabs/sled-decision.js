@@ -24,6 +24,34 @@
 
   const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
 
+  // Texas-first sourcing: rank by ship-from proximity to IFL's base (Killeen/Temple)
+  // and the major TX metros, then nearby states, then national. Closer = cheaper
+  // freight + faster delivery on small state orders.
+  const TX_METRO_RANK = [
+    [/killeen|temple|belton|harker heights|copperas|nolanville/i, 0],
+    [/waco|hewitt|woodway|bellmead|mcgregor|robinson/i, 1],
+    [/austin|round rock|cedar park|pflugerville|georgetown|san marcos|leander|kyle|buda/i, 2],
+    [/dallas|fort worth|arlington|richland hills|irving|plano|garland|mesquite|denton|mckinney|frisco|grand prairie|carrollton|lewisville|aubrey|grapevine|euless|bedford/i, 3],
+    [/san antonio|schertz|new braunfels|converse|boerne|seguin|universal city/i, 4],
+    [/houston|katy|sugar land|pasadena|pearland|spring|conroe|cypress|humble|baytown|the woodlands|missouri city/i, 5],
+  ];
+  const NEARBY_STATES = new Set(["OK", "LA", "NM", "AR"]);
+  function geoRank(v) {
+    const st = (v.state || "").toUpperCase();
+    const city = v.city || "";
+    if (st === "TX") { for (const [re, r] of TX_METRO_RANK) if (re.test(city)) return r; return 8; } // other TX
+    if (NEARBY_STATES.has(st)) return 50;
+    if (st) return 100; // national
+    return 120; // unknown location
+  }
+  function geoLabel(v) {
+    const st = (v.state || "").toUpperCase();
+    const parts = [v.city, st].filter(Boolean).join(", ");
+    if (st === "TX") return { text: parts, tone: "tx" };
+    if (NEARBY_STATES.has(st)) return { text: parts, tone: "near" };
+    return { text: parts || "—", tone: "far" };
+  }
+
   function buildRfq(opp, vendor) {
     const item = opp.name || "the item below";
     const d = opp._detail || {};
@@ -70,26 +98,31 @@
     // Select an opp → load distributors matching its FSC lanes (emailable first).
     const selectOpp = async (opp) => {
       setSel(opp); setVendors([]); setPicked(new Set()); setVLoading(true);
-      // Enrich from the ESBD detail page (real description, bid-response email,
-      // attachments, service hint) — runs in parallel with the vendor match.
-      post(ESBD, { action: "enrich", sol_id: opp.sol_id, id: opp._id })
-        .then((j) => { if (j.ok && j.detail) setSel((s) => (s && s.id === opp.id) ? { ...s, _detail: j.detail } : s); })
-        .catch(() => {});
-      const lanes = opp.fsc_lanes || [];
-      const byId = new Map();
-      for (const fsc of lanes) {
-        try {
-          const j = await post(DIST, { action: "distGetByFSC", payload: { fsc } });
-          const arr = Array.isArray(j) ? j : (j.result || j.data || []);
-          for (const v of arr) if (v && v.id && !byId.has(v.id)) byId.set(v.id, v);
-        } catch (e) {}
+      // Enrich first: detail page + the CMBL registered-vendor list (with clean
+      // TX location). Prefer CMBL (state-qualified + located); fall back to our
+      // distributor DB (FSC-matched) only when a sol has no CMBL attachment.
+      let det = null;
+      try { const j = await post(ESBD, { action: "enrich", sol_id: opp.sol_id, id: opp._id }); if (j.ok) det = j.detail; } catch (e) {}
+      if (det) setSel((s) => (s && s.id === opp.id) ? { ...s, _detail: det } : s);
+
+      let list = [];
+      if (det && (det.cmbl_vendors || []).length) {
+        list = det.cmbl_vendors.map((v) => ({ id: v.email || v.name, name: v.name, email: v.email, city: v.city, state: v.state, small_business: v.small_business, vethub: v.vethub, source: "CMBL" }))
+          .sort((a, b) => geoRank(a) - geoRank(b) || (!!b.email - !!a.email) || (a.name || "").localeCompare(b.name || ""));
+      } else {
+        const byId = new Map();
+        for (const fsc of (opp.fsc_lanes || [])) {
+          try {
+            const j = await post(DIST, { action: "distGetByFSC", payload: { fsc } });
+            const arr = Array.isArray(j) ? j : (j.result || j.data || []);
+            for (const v of arr) if (v && v.id && !byId.has(v.id)) byId.set(v.id, { ...v, state: (v.state || ""), source: "DB" });
+          } catch (e) {}
+        }
+        list = [...byId.values()].sort((a, b) => geoRank(a) - geoRank(b) || (!!b.email - !!a.email) || ((a.tier || 9) - (b.tier || 9)));
       }
-      // emailable first, then by tier; cap so we don't render hundreds
-      const list = [...byId.values()]
-        .sort((a, b) => (!!b.email - !!a.email) || ((a.tier || 9) - (b.tier || 9)))
-        .slice(0, 40);
+      list = list.slice(0, 60);
       setVendors(list);
-      setPicked(new Set(list.filter((v) => v.email).slice(0, 5).map((v) => v.id)));  // preselect top 5 emailable
+      setPicked(new Set(list.filter((v) => v.email).slice(0, 6).map((v) => v.id)));  // preselect closest emailable
       setVLoading(false);
     };
 
@@ -170,18 +203,29 @@
           vLoading ? h("div", { style: { color: DIM, fontFamily: MONO, fontSize: "15px", padding: "24px", textAlign: "center" } }, "Matching vendors…")
           : vendors.length === 0 ? h("div", { style: { color: FAINT, fontFamily: MONO, fontSize: "15px", padding: "24px", textAlign: "center" } }, "No distributors on record for these lanes.")
           : h("div", null,
-              h("div", { style: { fontFamily: MONO, fontSize: "13px", color: DIM, margin: "0 0 8px" } }, vendors.length + " matched · " + emailable + " emailable" + (vendors.length >= 40 ? " (top 40)" : "")),
+              h("div", { style: { fontFamily: MONO, fontSize: "13px", color: DIM, margin: "0 0 8px" } },
+                vendors.length + (vendors.length >= 60 ? "+ " : " ") + (vendors[0] && vendors[0].source === "CMBL" ? "CMBL vendors · " : "distributors · "),
+                h("span", { style: { color: GREEN } }, vendors.filter((v) => (v.state || "").toUpperCase() === "TX").length + " Texas"),
+                " · closest first"),
               h("div", { style: { maxHeight: "440px", overflowY: "auto", marginBottom: "12px" } },
-                vendors.map((v) => h("label", {
-                  key: v.id, style: { display: "flex", gap: "8px", alignItems: "center", padding: "6px 4px", borderBottom: "1px solid rgba(201,168,76,.07)", cursor: v.email ? "pointer" : "default", opacity: v.email ? 1 : 0.45 },
-                },
-                  h("input", { type: "checkbox", disabled: !v.email, checked: picked.has(v.id), onChange: () => toggle(v.id) }),
-                  h("div", { style: { minWidth: 0, flex: 1 } },
-                    h("div", { style: { fontSize: "15px", color: "var(--body,#f5f0e8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, (v.name || v.id) + (v.tier ? "  ·T" + v.tier : "")),
-                    h("div", { style: { fontFamily: MONO, fontSize: "13px", color: v.email ? DIM : FAINT } }, v.email || "no email on file"),
-                  ),
-                )),
-              ),
+                vendors.map((v) => {
+                  const gl = geoLabel(v);
+                  const locColor = gl.tone === "tx" ? GREEN : gl.tone === "near" ? "rgba(201,168,76,.85)" : FAINT;
+                  return h("label", {
+                    key: v.id, style: { display: "flex", gap: "8px", alignItems: "center", padding: "6px 4px", borderBottom: "1px solid rgba(201,168,76,.07)", cursor: v.email ? "pointer" : "default", opacity: v.email ? 1 : 0.45 },
+                  },
+                    h("input", { type: "checkbox", disabled: !v.email, checked: picked.has(v.id), onChange: () => toggle(v.id) }),
+                    h("div", { style: { minWidth: 0, flex: 1 } },
+                      h("div", { style: { fontSize: "15px", color: "var(--body,#f5f0e8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                        (v.name || v.id),
+                        v.small_business ? h("span", { style: { fontFamily: MONO, fontSize: "11px", color: "rgba(135,206,235,.85)" } }, "  SB") : null,
+                        v.vethub ? h("span", { style: { fontFamily: MONO, fontSize: "11px", color: GOLD } }, " VetHUB") : null),
+                      h("div", { style: { fontFamily: MONO, fontSize: "13px", color: v.email ? DIM : FAINT, display: "flex", gap: "8px" } },
+                        h("span", { style: { color: locColor } }, gl.text),
+                        h("span", null, v.email || "no email on file")),
+                    ),
+                  );
+                })),
               h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } },
                 h("span", { style: { fontFamily: MONO, fontSize: "14px", color: DIM } }, picked.size + " selected"),
                 h("div", { style: { flex: 1 } }),
