@@ -24,8 +24,9 @@
 
   // Pre-submission stages the router walks a bid through. Terminal stages
   // (Submitted, Pending Award, Awarded, Lost, No Bid) live on the Submissions tab.
-  const PIPE_STAGES = ["Draft", "Sourcing", "Ready to Bid"];
+  const PIPE_STAGES = ["New", "Sourcing", "Ready to Bid"];
   const STAGE_COLOR = {
+    New: "rgba(201,168,76,.5)",
     Draft: "rgba(201,168,76,.5)",
     Sourcing: "rgba(135,206,235,.8)",
     "Ready to Bid": "rgba(61,214,140,.85)",
@@ -35,7 +36,15 @@
     Lost: "rgba(232,116,116,.75)",
     "No Bid": "rgba(160,160,160,.55)",
   };
-  const ALL_STATUSES = ["Draft", "Sourcing", "Ready to Bid", "Submitted", "Pending Award", "Awarded", "Lost", "No Bid"];
+  const ALL_STATUSES = ["New", "Sourcing", "Ready to Bid", "Submitted", "Pending Award", "Awarded", "Lost", "No Bid"];
+
+  // ── Mongo is the source of truth (scc-esbd). localStorage is cache-only. ──
+  const API = "/.netlify/functions/scc-esbd";
+  const CACHE_KEY = "sled_opps_cache_v1";
+  const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "[]"); } catch (e) { return []; } };
+  const writeCache = (rows) => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(rows)); } catch (e) {} };
+  // Opportunity (Mongo) → board-model bid. Board reads .status/.title; we keep _id.
+  const mapOpp = (o) => ({ ...o, id: o._id, _id: o._id, title: o.name || o.title || "", status: o.internal_status || "New" });
 
   function money(n) {
     const v = parseFloat(n);
@@ -205,21 +214,33 @@
   }
 
   // ── data hook ────────────────────────────────────────────────────────────────
+  const INTERNAL_FIELDS = ["est_cost", "margin_pct", "suppliers", "bid_unit_price", "bid_total", "notes", "decision", "submission_result", "award_result"];
+
   function useBids() {
-    const [bids, setBids] = useState([]);
+    const [bids, setBids] = useState(() => readCache());
     const [loading, setLoading] = useState(true);
     const reload = useCallback(() => {
       setLoading(true);
-      Promise.resolve(DB.esbdGetAll ? DB.esbdGetAll() : []).then((all) => {
-        setBids(Array.isArray(all) ? all : []); setLoading(false);
-      }).catch(() => setLoading(false));
+      fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list", limit: 1500 }) })
+        .then((r) => r.json())
+        .then((j) => {
+          const rows = (j.opportunities || []).map(mapOpp);
+          setBids(rows); writeCache(rows); setLoading(false);
+        })
+        .catch(() => { setBids(readCache()); setLoading(false); });  // offline → cache
     }, []);
     useEffect(() => { reload(); }, [reload]);
 
+    // Optimistic local update, then persist internal fields to Mongo (source of truth).
     const patch = useCallback(async (bid, fields) => {
       const merged = { ...bid, ...fields };
-      setBids((prev) => prev.map((b) => (b.id === bid.id ? merged : b)));
-      if (DB.esbdSave) { try { await DB.esbdSave(merged); } catch (e) {} }
+      setBids((prev) => { const next = prev.map((b) => (b.id === bid.id ? merged : b)); writeCache(next); return next; });
+      const upd = {};
+      if (fields.status !== undefined) upd.internal_status = fields.status;
+      INTERNAL_FIELDS.forEach((f) => { if (fields[f] !== undefined) upd[f] = fields[f]; });
+      if (Object.keys(upd).length && bid._id) {
+        try { await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update", id: bid._id, fields: upd }) }); } catch (e) {}
+      }
     }, []);
 
     return { bids, loading, reload, patch };

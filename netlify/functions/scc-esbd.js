@@ -185,6 +185,19 @@ exports.handler = async (ev) => {
       return ok({ ok: true, last_success: last || null, runs: rows });
     }
 
+    // ── DELETE ────────────────────────────────────────────────────────────────
+    if (action === "delete") {
+      if (Array.isArray(body.ids) && body.ids.length) {
+        const res = await opps.deleteMany({ _id: { $in: body.ids.map(mongoId) } });
+        return ok({ ok: true, deleted: res.deletedCount });
+      }
+      if (body.solPrefix) {  // maintenance: purge test/tagged records
+        const res = await opps.deleteMany({ sol_id: { $regex: body.solPrefix } });
+        return ok({ ok: true, deleted: res.deletedCount });
+      }
+      return bad(400, "ids[] or solPrefix required");
+    }
+
     // ── CLEAR review flags ────────────────────────────────────────────────────
     if (action === "clearFlags") {
       const q = Array.isArray(body.ids) && body.ids.length ? { _id: { $in: body.ids.map(mongoId) } } : {};

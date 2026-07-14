@@ -94,7 +94,7 @@
       const chosen = rows.filter((r) => sel.has(r.i));
       if (!chosen.length) { if (showToast) showToast("Nothing selected"); return; }
 
-      // Primary: ingest into Mongo (source of truth) — dedup/merge/triage/coverage.
+      // Ingest into Mongo — the single source of truth (dedup/merge/triage/coverage).
       let mongo = null;
       try {
         const res = await fetch("/.netlify/functions/scc-esbd", {
@@ -107,24 +107,11 @@
         mongo = await res.json();
       } catch (e) { mongo = { ok: false, error: e.message }; }
 
-      // Mirror into the local pipeline store so the board shows them immediately.
-      for (const r of chosen) {
-        const bid = {
-          id: "esbd_" + r.sol_id + "_" + r.i,
-          sol_id: r.sol_id, state: "TX", source: "ESBD", status: "Draft",
-          title: r.name, agency_num: r.agency_num, nigp_code: (r.nigp || "").split(/[;\n]/)[0].trim(),
-          due_date: r.due_date, due_time: r.due_time, posted_date: r.posted,
-          fsc_lanes: r.fscLanes, lane_label: r.lane, esbd_status: r.status,
-          suppliers: [], est_cost: "", margin_pct: "", bid_total: "",
-          date_added: new Date().toLocaleDateString(),
-        };
-        if (DB.esbdSave) { try { await DB.esbdSave(bid); } catch (e) {} }
-      }
       if (showToast) showToast(
         mongo && mongo.ok
-          ? "Ingested → Mongo (" + mongo.added + " new, " + mongo.updated + " updated) · " + chosen.length + " → pipeline"
-          : "Saved " + chosen.length + " to pipeline (Mongo sync failed" + (mongo && mongo.error ? ": " + mongo.error : "") + ")");
-      if (goPipeline) goPipeline();
+          ? "Ingested → Mongo: " + mongo.added + " new, " + mongo.updated + " updated, " + mongo.unchanged + " unchanged"
+          : "Ingest failed" + (mongo && mongo.error ? ": " + mongo.error : "") + " — nothing saved");
+      if (mongo && mongo.ok && goPipeline) goPipeline();
     };
 
     const btn = (c, disabled) => ({ background: "transparent", border: "1px solid " + c, color: c, borderRadius: "6px", fontFamily: MONO, fontSize: "11px", padding: "7px 14px", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1 });
