@@ -273,6 +273,7 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
         set_aside:             sol.set_aside || "",
         fob:                   sol.fob || "",
         supplier_restrictions: sol.supplier_restrictions || "",
+        amsc:                  sol.amsc || "",
         supplier_list:         sol.supplier_list || "",
         buyer_email:           sol.buyer_email || "",
         buyer_name:            sol.buyer_name || "",
@@ -401,6 +402,7 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
               set_aside:             sol.set_aside || "",
               fob:                   sol.fob || "",
               supplier_restrictions: sol.supplier_restrictions || "",
+        amsc:                  sol.amsc || "",
               buyer_email:           sol.buyer_email || "",
               buyer_name:            sol.buyer_name || "",
               ship_to_dodaac:        sol.ship_to_dodaac || "",
@@ -479,6 +481,12 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
         sourcing_path:   s.sourcing_path || "",
         is_watched:      !!s.is_watched,
         is_repost:       !!s.is_repost,
+        // Approved-source companies (scraped Supplier List column) — persist so
+        // "who can supply this" is queryable. AIDC tagged from the sol-number
+        // type char (…U#### = AIDC) since the scrape doesn't capture Sol Type.
+        supplier_list:   s.supplier_list || "",
+        amsc:            s.amsc || "",
+        is_aidc:         ((s.sol_number || "")[8] || "").toUpperCase() === "U",
         reason:          s.reason || s.claudeReason || "",
         sol_url:         s.sol_url || "",
       };
@@ -651,6 +659,7 @@ const httpServer = http.createServer((req, res) => {
             set_aside:             sol.set_aside || "",
             fob:                   sol.fob || "",
             supplier_restrictions: sol.supplier_restrictions || "",
+        amsc:                  sol.amsc || "",
             buyer_email:           sol.buyer_email || "",
             buyer_name:            sol.buyer_name || "",
             ship_to_dodaac:        sol.ship_to_dodaac || "",
