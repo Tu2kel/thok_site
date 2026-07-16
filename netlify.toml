@@ -9,9 +9,10 @@
 [functions."analyze-sols"]
   timeout = 120
 
+# Schedule removed 2026-07-16 — this cron emailed vendors directly via the Gmail API,
+# outside the Railway blaster's kill switch. Invoke by hand if the ingest is wanted.
 [functions."gmail-ingest"]
   timeout = 120
-  schedule = "0 14 * * *"
 
 [functions."scc-rfq-inbox"]
   timeout = 10
@@ -28,6 +29,6 @@
 [functions."send-rfq"]
   timeout = 30
 
+# Schedule removed 2026-07-16 — same reason as gmail-ingest above.
 [functions."navigator-ingest"]
   timeout = 900
-  schedule = "0 9 * * *"

@@ -12,6 +12,11 @@
 
 const { MongoClient } = require("mongodb");
 
+// Federal RFQ blast retired 2026-07-15. This function emails vendors over the Gmail
+// API, which never touches the Railway blaster's runBlast guard — so it needs its own.
+// Default OFF; set FEDERAL_BLAST_ENABLED=true in Netlify env to resume.
+const BLAST_ENABLED  = process.env.FEDERAL_BLAST_ENABLED === "true";
+
 const FROM_ADDRESS   = "anthony@ifedlog.com";
 const FROM_NAME      = "Anthony K Kelley | Imperio Federal Logistics";
 const DLA_SENDER     = "solmlbsm@dla.mil";
@@ -411,7 +416,8 @@ exports.handler = async () => {
         // Requesting a quote commits nothing. You decide at bid time.
         // VERIFY FIRST sols are flagged in notes + summary so you know to review before submitting.
         const isFlag  = analysis.verdict === "VERIFY FIRST";
-        const vendors = selectVendors(record, dists);
+        const vendors = BLAST_ENABLED ? selectVendors(record, dists) : [];
+        if (!BLAST_ENABLED) addLog("⛔ Federal blast disabled — no RFQs sent for " + sol);
         let sent = 0;
         for (const { dist, reason } of vendors) {
           try {

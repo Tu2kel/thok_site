@@ -935,10 +935,16 @@ if (esbdNow) {
   log("SCC Agent online. Cron: \"" + SCHEDULE + "\" (" + (IS_LIVE ? "LIVE" : "TEST") + " mode)");
   log("Set BLAST_LIVE=true in Railway env vars to enable real vendor emails.");
 
-  cron.schedule(SCHEDULE, () => {
-    log("Cron fired — starting pipeline…");
-    runPipelineTracked().catch(e => err("Pipeline error:", e.message));
-  }, { timezone: "America/Chicago" });
+  // STOPPED 2026-07-16. The daily scrape+blast cron is not registered at all — the
+  // pipeline only runs on an explicit POST /trigger. Set DAILY_CRON_ENABLED=true to resume.
+  if (process.env.DAILY_CRON_ENABLED === "true") {
+    cron.schedule(SCHEDULE, () => {
+      log("Cron fired — starting pipeline…");
+      runPipelineTracked().catch(e => err("Pipeline error:", e.message));
+    }, { timezone: "America/Chicago" });
+  } else {
+    log("Daily pipeline cron NOT registered — stopped (set DAILY_CRON_ENABLED=true to resume)");
+  }
 
   // ESBD scrape — unattended daily pull → scc-esbd ingest
   cron.schedule(ESBD_CRON, () => {
@@ -958,6 +964,13 @@ if (esbdNow) {
   // FSC Updater — 5 PM Central daily. Reads the "Change FSC to meet Customer" label
   // and applies lane removals to vendor cards (remove-only), then emails a summary.
   cron.schedule("0 17 * * *", () => {
+    // PAUSED 2026-07-15 (federal-side revamp). The daily auto-apply of vendor-card FSC
+    // lane changes is off; set FSC_UPDATER_ENABLED=true to resume. Manual POSTs to the
+    // Netlify function (preview/apply) still work — this only stops the scheduled apply.
+    if (process.env.FSC_UPDATER_ENABLED !== "true") {
+      log("FSC Updater cron skipped — paused (set FSC_UPDATER_ENABLED=true to resume)");
+      return;
+    }
     log("FSC Updater cron firing (5 PM CT)…");
     fetch("https://thehouseofkel.com/.netlify/functions/scc-fsc-updater", {
       method: "POST",

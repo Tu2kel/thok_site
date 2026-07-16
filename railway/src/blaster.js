@@ -238,6 +238,24 @@ function makeSenderCache(db) {
 async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
 
+  // ── FEDERAL BLAST KILL SWITCH ──────────────────────────────────────────────
+  // The ~2,500-vendor DIBBS mass-blast was RETIRED 2026-07-15 (blast-and-pray POC
+  // failed). This vendor DB is being repurposed for the State/ESBD side, which
+  // uses per-sol matched targeting, not a spray.
+  //
+  // This guard covers the RAILWAY paths only: the daily cron, /blast-existing, and
+  // the UI live override. It does NOT cover netlify/functions/send-rfq.js, nor the
+  // gmail-ingest / navigator-ingest Netlify crons — those email vendors over the
+  // Gmail API and are gated separately in their own files. Scrape / screen /
+  // sol-ingest keep running (they still feed FSC matching and the DB).
+  // Default OFF. To resume during the revamp, set FEDERAL_BLAST_ENABLED=true.
+  if (process.env.FEDERAL_BLAST_ENABLED !== "true") {
+    results.skipped = plan.length;
+    results.paused  = true;
+    results.log.push({ note: "Federal blast disabled (retired 2026-07-15) — 0 vendor emails sent; " + plan.length + " skipped." });
+    return results;
+  }
+
   // Round-robin rotation across all vendors in the blast plan.
   // Stores last sent vendor in _meta.blast_cursor so each run picks up where
   // yesterday stopped. 100/day (Resend free) across 2,481 vendors = 25-day cycle.
