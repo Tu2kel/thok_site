@@ -17,8 +17,9 @@
 [functions."scc-rfq-inbox"]
   timeout = 10
 
+# Schedule removed 2026-07-16 — the inbox scan misparsed replies (130 new -> 0 quotes)
+# and auto-scrubbed FSC lanes off vendor cards on that bad read. Invoke by hand if wanted.
 [functions."scc-rfq-inbox-background"]
-  schedule = "0 15,18,21,0 * * 1-5"
 
 [functions."scc-sba-import"]
   timeout = 30
