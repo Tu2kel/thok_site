@@ -30,6 +30,11 @@ const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabl
 const DAILY_CRON_ENABLED = process.env.DAILY_CRON_ENABLED === "true";
 // Health-check alert cron. STOPPED 2026-07-16 — it was the last scheduled emailer.
 const HEALTH_CHECK_ENABLED = process.env.HEALTH_CHECK_ENABLED === "true";
+// FSC Updater cron. STOPPED 2026-07-16 — hard-off, deliberately NOT env-gated.
+// FSC_UPDATER_ENABLED=true is still set in Railway, which silently overrode the
+// "PAUSED 2026-07-15" comment and kept the 5 PM auto-apply running for a day.
+// To resume: unset that Railway env var FIRST, then restore the env check here.
+const FSC_UPDATER_ENABLED = false;
 // Where TEST-mode blasts are delivered instead of the vendor. This is the same
 // mailbox SCRUBBER scans, so a test RFQ is visible where the real ones land.
 const TEST_RECIPIENT = process.env.TEST_RECIPIENT || "anthony@ifedlog.com";
@@ -717,6 +722,7 @@ const httpServer = http.createServer((req, res) => {
       schedule: SCHEDULE,
       daily_cron_registered: DAILY_CRON_ENABLED,
       health_check_cron_registered: HEALTH_CHECK_ENABLED,
+      fsc_updater_cron_registered: FSC_UPDATER_ENABLED,
       federal_blast_enabled: process.env.FEDERAL_BLAST_ENABLED === "true",
       blast_live: IS_LIVE,
       blast_paused:  _blastState.paused,
@@ -980,26 +986,25 @@ if (esbdNow) {
     log("Health check cron NOT registered — stopped (set HEALTH_CHECK_ENABLED=true to resume)");
   }
 
-  // FSC Updater — 5 PM Central daily. Reads the "Change FSC to meet Customer" label
-  // and applies lane removals to vendor cards (remove-only), then emails a summary.
-  cron.schedule("0 17 * * *", () => {
-    // PAUSED 2026-07-15 (federal-side revamp). The daily auto-apply of vendor-card FSC
-    // lane changes is off; set FSC_UPDATER_ENABLED=true to resume. Manual POSTs to the
-    // Netlify function (preview/apply) still work — this only stops the scheduled apply.
-    if (process.env.FSC_UPDATER_ENABLED !== "true") {
-      log("FSC Updater cron skipped — paused (set FSC_UPDATER_ENABLED=true to resume)");
-      return;
-    }
-    log("FSC Updater cron firing (5 PM CT)…");
-    fetch("https://thehouseofkel.com/.netlify/functions/scc-fsc-updater", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "apply" }),
-    })
-      .then(r => r.json())
-      .then(d => log("FSC Updater: " + (d.ok ? ((d.result.changes || []).length + " applied, " + (d.result.skipped || []).length + " skipped") : ("error: " + d.error))))
-      .catch(e => err("FSC Updater cron failed:", e.message));
-  }, { timezone: "America/Chicago" });
+  // FSC Updater — was 5 PM Central daily. Read the "Change FSC to meet Customer" label
+  // and applied lane removals to vendor cards (remove-only), then emailed a summary.
+  // STOPPED 2026-07-16 — not registered at all. Manual POSTs to the Netlify function
+  // (preview/apply) still work; this only stops the unattended scheduled apply.
+  if (FSC_UPDATER_ENABLED) {
+    cron.schedule("0 17 * * *", () => {
+      log("FSC Updater cron firing (5 PM CT)…");
+      fetch("https://thehouseofkel.com/.netlify/functions/scc-fsc-updater", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "apply" }),
+      })
+        .then(r => r.json())
+        .then(d => log("FSC Updater: " + (d.ok ? ((d.result.changes || []).length + " applied, " + (d.result.skipped || []).length + " skipped") : ("error: " + d.error))))
+        .catch(e => err("FSC Updater cron failed:", e.message));
+    }, { timezone: "America/Chicago" });
+  } else {
+    log("FSC Updater cron NOT registered — stopped");
+  }
 
   // Keep process alive
   process.on("SIGTERM", () => { log("SIGTERM — shutting down"); process.exit(0); });
