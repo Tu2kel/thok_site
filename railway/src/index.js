@@ -28,6 +28,8 @@ const SCHEDULE  = process.env.CRON_SCHEDULE || "0 2 * * 1-5"; // 2 AM CT Mon–F
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
 // Daily scrape+blast cron. STOPPED 2026-07-16 — off unless explicitly re-enabled.
 const DAILY_CRON_ENABLED = process.env.DAILY_CRON_ENABLED === "true";
+// Health-check alert cron. STOPPED 2026-07-16 — it was the last scheduled emailer.
+const HEALTH_CHECK_ENABLED = process.env.HEALTH_CHECK_ENABLED === "true";
 // Where TEST-mode blasts are delivered instead of the vendor. This is the same
 // mailbox SCRUBBER scans, so a test RFQ is visible where the real ones land.
 const TEST_RECIPIENT = process.env.TEST_RECIPIENT || "anthony@ifedlog.com";
@@ -711,6 +713,7 @@ const httpServer = http.createServer((req, res) => {
       // /health reads "0 7 * * 1-5" and looks live when nothing is scheduled.
       schedule: SCHEDULE,
       daily_cron_registered: DAILY_CRON_ENABLED,
+      health_check_cron_registered: HEALTH_CHECK_ENABLED,
       federal_blast_enabled: process.env.FEDERAL_BLAST_ENABLED === "true",
       blast_live: IS_LIVE,
       blast_paused:  _blastState.paused,
@@ -962,11 +965,17 @@ if (esbdNow) {
   }, { timezone: "America/Chicago" });
   log("ESBD sync cron: \"" + ESBD_CRON + "\" (America/Chicago)");
 
-  // Health check every 6 hours — emails anthony@ifedlog.com if anything is red
-  cron.schedule("0 6,12,18,0 * * *", () => {
-    log("Health check cron firing…");
-    getDb().then(db => runHealthCheck(db, { emailOnFailure: true })).catch(e => err("Health check failed:", e.message));
-  }, { timezone: "America/Chicago" });
+  // Health check — STOPPED 2026-07-16. Was every 6 hours, emailing on any red
+  // component. Not registered; GET /health-check still runs it on demand without
+  // emailing. Set HEALTH_CHECK_ENABLED=true to resume the scheduled alerts.
+  if (HEALTH_CHECK_ENABLED) {
+    cron.schedule("0 6,12,18,0 * * *", () => {
+      log("Health check cron firing…");
+      getDb().then(db => runHealthCheck(db, { emailOnFailure: true })).catch(e => err("Health check failed:", e.message));
+    }, { timezone: "America/Chicago" });
+  } else {
+    log("Health check cron NOT registered — stopped (set HEALTH_CHECK_ENABLED=true to resume)");
+  }
 
   // FSC Updater — 5 PM Central daily. Reads the "Change FSC to meet Customer" label
   // and applies lane removals to vendor cards (remove-only), then emails a summary.
