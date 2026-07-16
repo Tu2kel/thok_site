@@ -262,6 +262,10 @@ function parseListingHtml(html) {
     const quoteDueCell = cells.find(c => /^\d{2}\/\d{2}\/\d{2,4}$/.test(c.trim())) || "";
     const postedCell   = cells.find((c, i) => /^\d{2}\/\d{2}\/\d{2,4}$/.test(c.trim()) && i > cells.indexOf(quoteDueCell)) || "";
     const qtyCell      = cells.find(c => /^[\d,]+$/.test(c.trim()) && parseInt(c.replace(/,/g,"")) > 0) || "";
+    // Unit of issue — standalone 2-char DLA unit code (EA, LB, PR, FT…). Vendors
+    // must quote per this unit; without it they assume "each" and misprice.
+    const UI_CODE      = /^(EA|LB|PR|FT|GL|QT|PT|OZ|YD|IN|HD|TH|RO|BX|CN|DZ|GR|KT|PG|SE|ST|SH|SL|CO|KG|RL|SP|TU|BT|JR)$/;
+    const unitCell     = cells.find(c => UI_CODE.test(c.trim())) || "";
     const naicsCell    = cells.find(c => /^\d{5,6}$/.test(c.trim())) || "";
     const jcpCell      = cells.find(c => /^[YN]$/.test(c.trim()) && cells.indexOf(c) > 5) || "";
     const amscCell     = cells.find(c => /^[A-Z]$/.test(c.trim()) && c.length === 1 && cells.indexOf(c) > 10) || "";
@@ -284,6 +288,7 @@ function parseListingHtml(html) {
       quote_due:            quoteDueCell || "",
       posted_date:          postedCell || "",
       quantity:             qtyCell || "",
+      unit_of_issue:        unitCell || (qtyCell ? "EA" : ""),
       naics:                naicsCell || "",
       jcp_required:         jcpCell === "Y" ? true : jcpCell === "N" ? false : null,
       amsc:                 amscCell || null,

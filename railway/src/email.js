@@ -67,13 +67,19 @@ function buildBodyForSender(vendor, sols, sender) {
       ? "FOB Destination, deliver to: " + (shipTo || "ship-to on the PO")
       : shipTo ? "Ship to: " + shipTo : null;
 
+    // Unit of issue — vendors must quote per this unit, not assume "each".
+    // A rivet buy of "100 LB" got quoted at 100 EA because U/I was missing.
+    const qty  = s.quantity || s.qty;
+    const unit = String(s.unit_of_issue || s.unit_issue || "").toUpperCase().trim();
+
     return [
       isMulti ? ("Item " + (i + 1) + ":") : null,
       "  Item:          " + (s.item_name || "n/a"),
       s.ref_part_number
         ? "  Part Number:   " + s.ref_part_number + (s.manufacturer_cage ? "  (Mfr CAGE: " + s.manufacturer_cage + ")" : "")
         : null,
-      (s.quantity || s.qty) ? "  Quantity:      " + (s.quantity || s.qty) : null,
+      qty  ? "  Quantity:      " + qty + (unit ? " " + unit : "") : null,
+      unit ? "  Unit of Issue: " + unit : null,
       s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
       dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       fobStr             ? "  Shipping:      " + fobStr : null,
@@ -85,6 +91,16 @@ function buildBodyForSender(vendor, sols, sender) {
   const needsMilSpec = sols.some(s => s.packaging_type === "Mil-Spec");
   const packagingLine = needsMilSpec
     ? "- Packaging: This requirement calls for MIL-STD-2073 military specification packaging. Are you able to comply?"
+    : null;
+
+  // Unit-of-issue callout — raised when any item ships in a unit other than "each"
+  // (LB, PR, FT, HD, etc.), so quotes come back priced per that unit, not per each.
+  const hasNonEaUnit = sols.some(s => {
+    const u = String(s.unit_of_issue || s.unit_issue || "").toUpperCase().trim();
+    return u && u !== "EA";
+  });
+  const unitOfIssueLine = hasNonEaUnit
+    ? "- Unit of issue: Please quote your price per the unit of issue shown above (e.g. per LB, PR, FT), not per each."
     : null;
 
   const sig = [
@@ -113,6 +129,7 @@ function buildBodyForSender(vendor, sols, sender) {
     itemLines,
     "",
     "Requirements:",
+    unitOfIssueLine,
     packagingLine,
     "- Payment: We issue POs quickly and wire payment prior to shipment.",
     "- Country of origin: please confirm" + (isMulti ? " for each item" : "") + " (some of our customers require TAA-compliant sourcing).",

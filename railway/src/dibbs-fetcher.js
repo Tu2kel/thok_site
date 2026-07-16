@@ -293,6 +293,17 @@ function parsePdfText(text, sol_number, nsn, fsc) {
     || extract(/\bQUANTITY[:\s]+([\d,]+)/i)
     || extract(/\bQTY[:\s]+([\d,]+)/i);
 
+  // ── Unit of issue — the unit qty is measured in (EA, LB, PR, FT, …). ─────
+  // DLA uses standardized 2-char codes; a whitelist avoids matching stray
+  // tokens near numbers. Falls back to EA when qty is present but no unit
+  // parsed, since EA is DLA's default and a stated unit beats a silent guess.
+  const UI = "EA|LB|PR|FT|GL|QT|PT|OZ|YD|IN|HD|TH|RO|BX|CN|DZ|GR|KT|PG|SE|ST|SH|SL|CO|KG|RL|SP|TU|BT|JR";
+  const unitOfIssue = extract(new RegExp("UNIT OF ISSUE[:\\s]+(" + UI + ")\\b", "i"))
+    || extract(new RegExp("\\bU/?I[:\\s]+(" + UI + ")\\b", "i"))
+    || extract(new RegExp("[\\d,]+(?:\\.\\d+)?\\s+(" + UI + ")\\b"))   // "100.000 LB"
+    || extract(new RegExp("\\b(" + UI + ")\\s+[\\d,]+(?:\\.\\d+)?\\b")) // "LB 100"
+    || (qty ? "EA" : null);
+
   // ── Unit price — blank on RFQs, fall back to proc history ─────────────
   const unitPrice = extract(/UNIT PRICE[:\s]+\$?([\d,]+\.\d+)/i)
     || extract(/EST(?:IMATED)? PRICE[:\s]+\$?([\d,]+\.\d+)/i);
@@ -421,6 +432,7 @@ function parsePdfText(text, sol_number, nsn, fsc) {
     ref_part_number:       partNum || null,
     manufacturer_cage:     mfrCage || null,
     quantity:              qtyNum ? String(qtyNum) : null,
+    unit_of_issue:         unitOfIssue,
     unit_price:            effectivePrice,
     hist_price:            histPriceNum,
     ext_price:             extPrice,
