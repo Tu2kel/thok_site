@@ -540,7 +540,10 @@ async function refreshBlastState() {
     _blastState.cached_at  = Date.now();
   } catch {}
 }
-// Refresh every 30 seconds
+// Prime at boot, then refresh every 30 seconds. Without the priming call, /health
+// serves the paused:false initializer for the first 30s after every deploy — which
+// reads as "the kill switch came unset on restart" when nothing actually changed.
+refreshBlastState().catch(() => {});
 setInterval(() => refreshBlastState().catch(() => {}), 30000);
 
 const PORT = process.env.PORT || 3100;
