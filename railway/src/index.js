@@ -26,6 +26,8 @@ const SOL_SOURCE = process.env.SOL_SOURCE || "navigator";
 
 const SCHEDULE  = process.env.CRON_SCHEDULE || "0 2 * * 1-5"; // 2 AM CT Mon–Fri — DIBBS scrape + vendor blast
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
+// Daily scrape+blast cron. STOPPED 2026-07-16 — off unless explicitly re-enabled.
+const DAILY_CRON_ENABLED = process.env.DAILY_CRON_ENABLED === "true";
 // Where TEST-mode blasts are delivered instead of the vendor. This is the same
 // mailbox SCRUBBER scans, so a test RFQ is visible where the real ones land.
 const TEST_RECIPIENT = process.env.TEST_RECIPIENT || "anthony@ifedlog.com";
@@ -704,7 +706,12 @@ const httpServer = http.createServer((req, res) => {
     res.end(JSON.stringify({
       ok: true,
       mode: "railway",
+      // schedule is the configured string; daily_cron_registered is whether it is
+      // actually armed. They disagree when the cron is stopped — report both, or
+      // /health reads "0 7 * * 1-5" and looks live when nothing is scheduled.
       schedule: SCHEDULE,
+      daily_cron_registered: DAILY_CRON_ENABLED,
+      federal_blast_enabled: process.env.FEDERAL_BLAST_ENABLED === "true",
       blast_live: IS_LIVE,
       blast_paused:  _blastState.paused,
       daily_sent:    _blastState.daily_sent,
@@ -937,7 +944,7 @@ if (esbdNow) {
 
   // STOPPED 2026-07-16. The daily scrape+blast cron is not registered at all — the
   // pipeline only runs on an explicit POST /trigger. Set DAILY_CRON_ENABLED=true to resume.
-  if (process.env.DAILY_CRON_ENABLED === "true") {
+  if (DAILY_CRON_ENABLED) {
     cron.schedule(SCHEDULE, () => {
       log("Cron fired — starting pipeline…");
       runPipelineTracked().catch(e => err("Pipeline error:", e.message));
