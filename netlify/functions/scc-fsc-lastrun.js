@@ -12,7 +12,10 @@ exports.handler = async () => {
   try {
     const db = await getDb();
     const doc = await db.collection("_meta").findOne({ _id: "fsc_last_run" });
-    if (doc) return { statusCode: 200, headers: hdrs, body: JSON.stringify(doc) };
+    // Callers rejected by the updater's unattended-apply block. This is how the
+    // still-unidentified scheduler that POSTs "apply" daily at 22:00 UTC gets named.
+    const blocked = await db.collection("_meta").findOne({ _id: "fsc_blocked_calls" });
+    if (doc) return { statusCode: 200, headers: hdrs, body: JSON.stringify({ ...doc, blocked_calls: blocked ? blocked.calls : [] }) };
     // Diagnostic: which db are we on, and does a write even work here?
     const dbName = db.databaseName;
     const metaIds = (await db.collection("_meta").find({}, { projection: { _id: 1 } }).limit(30).toArray()).map(d => d._id);

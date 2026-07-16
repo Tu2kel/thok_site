@@ -331,6 +331,40 @@ exports.handler = async (ev) => {
   const label  = body.label || null;
   const ok  = (d) => ({ statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, result: d }) });
   const fail = (m) => ({ statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: false, error: m }) });
+
+  // Unattended apply STOPPED 2026-07-16. The switch lives here, not in any caller:
+  // the Railway cron was hard-stopped at 10:46 CT and something STILL POSTed
+  // {"action":"apply"} at 22:00 UTC the same day. That caller is not in this repo and
+  // is still unidentified, and a guard on a known caller cannot stop an unknown one.
+  // Every caller funnels through this handler, so this is the only place that holds.
+  //
+  // Fail-safe by construction: with FSC_APPLY_TOKEN unset, apply is blocked. Setting
+  // the env var alone does NOT re-enable it — the caller must also send a matching
+  // {"confirm":"<token>"}, which no scheduler does. This inverts the old design, where
+  // a missing env var was the only thing standing between a cron and a live apply.
+  const APPLY_TOKEN = process.env.FSC_APPLY_TOKEN || "";
+  const confirmed   = APPLY_TOKEN !== "" && body.confirm === APPLY_TOKEN;
+  if (action === "apply" && !confirmed) {
+    // Fingerprint the caller so the mystery scheduler can be identified, then read it
+    // back via scc-fsc-lastrun. Recorded, not emailed — this must stay silent.
+    const h = ev.headers || {};
+    const who = {
+      at: new Date().toISOString(),
+      ip: h["x-nf-client-connection-ip"] || h["x-forwarded-for"] || null,
+      ua: h["user-agent"] || null,
+      referer: h["referer"] || null,
+      body: JSON.stringify(body).slice(0, 200),
+    };
+    await getDb()
+      .then(db => db.collection("_meta").updateOne(
+        { _id: "fsc_blocked_calls" },
+        { $push: { calls: { $each: [who], $slice: -10 } } },
+        { upsert: true },
+      ))
+      .catch(() => {});
+    return fail("unattended FSC apply is disabled (stopped 2026-07-16); caller recorded");
+  }
+
   try {
     const result = await run({ apply: action === "apply", limit, label, removeOnly: body.removeOnly !== false });
     if (body.emailSummary !== false) await sendSummary(result);
