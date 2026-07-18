@@ -231,6 +231,8 @@
     const [shipping, setShipping] = useIntakeState(0);
     const [supplierUnit, setSupplierUnit] = useIntakeState("");
     const [showDed, setShowDed] = useIntakeState(false);
+    // null = ride the cost-plus floor; a number = manual bid override (price-to-market)
+    const [bidOverride, setBidOverride] = useIntakeState(null);
     const [selectedTier, setSelectedTier] = useIntakeState(
       parsed.tier || "Standard",
     );
@@ -242,10 +244,26 @@
     const hasQuote = supplierUnit !== "";
     const estCostUnit = govUnit * 0.7;
     const activeSupplierUnit = hasQuote ? supplierUnit : estCostUnit.toFixed(2);
+
+    // ── BID PRICE: floor = cost-plus (tier min margin) · ceiling = gov hist ──
+    const costUnitNum = parseFloat(activeSupplierUnit) || 0;
+    const floorBid =
+      costUnitNum > 0 ? +(costUnitNum / (1 - tierMargin)).toFixed(2) : 0;
+    // Gov't historical unit price is the intelligence anchor / realistic ceiling.
+    // If cost lands near/above it, open headroom so the slider still has range.
+    const ceilBid =
+      govUnit > floorBid ? govUnit : +(floorBid * 1.5).toFixed(2);
+    const activeBid = bidOverride != null ? bidOverride : floorBid;
+    // Back-solve an effective margin so calcBidMath reproduces the chosen bid
+    // exactly (cost / (1 − (1 − cost/bid)) = bid) — no changes needed downstream.
+    const effMargin =
+      bidOverride != null && costUnitNum > 0 && activeBid > 0
+        ? 1 - costUnitNum / activeBid
+        : tierMargin;
     const m = calcBidMath(
       activeSupplierUnit,
       qty,
-      tierMargin,
+      effMargin,
       factoring,
       pofunding,
       shipping,
@@ -531,6 +549,128 @@
               " target — consider passing",
           ),
       ),
+
+      // Bid price slider — price to market between the cost-plus floor and
+      // the gov historical price (the only market intel on the record).
+      floorBid > 0 &&
+        h(
+          "div",
+          {
+            style: {
+              padding: "14px 16px",
+              marginBottom: "16px",
+              background: "rgba(0,0,0,.25)",
+              border:
+                "1px solid " +
+                (bidOverride != null
+                  ? "rgba(201,168,76,.35)"
+                  : "rgba(201,168,76,.12)"),
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "baseline",
+                marginBottom: "8px",
+              },
+            },
+            h(
+              "div",
+              { className: "f-lbl" },
+              "Bid Price/ea — drag to price to market ",
+              h(
+                "span",
+                { style: { color: "rgba(201,168,76,.5)", fontSize: "11px" } },
+                bidOverride != null ? "(manual override)" : "(riding min-margin floor)",
+              ),
+            ),
+            h(
+              "div",
+              {
+                style: {
+                  fontFamily: "JetBrains Mono,monospace",
+                  fontSize: "14px",
+                  color: "var(--gold-solid)",
+                },
+              },
+              fmt(activeBid),
+              govUnit > 0 &&
+                h(
+                  "span",
+                  {
+                    style: {
+                      fontSize: "11px",
+                      color: "var(--body-faint)",
+                      marginLeft: "8px",
+                    },
+                  },
+                  ((activeBid / govUnit) * 100).toFixed(0) +
+                    "% of gov hist " +
+                    fmt(govUnit),
+                ),
+            ),
+          ),
+          h(
+            "div",
+            { style: { display: "flex", gap: "12px", alignItems: "center" } },
+            h("input", {
+              type: "range",
+              min: floorBid,
+              max: Math.max(ceilBid, floorBid + 0.01),
+              step: 0.01,
+              value: Math.min(Math.max(activeBid, floorBid), ceilBid),
+              onChange: (e) => setBidOverride(parseFloat(e.target.value)),
+              style: { flex: 1, accentColor: "var(--gold-solid)", cursor: "pointer" },
+            }),
+            h("input", {
+              type: "number",
+              step: "0.01",
+              value: activeBid,
+              onChange: (e) => {
+                const v = parseFloat(e.target.value);
+                setBidOverride(e.target.value === "" || isNaN(v) ? null : v);
+              },
+              style: { ...inpStyle, width: "110px" },
+            }),
+            bidOverride != null &&
+              h(
+                "button",
+                {
+                  className: "btn btn-secondary",
+                  onClick: () => setBidOverride(null),
+                  style: { padding: "6px 12px", fontSize: "11px" },
+                },
+                h("span", { className: "glint" }),
+                "Reset to floor",
+              ),
+          ),
+          h(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                fontFamily: "JetBrains Mono,monospace",
+                fontSize: "10px",
+                color: "var(--body-faint)",
+                marginTop: "6px",
+              },
+            },
+            h(
+              "span",
+              null,
+              "floor " +
+                fmt(floorBid) +
+                " · " +
+                (tierMargin * 100).toFixed(0) +
+                "% min margin",
+            ),
+            h("span", null, "gov hist ceiling " + fmt(ceilBid)),
+          ),
+        ),
 
       // Deductions panel
       showDed &&
