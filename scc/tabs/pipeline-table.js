@@ -1178,6 +1178,54 @@ Rules:
       window.SCC_DB;
     const { Drawer } = window.SCC_TABS;
 
+    // ── Effective bid view ────────────────────────────────────────────────
+    // Honors a manual price-to-market override (bid_override); otherwise falls
+    // back to the cost-plus floor from the tier. Folds in the worst-case FE
+    // factoring fee so "net" reflects true take-home, not gross.
+    const FE_FACTORING_WORST = 0.05002; // day-60 factoring, no PO funding
+    const bidView = (r) => {
+      const q = parseFloat(r.quantity) || 1;
+      const gov = parseFloat(r.unit_price) || 0;
+      const tMargin = TIER_MARGINS[r.tier || "Standard"] || 0.3;
+      const cost = r.supplier_quote_price
+        ? parseFloat(r.supplier_quote_price)
+        : gov * 0.7;
+      const floor = calcBidMath(cost, q, tMargin, 0, 0, 0);
+      const override = parseFloat(r.bid_override) || 0;
+      const bidUnit = override > 0 ? +override.toFixed(2) : floor.bidUnit;
+      const bidTotal = +(bidUnit * q).toFixed(2);
+      const costTotal = +(cost * q).toFixed(2);
+      const gross = +(bidTotal - costTotal).toFixed(2);
+      const marginPct = bidTotal > 0 ? (gross / bidTotal) * 100 : 0;
+      const feFee = +(bidTotal * FE_FACTORING_WORST).toFixed(2);
+      const netTrue = +(gross - feFee).toFixed(2);
+      const pctHist = gov > 0 ? (bidUnit / gov) * 100 : 0;
+      return {
+        gov, tMargin, cost, floor, override, bidUnit, bidTotal,
+        costTotal, gross, marginPct, feFee, netTrue, pctHist,
+      };
+    };
+    // Live-edit the override (no persist) while typing…
+    const setBidOverrideLocal = (sol_number, val) =>
+      setRows(
+        rows.map((x) =>
+          x.sol_number === sol_number ? { ...x, bid_override: val } : x,
+        ),
+      );
+    // …persist on blur, mirroring the number into bid_price (the canonical
+    // "submitted bid" that the win-ledger / PO template read).
+    const saveBidOverride = async (sol_number, val) => {
+      const num = parseFloat(val);
+      const updated = rows.map((x) =>
+        x.sol_number === sol_number
+          ? { ...x, bid_override: val, bid_price: isNaN(num) ? x.bid_price : num }
+          : x,
+      );
+      setRows(updated);
+      const row = updated.find((x) => x.sol_number === sol_number);
+      if (row) await dbSave(row);
+    };
+
     const [clearConfirm, setClearConfirm] = usePState(false);
     const [bidBand, setBidBand] = usePState("All");
     const [search, setSearch] = usePState("");
@@ -2021,10 +2069,11 @@ Rules:
                     ? parseFloat(r.supplier_quote_price)
                     : govUnit * 0.7;
                   const m = calcBidMath(costUnit, qty, tierMargin, 0, 0, 0);
-                  const meetsM = m.gpPct >= tierMargin * 100 - 0.5;
+                  const bv = bidView(r);
+                  const meetsM = bv.marginPct >= tierMargin * 100 - 0.5;
                   const mcls = meetsM
                     ? "var(--green)"
-                    : m.gpPct >= 10
+                    : bv.marginPct >= 10
                       ? "var(--amber)"
                       : "var(--red)";
                   const TIER_ABBR = {
@@ -2328,20 +2377,57 @@ Rules:
                       ),
                       hP(
                         "td",
-                        {
-                          className: "imperio-gold-text",
+                        { onClick: (e) => e.stopPropagation() },
+                        hP("input", {
+                          type: "number",
+                          step: "0.01",
+                          value:
+                            r.bid_override != null && r.bid_override !== ""
+                              ? r.bid_override
+                              : "",
+                          placeholder: fmt(bv.floor.bidUnit),
+                          title:
+                            "Your bid $/ea. Blank = cost-plus floor. Type to price to market (toward gov hist).",
+                          onClick: (e) => e.stopPropagation(),
+                          onChange: (e) =>
+                            setBidOverrideLocal(r.sol_number, e.target.value),
+                          onBlur: (e) =>
+                            saveBidOverride(r.sol_number, e.target.value),
                           style: {
+                            width: "90px",
+                            background: "var(--inset-bg)",
+                            border: "1px solid rgba(201,168,76,.25)",
+                            borderRadius: "3px",
                             color: "var(--accent-pink-deep)",
-                            fontSize: "17px",
+                            fontFamily: "JetBrains Mono,monospace",
+                            fontSize: "15px",
                             fontWeight: "700",
+                            padding: "5px 7px",
+                            textAlign: "right",
                           },
-                        },
-                        fmt(m.bidUnit),
+                        }),
+                        bv.gov > 0 &&
+                          hP(
+                            "div",
+                            {
+                              style: {
+                                fontFamily: "JetBrains Mono,monospace",
+                                fontSize: "9px",
+                                color:
+                                  bv.pctHist > 100
+                                    ? "var(--red)"
+                                    : "var(--body-faint)",
+                                marginTop: "3px",
+                                textAlign: "right",
+                              },
+                            },
+                            bv.pctHist.toFixed(0) + "% hist",
+                          ),
                       ),
                       hP(
                         "td",
                         { style: { color: mcls, fontWeight: "700" } },
-                        m.gpPct.toFixed(1) + "%",
+                        bv.marginPct.toFixed(1) + "%",
                         hP(
                           "span",
                           {
@@ -2350,12 +2436,16 @@ Rules:
                               display: "block",
                               color: meetsM
                                 ? "var(--body-faint)"
-                                : m.gpPct >= 21
+                                : bv.marginPct >= 21
                                   ? "rgba(243,156,18,.5)"
                                   : "var(--red)",
                             },
                           },
-                          (r.supplier_quote_price ? "" : "est") +
+                          (r.bid_override
+                            ? "bid"
+                            : r.supplier_quote_price
+                              ? ""
+                              : "est") +
                             " · " +
                             (tierMargin * 100).toFixed(0) +
                             "% min",
@@ -2365,12 +2455,25 @@ Rules:
                         "td",
                         {
                           style: {
-                            color: m.net >= 0 ? "var(--green)" : "var(--red)",
+                            color:
+                              bv.netTrue >= 0 ? "var(--green)" : "var(--red)",
                             fontWeight: "700",
                             fontSize: "16px",
                           },
                         },
-                        fmt(m.net),
+                        fmt(bv.netTrue),
+                        hP(
+                          "span",
+                          {
+                            style: {
+                              fontSize: "9px",
+                              display: "block",
+                              color: "var(--body-faint)",
+                              fontFamily: "JetBrains Mono,monospace",
+                            },
+                          },
+                          "gross " + fmt(bv.gross) + " · −FE " + fmt(bv.feFee),
+                        ),
                       ),
 
                       // ── DUE CELL — 4 lines: date / urgency / Entered: MM/DD/YY / + Xd ago ──
@@ -2895,22 +2998,9 @@ Rules:
                       let total = 0,
                         oopTotal = 0;
                       visible.forEach((r) => {
-                        const qty = parseFloat(r.quantity) || 1;
-                        const govUnit = parseFloat(r.unit_price) || 0;
-                        const tier = r.tier || "Standard";
-                        const costUnit = r.supplier_quote_price
-                          ? parseFloat(r.supplier_quote_price)
-                          : govUnit * 0.7;
-                        const m = calcBidMath(
-                          costUnit,
-                          qty,
-                          TIER_MARGINS[tier] || 0.3,
-                          0,
-                          0,
-                          0,
-                        );
-                        total += m.net;
-                        if (oopSet.has(r.sol_number)) oopTotal += m.cogs;
+                        const bv = bidView(r);
+                        total += bv.netTrue;
+                        if (oopSet.has(r.sol_number)) oopTotal += bv.costTotal;
                       });
                       const oopCount = visible.filter((r) =>
                         oopSet.has(r.sol_number),
@@ -2989,7 +3079,7 @@ Rules:
                                 letterSpacing: ".06em",
                               },
                             },
-                            "est. net take home" +
+                            "net take home · after FE" +
                               (visible.every((r) => r.supplier_quote_price)
                                 ? ""
                                 : " (est)"),
