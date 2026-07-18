@@ -1174,7 +1174,8 @@ Rules:
   }) {
     const { fmt, TIER_MARGINS, STATUSES, tierClass, calcBidMath } =
       window.SCC_MATH;
-    const { dbSave, dbDelete, dbArchive, dbClearAll } = window.SCC_DB;
+    const { dbSave, dbDelete, dbArchive, dbClearAll, viSave, viGetByNSN } =
+      window.SCC_DB;
     const { Drawer } = window.SCC_TABS;
 
     const [clearConfirm, setClearConfirm] = usePState(false);
@@ -2786,7 +2787,64 @@ Rules:
                                   x.sol_number === r.sol_number ? updated : x,
                                 ),
                               );
-                              showToast(r.sol_number + " updated");
+
+                              // Supplier Intel feeds Vendor Intel — one entry,
+                              // no double keying. Upserts by vendor name per NSN.
+                              let viMsg = "";
+                              try {
+                                const px = parseFloat(
+                                  updated.supplier_quote_price,
+                                );
+                                const vName = (
+                                  updated.supplier_name ||
+                                  updated.ref_supplier ||
+                                  ""
+                                ).trim();
+                                if (updated.nsn && vName && px > 0 && viSave) {
+                                  const vid = vName
+                                    .toLowerCase()
+                                    .replace(/\s+/g, "_");
+                                  const pn = (
+                                    updated.ref_part_number || "NOPART"
+                                  )
+                                    .toUpperCase()
+                                    .replace(/\s+/g, "_");
+                                  const existing = viGetByNSN
+                                    ? await viGetByNSN(updated.nsn)
+                                    : [];
+                                  const match = existing.find(
+                                    (e) =>
+                                      (e.vendor_name || "")
+                                        .trim()
+                                        .toLowerCase() === vName.toLowerCase(),
+                                  );
+                                  await viSave({
+                                    id: match
+                                      ? match.id
+                                      : updated.nsn + "::" + pn + "::" + vid,
+                                    nsn: updated.nsn,
+                                    fsc:
+                                      updated.fsc ||
+                                      (updated.nsn || "")
+                                        .replace(/-/g, "")
+                                        .slice(0, 4),
+                                    vendor_id: vid,
+                                    vendor_name: vName,
+                                    part_number: updated.ref_part_number || "",
+                                    unit_price: px,
+                                    lead_time: updated.supplier_lead_time || "",
+                                    moq: updated.supplier_moq || "",
+                                    notes: match ? match.notes || "" : "",
+                                    status: "quoted",
+                                    sol_number: updated.sol_number,
+                                    last_updated:
+                                      new Date().toLocaleDateString(),
+                                  });
+                                  viMsg = " · Vendor Intel synced";
+                                }
+                              } catch (e) {}
+
+                              showToast(r.sol_number + " updated" + viMsg);
                             },
                             showToast,
                           }),

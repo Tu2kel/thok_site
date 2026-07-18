@@ -212,6 +212,7 @@
     const AwardsIntelPanel = window.SCC_TABS.AwardsIntelPanel || null;
     const [dtab, setDtab] = usePState("supplier");
     const [form, setForm] = usePState({
+      supplier_name: record.ref_supplier || "",
       supplier_website: "",
       supplier_phone: "",
       supplier_email: "",
@@ -235,6 +236,7 @@
       ...Object.fromEntries(
         Object.entries(record).filter(([k]) =>
           [
+            "supplier_name",
             "supplier_website",
             "supplier_phone",
             "supplier_email",
@@ -503,6 +505,12 @@ Imperio Talent Solutions | CAGE 152U4<br>
                   hP("div", { style: { fontFamily: "Cinzel,serif", fontSize: "9px", letterSpacing: ".22em",
                     textTransform: "uppercase", color: "rgba(56,189,248,.65)", marginBottom: "16px" } }, "Contact"),
 
+                  hP("div", { style: { marginBottom: "14px" } },
+                    fld("supplier_name", "Supplier / Vendor Name", { ph: "e.g. Bonesteel Aerospace, LLC" }),
+                    hP("div", { style: { fontFamily: "Cormorant Garamond,serif", fontStyle: "italic",
+                      fontSize: "12px", color: "rgba(56,189,248,.55)", marginTop: "4px" } },
+                      "Saving a quote here also logs this vendor to the global NSN Intel — no need to re-enter it under Vendor Intel."),
+                  ),
                   hP("div", { style: { marginBottom: "14px" } },
                     fld("supplier_website", "Website", { ph: "https://" })
                   ),
