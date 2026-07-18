@@ -17,6 +17,74 @@
     return /\bSP[A-Z][A-Z0-9]/i.test(top) || /\bHist\./i.test(text);
   }
 
+  // ── DLA NAVIGATOR TAB-ROW (fixed column layout) ─────────────────────────
+  // A row copied from the Navigator "Search Solicitations" results grid comes
+  // in as one tab-separated line. Column order (per the live header):
+  //   0 Solicitation · 1 AI · 2 Sol.Type · 3 Nomenclature · 4 Repost · 5 QTY ·
+  //   6 UnitIssue · 7 UnitPrice · 8 PriceHist · 9 Extended · 10 QuoteDue ·
+  //   11 Del(days) · 12 NSN · 13 PiecePartNo · 14 JCP · 15 SetAside ·
+  //   16 PartChar · 17 TechDocs · 18 SupplierRestr · 19 Quote · 20 BasicDrawing ·
+  //   21 QA · 22 FirstArt · 23 Insp · 24 FOB · 25 ComPack · 26 PostedDate ·
+  //   27 NAICS · 28 Suppliers · 29 NSNInfo · 30 SA · 31 AMSC · 32 BuyerInfo …
+  // We anchor on the QTY+UnitIssue pair (Nomenclature is always 3 cells left)
+  // and on the Posted date (FOB is always 2 cells left) rather than trusting
+  // raw indices, so a stray leading column can't throw the whole map off.
+  const NAV_UNIT_RX =
+    /^(EA|LT|BX|DZ|PR|FT|GL|LB|PK|RL|SE|ST|PG|HD|SH|VI|CY|GR|MX|TH|YD|SL|RO|AY|KT)$/i;
+
+  function parseNavigatorRow(text) {
+    let cells = null;
+    for (const line of text.split(/\r?\n/)) {
+      if (line.indexOf("\t") === -1) continue;
+      const c = line.split("\t").map((x) => x.trim());
+      if (c.length >= 12 && c.some((x) => /^S?P[A-Z][A-Z0-9]/i.test(x))) {
+        cells = c;
+        break;
+      }
+    }
+    if (!cells) return null;
+
+    // QTY+UnitIssue anchor — unit cell whose left neighbour is a bare quantity
+    let uIdx = -1;
+    for (let i = 1; i < cells.length; i++) {
+      if (NAV_UNIT_RX.test(cells[i]) && /^\d[\d,]*$/.test(cells[i - 1])) {
+        uIdx = i;
+        break;
+      }
+    }
+    if (uIdx === -1) return null; // not a shape we recognize — bail, keep regexes
+
+    const d = {};
+    const at = (i) => (i >= 0 && i < cells.length ? cells[i] : "");
+
+    // Nomenclature → item name (3 cells left of UnitIssue: Nom · Repost · QTY · Unit)
+    const nom = at(uIdx - 3);
+    if (
+      nom &&
+      !NAV_UNIT_RX.test(nom) &&
+      !/^[\d$]/.test(nom) &&
+      !/^(N\/A|—|-+)$/i.test(nom) &&
+      !/^S?P[A-Z][A-Z0-9]/i.test(nom)
+    ) {
+      d.item_name = nom;
+    }
+
+    // FOB → 2 cells left of the Posted date (FOB · ComPack · PostedDate).
+    // The Posted date is the LAST MM/DD/YY on the row; Quote-Due sits earlier.
+    const dateIdxs = [];
+    cells.forEach((c, i) => {
+      if (/^\d{2}\/\d{2}\/\d{2}$/.test(c)) dateIdxs.push(i);
+    });
+    if (dateIdxs.length) {
+      const fob = at(dateIdxs[dateIdxs.length - 1] - 2);
+      if (/^(Dest|Orig)\.?$/i.test(fob)) {
+        d.fob = /orig/i.test(fob) ? "Orig." : "Dest.";
+      }
+    }
+
+    return d;
+  }
+
   function parseListing(text) {
     const d = {};
 
@@ -182,6 +250,16 @@
         d.ref_supplier = supLine[1].trim();
         d.ref_supplier_cage = supLine[2];
       }
+    }
+
+    // Navigator tab-row positional parse wins for columns the regex heuristics
+    // can't place by content alone: Nomenclature → item_name, and the true FOB
+    // (regex grabs the earlier Inspection "Dest./Orig." cell instead).
+    const nav = parseNavigatorRow(text);
+    if (nav) {
+      Object.entries(nav).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && v !== "") d[k] = v;
+      });
     }
 
     return d;
@@ -378,5 +456,11 @@
   }
 
   // Expose globally
-  window.SCC_PARSER = { normalizeNSN, isListing, parseListing, parseAIText };
+  window.SCC_PARSER = {
+    normalizeNSN,
+    isListing,
+    parseListing,
+    parseAIText,
+    parseNavigatorRow,
+  };
 })();
