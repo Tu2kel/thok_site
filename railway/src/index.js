@@ -845,6 +845,28 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Full exclusion list — every distributor pulled from the blast (is_dns / bounced),
+  // with the reason. Shows who was killed and why, across the whole DB (not just aero).
+  if (u === "/excluded" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const ex = await mdb.collection("distributors")
+        .find({ $or: [{ is_dns: true }, { email_invalid: true }] })
+        .project({ name: 1, email: 1, dns_reason: 1, email_invalid: 1, email_bounced_at: 1, is_manufacturer: 1, tags: 1 }).toArray();
+      const rows = ex.map(d => ({
+        name: d.name, email: d.email || "(none)",
+        reason: d.dns_reason || (d.email_invalid ? "email bounced/invalid" : "dns"),
+        aero: /aero/i.test(d.name || "") || (d.tags || []).some(t => /aero/i.test(t)) || !!d.is_manufacturer,
+      }));
+      rows.sort((a, b) => a.name.localeCompare(b.name));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, count: rows.length, aero_excluded: rows.filter(r => r.aero).length, excluded: rows }, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
   // Aero roster health — who the aerospace lane actually emails, and whether those
   // addresses are deliverable. Helps explain low response (bounces / personal inboxes).
   if (u === "/aero-roster" && req.method === "GET") {
