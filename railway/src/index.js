@@ -26,6 +26,10 @@ const SOL_SOURCE = process.env.SOL_SOURCE || "navigator";
 
 const SCHEDULE  = process.env.CRON_SCHEDULE || "0 2 * * 1-5"; // 2 AM CT Mon–Fri — DIBBS scrape + vendor blast
 const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabled
+// AN/MS/NAS aerospace lane — decoupled from the retired FSC mass-blast 2026-07-18.
+// Gates ONLY the aerospace path in blaster.js (approved-mfr + aerospace vendors);
+// FEDERAL_BLAST_ENABLED stays off. Reported in /health as aerospace_blast_enabled.
+const AEROSPACE_BLAST_ENABLED = process.env.AEROSPACE_BLAST_ENABLED === "true";
 // Daily scrape+blast cron. STOPPED 2026-07-16 — off unless explicitly re-enabled.
 const DAILY_CRON_ENABLED = process.env.DAILY_CRON_ENABLED === "true";
 // Health-check alert cron. STOPPED 2026-07-16 — it was the last scheduled emailer.
@@ -724,6 +728,7 @@ const httpServer = http.createServer((req, res) => {
       health_check_cron_registered: HEALTH_CHECK_ENABLED,
       fsc_updater_cron_registered: FSC_UPDATER_ENABLED,
       federal_blast_enabled: process.env.FEDERAL_BLAST_ENABLED === "true",
+      aerospace_blast_enabled: AEROSPACE_BLAST_ENABLED,
       blast_live: IS_LIVE,
       blast_paused:  _blastState.paused,
       daily_sent:    _blastState.daily_sent,

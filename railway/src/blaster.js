@@ -144,7 +144,7 @@ function buildBlastPlan(sols, dists) {
     const priceKnown = cappedSols.some(r => r.unit_price != null || r.ext_price != null || r.hist_price != null);
     if (priceKnown && totalExt < 1000) continue;
 
-    plan.push({ vendor, sols: cappedSols, totalExt, fscs });
+    plan.push({ vendor, sols: cappedSols, totalExt, fscs, lane: "fsc" });
   }
 
   // Aerospace path: approved manufacturers AND aerospace companies receive ALL
@@ -165,7 +165,7 @@ function buildBlastPlan(sols, dists) {
         return s + (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1) || parseFloat(r.ext_price || 0) || 0);
       }, 0);
       if (totalExt >= 1000) {
-        plan.push({ vendor: av, sols: anmsNasSols, totalExt, fscs: [...goFscs] });
+        plan.push({ vendor: av, sols: anmsNasSols, totalExt, fscs: [...goFscs], lane: "aerospace" });
         info(av.name + (av.is_manufacturer ? " (approved-mfr)" : " (aerospace)") + " → " + anmsNasSols.length + " aerospace-std sol(s) queued");
       }
     }
@@ -238,22 +238,33 @@ function makeSenderCache(db) {
 async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = {}, db = null) {
   const results = { sent: 0, failed: 0, skipped: 0, paused: false, daily_limit: false, log: [] };
 
-  // ── FEDERAL BLAST KILL SWITCH ──────────────────────────────────────────────
-  // The ~2,500-vendor DIBBS mass-blast was RETIRED 2026-07-15 (blast-and-pray POC
-  // failed). This vendor DB is being repurposed for the State/ESBD side, which
-  // uses per-sol matched targeting, not a spray.
+  // ── PER-LANE BLAST KILL SWITCHES ───────────────────────────────────────────
+  // Two independent lanes, gated separately (decoupled 2026-07-18):
   //
-  // This guard covers the RAILWAY paths only: the daily cron, /blast-existing, and
-  // the UI live override. It does NOT cover netlify/functions/send-rfq.js, nor the
-  // gmail-ingest / navigator-ingest Netlify crons — those email vendors over the
-  // Gmail API and are gated separately in their own files. Scrape / screen /
-  // sol-ingest keep running (they still feed FSC matching and the DB).
-  // Default OFF. To resume during the revamp, set FEDERAL_BLAST_ENABLED=true.
-  if (process.env.FEDERAL_BLAST_ENABLED !== "true") {
-    results.skipped = plan.length;
+  //   lane "fsc"       — the ~2,500-vendor DIBBS mass-blast, RETIRED 2026-07-15
+  //                      (blast-and-pray POC failed). Stays OFF. Gate: FEDERAL_BLAST_ENABLED.
+  //   lane "aerospace" — AN/MS/NAS-standard sols → approved-mfr + aerospace vendors
+  //                      only (~33, not the 2,400). This always ran as its own targeted
+  //                      cut; it just shared the mass-blast's switch. Gate: AEROSPACE_BLAST_ENABLED.
+  //
+  // Enabling aerospace does NOT wake the mass-blast, and vice-versa. Entries with no
+  // lane tag (shouldn't happen) fall under the FSC gate, failing safe to OFF.
+  //
+  // These guards cover the RAILWAY paths only (daily cron, /blast-existing, UI live
+  // override). They do NOT cover netlify/functions/send-rfq.js (the browser ISO tool),
+  // which is gated in its own file. Scrape / screen / sol-ingest keep running.
+  const fscOn  = process.env.FEDERAL_BLAST_ENABLED   === "true";
+  const aeroOn = process.env.AEROSPACE_BLAST_ENABLED === "true";
+  const requested = plan.length;
+  plan = plan.filter(e => (e.lane === "aerospace" ? aeroOn : fscOn));
+  if (!plan.length) {
+    results.skipped = requested;
     results.paused  = true;
-    results.log.push({ note: "Federal blast disabled (retired 2026-07-15) — 0 vendor emails sent; " + plan.length + " skipped." });
+    results.log.push({ note: "Blast lanes disabled (fsc=" + fscOn + ", aerospace=" + aeroOn + ") — 0 vendor emails sent; " + requested + " skipped." });
     return results;
+  }
+  if (plan.length < requested) {
+    info("Lane filter: " + plan.length + "/" + requested + " vendors pass (fsc=" + fscOn + ", aerospace=" + aeroOn + ")");
   }
 
   // Round-robin rotation across all vendors in the blast plan.
