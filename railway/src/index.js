@@ -869,6 +869,12 @@ const httpServer = http.createServer((req, res) => {
           email = (p.localpart || "info") + "@" + dom;
           resolvedFrom = "blast_log:" + hist.vendor_email;
         }
+        // Do-not-contact guard — honor blocked vendors even on a manual one-off send.
+        const targetDom = email.split("@")[1] || "";
+        const blockHit = await db.collection("distributors").findOne({
+          is_dns: true, $or: [{ email: email }, { blocked_domain: targetDom }],
+        });
+        if (blockHit) throw new Error("BLOCKED — " + email + " is on the do-not-contact list (" + (blockHit.dns_reason || "blocked") + ")");
         const sols = await db.collection("solicitations")
           .find({ status: { $in: ["New", "Awaiting Quotes"] } }).toArray();
         const dists = [{ name: p.name || email, email, is_manufacturer: true, id: "oneoff:" + email }];
@@ -883,6 +889,53 @@ const httpServer = http.createServer((req, res) => {
         log("blast-one → " + email + ": " + result.sent + " sent, " + result.failed + " failed (" + aeroSols.length + " AN/MS/NAS sols)");
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, sent: result.sent, failed: result.failed, email, anmsnas_sols: aeroSols.length, sols: aeroSols }, null, 2));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // Permanently block a vendor / domain from all blasts. Body:
+  //   { "name":"G-Fast", "domain":"g-fast.com", "emails":["steve@g-fast.com","info@g-fast.com"], "reason":"..." }
+  // Upserts is_dns:true records so buildBlastPlan (auto sweep) AND /blast-one skip them.
+  if (u === "/block-vendor" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const reason = p.reason || "Do-not-contact (manual block)";
+        const db = await getDb();
+        const emails = (p.emails || []).map(e => String(e).toLowerCase());
+        let n = 0;
+        for (const em of emails) {
+          await db.collection("distributors").updateOne(
+            { email: em },
+            { $set: { name: p.name || em, email: em, is_dns: true, email_invalid: false, dns_reason: reason, blocked_at: new Date().toISOString() } },
+            { upsert: true },
+          );
+          n++;
+        }
+        if (p.domain) {
+          await db.collection("distributors").updateOne(
+            { blocked_domain: String(p.domain).toLowerCase() },
+            { $set: { blocked_domain: String(p.domain).toLowerCase(), name: p.name || p.domain, is_dns: true, dns_reason: reason, blocked_at: new Date().toISOString() } },
+            { upsert: true },
+          );
+          n++;
+        }
+        // Also flag any existing distributor rows on that domain
+        if (p.domain) {
+          await db.collection("distributors").updateMany(
+            { email: { $regex: "@" + String(p.domain).replace(/\./g, "\\.") + "$", $options: "i" } },
+            { $set: { is_dns: true, dns_reason: reason, blocked_at: new Date().toISOString() } },
+          ).catch(() => {});
+        }
+        log("block-vendor: " + (p.name || p.domain || "?") + " blocked (" + n + " record(s))");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, blocked: n, name: p.name, domain: p.domain || null, emails, reason }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: e.message }));
