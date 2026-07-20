@@ -196,6 +196,18 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
     log("Scrape complete — " + rawSols.length + " sols");
   }
 
+  // ── 2b. Lean AN/MS/NAS sweep ──────────────────────────────────────────
+  // When aerospace is the only live blast lane (aerospace ON + federal OFF),
+  // there is no reason to Claude-screen + save ~480 non-aerospace sols just to
+  // blast ~5. Filter to AN/MS/NAS right after scrape so screening/save/ingest
+  // only touch the sweep set. The State side needs vendors, not these sols.
+  const AEROSPACE_ONLY = AEROSPACE_BLAST_ENABLED && process.env.FEDERAL_BLAST_ENABLED !== "true";
+  if (AEROSPACE_ONLY) {
+    const beforeAero = rawSols.length;
+    rawSols = rawSols.filter(s => isAerospacePN(s.ref_part_number));
+    log("Aerospace-only sweep: " + rawSols.length + "/" + beforeAero + " sols are AN/MS/NAS — screening only these");
+  }
+
   // ── 3. Skip already-acted + DNS FSCs ─────────────────────────────────
   const alreadyActed = await getAlreadyActedSols(db);
   const dnsFscFiltered = rawSols.filter(s => {
@@ -288,6 +300,7 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
         supplier_restrictions: sol.supplier_restrictions || "",
         amsc:                  sol.amsc || "",
         supplier_list:         sol.supplier_list || "",
+        is_repost:             !!sol.is_repost,
         buyer_email:           sol.buyer_email || "",
         buyer_name:            sol.buyer_name || "",
         ship_to_dodaac:          sol.ship_to_dodaac || "",
@@ -331,13 +344,18 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
   // Raw quote_due must be at least 2 days out so the vendor has a real day to respond.
   const todayMs = new Date().setHours(0, 0, 0, 0);
   const cutoffMs = todayMs + 2 * 86400000; // today + 2 days
+  // Reposts are exempt: DIBBS reposts show a past/near "Quote Due" but are still
+  // open to quote (they get re-solicited). Gating them on the raw date drops the
+  // whole repost lane. Non-reposts still need 2 days for the vendor to respond.
   const expiredSols = blastSols.filter(s => {
+    if (s.is_repost) return false;
     if (!s.quote_due) return false;
     const d = new Date(s.quote_due);
     return !isNaN(d.getTime()) && d.getTime() < cutoffMs;
   });
-  if (expiredSols.length) log("Dropped " + expiredSols.length + " sol(s) — quote due today or tomorrow (too late to blast)");
+  if (expiredSols.length) log("Dropped " + expiredSols.length + " non-repost sol(s) — quote due today or tomorrow (too late to blast)");
   blastSols = blastSols.filter(s => {
+    if (s.is_repost) return true; // still quotable despite past/near due date
     if (!s.quote_due) return true;
     const d = new Date(s.quote_due);
     return isNaN(d.getTime()) || d.getTime() >= cutoffMs;
