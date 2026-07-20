@@ -11,7 +11,7 @@ const { fetchSamSols }         = require("./sam-fetcher");
 const { fetchDibbsDailySols }  = require("./dibbs-daily-fetcher");
 const { fetchDibbsDailySols: fetchDibbsPuppet } = require("./dibbs-puppet-fetcher");
 const { screenBatch }      = require("./screener");
-const { buildBlastPlan, runBlast, isAerospacePN } = require("./blaster");
+const { buildBlastPlan, runBlast, isAerospacePN, isMedicalFSC } = require("./blaster");
 const { runEsbdSync } = require("./esbd-scraper");
 let esbdRunning = false;
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
@@ -30,6 +30,9 @@ const IS_LIVE   = process.env.BLAST_LIVE === "true"; // must be explicitly enabl
 // Gates ONLY the aerospace path in blaster.js (approved-mfr + aerospace vendors);
 // FEDERAL_BLAST_ENABLED stays off. Reported in /health as aerospace_blast_enabled.
 const AEROSPACE_BLAST_ENABLED = process.env.AEROSPACE_BLAST_ENABLED === "true";
+// Medical lane — 65xx FSC sols → name-matched medical distributors (~57). Parallel
+// to aerospace, independently gated. Reported in /health as medical_blast_enabled.
+const MEDICAL_BLAST_ENABLED = process.env.MEDICAL_BLAST_ENABLED === "true";
 // Daily scrape+blast cron. STOPPED 2026-07-16 — off unless explicitly re-enabled.
 const DAILY_CRON_ENABLED = process.env.DAILY_CRON_ENABLED === "true";
 // Health-check alert cron. STOPPED 2026-07-16 — it was the last scheduled emailer.
@@ -201,11 +204,16 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
   // there is no reason to Claude-screen + save ~480 non-aerospace sols just to
   // blast ~5. Filter to AN/MS/NAS right after scrape so screening/save/ingest
   // only touch the sweep set. The State side needs vendors, not these sols.
-  const AEROSPACE_ONLY = AEROSPACE_BLAST_ENABLED && process.env.FEDERAL_BLAST_ENABLED !== "true";
-  if (AEROSPACE_ONLY) {
-    const beforeAero = rawSols.length;
-    rawSols = rawSols.filter(s => isAerospacePN(s.ref_part_number));
-    log("Aerospace-only sweep: " + rawSols.length + "/" + beforeAero + " sols are AN/MS/NAS — screening only these");
+  const FEDERAL_ON = process.env.FEDERAL_BLAST_ENABLED === "true";
+  const KEEP_AERO = AEROSPACE_BLAST_ENABLED && !FEDERAL_ON;
+  const KEEP_MED  = MEDICAL_BLAST_ENABLED && !FEDERAL_ON;
+  if ((KEEP_AERO || KEEP_MED) && !FEDERAL_ON) {
+    const before = rawSols.length;
+    rawSols = rawSols.filter(s =>
+      (KEEP_AERO && isAerospacePN(s.ref_part_number)) ||
+      (KEEP_MED && isMedicalFSC(s.fsc || (s.nsn || "").slice(0, 4))),
+    );
+    log("Lean sweep (aero=" + KEEP_AERO + " med=" + KEEP_MED + "): " + rawSols.length + "/" + before + " sols kept — screening only these");
   }
 
   // ── 3. Skip already-acted + DNS FSCs ─────────────────────────────────
@@ -236,9 +244,11 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
   // ($1k) — they come in at small ext prices but route to approved MFRs via blaster.
   // If ext_price is null, let through — can't filter what we don't know.
   const AN_MS_NAS_MIN = 1000;
+  const MEDICAL_MIN   = 1000; // medical orders run small — same lower floor as aerospace
   const valuedSols = MIN_ORDER_VALUE > 0 ? freshSols.filter(s => {
     if (s.ext_price == null) return true;
     if (isAerospacePN(s.ref_part_number)) return s.ext_price >= AN_MS_NAS_MIN;
+    if (isMedicalFSC(s.fsc || (s.nsn || "").slice(0, 4))) return s.ext_price >= MEDICAL_MIN;
     return s.ext_price >= MIN_ORDER_VALUE;
   }) : freshSols;
   const valueDrop = freshSols.length - valuedSols.length;
@@ -751,6 +761,7 @@ const httpServer = http.createServer((req, res) => {
       fsc_updater_cron_registered: FSC_UPDATER_ENABLED,
       federal_blast_enabled: process.env.FEDERAL_BLAST_ENABLED === "true",
       aerospace_blast_enabled: AEROSPACE_BLAST_ENABLED,
+      medical_blast_enabled: MEDICAL_BLAST_ENABLED,
       blast_live: IS_LIVE,
       blast_paused:  _blastState.paused,
       daily_sent:    _blastState.daily_sent,

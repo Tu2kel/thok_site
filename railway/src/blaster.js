@@ -78,6 +78,21 @@ function isAerospaceVendor(d) {
   return (d.tags || []).some(t => /aero/i.test(t));
 }
 
+// Medical Federal Supply Group — FSC 6505-6550 (drugs, dressings, surgical/medical
+// instruments & equipment, dental, x-ray, hospital furniture, apparel, ophthalmic,
+// medical sets, in-vitro diagnostics). Note 6505 (drugs) is FDA/DSCSA-heavy.
+function isMedicalFSC(fsc) { return /^65\d\d$/.test(String(fsc || "")); }
+
+// A "medical distributor" — identified by NAME/tag ONLY, never by FSC lane. The old
+// mass-blast blanket-assigned all 65xx lanes to ~1,000 non-medical vendors, so "has a
+// medical lane" is noise; name is the real signal (~57 genuine med/surgical/pharma/lab).
+function isMedicalVendor(d) {
+  if (!d) return false;
+  const n = d.name || d.company_name || "";
+  if (/\b(medical|health\s?care|healthcare|pharma|pharmac|surgical|surgic|dental|biomed|medtech|meditech|hospital|clinic|med[\s-]?supply|medsupply|wellness|therapeutic|diagnostic|nursing|scientific|prosthetic)\b/i.test(n)) return true;
+  return (d.tags || []).some(t => /med|health|pharma|dental|surg|scientific/i.test(t));
+}
+
 // Select vendors for a set of sols, respecting FSC cap + tier ordering
 function buildBlastPlan(sols, dists) {
   const goFscs = new Set(sols.map(s => String(s.fsc || (s.nsn || "").slice(0, 4))).filter(Boolean));
@@ -85,10 +100,11 @@ function buildBlastPlan(sols, dists) {
   const fscVendorCount = {};
   const seenNames = new Set();
 
-  // Exclude manufacturers AND aerospace companies from FSC-lane routing — both get
-  // their own part-number-based path below and receive ONLY those sols.
+  // Exclude manufacturers, aerospace, AND medical companies from FSC-lane routing —
+  // each gets its own targeted path below and receives ONLY those sols. (Without the
+  // medical exclusion, the ~1,000 blanket-65xx vendors would spray on medical sols.)
   const eligible = dists
-    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_manufacturer && !isAerospaceVendor(d))
+    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_manufacturer && !isAerospaceVendor(d) && !isMedicalVendor(d))
     .sort((a, b) => (a.tier || 9) - (b.tier || 9));
 
   const vendorFscMap = [];
@@ -167,6 +183,29 @@ function buildBlastPlan(sols, dists) {
       if (totalExt >= 1000) {
         plan.push({ vendor: av, sols: anmsNasSols, totalExt, fscs: [...goFscs], lane: "aerospace" });
         info(av.name + (av.is_manufacturer ? " (approved-mfr)" : " (aerospace)") + " → " + anmsNasSols.length + " aerospace-std sol(s) queued");
+      }
+    }
+  }
+
+  // Medical path: name-matched medical distributors receive ALL medical-FSC sols
+  // (65xx) and nothing else. Recipients are matched by NAME only (isMedicalVendor),
+  // never by FSC lane — that keeps the ~1,000 blanket-65xx non-medical vendors out.
+  const medicalSols = sols.filter(s => isMedicalFSC(s.fsc || (s.nsn || "").slice(0, 4)));
+  if (medicalSols.length) {
+    const medRecipients = dists.filter(d =>
+      isMedicalVendor(d) && d.email && !d.is_dns && !d.email_invalid,
+    );
+    for (const mv of medRecipients) {
+      const key = (mv.name || "").toUpperCase().trim();
+      if (seenNames.has(key)) continue;
+      seenNames.add(key);
+      const solExt = (r) => (parseFloat(r.unit_price || 0) * parseFloat(r.quantity || r.qty || 1)) || parseFloat(r.ext_price || 0) || 0;
+      const ranked = medicalSols.slice().sort((a, b) => solExt(b) - solExt(a));
+      const capped = ITEMS_PER_EMAIL > 0 ? ranked.slice(0, ITEMS_PER_EMAIL) : ranked;
+      const totalExt = capped.reduce((s, r) => s + solExt(r), 0);
+      if (totalExt >= 1000) {
+        plan.push({ vendor: mv, sols: capped, totalExt, fscs: [...goFscs], lane: "medical" });
+        info(mv.name + " (medical) → " + capped.length + " medical-FSC sol(s) queued");
       }
     }
   }
@@ -255,16 +294,18 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
   // which is gated in its own file. Scrape / screen / sol-ingest keep running.
   const fscOn  = process.env.FEDERAL_BLAST_ENABLED   === "true";
   const aeroOn = process.env.AEROSPACE_BLAST_ENABLED === "true";
+  const medOn  = process.env.MEDICAL_BLAST_ENABLED   === "true";
   const requested = plan.length;
-  plan = plan.filter(e => (e.lane === "aerospace" ? aeroOn : fscOn));
+  const laneOn = e => e.lane === "aerospace" ? aeroOn : e.lane === "medical" ? medOn : fscOn;
+  plan = plan.filter(laneOn);
   if (!plan.length) {
     results.skipped = requested;
     results.paused  = true;
-    results.log.push({ note: "Blast lanes disabled (fsc=" + fscOn + ", aerospace=" + aeroOn + ") — 0 vendor emails sent; " + requested + " skipped." });
+    results.log.push({ note: "Blast lanes disabled (fsc=" + fscOn + ", aerospace=" + aeroOn + ", medical=" + medOn + ") — 0 vendor emails sent; " + requested + " skipped." });
     return results;
   }
   if (plan.length < requested) {
-    info("Lane filter: " + plan.length + "/" + requested + " vendors pass (fsc=" + fscOn + ", aerospace=" + aeroOn + ")");
+    info("Lane filter: " + plan.length + "/" + requested + " vendors pass (fsc=" + fscOn + ", aerospace=" + aeroOn + ", medical=" + medOn + ")");
   }
 
   // Round-robin rotation across all vendors in the blast plan.
@@ -464,4 +505,4 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
   return results;
 }
 
-module.exports = { buildBlastPlan, runBlast, detectPNPrefix, isAerospacePN };
+module.exports = { buildBlastPlan, runBlast, detectPNPrefix, isAerospacePN, isMedicalFSC };
