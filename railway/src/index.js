@@ -966,6 +966,38 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Medical roster assessment — how many medical distributors we have and whether
+  // they're deliverable. Gates whether a medical blast lane has anyone to email.
+  if (u === "/medical-roster" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const all = await mdb.collection("distributors")
+        .find({}).project({ name: 1, email: 1, fsc: 1, tags: 1, is_dns: 1, email_invalid: 1 }).toArray();
+      const MED = /\b(medical|health\s?care|healthcare|health|pharma|pharmac|surgical|dental|biomed|medtech|meditech|hospital|clinic|med[\s-]?supply|wellness|therapeutic|diagnostic|nursing|lab(?:oratory)?)\b/i;
+      const medFsc = f => /^65\d\d$/.test(String(f || ""));
+      const isMed = d => MED.test(d.name || "") || (d.tags || []).some(t => /med|health|pharma|dental|surg/i.test(t)) || (d.fsc || []).some(medFsc);
+      const roster = all.filter(isMed);
+      const withEmail = roster.filter(d => d.email);
+      const live = withEmail.filter(d => !d.is_dns && !d.email_invalid);
+      const dead = withEmail.filter(d => d.is_dns || d.email_invalid);
+      const PERSONAL = /gmail\.com|yahoo\.com|aol\.com|hotmail\.com|outlook\.com|icloud\.com/i;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        total_medical_matches: roster.length,
+        live_email: live.length,
+        dead_or_bounced: dead.length,
+        no_email: roster.length - withEmail.length,
+        live_corporate: live.filter(d => !PERSONAL.test(d.email || "")).length,
+        live_personal: live.filter(d => PERSONAL.test(d.email || "")).length,
+        live_list: live.map(d => ({ name: d.name, email: d.email, fscs: (d.fsc || []).filter(medFsc) })).slice(0, 60),
+      }, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
   // Aero roster health — who the aerospace lane actually emails, and whether those
   // addresses are deliverable. Helps explain low response (bounces / personal inboxes).
   if (u === "/aero-roster" && req.method === "GET") {
