@@ -845,6 +845,38 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Aero roster health — who the aerospace lane actually emails, and whether those
+  // addresses are deliverable. Helps explain low response (bounces / personal inboxes).
+  if (u === "/aero-roster" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const all = await mdb.collection("distributors")
+        .find({}).project({ name: 1, email: 1, is_manufacturer: 1, tags: 1, is_dns: 1, email_invalid: 1, dns_reason: 1, has_jcp: 1 }).toArray();
+      const isAero = d => /aero/i.test(d.name || "") || (d.tags || []).some(t => /aero/i.test(t));
+      const roster = all.filter(d => d.is_manufacturer || isAero(d));
+      const withEmail = roster.filter(d => d.email);
+      const live = withEmail.filter(d => !d.is_dns && !d.email_invalid);
+      const bounced = withEmail.filter(d => d.is_dns || d.email_invalid);
+      const PERSONAL = /gmail\.com|yahoo\.com|aol\.com|hotmail\.com|outlook\.com|icloud\.com/i;
+      const personal = live.filter(d => PERSONAL.test(d.email || ""));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        total_roster: roster.length,
+        no_email: roster.length - withEmail.length,
+        live_email: live.length,
+        bounced_or_dns: bounced.length,
+        personal_domain: personal.length,
+        corporate_domain: live.length - personal.length,
+        bounced_list: bounced.map(d => ({ name: d.name, email: d.email, reason: d.dns_reason || "dns/invalid" })),
+        personal_list: personal.map(d => ({ name: d.name, email: d.email })),
+      }, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
   // Ingest a hand-curated sol list into the solicitations collection so the blast
   // engine (and its dedup) can send it. Body: { "sols": [ {sol_number, ref_part_number,
   // nsn, item_name, quantity, ...}, ... ] }. Upserts each as status:New verdict:GO.
