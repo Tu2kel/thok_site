@@ -824,6 +824,55 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Ingest a hand-curated sol list into the solicitations collection so the blast
+  // engine (and its dedup) can send it. Body: { "sols": [ {sol_number, ref_part_number,
+  // nsn, item_name, quantity, ...}, ... ] }. Upserts each as status:New verdict:GO.
+  // Use for lists built outside the scrape (e.g. the browser ISO tool), then POST
+  // /blast-existing to send them — blast_log dedup skips anything already emailed.
+  if (u === "/ingest-sols" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", () => {
+      let sols = [];
+      try { sols = (JSON.parse(body).sols) || []; } catch {}
+      if (!Array.isArray(sols) || !sols.length) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "body must be { sols: [...] } with at least one sol" }));
+        return;
+      }
+      getDb().then(async (mdb) => {
+        let n = 0;
+        for (const s of sols) {
+          if (!s.sol_number) continue;
+          const nsn = s.nsn || "";
+          await saveSol(mdb, {
+            sol_number:      s.sol_number,
+            nsn:             nsn,
+            fsc:             s.fsc || nsn.slice(0, 4),
+            item_name:       s.item_name || "",
+            ref_part_number: s.ref_part_number || "",
+            quantity:        String(s.quantity || ""),
+            unit_of_issue:   s.unit_of_issue || "",
+            unit_price:      s.unit_price != null ? s.unit_price : null,
+            ext_price:       s.ext_price != null ? s.ext_price : (s.ext != null ? s.ext : null),
+            quote_due:       s.quote_due || "",
+            delivery_days:   String(s.delivery_days || ""),
+            is_repost:       !!s.is_repost,
+            status:          "New",
+            verdict:         "GO",
+            win_probability: 100,
+            source:          "manual-ingest",
+            date_added:      new Date().toLocaleDateString(),
+          }).then(() => n++).catch(() => {});
+        }
+        log("ingest-sols: " + n + "/" + sols.length + " upserted");
+      }).catch(e => err("ingest-sols:", e.message));
+      res.writeHead(202, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, message: "ingesting " + sols.length + " sol(s)" }));
+    });
+    return;
+  }
+
   if (u === "/daily-brief" && req.method === "GET") {
     getDb().then(async (mdb) => {
       const brief = await mdb.collection("blast_briefs").findOne({}, { sort: { created_at: -1 } });
