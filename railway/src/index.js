@@ -824,6 +824,26 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Read what actually went out recently — /blast-existing writes no daily brief,
+  // so this reads blast_log directly. ?mins=N sets the window (default 20).
+  if (u === "/recent-blasts" && req.method === "GET") {
+    const mins = parseInt(new URLSearchParams(req.url.split("?")[1] || "").get("mins") || "20", 10) || 20;
+    getDb().then(async (mdb) => {
+      const since = new Date(Date.now() - mins * 60000).toISOString();
+      const rows = await mdb.collection("blast_log")
+        .find({ status: "sent", sent_at: { $gte: since } })
+        .project({ sol_number: 1, vendor_name: 1, vendor_email: 1, sent_at: 1 }).toArray();
+      const sols = [...new Set(rows.map(r => r.sol_number))];
+      const vendors = [...new Set(rows.map(r => (r.vendor_email || "").toLowerCase()))];
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, window_min: mins, sent_rows: rows.length, unique_sols: sols.length, unique_vendors: vendors.length, sols: sols.sort() }, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
   // Ingest a hand-curated sol list into the solicitations collection so the blast
   // engine (and its dedup) can send it. Body: { "sols": [ {sol_number, ref_part_number,
   // nsn, item_name, quantity, ...}, ... ] }. Upserts each as status:New verdict:GO.
