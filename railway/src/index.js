@@ -845,6 +845,52 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Targeted single-vendor send of the current AN/MS/NAS sweep. Body:
+  //   { "name":"G-Fast", "localpart":"info" }  → resolves the domain from this
+  //     vendor's historical blast_log email and swaps the local part (info@<domain>).
+  //   { "email":"info@foo.com", "name":"G-Fast" } → explicit address.
+  //   add "send":true to actually send; without it, dry-run (resolved email + sol list).
+  // Routes through the aerospace lane only, so ONLY AN/MS/NAS sols go. Deduped.
+  if (u === "/blast-one" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const db = await getDb();
+        let email = (p.email || "").toLowerCase(), resolvedFrom = "provided";
+        if (!email) {
+          if (!p.name) throw new Error("name or email required");
+          const rx = new RegExp(p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]?"), "i");
+          const hist = await db.collection("blast_log").findOne({ vendor_name: rx, vendor_email: { $nin: ["", null] } });
+          if (!hist) throw new Error("no historical blast_log email found for '" + p.name + "'");
+          const dom = (hist.vendor_email || "").split("@")[1];
+          if (!dom) throw new Error("historical email has no domain: " + hist.vendor_email);
+          email = (p.localpart || "info") + "@" + dom;
+          resolvedFrom = "blast_log:" + hist.vendor_email;
+        }
+        const sols = await db.collection("solicitations")
+          .find({ status: { $in: ["New", "Awaiting Quotes"] } }).toArray();
+        const dists = [{ name: p.name || email, email, is_manufacturer: true, id: "oneoff:" + email }];
+        const plan = buildBlastPlan(sols, dists);
+        const aeroSols = plan[0] ? plan[0].sols.map(s => s.sol_number) : [];
+        if (p.send !== true) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, dryRun: true, email, resolvedFrom, anmsnas_sols: aeroSols.length, sols: aeroSols }, null, 2));
+          return;
+        }
+        const result = await runBlast(plan, { isLive: true, fromAddress: TEST_RECIPIENT }, db);
+        log("blast-one → " + email + ": " + result.sent + " sent, " + result.failed + " failed (" + aeroSols.length + " AN/MS/NAS sols)");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, sent: result.sent, failed: result.failed, email, anmsnas_sols: aeroSols.length, sols: aeroSols }, null, 2));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // Full exclusion list — every distributor pulled from the blast (is_dns / bounced),
   // with the reason. Shows who was killed and why, across the whole DB (not just aero).
   if (u === "/excluded" && req.method === "GET") {
