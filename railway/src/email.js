@@ -68,9 +68,23 @@ function buildBodyForSender(vendor, sols, sender) {
       : shipTo ? "Ship to: " + shipTo : null;
 
     // Unit of issue — vendors must quote per this unit, not assume "each".
-    // A rivet buy of "100 LB" got quoted at 100 EA because U/I was missing.
+    // A rivet buy of "100 LB" got quoted at 100 EA because U/I was missing; a
+    // "535 HD" (hundred) buy got quoted at 535 EA — off by 100x. Expand the code
+    // and spell out the each-total so a multiplier unit can't be misread as EA.
     const qty  = s.quantity || s.qty;
     const unit = String(s.unit_of_issue || s.unit_issue || "").toUpperCase().trim();
+    const UI_NAME = { EA:"Each", HD:"Hundred", TH:"Thousand", C:"Hundred", M:"Thousand", DZ:"Dozen", GR:"Gross", GRO:"Gross", BX:"Box", PG:"Package", PK:"Package", PR:"Pair", RL:"Roll", RO:"Roll", SE:"Set", ST:"Set", KT:"Kit", LB:"Pound", FT:"Foot", YD:"Yard", GL:"Gallon", QT:"Quart", SH:"Sheet", SL:"Spool", AY:"Assembly", CN:"Can" };
+    const UI_MULT = { HD:100, TH:1000, C:100, M:1000, DZ:12, GR:144, GRO:144 };
+    const unitName = UI_NAME[unit] || "";
+    const qtyNum   = parseFloat(String(qty || "").replace(/[^0-9.]/g, "")) || 0;
+    const eaTotal  = (UI_MULT[unit] && qtyNum) ? (qtyNum * UI_MULT[unit]).toLocaleString() : "";
+    const qtyLine  = qty
+      ? "  Quantity:      " + qty + (unit ? " " + unit : "") +
+        (unit && unit !== "EA" ? "  (" + (unitName || unit) + (eaTotal ? " = " + eaTotal + " each total" : "") + ")" : "")
+      : null;
+    const uiLine   = (unit && unit !== "EA")
+      ? "  Unit of Issue: " + unit + (unitName ? " (" + unitName + ")" : "") + " — please quote your price PER " + unit + ", NOT per each"
+      : (unit ? "  Unit of Issue: EA (Each)" : null);
 
     return [
       isMulti ? ("Item " + (i + 1) + ":") : null,
@@ -78,8 +92,8 @@ function buildBodyForSender(vendor, sols, sender) {
       s.ref_part_number
         ? "  Part Number:   " + s.ref_part_number + (s.manufacturer_cage ? "  (Mfr CAGE: " + s.manufacturer_cage + ")" : "")
         : null,
-      qty  ? "  Quantity:      " + qty + (unit ? " " + unit : "") : null,
-      unit ? "  Unit of Issue: " + unit : null,
+      qtyLine,
+      uiLine,
       s.delivery_days    ? "  Deliver By:    " + s.delivery_days + " days ARO" : null,
       dayBefore(s.quote_due) ? "  Response Due:  " + dayBefore(s.quote_due) : null,
       fobStr             ? "  Shipping:      " + fobStr : null,

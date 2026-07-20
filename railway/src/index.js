@@ -290,6 +290,7 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
         ref_part_number:       sol.ref_part_number || sol.piece_part_no || "",
         manufacturer_cage:     sol.manufacturer_cage || "",
         quantity:              String(sol.qty || sol.quantity || ""),
+        unit_of_issue:         sol.unit_issue || sol.unit_of_issue || "", // e.g. HD (hundred) — vendors mis-quote as EA without it
         unit_price:            sol.unit_price || sol.hist_price || null,
         hist_price:            sol.hist_price || null,
         ext_price:             sol.ext_price || (sol.unit_price || sol.hist_price ? (sol.unit_price || sol.hist_price) * parseFloat(sol.qty || sol.quantity || 1) : null) || null,
