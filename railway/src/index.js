@@ -391,9 +391,12 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
       blastResult = await runBlast(plan, { isLive: effectiveLive, fromAddress: TEST_RECIPIENT, maxVendors }, db);
       log("Blast complete: " + blastResult.sent + " sent, " + blastResult.failed + " failed");
 
-      // Only mark sols whose emails were actually confirmed sent
+      // Only mark sols whose emails were actually confirmed sent — and ONLY on a
+      // LIVE run. A test run (isLive:false) mails to TEST_RECIPIENT, not the vendor;
+      // marking those "Awaiting Quotes" made getAlreadyActedSols skip them on the
+      // next real blast, so today's sweep silently sent 0. Test = no status change.
       const sentSolNums = new Set(
-        blastResult.log.filter(e => e.status === "sent").flatMap(e => e.sol_numbers || [])
+        effectiveLive ? blastResult.log.filter(e => e.status === "sent").flatMap(e => e.sol_numbers || []) : []
       );
       for (const entry of plan) {
         for (const sol of entry.sols) {
@@ -788,6 +791,32 @@ const httpServer = http.createServer((req, res) => {
       log("Daily send counts reset to 0 for " + today);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, date: today, gmail: 0, resend: 0 }));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
+  // Un-stick sols falsely marked "Awaiting Quotes" by a TEST run. A real send writes
+  // a blast_log {status:"sent"} row; a test send does not. Any "Awaiting Quotes" sol
+  // with no such row was never emailed to a vendor — reset it to "New" so it blasts.
+  if (u === "/reset-unsent" && req.method === "POST") {
+    getDb().then(async (mdb) => {
+      const stuck = await mdb.collection("solicitations")
+        .find({ status: "Awaiting Quotes" }).project({ sol_number: 1 }).toArray();
+      const sentRows = await mdb.collection("blast_log")
+        .find({ status: "sent" }).project({ sol_number: 1 }).toArray();
+      const sent = new Set(sentRows.map(r => r.sol_number));
+      const toReset = stuck.filter(s => !sent.has(s.sol_number));
+      for (const s of toReset) {
+        await mdb.collection("solicitations").updateOne(
+          { sol_number: s.sol_number }, { $set: { status: "New" } },
+        ).catch(() => {});
+      }
+      log("reset-unsent: " + toReset.length + " reset to New (of " + stuck.length + " Awaiting Quotes)");
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, awaiting: stuck.length, reset: toReset.length, sols: toReset.map(s => s.sol_number) }));
     }).catch(e => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: e.message }));
