@@ -972,24 +972,24 @@ const httpServer = http.createServer((req, res) => {
     getDb().then(async (mdb) => {
       const all = await mdb.collection("distributors")
         .find({}).project({ name: 1, email: 1, fsc: 1, tags: 1, is_dns: 1, email_invalid: 1 }).toArray();
-      const MED = /\b(medical|health\s?care|healthcare|health|pharma|pharmac|surgical|dental|biomed|medtech|meditech|hospital|clinic|med[\s-]?supply|wellness|therapeutic|diagnostic|nursing|lab(?:oratory)?)\b/i;
+      // Real medical distributors are NAME/TAG matched. "Has a 65xx FSC lane" is NOT
+      // reliable — the old mass-blast blanket-assigned all medical lanes to the whole
+      // federal pool (fasteners, electronics, industrial), so FSC alone over-counts.
+      const MED = /\b(medical|health\s?care|healthcare|pharma|pharmac|surgical|surgic|dental|biomed|medtech|meditech|hospital|clinic|med[\s-]?supply|medsupply|wellness|therapeutic|diagnostic|nursing|scientific|meditek|healthcare)\b/i;
       const medFsc = f => /^65\d\d$/.test(String(f || ""));
-      const isMed = d => MED.test(d.name || "") || (d.tags || []).some(t => /med|health|pharma|dental|surg/i.test(t)) || (d.fsc || []).some(medFsc);
-      const roster = all.filter(isMed);
-      const withEmail = roster.filter(d => d.email);
-      const live = withEmail.filter(d => !d.is_dns && !d.email_invalid);
-      const dead = withEmail.filter(d => d.is_dns || d.email_invalid);
+      const nameMatch = d => MED.test(d.name || "") || (d.tags || []).some(t => /med|health|pharma|dental|surg|scientific/i.test(t));
       const PERSONAL = /gmail\.com|yahoo\.com|aol\.com|hotmail\.com|outlook\.com|icloud\.com/i;
+      const named   = all.filter(nameMatch);
+      const fscOnly = all.filter(d => !nameMatch(d) && (d.fsc || []).some(medFsc));
+      const namedLive = named.filter(d => d.email && !d.is_dns && !d.email_invalid);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         ok: true,
-        total_medical_matches: roster.length,
-        live_email: live.length,
-        dead_or_bounced: dead.length,
-        no_email: roster.length - withEmail.length,
-        live_corporate: live.filter(d => !PERSONAL.test(d.email || "")).length,
-        live_personal: live.filter(d => PERSONAL.test(d.email || "")).length,
-        live_list: live.map(d => ({ name: d.name, email: d.email, fscs: (d.fsc || []).filter(medFsc) })).slice(0, 60),
+        name_or_tag_matched: named.length,          // real medical distributors
+        name_matched_live_email: namedLive.length,
+        name_matched_corporate: namedLive.filter(d => !PERSONAL.test(d.email || "")).length,
+        fsc_lane_only_noise: fscOnly.length,        // blanket-assigned, NOT actually medical
+        named_live_list: namedLive.map(d => ({ name: d.name, email: d.email })).slice(0, 80),
       }, null, 2));
     }).catch(e => {
       res.writeHead(500, { "Content-Type": "application/json" });
