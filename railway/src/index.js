@@ -924,7 +924,7 @@ const httpServer = http.createServer((req, res) => {
         for (const em of emails) {
           await db.collection("distributors").updateOne(
             { email: em },
-            { $set: { name: p.name || em, email: em, is_dns: true, email_invalid: false, dns_reason: reason, blocked_at: new Date().toISOString() } },
+            { $set: { name: p.name || em, email: em, is_dns: true, is_portal: false, email_invalid: false, dns_reason: reason, blocked_at: new Date().toISOString() } },
             { upsert: true },
           );
           n++;
@@ -932,16 +932,17 @@ const httpServer = http.createServer((req, res) => {
         if (p.domain) {
           await db.collection("distributors").updateOne(
             { blocked_domain: String(p.domain).toLowerCase() },
-            { $set: { blocked_domain: String(p.domain).toLowerCase(), name: p.name || p.domain, is_dns: true, dns_reason: reason, blocked_at: new Date().toISOString() } },
+            { $set: { blocked_domain: String(p.domain).toLowerCase(), name: p.name || p.domain, is_dns: true, is_portal: false, dns_reason: reason, blocked_at: new Date().toISOString() } },
             { upsert: true },
           );
           n++;
         }
-        // Also flag any existing distributor rows on that domain
+        // Also flag any existing distributor rows on that domain (clear portal too —
+        // a blocked competitor is neither an email nor a portal source).
         if (p.domain) {
           await db.collection("distributors").updateMany(
             { email: { $regex: "@" + String(p.domain).replace(/\./g, "\\.") + "$", $options: "i" } },
-            { $set: { is_dns: true, dns_reason: reason, blocked_at: new Date().toISOString() } },
+            { $set: { is_dns: true, is_portal: false, dns_reason: reason, blocked_at: new Date().toISOString() } },
           ).catch(() => {});
         }
         log("block-vendor: " + (p.name || p.domain || "?") + " blocked (" + n + " record(s))");
