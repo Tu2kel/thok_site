@@ -376,6 +376,9 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
     const missing = [];
     if (!s.quote_due) missing.push("quote_due");
     if (!s.item_name) missing.push("item_name");
+    // HARD GATE: no part number, no blast. A vendor can't quote "HOSE, qty 235"
+    // without a P/N — that's what put 1,528 junk RFQs out. Held here until enriched.
+    if (!s.ref_part_number || s.ref_part_number === "N/A") missing.push("part_number");
     // Track missing quantity as advisory only — does not block blast
     if (!s.quantity && !s.qty) s._missing_qty = true;
     if (missing.length) {
@@ -988,6 +991,32 @@ const httpServer = http.createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: e.message }));
       }
+    });
+    return;
+  }
+
+  // P/N to-do queue — high-$ sols held from blast because they have no part number.
+  // Each carries the DIBBS NSN lookup link so you (or enrichment) can grab the P/N.
+  if (u === "/pn-queue" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const sols = await mdb.collection("solicitations").find({
+        status: { $in: ["New", "Awaiting Quotes"] },
+        $or: [{ ref_part_number: { $in: ["", null] } }, { ref_part_number: "N/A" }],
+      }).project({ sol_number: 1, item_name: 1, nsn: 1, fsc: 1, quantity: 1, unit_of_issue: 1, ext_price: 1, quote_due: 1 }).toArray();
+      const hi = sols.filter(s => s.ext_price == null || s.ext_price >= MIN_ORDER_VALUE);
+      hi.sort((a, b) => (b.ext_price || 0) - (a.ext_price || 0));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true, total_no_pn: sols.length, high_value_no_pn: hi.length, floor: MIN_ORDER_VALUE,
+        queue: hi.slice(0, 100).map(s => ({
+          sol: s.sol_number, item: s.item_name, nsn: s.nsn, qty: s.quantity, ui: s.unit_of_issue,
+          ext: s.ext_price, due: s.quote_due,
+          lookup: "https://www.dibbs.bsm.dla.mil/RFQ/RFQNsn.aspx?value=" + String(s.nsn || "").replace(/\D/g, "") + "&category=sol&Scope=open",
+        })),
+      }, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
     });
     return;
   }
