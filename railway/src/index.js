@@ -960,6 +960,38 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Re-card a vendor: set their FSC lanes to what they ACTUALLY carry (per their line
+  // card), fixing over-broad NAICS-driven mismatches so they get the right RFQs and stop
+  // the wrong ones. Also un-blocks (is_dns/is_portal cleared) — a mis-carded vendor isn't
+  // dead, just wrongly tagged. Body: { name|email|domain, fscs:["4810",...], note }
+  if (u === "/set-vendor-fsc" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const fscs = (p.fscs || []).map(String).map(s => s.trim()).filter(Boolean);
+        if (!fscs.length) throw new Error("fscs[] required");
+        const db = await getDb();
+        let filter;
+        if (p.email)       filter = { email: { $regex: "^" + String(p.email).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", $options: "i" } };
+        else if (p.domain) filter = { email: { $regex: "@" + String(p.domain).replace(/\./g, "\\.") + "$", $options: "i" } };
+        else if (p.name)   filter = { name: new RegExp(p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]?"), "i") };
+        else throw new Error("name, email, or domain required");
+        const set = { fsc: fscs, is_dns: false, is_portal: false, fsc_recarded_at: new Date().toISOString() };
+        if (p.note) set.fsc_note = p.note;
+        const r = await db.collection("distributors").updateMany(filter, { $set: set, $unset: { dns_reason: "", blocked_domain: "" } });
+        log("set-vendor-fsc: " + (p.name || p.email || p.domain) + " → " + fscs.join(",") + " (" + r.modifiedCount + " rows)");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, matched: r.matchedCount, updated: r.modifiedCount, fscs }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // Full exclusion list — every distributor pulled from the blast (is_dns / bounced),
   // with the reason. Shows who was killed and why, across the whole DB (not just aero).
   if (u === "/excluded" && req.method === "GET") {
