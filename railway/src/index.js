@@ -921,12 +921,17 @@ const httpServer = http.createServer((req, res) => {
         const db = await getDb();
         const emails = (p.emails || []).map(e => String(e).toLowerCase());
         let n = 0;
+        const setDead = { is_dns: true, is_portal: false, email_invalid: false, dns_reason: reason, blocked_at: new Date().toISOString() };
         for (const em of emails) {
-          await db.collection("distributors").updateOne(
-            { email: em },
-            { $set: { name: p.name || em, email: em, is_dns: true, is_portal: false, email_invalid: false, dns_reason: reason, blocked_at: new Date().toISOString() } },
-            { upsert: true },
-          );
+          // Case-insensitive match so an UPPERCASE stored email isn't silently missed
+          // (which upserts a dupe and leaves the original live).
+          const esc = em.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const found = await db.collection("distributors").findOne({ email: { $regex: "^" + esc + "$", $options: "i" } });
+          if (found) {
+            await db.collection("distributors").updateOne({ _id: found._id }, { $set: setDead });
+          } else {
+            await db.collection("distributors").updateOne({ email: em }, { $set: { name: p.name || em, email: em, ...setDead } }, { upsert: true });
+          }
           n++;
         }
         if (p.domain) {
