@@ -11,7 +11,7 @@ const { fetchSamSols }         = require("./sam-fetcher");
 const { fetchDibbsDailySols }  = require("./dibbs-daily-fetcher");
 const { fetchDibbsDailySols: fetchDibbsPuppet } = require("./dibbs-puppet-fetcher");
 const { screenBatch }      = require("./screener");
-const { buildBlastPlan, runBlast, isAerospacePN, isMedicalFSC } = require("./blaster");
+const { buildBlastPlan, runBlast, isAerospacePN, isMedicalFSC, isMedicalVendor, isAerospaceVendor } = require("./blaster");
 const { runEsbdSync } = require("./esbd-scraper");
 let esbdRunning = false;
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
@@ -970,6 +970,66 @@ const httpServer = http.createServer((req, res) => {
       rows.sort((a, b) => a.name.localeCompare(b.name));
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, count: rows.length, aero_excluded: rows.filter(r => r.aero).length, excluded: rows }, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    return;
+  }
+
+  // Mark a vendor as PORTAL (orders go through their website, not email). Body:
+  //   { "name":"CIA Medical", "url":"https://...", "email":"..." }
+  // Sets is_portal:true so every blast lane skips it; it surfaces in /portal-queue
+  // instead as a manual to-do list of matching sols to key into the site.
+  if (u === "/mark-portal" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const db = await getDb();
+        const set = { is_portal: true, portal_url: p.url || "", portal_marked_at: new Date().toISOString() };
+        let filter;
+        if (p.email) filter = { email: String(p.email).toLowerCase() };
+        else if (p.name) filter = { name: new RegExp(p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]?"), "i") };
+        else throw new Error("name or email required");
+        const r = await db.collection("distributors").updateMany(filter, { $set: set });
+        log("mark-portal: " + (p.name || p.email) + " → " + r.modifiedCount + " marked portal");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, matched: r.matchedCount, marked: r.modifiedCount, url: p.url || null }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // Portal to-do list — for each portal vendor, the active sols it could quote, so you
+  // can key them into that vendor's website (they don't take email RFQs).
+  if (u === "/portal-queue" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const portals = await mdb.collection("distributors").find({ is_portal: true })
+        .project({ name: 1, email: 1, portal_url: 1, fsc: 1, tags: 1, is_manufacturer: 1 }).toArray();
+      const sols = await mdb.collection("solicitations")
+        .find({ status: { $in: ["New", "Awaiting Quotes"] } })
+        .project({ sol_number: 1, item_name: 1, nsn: 1, fsc: 1, ref_part_number: 1, quantity: 1, unit_of_issue: 1, quote_due: 1 }).toArray();
+      const solFsc = s => String(s.fsc || (s.nsn || "").slice(0, 4));
+      const queue = portals.map(pv => {
+        const matched = sols.filter(s => {
+          const f = solFsc(s);
+          if (isMedicalVendor(pv) && isMedicalFSC(f)) return true;
+          if ((pv.is_manufacturer || isAerospaceVendor(pv)) && isAerospacePN(s.ref_part_number)) return true;
+          if ((pv.fsc || []).map(String).includes(f)) return true;
+          return false;
+        });
+        return {
+          vendor: pv.name, portal_url: pv.portal_url || "", matched: matched.length,
+          sols: matched.map(s => ({ sol: s.sol_number, item: s.item_name, pn: s.ref_part_number, qty: s.quantity, ui: s.unit_of_issue, nsn: s.nsn, due: s.quote_due })),
+        };
+      }).filter(q => q.matched > 0);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, portal_vendors: portals.length, with_matches: queue.length, queue }, null, 2));
     }).catch(e => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: e.message }));

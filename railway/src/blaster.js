@@ -104,7 +104,7 @@ function buildBlastPlan(sols, dists) {
   // each gets its own targeted path below and receives ONLY those sols. (Without the
   // medical exclusion, the ~1,000 blanket-65xx vendors would spray on medical sols.)
   const eligible = dists
-    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_manufacturer && !isAerospaceVendor(d) && !isMedicalVendor(d))
+    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_portal && !d.is_manufacturer && !isAerospaceVendor(d) && !isMedicalVendor(d))
     .sort((a, b) => (a.tier || 9) - (b.tier || 9));
 
   const vendorFscMap = [];
@@ -171,7 +171,7 @@ function buildBlastPlan(sols, dists) {
   if (anmsNasSols.length) {
     const aeroRecipients = dists.filter(d =>
       (d.is_manufacturer || isAerospaceVendor(d)) &&
-      d.email && !d.is_dns && !d.email_invalid,
+      d.email && !d.is_dns && !d.email_invalid && !d.is_portal,
     );
     for (const av of aeroRecipients) {
       const key = (av.name || "").toUpperCase().trim();
@@ -193,7 +193,7 @@ function buildBlastPlan(sols, dists) {
   const medicalSols = sols.filter(s => isMedicalFSC(s.fsc || (s.nsn || "").slice(0, 4)));
   if (medicalSols.length) {
     const medRecipients = dists.filter(d =>
-      isMedicalVendor(d) && d.email && !d.is_dns && !d.email_invalid,
+      isMedicalVendor(d) && d.email && !d.is_dns && !d.email_invalid && !d.is_portal,
     );
     for (const mv of medRecipients) {
       const key = (mv.name || "").toUpperCase().trim();
@@ -505,4 +505,4 @@ async function runBlast(plan, { isLive = false, fromAddress, maxVendors = 0 } = 
   return results;
 }
 
-module.exports = { buildBlastPlan, runBlast, detectPNPrefix, isAerospacePN, isMedicalFSC };
+module.exports = { buildBlastPlan, runBlast, detectPNPrefix, isAerospacePN, isMedicalFSC, isMedicalVendor, isAerospaceVendor };
