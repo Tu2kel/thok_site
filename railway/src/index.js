@@ -988,7 +988,9 @@ const httpServer = http.createServer((req, res) => {
       try {
         const p = JSON.parse(body || "{}");
         const db = await getDb();
-        const set = { is_portal: true, portal_url: p.url || "", portal_marked_at: new Date().toISOString() };
+        // Portal = reachable via website, NOT dead — so also clear is_dns.
+        const set = { is_portal: true, is_dns: false, portal_marked_at: new Date().toISOString() };
+        if (p.url) set.portal_url = p.url;
         let filter;
         if (p.email) filter = { email: String(p.email).toLowerCase() };
         else if (p.name) filter = { name: new RegExp(p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[\s-]+/g, "[\\s-]?"), "i") };
@@ -1001,6 +1003,33 @@ const httpServer = http.createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: e.message }));
       }
+    });
+    return;
+  }
+
+  // Convert vendors that were DNS'd for being website/portal-order into proper portal
+  // vendors (is_portal:true, is_dns:false) so they surface in /portal-queue instead of
+  // the dead pile. Matches the dns_reason for portal/website wording; derives a URL
+  // from the email domain when none is set.
+  if (u === "/convert-portal-excluded" && req.method === "POST") {
+    getDb().then(async (mdb) => {
+      const rx = /portal|website|web\s?site|order(ed|s)?\s+(online|via|thru|through)|\bonline\b|their\s+site/i;
+      const cands = await mdb.collection("distributors")
+        .find({ is_dns: true, dns_reason: { $regex: rx } }).project({ name: 1, email: 1, dns_reason: 1 }).toArray();
+      const converted = [];
+      for (const c of cands) {
+        const dom = (c.email || "").split("@")[1];
+        const set = { is_portal: true, is_dns: false, portal_marked_at: new Date().toISOString() };
+        if (dom) set.portal_url = "https://www." + dom;
+        await mdb.collection("distributors").updateOne({ _id: c._id }, { $set: set }).catch(() => {});
+        converted.push({ name: c.name, email: c.email, was: c.dns_reason, url: set.portal_url || null });
+      }
+      log("convert-portal-excluded: " + converted.length + " moved to portal queue");
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, converted: converted.length, vendors: converted }, null, 2));
+    }).catch(e => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
     });
     return;
   }
