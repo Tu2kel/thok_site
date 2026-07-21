@@ -52,7 +52,7 @@ const SKIP_FSCS = new Set(
 );
 // Minimum estimated order value — sols below this are skipped (0 = disabled).
 // ext_price = hist_price × qty from PDF. If no price data, sol passes through.
-const MIN_ORDER_VALUE = parseInt(process.env.MIN_ORDER_VALUE || "10000", 10) || 0;
+const MIN_ORDER_VALUE = parseInt(process.env.MIN_ORDER_VALUE || "20000", 10) || 0;
 
 // Fix #6: hoisted to module scope so runPipeline and blast-existing stay in sync
 const SKIP_SET_ASIDES   = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
@@ -243,12 +243,11 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
   // Drop sub-minimum orders. Aerospace-standard MIL-spec parts use a lower floor
   // ($1k) — they come in at small ext prices but route to approved MFRs via blaster.
   // If ext_price is null, let through — can't filter what we don't know.
-  const AN_MS_NAS_MIN = 1000;
-  const MEDICAL_MIN   = 1000; // medical orders run small — same lower floor as aerospace
+  // Single high floor across ALL lanes ($20k default) — Anthony only wants to sort/bid
+  // high-dollar sols, not wade through 200 low-$ items. The old $1k aero/medical
+  // carve-outs are gone. Unknown ext_price still passes (can't filter what we don't know).
   const valuedSols = MIN_ORDER_VALUE > 0 ? freshSols.filter(s => {
     if (s.ext_price == null) return true;
-    if (isAerospacePN(s.ref_part_number)) return s.ext_price >= AN_MS_NAS_MIN;
-    if (isMedicalFSC(s.fsc || (s.nsn || "").slice(0, 4))) return s.ext_price >= MEDICAL_MIN;
     return s.ext_price >= MIN_ORDER_VALUE;
   }) : freshSols;
   const valueDrop = freshSols.length - valuedSols.length;
