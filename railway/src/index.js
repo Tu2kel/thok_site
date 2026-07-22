@@ -995,6 +995,46 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // NAICS probe — look up a vendor's PRIMARY NAICS from SAM.gov entity API, so we can
+  // route by their real line of business instead of over-registered secondary NAICS.
+  if (u === "/naics-probe" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const key = process.env.SAM_API_KEY;
+        if (!key) throw new Error("SAM_API_KEY not set");
+        const params = new URLSearchParams({ api_key: key, includeSections: "entityRegistration,assertions" });
+        if (p.cage)      params.set("cageCode", p.cage);
+        else if (p.uei)  params.set("ueiSAM", p.uei);
+        else if (p.name) params.set("legalBusinessName", p.name);
+        else throw new Error("cage, uei, or name required");
+        const r = await fetch("https://api.sam.gov/entity-information/v3/entities?" + params.toString());
+        const text = await r.text();
+        let data; try { data = JSON.parse(text); } catch { data = null; }
+        if (!data) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, http: r.status, note: "non-JSON (key scope?)", body: text.slice(0, 300) })); return; }
+        const ents = (data.entityData || []).slice(0, 3).map(e => {
+          const gs = e.assertions?.goodsAndServices || {};
+          const prim = gs.primaryNaics || "";
+          return {
+            name: e.entityRegistration?.legalBusinessName,
+            cage: e.entityRegistration?.cageCode,
+            uei: e.entityRegistration?.ueiSAM,
+            primaryNaics: prim,
+            allNaics: (gs.naicsList || []).map(n => n.naicsCode + (String(n.naicsCode) === String(prim) ? " (PRIMARY)" : "")),
+          };
+        });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, http: r.status, totalRecords: data.totalRecords, entities: ents }, null, 2));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // P/N to-do queue — high-$ sols held from blast because they have no part number.
   // Each carries the DIBBS NSN lookup link so you (or enrichment) can grab the P/N.
   if (u === "/pn-queue" && req.method === "GET") {
