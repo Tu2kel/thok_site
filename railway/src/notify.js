@@ -32,7 +32,7 @@ function buildReport({ scrape, screen, blast, watchHits = [], errors = [], runDa
     ct + " CT",
     divider("═"),
     "",
-    "SAM pull: " + totalPulled + " sols   |   PDFs parsed: " + pdfParsed + "/" + totalPulled +
+    "Scrape (" + (process.env.SOL_SOURCE || "navigator") + "): " + totalPulled + " sols   |   PDFs parsed: " + pdfParsed + "/" + totalPulled +
       "   |   Screened: " + screen.length + "   |   Blasted: " + blasted.length,
     "",
   ];

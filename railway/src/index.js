@@ -995,6 +995,62 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Batch NAICS enrichment — populate each vendor's PRIMARY NAICS (+ full list, CAGE)
+  // from SAM.gov so we route by their real line of business. Resumable (skips already
+  // enriched), rate-limited. Body: { limit:50, activeOnly:true }. Loop until done.
+  if (u === "/enrich-naics" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const limit = Math.min(parseInt(p.limit, 10) || 50, 200);
+        const key = process.env.SAM_API_KEY;
+        if (!key) throw new Error("SAM_API_KEY not set");
+        const db = await getDb();
+        const filter = { naics_enriched_at: { $exists: false } };
+        if (p.activeOnly !== false) { filter.email = { $nin: ["", null] }; filter.is_dns = { $ne: true }; }
+        const vendors = await db.collection("distributors").find(filter)
+          .project({ name: 1, email: 1, cage: 1, cage_code: 1 }).limit(limit).toArray();
+        const norm = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        let enriched = 0, notfound = 0;
+        for (const v of vendors) {
+          const cage = v.cage || v.cage_code;
+          const params = new URLSearchParams({ api_key: key, includeSections: "entityRegistration,assertions" });
+          if (cage) params.set("cageCode", cage); else params.set("legalBusinessName", v.name || "");
+          const set = { naics_enriched_at: new Date().toISOString() };
+          try {
+            const r = await fetch("https://api.sam.gov/entity-information/v3/entities?" + params.toString());
+            const data = await r.json();
+            const list = data.entityData || [];
+            let ent = null;
+            if (cage) ent = list[0];
+            else ent = list.find(e => norm(e.entityRegistration?.legalBusinessName) === norm(v.name)) || (list.length === 1 ? list[0] : null);
+            if (ent) {
+              const gs = ent.assertions?.goodsAndServices || {};
+              set.primary_naics = String(gs.primaryNaics || "");
+              set.naics = (gs.naicsList || []).map(n => String(n.naicsCode));
+              set.cage = ent.entityRegistration?.cageCode || cage || "";
+              set.uei = ent.entityRegistration?.ueiSAM || "";
+              if (set.primary_naics) enriched++; else notfound++;
+              set.naics_status = set.primary_naics ? "ok" : "no-naics";
+            } else { set.naics_status = list.length ? "ambiguous" : "notfound"; notfound++; }
+          } catch (e) { set.naics_status = "error:" + e.message.slice(0, 40); notfound++; }
+          await db.collection("distributors").updateOne({ _id: v._id }, { $set: set });
+          await new Promise(r => setTimeout(r, 180)); // SAM rate limit
+        }
+        const remaining = await db.collection("distributors").countDocuments(filter);
+        log("enrich-naics: +" + enriched + " enriched, " + notfound + " notfound, " + remaining + " remaining");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, processed: vendors.length, enriched, notfound, remaining }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // NAICS probe — look up a vendor's PRIMARY NAICS from SAM.gov entity API, so we can
   // route by their real line of business instead of over-registered secondary NAICS.
   if (u === "/naics-probe" && req.method === "POST") {
