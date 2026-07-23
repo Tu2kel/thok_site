@@ -1004,23 +1004,35 @@ const httpServer = http.createServer((req, res) => {
     req.on("end", async () => {
       try {
         const p = JSON.parse(body || "{}");
+        const db = await getDb();
+        // Reset false-notfounds (SAM daily-cap artifacts) so they retry after quota reset.
+        if (p.reset) {
+          const rr = await db.collection("distributors").updateMany(
+            { naics_status: { $ne: "ok" } }, { $unset: { naics_enriched_at: "", naics_status: "" } });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, reset: rr.modifiedCount }));
+          return;
+        }
         const limit = Math.min(parseInt(p.limit, 10) || 50, 200);
         const key = process.env.SAM_API_KEY;
         if (!key) throw new Error("SAM_API_KEY not set");
-        const db = await getDb();
         const filter = { naics_enriched_at: { $exists: false } };
         if (p.activeOnly !== false) { filter.email = { $nin: ["", null] }; filter.is_dns = { $ne: true }; }
         const vendors = await db.collection("distributors").find(filter)
           .project({ name: 1, email: 1, cage: 1, cage_code: 1 }).limit(limit).toArray();
         const norm = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-        let enriched = 0, notfound = 0;
+        let enriched = 0, notfound = 0, throttled = 0;
         for (const v of vendors) {
           const cage = v.cage || v.cage_code;
           const params = new URLSearchParams({ api_key: key, includeSections: "entityRegistration,assertions" });
           if (cage) params.set("cageCode", cage); else params.set("legalBusinessName", v.name || "");
           const set = { naics_enriched_at: new Date().toISOString() };
+          let httpStatus = 0;
           try {
             const r = await fetch("https://api.sam.gov/entity-information/v3/entities?" + params.toString());
+            httpStatus = r.status;
+            // Non-200 = SAM throttle/daily cap. Do NOT mark done — leave for retry.
+            if (httpStatus !== 200) { throttled++; if (throttled >= 3) break; await new Promise(rr => setTimeout(rr, 180)); continue; }
             const data = await r.json();
             const list = data.entityData || [];
             let ent = null;
@@ -1040,9 +1052,9 @@ const httpServer = http.createServer((req, res) => {
           await new Promise(r => setTimeout(r, 180)); // SAM rate limit
         }
         const remaining = await db.collection("distributors").countDocuments(filter);
-        log("enrich-naics: +" + enriched + " enriched, " + notfound + " notfound, " + remaining + " remaining");
+        log("enrich-naics: +" + enriched + " enriched, " + notfound + " notfound, " + throttled + " throttled, " + remaining + " remaining");
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, processed: vendors.length, enriched, notfound, remaining }));
+        res.end(JSON.stringify({ ok: true, processed: vendors.length, enriched, notfound, throttled, remaining }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: e.message }));
