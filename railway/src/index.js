@@ -995,6 +995,22 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // NAICS coverage — reads OUR DB (no SAM call), so it's accurate even when SAM is capped.
+  if (u === "/naics-coverage" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const active = { email: { $nin: ["", null] }, is_dns: { $ne: true } };
+      const total = await mdb.collection("distributors").countDocuments(active);
+      const withNaics = await mdb.collection("distributors").countDocuments({ ...active, primary_naics: { $nin: ["", null] } });
+      const pending = await mdb.collection("distributors").countDocuments({ ...active, naics_enriched_at: { $exists: false } });
+      const sample = await mdb.collection("distributors").find({ ...active, primary_naics: { $nin: ["", null] } })
+        .project({ name: 1, primary_naics: 1, naics: 1, cage: 1 }).limit(12).toArray();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, active_total: total, with_primary_naics: withNaics, still_pending: pending,
+        sample: sample.map(s => ({ name: s.name, primary: s.primary_naics, all: s.naics, cage: s.cage })) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Batch NAICS enrichment — populate each vendor's PRIMARY NAICS (+ full list, CAGE)
   // from SAM.gov so we route by their real line of business. Resumable (skips already
   // enriched), rate-limited. Body: { limit:50, activeOnly:true }. Loop until done.
