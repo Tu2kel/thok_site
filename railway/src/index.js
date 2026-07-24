@@ -1157,13 +1157,18 @@ const httpServer = http.createServer((req, res) => {
         const db = await getDb();
         const AERO = /^(NASM[\d-]|NAS[\d-]|NSA[\d-]|AN[\d-]|MS[\d-]|MIL[\d-]|AS[\d-]|BAC[A-Z]?\d|DIN[\d-])/i;
         const all = await db.collection("solicitations").find({})
-          .project({ sol_number: 1, ref_part_number: 1, item_name: 1, fsc: 1 }).toArray();
-        const purge = all.filter(s => !AERO.test(String(s.ref_part_number || "").trim()));
+          .project({ sol_number: 1, ref_part_number: 1, item_name: 1, fsc: 1, is_repost: 1 }).toArray();
+        // KEEP: AN/MS/NAS parts OR reposts (reposts are in-scope even when not AN/MS/NAS).
+        const keepSol = s => AERO.test(String(s.ref_part_number || "").trim()) || s.is_repost === true;
+        const purge = all.filter(s => !keepSol(s));
+        const aeroKept = all.filter(s => AERO.test(String(s.ref_part_number || "").trim())).length;
+        const repostKept = all.filter(s => s.is_repost === true).length;
         if (!p.confirm) {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true, dryRun: true, total_sols: all.length,
-            would_delete: purge.length, would_keep_ANMSNAS: all.length - purge.length,
-            sample_to_delete: purge.slice(0, 10).map(s => ({ sol: s.sol_number, pn: s.ref_part_number || "(none)", item: s.item_name, fsc: s.fsc })) }, null, 2));
+            would_keep: all.length - purge.length, keep_ANMSNAS: aeroKept, keep_reposts: repostKept,
+            would_delete: purge.length,
+            sample_to_delete: purge.slice(0, 10).map(s => ({ sol: s.sol_number, pn: s.ref_part_number || "(none)", item: s.item_name, fsc: s.fsc, repost: !!s.is_repost })) }, null, 2));
           return;
         }
         const r = await db.collection("solicitations").deleteMany({ _id: { $in: purge.map(s => s._id) } });
