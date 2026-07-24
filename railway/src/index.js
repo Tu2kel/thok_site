@@ -1145,6 +1145,39 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Purge out-of-scope sols — keep ONLY AN/MS/NAS (aerospace-standard P/N). Everything
+  // else (general FSC, no-PN valves/hoses, 65xx) is noise that shouldn't be in the DB.
+  // Dry-run by default (shows counts + sample); {confirm:true} deletes.
+  if (u === "/purge-sols" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const db = await getDb();
+        const AERO = /^(NASM[\d-]|NAS[\d-]|NSA[\d-]|AN[\d-]|MS[\d-]|MIL[\d-]|AS[\d-]|BAC[A-Z]?\d|DIN[\d-])/i;
+        const all = await db.collection("solicitations").find({})
+          .project({ sol_number: 1, ref_part_number: 1, item_name: 1, fsc: 1 }).toArray();
+        const purge = all.filter(s => !AERO.test(String(s.ref_part_number || "").trim()));
+        if (!p.confirm) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, dryRun: true, total_sols: all.length,
+            would_delete: purge.length, would_keep_ANMSNAS: all.length - purge.length,
+            sample_to_delete: purge.slice(0, 10).map(s => ({ sol: s.sol_number, pn: s.ref_part_number || "(none)", item: s.item_name, fsc: s.fsc })) }, null, 2));
+          return;
+        }
+        const r = await db.collection("solicitations").deleteMany({ _id: { $in: purge.map(s => s._id) } });
+        log("purge-sols: deleted " + r.deletedCount + " out-of-scope sols, kept " + (all.length - r.deletedCount) + " AN/MS/NAS");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, deleted: r.deletedCount, kept_ANMSNAS: all.length - r.deletedCount }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // Blast PREVIEW — dry run. Shows exactly what WOULD send (vendors, sols, a real
   // sample email) after the PN gate + lane gate, and sends NOTHING. Review before live.
   if (u === "/blast-preview" && req.method === "GET") {
