@@ -1145,6 +1145,41 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Blast PREVIEW — dry run. Shows exactly what WOULD send (vendors, sols, a real
+  // sample email) after the PN gate + lane gate, and sends NOTHING. Review before live.
+  if (u === "/blast-preview" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const { buildBodyForSender } = require("./email");
+      const dists = await getDistributors(mdb);
+      const existing = await mdb.collection("solicitations").find({
+        status: { $nin: ["Awaiting Quotes", "Bid Submitted", "Awarded", "Lost", "Outreach"] },
+        verdict: { $in: ["GO", "VERIFY FIRST", null, ""] },
+      }).toArray();
+      const blastSols = existing.filter(s => {
+        if (s.set_aside && SKIP_SET_ASIDES.has(s.set_aside)) return false;
+        if (s.supplier_restrictions && SKIP_RESTRICTIONS.has(s.supplier_restrictions)) return false;
+        return true;
+      });
+      const plan = buildBlastPlan(blastSols, dists); // PN gate applied inside
+      const fscOn = process.env.FEDERAL_BLAST_ENABLED === "true";
+      const aeroOn = process.env.AEROSPACE_BLAST_ENABLED === "true";
+      const medOn = process.env.MEDICAL_BLAST_ENABLED === "true";
+      const live = plan.filter(e => e.lane === "aerospace" ? aeroOn : e.lane === "medical" ? medOn : fscOn);
+      const sols = new Set(); live.forEach(e => (e.sols || []).forEach(s => sols.add(s.sol_number)));
+      const missingPN = [...sols].length ? live.flatMap(e => e.sols).filter(s => !s.ref_part_number).length : 0;
+      const sample = live[0] ? buildBodyForSender(live[0].vendor, live[0].sols.slice(0, 10), "resend") : null;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true, would_send_to_vendors: live.length, unique_sols: sols.size,
+        any_missing_PN: missingPN, lanes: { federal: fscOn, aerospace: aeroOn, medical: medOn },
+        by_lane: ["fsc", "aerospace", "medical"].map(l => ({ lane: l, vendors: live.filter(e => e.lane === l).length })),
+        sample_vendor: live[0] ? live[0].vendor.name : null,
+        sample_email: sample,
+      }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Full exclusion list — every distributor pulled from the blast (is_dns / bounced),
   // with the reason. Shows who was killed and why, across the whole DB (not just aero).
   if (u === "/excluded" && req.method === "GET") {

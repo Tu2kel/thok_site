@@ -95,6 +95,14 @@ function isMedicalVendor(d) {
 
 // Select vendors for a set of sols, respecting FSC cap + tier ordering
 function buildBlastPlan(sols, dists) {
+  // ── CHOKE-POINT GATE: NO PART NUMBER, NO BLAST ──────────────────────────────
+  // EVERY blast path (daily pipeline, /blast-existing, /blast-one) calls this one
+  // function, so this is the single place the rule can't be bypassed. A vendor can't
+  // quote an item with no P/N — that's what made us look like idiots. Held, not sent.
+  const beforePN = sols.length;
+  sols = sols.filter(s => { const pn = String(s.ref_part_number || "").trim(); return pn && pn.toUpperCase() !== "N/A"; });
+  if (sols.length < beforePN) info("PN gate: dropped " + (beforePN - sols.length) + " no-P/N sol(s), " + sols.length + " remain");
+
   const goFscs = new Set(sols.map(s => String(s.fsc || (s.nsn || "").slice(0, 4))).filter(Boolean));
 
   const fscVendorCount = {};
