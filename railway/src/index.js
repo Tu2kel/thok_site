@@ -52,7 +52,7 @@ const SKIP_FSCS = new Set(
 );
 // Minimum estimated order value — sols below this are skipped (0 = disabled).
 // ext_price = hist_price × qty from PDF. If no price data, sol passes through.
-const MIN_ORDER_VALUE = parseInt(process.env.MIN_ORDER_VALUE || "20000", 10) || 0;
+const MIN_ORDER_VALUE = parseInt(process.env.MIN_ORDER_VALUE || "1000", 10) || 0;
 
 // Fix #6: hoisted to module scope so runPipeline and blast-existing stay in sync
 const SKIP_SET_ASIDES   = new Set(["HUBZone", "8(a)", "WOSB", "EDWOSB"]);
