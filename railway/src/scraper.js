@@ -237,7 +237,13 @@ async function scrape({ username, password, minPrice = 1000 }) {
 
     // Login
     info("Logging in to DIBBS Navigator…");
-    await page.goto("https://dibbsnavigator.com/login.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
+    // The site added a cookie-check redirect (login.aspx -> login.aspx?cc=true) that
+    // hangs a plain goto for 120s. Visit login.aspx first to set the cookie (don't fail
+    // if it stalls on the redirect), then load the ?cc=true form page directly.
+    await page.goto("https://dibbsnavigator.com/login.aspx", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
+    if (!(await page.$("#Main_Input_Customer_Name"))) {
+      await page.goto("https://dibbsnavigator.com/login.aspx?cc=true", { waitUntil: "domcontentloaded", timeout: 60000 });
+    }
     await page.waitForSelector("#Main_Input_Customer_Name", { timeout: 30000 });
     await page.type("#Main_Input_Customer_Name", username, { delay: 60 });
     await page.type("#Main_Input_Password", password, { delay: 60 });
