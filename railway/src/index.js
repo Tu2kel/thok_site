@@ -1179,12 +1179,15 @@ const httpServer = http.createServer((req, res) => {
       const sols = await mdb.collection("solicitations").find({
         status: { $in: ["New", "Awaiting Quotes"] },
         $or: [{ ref_part_number: { $in: ["", null] } }, { ref_part_number: "N/A" }],
-      }).project({ sol_number: 1, item_name: 1, nsn: 1, fsc: 1, quantity: 1, unit_of_issue: 1, ext_price: 1, quote_due: 1 }).toArray();
+      }).project({ sol_number: 1, item_name: 1, nsn: 1, fsc: 1, quantity: 1, unit_of_issue: 1, ext_price: 1, quote_due: 1, pn_enrich_note: 1 }).toArray();
       const hi = sols.filter(s => s.ext_price == null || s.ext_price >= MIN_ORDER_VALUE);
       hi.sort((a, b) => (b.ext_price || 0) - (a.ext_price || 0));
+      const noteCounts = {};
+      for (const s of sols) { const n = s.pn_enrich_note || "(not attempted)"; noteCounts[n] = (noteCounts[n] || 0) + 1; }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         ok: true, total_no_pn: sols.length, high_value_no_pn: hi.length, floor: MIN_ORDER_VALUE,
+        enrich_notes: noteCounts,
         queue: hi.slice(0, 100).map(s => ({
           sol: s.sol_number, item: s.item_name, nsn: s.nsn, qty: s.quantity, ui: s.unit_of_issue,
           ext: s.ext_price, due: s.quote_due,
