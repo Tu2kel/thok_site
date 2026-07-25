@@ -1011,6 +1011,59 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // P/N enrichment — for in-scope sols with NO part number, go DEEPER: pull it from the
+  // DIBBS solicitation PDF (fetchSolDetails clears the DoD consent banner via plain fetch,
+  // parses the P/N + unit-of-issue + qty). Uses DIBBS, not SAM — no quota issue. Resumable.
+  // Body: { limit:20 } to run a batch, or { reset:true } to retry all failed.
+  if (u === "/enrich-pn" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const db = await getDb();
+        if (p.reset) {
+          const rr = await db.collection("solicitations").updateMany(
+            { pn_enrich_attempted: true, $or: [{ ref_part_number: { $in: ["", null] } }, { ref_part_number: "N/A" }] },
+            { $unset: { pn_enrich_attempted: "", pn_enrich_note: "" } });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, reset: rr.modifiedCount }));
+          return;
+        }
+        const { fetchSolDetails } = require("./dibbs-fetcher");
+        const limit = Math.min(parseInt(p.limit, 10) || 20, 50);
+        const noPN = { $or: [{ ref_part_number: { $in: ["", null] } }, { ref_part_number: "N/A" }] };
+        const sols = await db.collection("solicitations")
+          .find({ ...noPN, pn_enrich_attempted: { $ne: true } })
+          .project({ sol_number: 1, nsn: 1, fsc: 1 }).limit(limit).toArray();
+        let got = 0, none = 0;
+        for (const s of sols) {
+          const set = { pn_enrich_attempted: true };
+          try {
+            const e = await fetchSolDetails({ sol_number: s.sol_number, nsn: s.nsn, fsc: s.fsc });
+            if (e && e.ref_part_number) {
+              set.ref_part_number = e.ref_part_number;
+              if (e.unit_of_issue) set.unit_of_issue = e.unit_of_issue;
+              if (e.quantity) set.quantity = String(e.quantity);
+              if (e.unit_price != null) set.unit_price = e.unit_price;
+              if (e.ext_price != null) set.ext_price = e.ext_price;
+              got++;
+            } else { set.pn_enrich_note = e && e.pdf_parsed ? "PDF had no P/N" : "PDF not fetched"; none++; }
+          } catch (err) { set.pn_enrich_note = String(err.message).slice(0, 60); none++; }
+          await db.collection("solicitations").updateOne({ _id: s._id }, { $set: set });
+        }
+        const remaining = await db.collection("solicitations").countDocuments({ ...noPN, pn_enrich_attempted: { $ne: true } });
+        log("enrich-pn: +" + got + " P/N found, " + none + " none, " + remaining + " remaining");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, processed: sols.length, got_pn: got, no_pn: none, remaining }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // Batch NAICS enrichment — populate each vendor's PRIMARY NAICS (+ full list, CAGE)
   // from SAM.gov so we route by their real line of business. Resumable (skips already
   // enriched), rate-limited. Body: { limit:50, activeOnly:true }. Loop until done.
