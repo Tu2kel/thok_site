@@ -111,9 +111,13 @@ function buildBlastPlan(sols, dists) {
   // Exclude manufacturers, aerospace, AND medical companies from FSC-lane routing —
   // each gets its own targeted path below and receives ONLY those sols. (Without the
   // medical exclusion, the ~1,000 blanket-65xx vendors would spray on medical sols.)
-  const eligible = dists
-    .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_portal && !d.is_manufacturer && !isAerospaceVendor(d) && !isMedicalVendor(d))
-    .sort((a, b) => (a.tier || 9) - (b.tier || 9));
+  // HARD GUARD: if the retired FSC mass-blast lane is off, build NO fsc vendors at all —
+  // so the spray can't happen even if the runBlast lane filter is somehow bypassed.
+  const eligible = (process.env.FEDERAL_BLAST_ENABLED === "true")
+    ? dists
+        .filter(d => d.email && !d.is_dns && !d.email_invalid && !d.is_portal && !d.is_manufacturer && !isAerospaceVendor(d) && !isMedicalVendor(d))
+        .sort((a, b) => (a.tier || 9) - (b.tier || 9))
+    : [];
 
   const vendorFscMap = [];
 
