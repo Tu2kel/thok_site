@@ -1201,6 +1201,41 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Purge the vendor/distributor DB down to a keep-list — the 2,500 SBS-sourced vendors
+  // were duds; clean slate to rebuild with real authorized dealers. Dry-run by default;
+  // {confirm:true} deletes. Keeps Bonesteel + J M Industrial Supply (the only responders).
+  if (u === "/purge-vendors" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const db = await getDb();
+        const keepEmails = new Set((p.keepEmails || ["mbarnett@jmindsupply.com"]).map(e => String(e).toLowerCase()));
+        const nameRx = new RegExp((p.keepNamePattern || "bonesteel|j\\.?\\s*m\\.?\\s*industrial"), "i");
+        const domRx = new RegExp((p.keepDomainPattern || "bonesteelaerospace\\.com|jmindsupply\\.com"), "i");
+        const all = await db.collection("distributors").find({}).project({ name: 1, email: 1 }).toArray();
+        const keep = all.filter(d => keepEmails.has(String(d.email || "").toLowerCase()) || nameRx.test(d.name || "") || domRx.test(d.email || ""));
+        const del = all.filter(d => !keep.includes(d));
+        if (!p.confirm) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, dryRun: true, total_vendors: all.length, would_keep: keep.length, would_delete: del.length,
+            keeping: keep.map(d => ({ name: d.name, email: d.email })) }, null, 2));
+          return;
+        }
+        if (!keep.length) throw new Error("keep-list matched 0 vendors — refusing to delete everything");
+        const r = await db.collection("distributors").deleteMany({ _id: { $in: del.map(d => d._id) } });
+        log("purge-vendors: deleted " + r.deletedCount + ", kept " + keep.length);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, deleted: r.deletedCount, kept: keep.map(d => ({ name: d.name, email: d.email })) }, null, 2));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // Purge out-of-scope sols — keep ONLY AN/MS/NAS (aerospace-standard P/N). Everything
   // else (general FSC, no-PN valves/hoses, 65xx) is noise that shouldn't be in the DB.
   // Dry-run by default (shows counts + sample); {confirm:true} deletes.
