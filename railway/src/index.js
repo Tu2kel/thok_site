@@ -1203,6 +1203,83 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Reseller MATCH — the de-noise. Intersect the reseller roster with the
+  // designated suppliers of the sols WE bid (supplier_list CAGEs). Output: for
+  // each part on our board, who the reseller-friendly source is + their opp %.
+  // ?lane=aero|medical|repost|all  ?min=90 (roster floor)  ?noprimes=1
+  if (u === "/reseller-match" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const lane = qp.get("lane") || "all";
+      const rosterMin = parseInt(qp.get("min") || "90", 10);
+      const noPrimes = qp.get("noprimes") === "1";
+      const PRIMES = ["BOEING", "LOCKHEED", "RAYTHEON", "OSHKOSH", "NORTHROP", "GENERAL DYNAMICS",
+        "BAE SYSTEMS", "SIKORSKY", "L3HARRIS", "L-3", "ROLLS-ROYCE", "GENERAL ELECTRIC",
+        "NAVANTIA", "LEONARDO", "THALES", "CURTISS-WRIGHT", "HONEYWELL", "ELBIT", "SAAB"];
+      const isPrime = n => PRIMES.some(p => (n || "").toUpperCase().includes(p));
+
+      // roster lookup by CAGE
+      const roster = await mdb.collection("reseller_suppliers")
+        .find({ reseller_pct: { $gte: rosterMin } }).toArray();
+      const byCage = {};
+      roster.forEach(r => { byCage[r.cage] = r; });
+
+      // sols we bid, with a designated supplier list
+      const sols = await mdb.collection("solicitations")
+        .find({ supplier_list: { $nin: ["", null] } })
+        .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
+          qty: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
+
+      const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
+      const inLane = s => {
+        const pn = String(s.ref_part_number || "").trim().toUpperCase();
+        const isAero = AERO.test(pn);
+        const isMed = /^65\d\d$/.test(String(s.fsc || "").trim()) || /^65/.test(String(s.nsn || "").slice(0, 2));
+        if (lane === "aero") return isAero;
+        if (lane === "medical") return isMed;
+        if (lane === "repost") return !!s.is_repost;
+        return true;
+      };
+
+      const matches = [];
+      let solsConsidered = 0, solsWithMatch = 0;
+      for (const s of sols) {
+        if (!inLane(s)) continue;
+        solsConsidered++;
+        const suppliers = [];
+        for (const entry of String(s.supplier_list).split(";")) {
+          const parts = entry.split("|").map(x => x.trim());
+          const cage = parts[1];
+          if (!cage || !/^[A-Z0-9]{5}$/i.test(cage)) continue;
+          const hit = byCage[cage.toUpperCase()];
+          if (hit && !(noPrimes && isPrime(hit.company))) {
+            suppliers.push({ company: hit.company, cage: hit.cage, reseller_pct: hit.reseller_pct,
+              no_nsns: hit.no_nsns, state: hit.state, prime: isPrime(hit.company) });
+          }
+        }
+        if (suppliers.length) {
+          solsWithMatch++;
+          matches.push({ sol: s.sol_number, nsn: s.nsn, item: s.item_name, part: s.ref_part_number,
+            ui: s.unit_of_issue, qty: s.qty, repost: !!s.is_repost, quote_due: s.quote_due,
+            suppliers: suppliers.sort((a, b) => b.reseller_pct - a.reseller_pct) });
+        }
+      }
+      // also: the unique suppliers across all matched sols (the buy-from shortlist)
+      const shortlist = {};
+      matches.forEach(m => m.suppliers.forEach(sp => {
+        if (!shortlist[sp.cage]) shortlist[sp.cage] = { ...sp, sols: 0 };
+        shortlist[sp.cage].sols++;
+      }));
+      const shortlistArr = Object.values(shortlist).sort((a, b) => b.sols - a.sols);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, lane, roster_min: rosterMin, noprimes: noPrimes,
+        sols_considered: solsConsidered, sols_with_a_reseller_match: solsWithMatch,
+        unique_suppliers: shortlistArr.length, shortlist: shortlistArr.slice(0, 40),
+        sample_matches: matches.slice(0, 25) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Reseller Tool scrape — background job. Filters suppliers.aspx to high
   // reseller % + min NSN count, paginates, streams to `reseller_suppliers`
   // (upsert by CAGE). Params: ?min=90&nsns=2&pages=40  (GET or POST).
