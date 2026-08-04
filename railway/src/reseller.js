@@ -187,13 +187,22 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
     ]);
     await new Promise(r => setTimeout(r, 1500));
 
-    // discover the pager postback target from any Page$ link
-    const pagerTarget = await page.evaluate(() => {
-      const a = [...document.querySelectorAll("a")].find(x => /Page\$\d/.test(x.getAttribute("href") || ""));
-      if (!a) return null;
-      const m = (a.getAttribute("href") || "").match(/__doPostBack\(['"]([^'"]+)['"],\s*['"]Page\$/);
-      return m ? m[1] : null;
+    // discover the pager postback target from any Page$ link + capture pager
+    // anchors for diagnostics (their real href format tells us how to advance)
+    const pagerInfo = await page.evaluate(() => {
+      const anchors = [...document.querySelectorAll("a")].filter(a => {
+        const t = (a.innerText || "").trim(); const h = a.getAttribute("href") || "";
+        return /^\d+$/.test(t) || t === "..." || /last|next/i.test(t) || /Page\$/i.test(h) || /doPostBack/i.test(h);
+      }).slice(0, 30).map(a => ({ text: (a.innerText || "").trim(), href: (a.getAttribute("href") || "").slice(0, 140) }));
+      let target = null;
+      for (const a of document.querySelectorAll("a")) {
+        const h = a.getAttribute("href") || "";
+        const m = h.match(/__doPostBack\(['"]([^'"]+)['"],\s*['"]Page\$/i);
+        if (m) { target = m[1]; break; }
+      }
+      return { target, anchors, doPostBackType: typeof window.__doPostBack };
     });
+    const pagerTarget = pagerInfo.target;
 
     const seen = new Set();
     const all = [];
@@ -246,7 +255,7 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
       });
     }
     await browser.close();
-    return { ok: true, count: all.length, pages: pageNum, capped, suppliers: all, diag };
+    return { ok: true, count: all.length, pages: pageNum, capped, suppliers: all, diag, pagerInfo };
   } catch (e) {
     fail("scrape error:", e.message);
     try { await browser.close(); } catch {}

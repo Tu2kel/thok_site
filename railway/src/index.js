@@ -1241,6 +1241,7 @@ const httpServer = http.createServer((req, res) => {
         );
         resellerStatus.capped = !!r.capped;
         resellerStatus.diag = r.diag || null;
+        resellerStatus.pagerInfo = r.pagerInfo || null;
         resellerStatus.error = r.ok ? null : (r.error || "unknown");
         log(`Reseller scrape done — ${resellerStatus.found} suppliers over ${resellerStatus.pages} pages (min%=${minResell}, minNSNs=${minNoNSNs})`);
       } catch (e) {
