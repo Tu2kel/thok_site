@@ -190,19 +190,21 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
     // discover the pager postback target from any Page$ link + capture pager
     // anchors for diagnostics (their real href format tells us how to advance)
     const pagerInfo = await page.evaluate(() => {
-      const anchors = [...document.querySelectorAll("a")].filter(a => {
-        const t = (a.innerText || "").trim(); const h = a.getAttribute("href") || "";
-        return /^\d+$/.test(t) || t === "..." || /last|next/i.test(t) || /Page\$/i.test(h) || /doPostBack/i.test(h);
-      }).slice(0, 30).map(a => ({ text: (a.innerText || "").trim(), href: (a.getAttribute("href") || "").slice(0, 140) }));
+      // capture ONLY the pager links (href references Page$N) — these are the
+      // page-number anchors, wherever they sit in the DOM
+      const pageAnchors = [...document.querySelectorAll("a")]
+        .filter(a => /Page\$/i.test(a.getAttribute("href") || ""))
+        .map(a => ({ text: (a.innerText || "").trim(), href: (a.getAttribute("href") || "").slice(0, 140) }));
       let target = null;
       for (const a of document.querySelectorAll("a")) {
         const h = a.getAttribute("href") || "";
         const m = h.match(/__doPostBack\(['"]([^'"]+)['"],\s*['"]Page\$/i);
         if (m) { target = m[1]; break; }
       }
-      return { target, anchors, doPostBackType: typeof window.__doPostBack };
+      return { target, pageAnchors, doPostBackType: typeof window.__doPostBack };
     });
     const pagerTarget = pagerInfo.target;
+    info("pager target=" + pagerTarget + " pageAnchors=" + JSON.stringify(pagerInfo.pageAnchors));
 
     const seen = new Set();
     const all = [];
@@ -222,7 +224,18 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
       // grid until the first row's CAGE changes (the new page loaded). Firing
       // Page$N beyond the last page reloads the same rows → no change → we stop.
       const before = rows[0]?.cage || "";
-      try { await page.evaluate((t, n) => { window.__doPostBack(t, "Page$" + n); }, pagerTarget, pageNum + 1); } catch {}
+      const nextNum = pageNum + 1;
+      // Prefer clicking the real page-number anchor (fires the site's own handler,
+      // UpdatePanel-aware); fall back to a direct __doPostBack('...','Page$N').
+      const how = await page.evaluate((next, tgt) => {
+        const links = [...document.querySelectorAll("a")].filter(a => /Page\$/i.test(a.getAttribute("href") || ""));
+        const numeric = links.find(a => (a.innerText || "").trim() === String(next));
+        if (numeric) { numeric.click(); return "click-num"; }
+        const dots = links.find(a => (a.innerText || "").trim() === "...");
+        if (dots) { dots.click(); return "click-dots"; }
+        if (tgt && window.__doPostBack) { window.__doPostBack(tgt, "Page$" + next); return "postback"; }
+        return "none";
+      }, nextNum, pagerTarget).catch(() => "err");
       let advanced = false;
       for (let w = 0; w < 40; w++) {           // up to ~28s for the partial postback
         await new Promise(r => setTimeout(r, 700));
