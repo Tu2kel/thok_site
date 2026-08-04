@@ -1201,6 +1201,36 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // AAD candidates — parse DLA's designated suppliers out of the scraped supplier_list
+  // (Reseller Tool data: NAME|CAGE|PART per NSN). These are the REAL sources to pursue
+  // as authorized dealers. Aggregates by CAGE with the NSNs they supply.
+  if (u === "/aad-candidates" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const sols = await mdb.collection("solicitations")
+        .find({ supplier_list: { $nin: ["", null] } })
+        .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, supplier_list: 1 }).toArray();
+      const byCage = {};
+      for (const s of sols) {
+        // supplier_list: "NAME|CAGE|PART; NAME2|CAGE2|PART2"
+        for (const entry of String(s.supplier_list).split(";")) {
+          const parts = entry.split("|").map(x => x.trim());
+          if (parts.length < 2) continue;
+          const name = parts[0], cage = parts[1];
+          if (!name || !/^[A-Z0-9]{5}$/i.test(cage)) continue;
+          const k = cage.toUpperCase();
+          if (!byCage[k]) byCage[k] = { name, cage: k, nsn_count: 0, sample_nsns: [] };
+          byCage[k].nsn_count++;
+          if (byCage[k].sample_nsns.length < 4) byCage[k].sample_nsns.push(s.nsn);
+        }
+      }
+      const roster = Object.values(byCage).sort((a, b) => b.nsn_count - a.nsn_count);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, sols_with_supplier_list: sols.length,
+        unique_designated_suppliers: roster.length, top: roster.slice(0, 40) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Purge the vendor/distributor DB down to a keep-list — the 2,500 SBS-sourced vendors
   // were duds; clean slate to rebuild with real authorized dealers. Dry-run by default;
   // {confirm:true} deletes. Keeps Bonesteel + J M Industrial Supply (the only responders).
