@@ -115,10 +115,18 @@ async function scrapeGrid(page) {
   return page.evaluate(() => {
     const norm = s => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
     const numify = s => { const n = String(s || "").replace(/[^0-9.]/g, ""); return n ? Number(n) : 0; };
-    // biggest table = the grid
-    let best = null, bestRows = 0;
+    const cageRe = /^[A-Z0-9]{5}$/i;
+    // The results grid = the table with the most CAGE-shaped rows (robust to a
+    // smaller filtered set no longer being the physically largest table, and to
+    // nested layout tables). Score every table by direct-child CAGE cells.
+    let best = null, bestScore = 0;
     document.querySelectorAll("table").forEach(t => {
-      const r = t.querySelectorAll("tr").length; if (r > bestRows) { bestRows = r; best = t; }
+      let score = 0;
+      t.querySelectorAll(":scope > tbody > tr, :scope > tr").forEach(tr => {
+        const cells = [...tr.children].filter(c => c.tagName === "TD" || c.tagName === "TH");
+        if (cells.some(c => cageRe.test((c.innerText || "").trim()))) score++;
+      });
+      if (score > bestScore) { bestScore = score; best = t; }
     });
     if (!best) return [];
     const trs = [...best.querySelectorAll("tr")];
@@ -219,8 +227,26 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
       pageNum++;
     }
     if (pageNum > maxPages) capped = true;
+    let diag = null;
+    if (all.length === 0) {
+      diag = await page.evaluate(() => {
+        const tables = [...document.querySelectorAll("table")];
+        return {
+          url: location.href,
+          table_count: tables.length,
+          has_reseller_text: /reseller\s*opp/i.test(document.body.innerText),
+          companies_text: (document.body.innerText.match(/([\d,]+)\s+Companies/i) || [])[0] || "",
+          min_resell_value: document.querySelector("#Main_MinResell")?.value || "",
+          biggest_table_first_rows: (() => {
+            let b = null, m = 0; tables.forEach(t => { const r = t.querySelectorAll("tr").length; if (r > m) { m = r; b = t; } });
+            if (!b) return [];
+            return [...b.querySelectorAll("tr")].slice(0, 3).map(tr => [...tr.querySelectorAll("td,th")].map(c => (c.innerText || "").trim().slice(0, 25)));
+          })(),
+        };
+      });
+    }
     await browser.close();
-    return { ok: true, count: all.length, pages: pageNum, capped, suppliers: all };
+    return { ok: true, count: all.length, pages: pageNum, capped, suppliers: all, diag };
   } catch (e) {
     fail("scrape error:", e.message);
     try { await browser.close(); } catch {}
