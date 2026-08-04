@@ -1230,7 +1230,7 @@ const httpServer = http.createServer((req, res) => {
       const sols = await mdb.collection("solicitations")
         .find({ supplier_list: { $nin: ["", null] } })
         .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
-          qty: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
+          quantity: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
 
       const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
       const inLane = s => {
@@ -1263,7 +1263,7 @@ const httpServer = http.createServer((req, res) => {
         if (suppliers.length) {
           solsWithMatch++;
           matches.push({ sol: s.sol_number, nsn: s.nsn, item: s.item_name, part: s.ref_part_number,
-            ui: s.unit_of_issue, qty: s.qty, repost: !!s.is_repost, quote_due: s.quote_due,
+            ui: s.unit_of_issue, qty: s.quantity, repost: !!s.is_repost, quote_due: s.quote_due,
             suppliers: suppliers.sort((a, b) => b.reseller_pct - a.reseller_pct) });
         }
       }
