@@ -1201,6 +1201,26 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Reseller Tool recon — one-off: log in, open suppliers.aspx, dump the form
+  // field IDs + table structure so the real scrape can be wired correctly.
+  if (u === "/reseller-recon" && req.method === "GET") {
+    (async () => {
+      try {
+        const { reconResellerTool } = require("./reseller");
+        const dump = await reconResellerTool({
+          username: process.env.NAVIGATOR_USERNAME,
+          password: process.env.NAVIGATOR_PASSWORD,
+        });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(dump, null, 2));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    })();
+    return;
+  }
+
   // AAD candidates — parse DLA's designated suppliers out of the scraped supplier_list
   // (Reseller Tool data: NAME|CAGE|PART per NSN). These are the REAL sources to pursue
   // as authorized dealers. Aggregates by CAGE with the NSNs they supply.
