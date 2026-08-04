@@ -1263,7 +1263,7 @@ const httpServer = http.createServer((req, res) => {
           (l.delivery_days ? ` | Deliver ${l.delivery_days} days ARO` : "") +
           ` | (Sol ${l.sol}, due ${l.due || "n/a"})`).join("\n");
         const body =
-`${sup.email.split("@")[0]},
+`Hello,
 
 Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding DLA solicitations for which ${sup.supplier} is the designated/approved source. Please provide your best DEALER / RESELLER pricing on the ${sup.ready.length} item(s) below.
 
