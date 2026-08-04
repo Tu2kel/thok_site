@@ -1225,6 +1225,7 @@ const httpServer = http.createServer((req, res) => {
         const { scrapeResellerTool } = require("./reseller");
         const mdb = await getDb();
         const coll = mdb.collection("reseller_suppliers");
+        if (qp.get("reset") === "1") { await coll.deleteMany({}); log("reseller_suppliers cleared before scrape"); }
         const scrapedAt = new Date();
         const r = await scrapeResellerTool(
           { username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, minResell, minNoNSNs, maxPages },

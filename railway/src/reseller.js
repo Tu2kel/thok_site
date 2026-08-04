@@ -187,6 +187,24 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
     ]);
     await new Promise(r => setTimeout(r, 1500));
 
+    // Sort by CAGE (unique key) so Page$N returns DISJOINT slices. Without a
+    // stable ORDER BY the GridView re-queries in arbitrary order each postback,
+    // making pages overlap heavily. Clicking the CAGE header once fixes ordering.
+    const firstBeforeSort = (await scrapeGrid(page))[0]?.cage || "";
+    const sorted = await page.evaluate(() => {
+      const a = [...document.querySelectorAll("a")].find(x => /Sort\$Cage/i.test(x.getAttribute("href") || ""));
+      if (a) { a.click(); return true; }
+      return false;
+    });
+    if (sorted) {
+      for (let w = 0; w < 40; w++) {
+        await new Promise(r => setTimeout(r, 500));
+        const fc = (await scrapeGrid(page).catch(() => []))[0]?.cage || "";
+        if (fc && fc !== firstBeforeSort) break;
+      }
+      info("sorted by CAGE for stable pagination");
+    }
+
     // discover the pager postback target from any Page$ link + capture pager
     // anchors for diagnostics (their real href format tells us how to advance)
     const pagerInfo = await page.evaluate(() => {
