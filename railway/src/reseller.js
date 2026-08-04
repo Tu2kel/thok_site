@@ -216,18 +216,20 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
       info(`page ${pageNum}: ${rows.length} rows (${fresh.length} new) — total ${all.length}`);
       if (fresh.length === 0 && pageNum > 1) break; // no new data → done
       if (!pagerTarget) break;                        // single page
-      // advance to next page. __doPostBack('...GridView1','Page$N') jumps directly
-      // to page N (numeric pager). The evaluate rejects with "context destroyed"
-      // once navigation starts — that's EXPECTED, so swallow it; waitForNavigation
-      // is the real completion signal. (Swallowing this is what makes paging work.)
+      // advance to next page. The GridView sits in an UpdatePanel, so
+      // __doPostBack('...GridView1','Page$N') is an AJAX partial postback — no
+      // navigation event, the grid just swaps in place. So fire it, then poll the
+      // grid until the first row's CAGE changes (the new page loaded). Firing
+      // Page$N beyond the last page reloads the same rows → no change → we stop.
+      const before = rows[0]?.cage || "";
+      try { await page.evaluate((t, n) => { window.__doPostBack(t, "Page$" + n); }, pagerTarget, pageNum + 1); } catch {}
       let advanced = false;
-      try {
-        const nav = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 });
-        page.evaluate((t, n) => { window.__doPostBack(t, "Page$" + n); }, pagerTarget, pageNum + 1).catch(() => {});
-        await nav;
+      for (let w = 0; w < 40; w++) {           // up to ~28s for the partial postback
         await new Promise(r => setTimeout(r, 700));
-        advanced = true; // loop re-scrapes; dedup catches a page that didn't move
-      } catch { advanced = false; }
+        let firstCage = "";
+        try { const g = await scrapeGrid(page); firstCage = g[0]?.cage || ""; } catch {}
+        if (firstCage && firstCage !== before) { advanced = true; break; }
+      }
       if (!advanced) break;
       if (pageNum + 1 > maxPages) { capped = true; }
       pageNum++;
