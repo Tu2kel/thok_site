@@ -14,6 +14,8 @@ const { screenBatch }      = require("./screener");
 const { buildBlastPlan, runBlast, isAerospacePN, isMedicalFSC, isMedicalVendor, isAerospaceVendor } = require("./blaster");
 const { runEsbdSync } = require("./esbd-scraper");
 let esbdRunning = false;
+let resellerRunning = false;
+let resellerStatus = { running: false, started_at: null, finished_at: null, pages: 0, found: 0, capped: false, error: null, params: null };
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
@@ -1198,6 +1200,86 @@ const httpServer = http.createServer((req, res) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: e.message }));
     });
+    return;
+  }
+
+  // Reseller Tool scrape — background job. Filters suppliers.aspx to high
+  // reseller % + min NSN count, paginates, streams to `reseller_suppliers`
+  // (upsert by CAGE). Params: ?min=90&nsns=2&pages=40  (GET or POST).
+  if (u === "/reseller-scrape" && (req.method === "GET" || req.method === "POST")) {
+    if (resellerRunning) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "reseller scrape already running", status: resellerStatus }));
+      return;
+    }
+    const qp = new URLSearchParams(req.url.split("?")[1] || "");
+    const minResell = parseInt(qp.get("min") || "90", 10);
+    const minNoNSNs = parseInt(qp.get("nsns") || "2", 10);
+    const maxPages = parseInt(qp.get("pages") || "40", 10);
+    resellerRunning = true;
+    resellerStatus = { running: true, started_at: new Date().toISOString(), finished_at: null, pages: 0, found: 0, capped: false, error: null, params: { minResell, minNoNSNs, maxPages } };
+    res.writeHead(202, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, message: "reseller scrape started", params: resellerStatus.params }));
+    (async () => {
+      try {
+        const { scrapeResellerTool } = require("./reseller");
+        const mdb = await getDb();
+        const coll = mdb.collection("reseller_suppliers");
+        const scrapedAt = new Date();
+        const r = await scrapeResellerTool(
+          { username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, minResell, minNoNSNs, maxPages },
+          async (rows, pageNum) => {
+            resellerStatus.pages = pageNum;
+            resellerStatus.found += rows.length;
+            if (rows.length) {
+              const ops = rows.map(s => ({
+                updateOne: { filter: { cage: s.cage }, update: { $set: { ...s, scraped_at: scrapedAt } }, upsert: true },
+              }));
+              try { await coll.bulkWrite(ops, { ordered: false }); } catch (e) { err("reseller upsert:", e.message); }
+            }
+          }
+        );
+        resellerStatus.capped = !!r.capped;
+        resellerStatus.error = r.ok ? null : (r.error || "unknown");
+        log(`Reseller scrape done — ${resellerStatus.found} suppliers over ${resellerStatus.pages} pages (min%=${minResell}, minNSNs=${minNoNSNs})`);
+      } catch (e) {
+        resellerStatus.error = e.message; err("reseller scrape error:", e.message);
+      } finally {
+        resellerStatus.running = false; resellerStatus.finished_at = new Date().toISOString(); resellerRunning = false;
+      }
+    })();
+    return;
+  }
+
+  // Reseller scrape status
+  if (u === "/reseller-status" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const total = await mdb.collection("reseller_suppliers").countDocuments({});
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, status: resellerStatus, stored_total: total }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Reseller roster — query stored suppliers. ?min=90&state=TX&nsns=3&sort=value|nsns&limit=100
+  if (u === "/reseller-roster" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const q = {};
+      if (qp.get("min")) q.reseller_pct = { $gte: parseInt(qp.get("min"), 10) };
+      if (qp.get("nsns")) q.no_nsns = { $gte: parseInt(qp.get("nsns"), 10) };
+      if (qp.get("state")) q.state = qp.get("state").toUpperCase();
+      if (qp.get("cage")) q.cage = qp.get("cage").toUpperCase();
+      const sortKey = qp.get("sort") === "nsns" ? "no_nsns" : "total_value";
+      const limit = Math.min(parseInt(qp.get("limit") || "100", 10), 1000);
+      const rows = await mdb.collection("reseller_suppliers")
+        .find(q).sort({ [sortKey]: -1 }).limit(limit).toArray();
+      const matched = await mdb.collection("reseller_suppliers").countDocuments(q);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, matched, showing: rows.length, sort: sortKey,
+        roster: rows.map(r => ({ company: r.company, cage: r.cage, state: r.state, city: r.city,
+          no_nsns: r.no_nsns, total_value: r.total_value, reseller_pct: r.reseller_pct })) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
 
