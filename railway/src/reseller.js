@@ -293,4 +293,49 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
   }
 }
 
-module.exports = { reconResellerTool, scrapeResellerTool, launchAndLogin };
+// RECON a supplier's "Details" — filter the Reseller Tool to one CAGE, click its
+// Details link, dump whatever appears (looking for contact email/phone). This is
+// the no-SAM contact source. Returns the detail panel's text + any links/inputs.
+async function reconResellerDetail({ username, password, cage }) {
+  const { browser, page } = await launchAndLogin(username, password);
+  try {
+    await page.goto("https://dibbsnavigator.com/suppliers.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.waitForSelector("#Main_Cage", { timeout: 30000 });
+    await page.evaluate((c) => { const el = document.querySelector("#Main_Cage"); if (el) el.value = c; }, cage);
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }),
+      page.click("#Main_btnApply"),
+    ]);
+    await new Promise(r => setTimeout(r, 1500));
+    const beforeText = await page.evaluate(() => document.body.innerText.length);
+    // click the Details link (row anchor whose postback target ends in $Cage)
+    const clicked = await page.evaluate(() => {
+      const a = [...document.querySelectorAll("a")].find(x => (x.innerText || "").trim() === "Details");
+      if (a) { a.click(); return true; }
+      return false;
+    });
+    // details may open a modal/panel (partial postback) or navigate — wait for change
+    for (let w = 0; w < 20; w++) {
+      await new Promise(r => setTimeout(r, 600));
+      const now = await page.evaluate(() => document.body.innerText.length);
+      if (Math.abs(now - beforeText) > 40) break;
+    }
+    const dump = await page.evaluate(() => {
+      const bodyText = document.body.innerText;
+      const emails = (bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).slice(0, 10);
+      const phones = (bodyText.match(/\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/g) || []).slice(0, 10);
+      // any visible modal/panel text (look for a container that appeared)
+      const panels = [...document.querySelectorAll("div,td")].filter(d => /contact|email|phone|willing|address/i.test(d.innerText) && d.innerText.length < 600)
+        .slice(0, 5).map(d => d.innerText.replace(/\s+/g, " ").trim().slice(0, 300));
+      return { url: location.href, clickedDetails: true, emails, phones, panels, bodyLen: bodyText.length };
+    });
+    await browser.close();
+    return { ok: true, cage, clicked, ...dump };
+  } catch (e) {
+    fail("detail recon error:", e.message);
+    try { await browser.close(); } catch {}
+    return { ok: false, error: e.message };
+  }
+}
+
+module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, launchAndLogin };

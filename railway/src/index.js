@@ -1363,6 +1363,22 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Recon a supplier's Details (contact source, no SAM). ?cage=XXXXX
+  if (u === "/reseller-detail-recon" && req.method === "GET") {
+    (async () => {
+      try {
+        const qp = new URLSearchParams(req.url.split("?")[1] || "");
+        const cage = (qp.get("cage") || "").trim();
+        if (!cage) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "cage required" })); return; }
+        const { reconResellerDetail } = require("./reseller");
+        const dump = await reconResellerDetail({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, cage });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(dump, null, 2));
+      } catch (e) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
+    })();
+    return;
+  }
+
   // Reseller Tool recon — one-off: log in, open suppliers.aspx, dump the form
   // field IDs + table structure so the real scrape can be wired correctly.
   if (u === "/reseller-recon" && req.method === "GET") {
