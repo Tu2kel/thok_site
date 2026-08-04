@@ -1205,6 +1205,93 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // RFQ PREVIEW — generate the dealer-pricing RFQ per matched supplier. NEVER
+  // sends. HARD completeness gate: a line is included only if NSN + P/N + qty +
+  // unit-of-issue are ALL present (the "we look like idiots" rule). Incomplete
+  // sols are reported as held with the missing field. ?lane=all&min=90
+  if (u === "/rfq-preview" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const lane = qp.get("lane") || "all";
+      const rosterMin = parseInt(qp.get("min") || "90", 10);
+      const PRIMES = ["BOEING", "LOCKHEED", "RAYTHEON", "OSHKOSH", "NORTHROP", "GENERAL DYNAMICS",
+        "BAE SYSTEMS", "SIKORSKY", "L3HARRIS", "L-3", "ROLLS-ROYCE", "GENERAL ELECTRIC",
+        "NAVANTIA", "LEONARDO", "THALES", "CURTISS-WRIGHT", "HONEYWELL", "ELBIT", "SAAB"];
+      const isPrime = n => PRIMES.some(p => (n || "").toUpperCase().includes(p));
+      const roster = await mdb.collection("reseller_suppliers").find({ reseller_pct: { $gte: rosterMin } }).toArray();
+      const byCage = {}; roster.forEach(r => { byCage[r.cage] = r; });
+      const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } })
+        .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
+          quantity: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
+      const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
+      const inLane = s => {
+        const isAero = AERO.test(String(s.ref_part_number || "").trim().toUpperCase());
+        const isMed = /^65\d\d$/.test(String(s.fsc || "").trim()) || /^65/.test(String(s.nsn || "").slice(0, 2));
+        if (lane === "aero") return isAero; if (lane === "medical") return isMed;
+        if (lane === "repost") return !!s.is_repost; return true;
+      };
+      // group ready/held sols per supplier CAGE
+      const bySupplier = {};
+      let readyTotal = 0, heldTotal = 0;
+      for (const s of sols) {
+        if (!inLane(s)) continue;
+        const missing = [];
+        if (!s.nsn) missing.push("nsn");
+        if (!String(s.ref_part_number || "").trim()) missing.push("part_number");
+        if (!String(s.quantity || "").trim()) missing.push("quantity");
+        if (!String(s.unit_of_issue || "").trim()) missing.push("unit_of_issue");
+        for (const entry of String(s.supplier_list).split(";")) {
+          const cage = (entry.split("|")[1] || "").trim().toUpperCase();
+          if (!/^[A-Z0-9]{5}$/.test(cage)) continue;
+          const hit = byCage[cage];
+          if (!hit || isPrime(hit.company) || !hit.contact_email) continue;
+          if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
+            reseller_pct: hit.reseller_pct, ready: [], held: [] };
+          const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
+            qty: s.quantity, ui: s.unit_of_issue, delivery_days: s.delivery_days, due: s.quote_due };
+          if (missing.length) { bySupplier[cage].held.push({ ...line, missing }); }
+          else { bySupplier[cage].ready.push(line); }
+        }
+      }
+      // build RFQ text for suppliers that have >=1 ready line
+      const drafts = [];
+      for (const sup of Object.values(bySupplier)) {
+        readyTotal += sup.ready.length; heldTotal += sup.held.length;
+        if (!sup.ready.length) continue;
+        const lines = sup.ready.map((l, i) =>
+          `  ${i + 1}. NSN ${l.nsn} | P/N ${l.part} | ${l.item} | Qty ${l.qty} ${l.ui}` +
+          (l.delivery_days ? ` | Deliver ${l.delivery_days} days ARO` : "") +
+          ` | (Sol ${l.sol}, due ${l.due || "n/a"})`).join("\n");
+        const body =
+`${sup.email.split("@")[0]},
+
+Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding DLA solicitations for which ${sup.supplier} is the designated/approved source. Please provide your best DEALER / RESELLER pricing on the ${sup.ready.length} item(s) below.
+
+For each item we require: Certificate of Conformance + full material/lot traceability; mil-spec / QPL compliance where applicable; MIL-STD-129 packaging & marking. FOB Origin preferred.
+
+Line items:
+${lines}
+
+Please also confirm: (1) that you sell to resellers, (2) your minimum order quantity, and (3) lead time.
+
+Thank you,
+Anthony Kelley
+Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
+        drafts.push({ supplier: sup.supplier, cage: sup.cage, email: sup.email, reseller_pct: sup.reseller_pct,
+          ready_lines: sup.ready.length, held_lines: sup.held.length,
+          subject: `RFQ — Dealer Pricing Request — ${sup.ready.length} item(s) (DLA resale)`, body });
+      }
+      drafts.sort((a, b) => b.ready_lines - a.ready_lines);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, lane, roster_min: rosterMin,
+        suppliers_with_sendable_rfq: drafts.length,
+        line_items_ready: readyTotal, line_items_held_incomplete: heldTotal,
+        note: "PREVIEW ONLY — nothing sent. Held lines are missing P/N/qty/UI and need fresh-sol PDF enrichment.",
+        drafts: drafts.slice(0, 15) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Reseller MATCH — the de-noise. Intersect the reseller roster with the
   // designated suppliers of the sols WE bid (supplier_list CAGEs). Output: for
   // each part on our board, who the reseller-friendly source is + their opp %.
