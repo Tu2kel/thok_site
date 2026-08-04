@@ -216,20 +216,17 @@ async function scrapeResellerTool({ username, password, minResell = 90, minNoNSN
       info(`page ${pageNum}: ${rows.length} rows (${fresh.length} new) — total ${all.length}`);
       if (fresh.length === 0 && pageNum > 1) break; // no new data → done
       if (!pagerTarget) break;                        // single page
-      // advance to next page via postback
-      const before = rows[0]?.cage || "";
+      // advance to next page. __doPostBack('...GridView1','Page$N') jumps directly
+      // to page N (numeric pager). The evaluate rejects with "context destroyed"
+      // once navigation starts — that's EXPECTED, so swallow it; waitForNavigation
+      // is the real completion signal. (Swallowing this is what makes paging work.)
       let advanced = false;
       try {
-        await Promise.all([
-          page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 }),
-          page.evaluate((t, n) => { window.__doPostBack(t, "Page$" + n); }, pagerTarget, pageNum + 1),
-        ]);
-        await new Promise(r => setTimeout(r, 800));
-        const after = await page.evaluate(() => {
-          const a = document.querySelector("table tr td")?.innerText || "";
-          return a;
-        });
-        advanced = true; // navigation happened; loop re-scrapes and dedups
+        const nav = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 });
+        page.evaluate((t, n) => { window.__doPostBack(t, "Page$" + n); }, pagerTarget, pageNum + 1).catch(() => {});
+        await nav;
+        await new Promise(r => setTimeout(r, 700));
+        advanced = true; // loop re-scrapes; dedup catches a page that didn't move
       } catch { advanced = false; }
       if (!advanced) break;
       if (pageNum + 1 > maxPages) { capped = true; }
