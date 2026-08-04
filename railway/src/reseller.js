@@ -338,4 +338,64 @@ async function reconResellerDetail({ username, password, cage }) {
   }
 }
 
-module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, launchAndLogin };
+// Enrich a batch of CAGEs with contact info from the Reseller Tool "Details"
+// panel (email + address + NAICS + small-business). One login, loops the list.
+// onOne(record) is called per CAGE so the caller can stream to Mongo.
+async function scrapeResellerContacts({ username, password, cages }, onOne) {
+  const { browser, page } = await launchAndLogin(username, password);
+  const results = [];
+  try {
+    for (const cage of cages) {
+      let rec = { cage, contact_email: "", contact_emails: [], address: "", city: "", state: "", zip: "", naics: "", small_business: null, ok: false };
+      try {
+        await page.goto("https://dibbsnavigator.com/suppliers.aspx", { waitUntil: "domcontentloaded", timeout: 90000 });
+        await page.waitForSelector("#Main_Cage", { timeout: 20000 });
+        await page.evaluate((c) => { const el = document.querySelector("#Main_Cage"); if (el) el.value = c; }, cage);
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 90000 }),
+          page.click("#Main_btnApply"),
+        ]);
+        await new Promise(r => setTimeout(r, 1200));
+        const beforeLen = await page.evaluate(() => document.body.innerText.length);
+        const clicked = await page.evaluate(() => {
+          const a = [...document.querySelectorAll("a")].find(x => (x.innerText || "").trim() === "Details");
+          if (a) { a.click(); return true; } return false;
+        });
+        if (clicked) {
+          for (let w = 0; w < 20; w++) {
+            await new Promise(r => setTimeout(r, 500));
+            const now = await page.evaluate(() => document.body.innerText.length);
+            if (Math.abs(now - beforeLen) > 40) break;
+          }
+        }
+        const info = await page.evaluate(() => {
+          const t = document.body.innerText;
+          const emails = (t.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []);
+          const grab = (label) => { const m = t.match(new RegExp(label + "\\s*:?\\s*([^\\n]{1,60})", "i")); return m ? m[1].trim() : ""; };
+          return {
+            emails: [...new Set(emails)].slice(0, 5),
+            address: grab("Address 1"),
+            city: grab("City"), state: grab("State"), zip: grab("ZIP"),
+            naics: (t.match(/Primary NAICS:\s*(\d{6})/i) || [])[1] || "",
+            small: /Is Small Business:\s*Y/i.test(t) ? true : (/Is Small Business:\s*N/i.test(t) ? false : null),
+          };
+        });
+        // pick a non-dibbsnavigator email as the supplier contact
+        const supEmail = (info.emails || []).find(e => !/dibbsnavigator|dibbs\.bsm|dla\.mil|example\.com/i.test(e)) || "";
+        rec = { cage, contact_email: supEmail, contact_emails: info.emails || [], address: info.address,
+          city: info.city, state: info.state, zip: info.zip, naics: info.naics, small_business: info.small, ok: true };
+      } catch (e) { rec.error = e.message; }
+      results.push(rec);
+      if (onOne) { try { await onOne(rec); } catch {} }
+      info("contact " + cage + " -> " + (rec.contact_email || "(none)"));
+    }
+    await browser.close();
+    return { ok: true, results };
+  } catch (e) {
+    fail("contacts error:", e.message);
+    try { await browser.close(); } catch {}
+    return { ok: false, error: e.message, results };
+  }
+}
+
+module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, scrapeResellerContacts, launchAndLogin };

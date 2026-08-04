@@ -16,6 +16,8 @@ const { runEsbdSync } = require("./esbd-scraper");
 let esbdRunning = false;
 let resellerRunning = false;
 let resellerStatus = { running: false, started_at: null, finished_at: null, pages: 0, found: 0, capped: false, error: null, params: null };
+let contactsRunning = false;
+let contactsStatus = { running: false, started_at: null, finished_at: null, done: 0, total: 0, with_email: 0, error: null };
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
@@ -1359,6 +1361,62 @@ const httpServer = http.createServer((req, res) => {
       res.end(JSON.stringify({ ok: true, matched, showing: rows.length, sort: sortKey,
         roster: rows.map(r => ({ company: r.company, cage: r.cage, state: r.state, city: r.city,
           no_nsns: r.no_nsns, total_value: r.total_value, reseller_pct: r.reseller_pct })) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Enrich contacts for the reseller suppliers matched to our bid sols (no SAM).
+  // Default set: CAGEs that are BOTH a designated supplier on our sols AND in the
+  // roster AND missing contact_email. ?cages=a,b  ?all=1  ?limit=60
+  if (u === "/reseller-enrich-contacts" && (req.method === "GET" || req.method === "POST")) {
+    if (contactsRunning) { res.writeHead(409, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "already running", status: contactsStatus })); return; }
+    const qp = new URLSearchParams(req.url.split("?")[1] || "");
+    const limit = Math.min(parseInt(qp.get("limit") || "60", 10), 200);
+    (async () => {
+      const mdb = await getDb();
+      let cages = [];
+      if (qp.get("cages")) {
+        cages = qp.get("cages").split(",").map(c => c.trim().toUpperCase()).filter(Boolean);
+      } else {
+        // matched set: sols' designated-supplier CAGEs ∩ roster, missing email
+        const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } }).project({ supplier_list: 1 }).toArray();
+        const solCages = new Set();
+        sols.forEach(s => String(s.supplier_list).split(";").forEach(e => { const c = (e.split("|")[1] || "").trim().toUpperCase(); if (/^[A-Z0-9]{5}$/.test(c)) solCages.add(c); }));
+        const inRoster = await mdb.collection("reseller_suppliers")
+          .find({ cage: { $in: [...solCages] } }).project({ cage: 1, contact_email: 1 }).toArray();
+        const pool = qp.get("all") === "1" ? inRoster : inRoster.filter(r => !r.contact_email);
+        cages = pool.map(r => r.cage);
+      }
+      cages = cages.slice(0, limit);
+      if (!cages.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, message: "no CAGEs to enrich", status: contactsStatus })); return; }
+      contactsRunning = true;
+      contactsStatus = { running: true, started_at: new Date().toISOString(), finished_at: null, done: 0, total: cages.length, with_email: 0, error: null };
+      res.writeHead(202, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, message: "contact enrichment started", total: cages.length, cages }));
+      try {
+        const { scrapeResellerContacts } = require("./reseller");
+        const coll = mdb.collection("reseller_suppliers");
+        await scrapeResellerContacts({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, cages }, async (rec) => {
+          contactsStatus.done++;
+          if (rec.contact_email) contactsStatus.with_email++;
+          await coll.updateOne({ cage: rec.cage }, { $set: {
+            contact_email: rec.contact_email || "", contact_emails: rec.contact_emails || [],
+            address: rec.address || "", naics: rec.naics || "", small_business: rec.small_business,
+            contact_scraped_at: new Date() } }, { upsert: true }).catch(() => {});
+        });
+        log(`Contact enrichment done — ${contactsStatus.with_email}/${contactsStatus.total} got an email`);
+      } catch (e) { contactsStatus.error = e.message; err("contact enrich:", e.message); }
+      finally { contactsStatus.running = false; contactsStatus.finished_at = new Date().toISOString(); contactsRunning = false; }
+    })().catch(e => { try { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); } catch {} });
+    return;
+  }
+
+  // Contact enrichment status
+  if (u === "/reseller-contacts-status" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const withEmail = await mdb.collection("reseller_suppliers").countDocuments({ contact_email: { $nin: ["", null] } });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, status: contactsStatus, roster_with_email: withEmail }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
