@@ -1256,7 +1256,8 @@ const httpServer = http.createServer((req, res) => {
           const hit = byCage[cage.toUpperCase()];
           if (hit && !(noPrimes && isPrime(hit.company))) {
             suppliers.push({ company: hit.company, cage: hit.cage, reseller_pct: hit.reseller_pct,
-              no_nsns: hit.no_nsns, state: hit.state, prime: isPrime(hit.company) });
+              no_nsns: hit.no_nsns, state: hit.state, prime: isPrime(hit.company),
+              contact_email: hit.contact_email || "", naics: hit.naics || "" });
           }
         }
         if (suppliers.length) {
@@ -1272,11 +1273,12 @@ const httpServer = http.createServer((req, res) => {
         if (!shortlist[sp.cage]) shortlist[sp.cage] = { ...sp, sols: 0 };
         shortlist[sp.cage].sols++;
       }));
+      const contactable = Object.values(shortlist).filter(s => s.contact_email).length;
       const shortlistArr = Object.values(shortlist).sort((a, b) => b.sols - a.sols);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, lane, roster_min: rosterMin, noprimes: noPrimes,
         sols_considered: solsConsidered, sols_with_a_reseller_match: solsWithMatch,
-        unique_suppliers: shortlistArr.length, shortlist: shortlistArr.slice(0, 40),
+        unique_suppliers: shortlistArr.length, contactable_suppliers: contactable, shortlist: shortlistArr.slice(0, 40),
         sample_matches: matches.slice(0, 25) }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
