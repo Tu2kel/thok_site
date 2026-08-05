@@ -33,7 +33,7 @@ async function buildRfqDrafts(mdb, lane, rosterMin) {
   const byCage = {}; roster.forEach(r => { byCage[r.cage] = r; });
   const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } })
     .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
-      quantity: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
+      quantity: 1, ext_price: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
   const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
   const inLane = s => {
     const isAero = AERO.test(String(s.ref_part_number || "").trim().toUpperCase());
@@ -59,7 +59,8 @@ async function buildRfqDrafts(mdb, lane, rosterMin) {
       if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
         reseller_pct: hit.reseller_pct, ready: [], held: [] };
       const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
-        qty: s.quantity, ui: s.unit_of_issue, delivery_days: s.delivery_days, due: s.quote_due };
+        qty: s.quantity, ui: s.unit_of_issue, ext: Number(s.ext_price) || 0,
+        delivery_days: s.delivery_days, due: s.quote_due };
       if (missing.length) bySupplier[cage].held.push({ ...line, missing });
       else bySupplier[cage].ready.push(line);
     }
@@ -68,6 +69,8 @@ async function buildRfqDrafts(mdb, lane, rosterMin) {
   for (const sup of Object.values(bySupplier)) {
     readyTotal += sup.ready.length; heldTotal += sup.held.length;
     if (!sup.ready.length) continue;
+    sup.ready.sort((a, b) => b.ext - a.ext);                       // biggest-$ line first
+    const supplierValue = sup.ready.reduce((a, l) => a + (l.ext || 0), 0);
     const lines = sup.ready.map((l, i) =>
       `  ${i + 1}. NSN ${l.nsn} | P/N ${l.part} | ${l.item} | Qty ${l.qty} ${l.ui}` +
       (l.delivery_days ? ` | Deliver ${l.delivery_days} days ARO` : "") +
@@ -88,11 +91,13 @@ Thank you,
 Anthony Kelley
 Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
     drafts.push({ supplier: sup.supplier, cage: sup.cage, email: sup.email, reseller_pct: sup.reseller_pct,
-      ready_lines: sup.ready.length, held_lines: sup.held.length,
+      ready_lines: sup.ready.length, held_lines: sup.held.length, total_value: Math.round(supplierValue),
       subject: `RFQ — Dealer Pricing Request — ${sup.ready.length} item(s) (DLA resale)`, body,
       sols: sup.ready.map(l => l.sol) });
   }
-  drafts.sort((a, b) => b.ready_lines - a.ready_lines);
+  // HIGHEST DOLLAR FIRST — the daily cap takes the biggest-$ suppliers, never
+  // burns the budget on low-value ones (user: "don't miss the money").
+  drafts.sort((a, b) => b.total_value - a.total_value);
   return { drafts, readyTotal, heldTotal };
 }
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
