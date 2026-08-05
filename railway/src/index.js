@@ -18,6 +18,83 @@ let resellerRunning = false;
 let resellerStatus = { running: false, started_at: null, finished_at: null, pages: 0, found: 0, capped: false, error: null, params: null };
 let contactsRunning = false;
 let contactsStatus = { running: false, started_at: null, finished_at: null, done: 0, total: 0, with_email: 0, error: null };
+let rfqSendStatus = { last_run: null, sent: 0, failed: 0, skipped_disabled: false };
+
+// Build dealer-pricing RFQ drafts per matched, reseller-friendly, ACTIVE supplier.
+// Shared by /rfq-preview (no send) and /rfq-send (gated send). HARD completeness
+// gate: a line is included only if NSN + P/N + quantity + unit_of_issue are all
+// present. Returns { drafts, readyTotal, heldTotal }.
+const RFQ_PRIMES = ["BOEING", "LOCKHEED", "RAYTHEON", "OSHKOSH", "NORTHROP", "GENERAL DYNAMICS",
+  "BAE SYSTEMS", "SIKORSKY", "L3HARRIS", "L-3", "ROLLS-ROYCE", "GENERAL ELECTRIC",
+  "NAVANTIA", "LEONARDO", "THALES", "CURTISS-WRIGHT", "HONEYWELL", "ELBIT", "SAAB"];
+async function buildRfqDrafts(mdb, lane, rosterMin) {
+  const isPrime = n => RFQ_PRIMES.some(p => (n || "").toUpperCase().includes(p));
+  const roster = await mdb.collection("reseller_suppliers").find({ reseller_pct: { $gte: rosterMin } }).toArray();
+  const byCage = {}; roster.forEach(r => { byCage[r.cage] = r; });
+  const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } })
+    .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
+      quantity: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
+  const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
+  const inLane = s => {
+    const isAero = AERO.test(String(s.ref_part_number || "").trim().toUpperCase());
+    const isMed = /^65\d\d$/.test(String(s.fsc || "").trim()) || /^65/.test(String(s.nsn || "").slice(0, 2));
+    if (lane === "aero") return isAero; if (lane === "medical") return isMed;
+    if (lane === "repost") return !!s.is_repost; return true;
+  };
+  const bySupplier = {};
+  let readyTotal = 0, heldTotal = 0;
+  for (const s of sols) {
+    if (!inLane(s)) continue;
+    const missing = [];
+    if (!s.nsn) missing.push("nsn");
+    if (!String(s.ref_part_number || "").trim()) missing.push("part_number");
+    if (!String(s.quantity || "").trim()) missing.push("quantity");
+    if (!String(s.unit_of_issue || "").trim()) missing.push("unit_of_issue");
+    for (const entry of String(s.supplier_list).split(";")) {
+      const cage = (entry.split("|")[1] || "").trim().toUpperCase();
+      if (!/^[A-Z0-9]{5}$/.test(cage)) continue;
+      const hit = byCage[cage];
+      if (!hit || isPrime(hit.company) || !hit.contact_email) continue;
+      if (hit.status === "paused" || hit.status === "dns") continue;
+      if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
+        reseller_pct: hit.reseller_pct, ready: [], held: [] };
+      const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
+        qty: s.quantity, ui: s.unit_of_issue, delivery_days: s.delivery_days, due: s.quote_due };
+      if (missing.length) bySupplier[cage].held.push({ ...line, missing });
+      else bySupplier[cage].ready.push(line);
+    }
+  }
+  const drafts = [];
+  for (const sup of Object.values(bySupplier)) {
+    readyTotal += sup.ready.length; heldTotal += sup.held.length;
+    if (!sup.ready.length) continue;
+    const lines = sup.ready.map((l, i) =>
+      `  ${i + 1}. NSN ${l.nsn} | P/N ${l.part} | ${l.item} | Qty ${l.qty} ${l.ui}` +
+      (l.delivery_days ? ` | Deliver ${l.delivery_days} days ARO` : "") +
+      ` | (Sol ${l.sol}, due ${l.due || "n/a"})`).join("\n");
+    const body =
+`Hello,
+
+Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding DLA solicitations for which ${sup.supplier} is the designated/approved source. Please provide your best DEALER / RESELLER pricing on the ${sup.ready.length} item(s) below.
+
+For each item we require: Certificate of Conformance + full material/lot traceability; mil-spec / QPL compliance where applicable; MIL-STD-129 packaging & marking. FOB Origin preferred.
+
+Line items:
+${lines}
+
+Please also confirm: (1) that you sell to resellers, (2) your minimum order quantity, and (3) lead time.
+
+Thank you,
+Anthony Kelley
+Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
+    drafts.push({ supplier: sup.supplier, cage: sup.cage, email: sup.email, reseller_pct: sup.reseller_pct,
+      ready_lines: sup.ready.length, held_lines: sup.held.length,
+      subject: `RFQ — Dealer Pricing Request — ${sup.ready.length} item(s) (DLA resale)`, body,
+      sols: sup.ready.map(l => l.sol) });
+  }
+  drafts.sort((a, b) => b.ready_lines - a.ready_lines);
+  return { drafts, readyTotal, heldTotal };
+}
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
@@ -768,6 +845,8 @@ const httpServer = http.createServer((req, res) => {
       federal_blast_enabled: process.env.FEDERAL_BLAST_ENABLED === "true",
       aerospace_blast_enabled: AEROSPACE_BLAST_ENABLED,
       medical_blast_enabled: MEDICAL_BLAST_ENABLED,
+      reseller_rfq_enabled: process.env.RESELLER_RFQ_ENABLED === "true",
+      reseller_rfq_last: rfqSendStatus,
       blast_live: IS_LIVE,
       blast_paused:  _blastState.paused,
       daily_sent:    _blastState.daily_sent,
@@ -1235,81 +1314,60 @@ const httpServer = http.createServer((req, res) => {
       const qp = new URLSearchParams(req.url.split("?")[1] || "");
       const lane = qp.get("lane") || "all";
       const rosterMin = parseInt(qp.get("min") || "90", 10);
-      const PRIMES = ["BOEING", "LOCKHEED", "RAYTHEON", "OSHKOSH", "NORTHROP", "GENERAL DYNAMICS",
-        "BAE SYSTEMS", "SIKORSKY", "L3HARRIS", "L-3", "ROLLS-ROYCE", "GENERAL ELECTRIC",
-        "NAVANTIA", "LEONARDO", "THALES", "CURTISS-WRIGHT", "HONEYWELL", "ELBIT", "SAAB"];
-      const isPrime = n => PRIMES.some(p => (n || "").toUpperCase().includes(p));
-      const roster = await mdb.collection("reseller_suppliers").find({ reseller_pct: { $gte: rosterMin } }).toArray();
-      const byCage = {}; roster.forEach(r => { byCage[r.cage] = r; });
-      const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } })
-        .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
-          quantity: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
-      const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
-      const inLane = s => {
-        const isAero = AERO.test(String(s.ref_part_number || "").trim().toUpperCase());
-        const isMed = /^65\d\d$/.test(String(s.fsc || "").trim()) || /^65/.test(String(s.nsn || "").slice(0, 2));
-        if (lane === "aero") return isAero; if (lane === "medical") return isMed;
-        if (lane === "repost") return !!s.is_repost; return true;
-      };
-      // group ready/held sols per supplier CAGE
-      const bySupplier = {};
-      let readyTotal = 0, heldTotal = 0;
-      for (const s of sols) {
-        if (!inLane(s)) continue;
-        const missing = [];
-        if (!s.nsn) missing.push("nsn");
-        if (!String(s.ref_part_number || "").trim()) missing.push("part_number");
-        if (!String(s.quantity || "").trim()) missing.push("quantity");
-        if (!String(s.unit_of_issue || "").trim()) missing.push("unit_of_issue");
-        for (const entry of String(s.supplier_list).split(";")) {
-          const cage = (entry.split("|")[1] || "").trim().toUpperCase();
-          if (!/^[A-Z0-9]{5}$/.test(cage)) continue;
-          const hit = byCage[cage];
-          if (!hit || isPrime(hit.company) || !hit.contact_email) continue;
-          if (hit.status === "paused" || hit.status === "dns") continue; // control layer: skip flagged
-          if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
-            reseller_pct: hit.reseller_pct, ready: [], held: [] };
-          const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
-            qty: s.quantity, ui: s.unit_of_issue, delivery_days: s.delivery_days, due: s.quote_due };
-          if (missing.length) { bySupplier[cage].held.push({ ...line, missing }); }
-          else { bySupplier[cage].ready.push(line); }
-        }
-      }
-      // build RFQ text for suppliers that have >=1 ready line
-      const drafts = [];
-      for (const sup of Object.values(bySupplier)) {
-        readyTotal += sup.ready.length; heldTotal += sup.held.length;
-        if (!sup.ready.length) continue;
-        const lines = sup.ready.map((l, i) =>
-          `  ${i + 1}. NSN ${l.nsn} | P/N ${l.part} | ${l.item} | Qty ${l.qty} ${l.ui}` +
-          (l.delivery_days ? ` | Deliver ${l.delivery_days} days ARO` : "") +
-          ` | (Sol ${l.sol}, due ${l.due || "n/a"})`).join("\n");
-        const body =
-`Hello,
-
-Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding DLA solicitations for which ${sup.supplier} is the designated/approved source. Please provide your best DEALER / RESELLER pricing on the ${sup.ready.length} item(s) below.
-
-For each item we require: Certificate of Conformance + full material/lot traceability; mil-spec / QPL compliance where applicable; MIL-STD-129 packaging & marking. FOB Origin preferred.
-
-Line items:
-${lines}
-
-Please also confirm: (1) that you sell to resellers, (2) your minimum order quantity, and (3) lead time.
-
-Thank you,
-Anthony Kelley
-Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
-        drafts.push({ supplier: sup.supplier, cage: sup.cage, email: sup.email, reseller_pct: sup.reseller_pct,
-          ready_lines: sup.ready.length, held_lines: sup.held.length,
-          subject: `RFQ — Dealer Pricing Request — ${sup.ready.length} item(s) (DLA resale)`, body });
-      }
-      drafts.sort((a, b) => b.ready_lines - a.ready_lines);
+      const { drafts, readyTotal, heldTotal } = await buildRfqDrafts(mdb, lane, rosterMin);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, lane, roster_min: rosterMin,
         suppliers_with_sendable_rfq: drafts.length,
         line_items_ready: readyTotal, line_items_held_incomplete: heldTotal,
         note: "PREVIEW ONLY — nothing sent. Held lines are missing P/N/qty/UI and need fresh-sol PDF enrichment.",
         drafts: drafts.slice(0, 15) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // RFQ SEND — the live dispatch. DARK by default: sends nothing unless
+  // RESELLER_RFQ_ENABLED === "true" in Railway env. Even then, ?confirm=1 is
+  // required to actually fire (a bare call reports what WOULD send). Daily cap via
+  // RESELLER_RFQ_DAILY_LIMIT (default 25). Logs to rfq_log, bumps rfqs_sent.
+  if (u === "/rfq-send" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const lane = qp.get("lane") || "all";
+      const rosterMin = parseInt(qp.get("min") || "90", 10);
+      const enabled = process.env.RESELLER_RFQ_ENABLED === "true";
+      const confirm = qp.get("confirm") === "1";
+      const cap = parseInt(process.env.RESELLER_RFQ_DAILY_LIMIT || "25", 10);
+      const { drafts } = await buildRfqDrafts(mdb, lane, rosterMin);
+      const batch = drafts.slice(0, cap);
+      if (!enabled) {
+        rfqSendStatus = { last_run: new Date().toISOString(), sent: 0, failed: 0, skipped_disabled: true };
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, disabled: true, sent: 0, would_send: batch.length,
+          note: "RESELLER_RFQ_ENABLED is not 'true' — DARK, nothing sent. Set it in Railway to go live." }, null, 2));
+        return;
+      }
+      if (!confirm) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, enabled: true, sent: 0, would_send: batch.length,
+          note: "Enabled but ?confirm=1 not passed — no send. Add &confirm=1 to dispatch." }, null, 2));
+        return;
+      }
+      const { sendEmailResend } = require("./email");
+      let sent = 0, failed = 0; const results = [];
+      for (const d of batch) {
+        try {
+          await sendEmailResend({ to: d.email, subject: d.subject, body: d.body });
+          await mdb.collection("rfq_log").insertOne({ cage: d.cage, supplier: d.supplier, email: d.email,
+            subject: d.subject, sols: d.sols, ready_lines: d.ready_lines, sent_at: new Date(), lane });
+          await mdb.collection("reseller_suppliers").updateOne({ cage: d.cage },
+            { $inc: { rfqs_sent: 1 }, $set: { last_rfq_at: new Date() } });
+          sent++; results.push({ cage: d.cage, email: d.email, ok: true });
+        } catch (e) { failed++; results.push({ cage: d.cage, email: d.email, ok: false, error: e.message }); }
+      }
+      rfqSendStatus = { last_run: new Date().toISOString(), sent, failed, skipped_disabled: false };
+      log(`RFQ send — ${sent} sent, ${failed} failed (cap ${cap}, lane ${lane})`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, enabled: true, confirmed: true, sent, failed, cap, results }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
