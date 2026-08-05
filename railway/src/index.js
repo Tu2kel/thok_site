@@ -1205,6 +1205,27 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Set a reseller supplier's status/disposition (control layer). The RFQ lane
+  // sends only to active suppliers; paused/dns are kept for review but skipped.
+  // ?cage=A,B  ?status=active|paused|dns  ?disposition=rejected_us|over_hist|no_margin|verified  ?note=...
+  if (u === "/reseller-supplier-status" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const cages = (qp.get("cage") || "").split(",").map(c => c.trim().toUpperCase()).filter(Boolean);
+      const status = (qp.get("status") || "").toLowerCase();
+      if (!cages.length) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "cage required" })); return; }
+      if (status && !["active", "paused", "dns"].includes(status)) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "status must be active|paused|dns" })); return; }
+      const set = { status_updated_at: new Date() };
+      if (status) set.status = status;
+      if (qp.get("disposition")) set.disposition = qp.get("disposition");
+      if (qp.get("note")) set.note = qp.get("note");
+      const r = await mdb.collection("reseller_suppliers").updateMany({ cage: { $in: cages } }, { $set: set });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, matched: r.matchedCount, modified: r.modifiedCount, cages, set }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // RFQ PREVIEW — generate the dealer-pricing RFQ per matched supplier. NEVER
   // sends. HARD completeness gate: a line is included only if NSN + P/N + qty +
   // unit-of-issue are ALL present (the "we look like idiots" rule). Incomplete
@@ -1245,6 +1266,7 @@ const httpServer = http.createServer((req, res) => {
           if (!/^[A-Z0-9]{5}$/.test(cage)) continue;
           const hit = byCage[cage];
           if (!hit || isPrime(hit.company) || !hit.contact_email) continue;
+          if (hit.status === "paused" || hit.status === "dns") continue; // control layer: skip flagged
           if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
             reseller_pct: hit.reseller_pct, ready: [], held: [] };
           const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
@@ -1344,7 +1366,8 @@ Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
           if (hit && !(noPrimes && isPrime(hit.company))) {
             suppliers.push({ company: hit.company, cage: hit.cage, reseller_pct: hit.reseller_pct,
               no_nsns: hit.no_nsns, state: hit.state, prime: isPrime(hit.company),
-              contact_email: hit.contact_email || "", naics: hit.naics || "" });
+              contact_email: hit.contact_email || "", naics: hit.naics || "",
+              status: hit.status || "active", disposition: hit.disposition || "" });
           }
         }
         if (suppliers.length) {
@@ -1449,7 +1472,8 @@ Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, matched, showing: rows.length, sort: sortKey,
         roster: rows.map(r => ({ company: r.company, cage: r.cage, state: r.state, city: r.city,
-          no_nsns: r.no_nsns, total_value: r.total_value, reseller_pct: r.reseller_pct })) }, null, 2));
+          no_nsns: r.no_nsns, total_value: r.total_value, reseller_pct: r.reseller_pct,
+          status: r.status || "active", disposition: r.disposition || "", contact_email: r.contact_email || "" })) }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
