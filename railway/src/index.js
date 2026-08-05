@@ -31,6 +31,11 @@ async function buildRfqDrafts(mdb, lane, rosterMin) {
   const isPrime = n => RFQ_PRIMES.some(p => (n || "").toUpperCase().includes(p));
   const roster = await mdb.collection("reseller_suppliers").find({ reseller_pct: { $gte: rosterMin } }).toArray();
   const byCage = {}; roster.forEach(r => { byCage[r.cage] = r; });
+  // IDEMPOTENCY: never RFQ the same (supplier, sol) twice — a daily job must not
+  // re-spam. rfq_log holds every past send as {cage, sols:[...]}.
+  const alreadySent = new Set();
+  (await mdb.collection("rfq_log").find({}).project({ cage: 1, sols: 1 }).toArray())
+    .forEach(r => (r.sols || []).forEach(s => alreadySent.add(r.cage + "|" + s)));
   const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } })
     .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
       quantity: 1, ext_price: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
@@ -56,6 +61,7 @@ async function buildRfqDrafts(mdb, lane, rosterMin) {
       const hit = byCage[cage];
       if (!hit || isPrime(hit.company) || !hit.contact_email) continue;
       if (hit.status === "paused" || hit.status === "dns") continue;
+      if (alreadySent.has(cage + "|" + s.sol_number)) continue; // idempotency: sent before
       if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
         reseller_pct: hit.reseller_pct, ready: [], held: [] };
       const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
@@ -99,6 +105,27 @@ Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
   // burns the budget on low-value ones (user: "don't miss the money").
   drafts.sort((a, b) => b.total_value - a.total_value);
   return { drafts, readyTotal, heldTotal };
+}
+
+// Send the top-value RFQs (up to cap). Shared by /rfq-send and the daily pipeline.
+// Idempotent via buildRfqDrafts (skips already-sent). Logs to rfq_log, bumps counters.
+async function dispatchRfqs(mdb, lane, rosterMin, cap) {
+  const { drafts } = await buildRfqDrafts(mdb, lane, rosterMin);
+  const batch = drafts.slice(0, cap);
+  const { sendEmailResend } = require("./email");
+  let sent = 0, failed = 0; const results = [];
+  for (const d of batch) {
+    try {
+      await sendEmailResend({ to: d.email, subject: d.subject, body: d.body });
+      await mdb.collection("rfq_log").insertOne({ cage: d.cage, supplier: d.supplier, email: d.email,
+        subject: d.subject, sols: d.sols, ready_lines: d.ready_lines, total_value: d.total_value, sent_at: new Date(), lane });
+      await mdb.collection("reseller_suppliers").updateOne({ cage: d.cage },
+        { $inc: { rfqs_sent: 1 }, $set: { last_rfq_at: new Date() } });
+      sent++; results.push({ cage: d.cage, supplier: d.supplier, email: d.email, value: d.total_value, ok: true });
+    } catch (e) { failed++; results.push({ cage: d.cage, email: d.email, ok: false, error: e.message }); }
+  }
+  rfqSendStatus = { last_run: new Date().toISOString(), sent, failed, skipped_disabled: false };
+  return { sent, failed, attempted: batch.length, results };
 }
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
@@ -641,6 +668,19 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
     });
   } catch (e) {
     err("Summary email failed:", e.message);
+  }
+
+  // ── 10. Reseller RFQ auto-send (highest-$ first, idempotent, capped) ──
+  // Gated by RESELLER_RFQ_ENABLED. Separate from the federal blast above.
+  // Guarded so a send error can never break the pipeline.
+  if (process.env.RESELLER_RFQ_ENABLED === "true") {
+    try {
+      const cap = parseInt(process.env.RESELLER_RFQ_DAILY_LIMIT || "25", 10);
+      const r = await dispatchRfqs(db, "all", 90, cap);
+      log(`Reseller RFQ auto-send: ${r.sent} sent, ${r.failed} failed (cap ${cap}, highest-$ first)`);
+    } catch (e) {
+      err("Reseller RFQ auto-send failed:", e.message);
+    }
   }
 
   log("Pipeline complete ✅");
@@ -1357,22 +1397,10 @@ const httpServer = http.createServer((req, res) => {
           note: "Enabled but ?confirm=1 not passed — no send. Add &confirm=1 to dispatch." }, null, 2));
         return;
       }
-      const { sendEmailResend } = require("./email");
-      let sent = 0, failed = 0; const results = [];
-      for (const d of batch) {
-        try {
-          await sendEmailResend({ to: d.email, subject: d.subject, body: d.body });
-          await mdb.collection("rfq_log").insertOne({ cage: d.cage, supplier: d.supplier, email: d.email,
-            subject: d.subject, sols: d.sols, ready_lines: d.ready_lines, sent_at: new Date(), lane });
-          await mdb.collection("reseller_suppliers").updateOne({ cage: d.cage },
-            { $inc: { rfqs_sent: 1 }, $set: { last_rfq_at: new Date() } });
-          sent++; results.push({ cage: d.cage, email: d.email, ok: true });
-        } catch (e) { failed++; results.push({ cage: d.cage, email: d.email, ok: false, error: e.message }); }
-      }
-      rfqSendStatus = { last_run: new Date().toISOString(), sent, failed, skipped_disabled: false };
-      log(`RFQ send — ${sent} sent, ${failed} failed (cap ${cap}, lane ${lane})`);
+      const r = await dispatchRfqs(mdb, lane, rosterMin, cap);
+      log(`RFQ send — ${r.sent} sent, ${r.failed} failed (cap ${cap}, lane ${lane})`);
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, enabled: true, confirmed: true, sent, failed, cap, results }, null, 2));
+      res.end(JSON.stringify({ ok: true, enabled: true, confirmed: true, sent: r.sent, failed: r.failed, cap, results: r.results }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
