@@ -404,25 +404,29 @@ async function scrapeResellerContacts({ username, password, cages }, onOne) {
 // grab Section B programmatically (skip the ChatGPT hand-off).
 async function reconAiLink({ username, password, solNumber }) {
   const { browser, page } = await launchAndLogin(username, password);
-  const captured = { dialogs: [], clipboard: "", newPages: [], aiOnclick: "", rowFound: false };
+  const captured = { dialogs: [], newPages: [], aiOnclick: "", rowFound: false, fnSrc: "", netHits: [], clip: "" };
+  const withTimeout = (p, ms, fb) => Promise.race([p.catch(() => fb), new Promise(r => setTimeout(() => r(fb), ms))]);
   try {
-    // grant clipboard read so we can pull what the AI link copies
-    try {
-      const ctx = browser.defaultBrowserContext();
-      await ctx.overridePermissions("https://dibbsnavigator.com", ["clipboard-read", "clipboard-write"]);
-    } catch {}
-    // auto-handle the confirm() dialog (capture text, then dismiss so we DON'T open ChatGPT)
+    try { await browser.defaultBrowserContext().overridePermissions("https://dibbsnavigator.com", ["clipboard-read", "clipboard-write"]); } catch {}
     page.on("dialog", async d => { captured.dialogs.push({ type: d.type(), message: d.message().slice(0, 200) }); try { await d.dismiss(); } catch {} });
-    browser.on("targetcreated", async t => { try { const p = await t.page(); if (p) captured.newPages.push(t.url()); } catch {} });
+    browser.on("targetcreated", async t => { try { captured.newPages.push(t.url()); } catch {} });
+    // capture any network response that smells like a Section-B / RFQ fetch
+    page.on("response", async r => {
+      try {
+        const url = r.url();
+        if (!/section|rfq|ai|analyze|getsol|solicit|clip|pdf/i.test(url)) return;
+        let sample = ""; try { sample = (await r.text()).slice(0, 400); } catch {}
+        captured.netHits.push({ url: url.slice(0, 160), ct: (r.headers()["content-type"] || "").slice(0, 40), sample });
+      } catch {}
+    });
 
     await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
     await page.waitForSelector("#Main_btnApplySelections", { timeout: 30000 });
     await new Promise(r => setTimeout(r, 1500));
-    // search by solicitation number if given, else a broad recent apply
     if (solNumber) {
       await page.evaluate((sn) => { const el = document.querySelector("#Main_Solicitation_Search, #Main_SolicitationNo, input[id*='Solicitation']"); if (el) el.value = sn; }, solNumber);
     } else {
-      await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_1"); if (el) el.click(); }); // last 3 days
+      await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_1"); if (el) el.click(); });
     }
     await Promise.all([
       page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }).catch(() => {}),
@@ -430,21 +434,22 @@ async function reconAiLink({ username, password, solNumber }) {
     ]);
     await new Promise(r => setTimeout(r, 2500));
 
-    // find the AI link (onclick references handleAI_Click) and capture its onclick
-    const aiInfo = await page.evaluate(() => {
-      const el = [...document.querySelectorAll("td,a,span,img")].find(e => /handleAI_Click/i.test(e.getAttribute("onclick") || ""));
-      if (!el) return { found: false };
-      return { found: true, onclick: (el.getAttribute("onclick") || "").slice(0, 120), tag: el.tagName };
-    });
-    captured.rowFound = aiInfo.found;
-    captured.aiOnclick = aiInfo.onclick || "";
-    if (aiInfo.found) {
-      await page.evaluate(() => { const el = [...document.querySelectorAll("td,a,span,img")].find(e => /handleAI_Click/i.test(e.getAttribute("onclick") || "")); if (el) el.click(); });
-      await new Promise(r => setTimeout(r, 2500));
-      captured.clipboard = await page.evaluate(async () => { try { return (await navigator.clipboard.readText()).slice(0, 4000); } catch (e) { return "READ_FAIL:" + e.message; } });
+    // Capture the AI onclick + the handleAI_Click function SOURCE (reveals the data source, no clipboard needed)
+    const info = await withTimeout(page.evaluate(() => {
+      const el = [...document.querySelectorAll("[onclick]")].find(e => /handleAI_Click/i.test(e.getAttribute("onclick") || ""));
+      let fnSrc = "";
+      try { if (typeof window.handleAI_Click === "function") fnSrc = window.handleAI_Click.toString().slice(0, 2000); } catch {}
+      return { found: !!el, onclick: el ? (el.getAttribute("onclick") || "").slice(0, 160) : "", fnSrc };
+    }), 15000, { found: false, onclick: "", fnSrc: "" });
+    captured.rowFound = info.found; captured.aiOnclick = info.onclick; captured.fnSrc = info.fnSrc;
+
+    if (info.found) {
+      await withTimeout(page.evaluate(() => { const el = [...document.querySelectorAll("[onclick]")].find(e => /handleAI_Click/i.test(e.getAttribute("onclick") || "")); if (el) el.click(); }), 10000, null);
+      await new Promise(r => setTimeout(r, 4000)); // let any fetch/copy happen
+      captured.clip = await withTimeout(page.evaluate(async () => { try { return (await navigator.clipboard.readText()).slice(0, 3000); } catch (e) { return "READ_FAIL:" + e.message; } }), 6000, "TIMEOUT");
     }
     await browser.close();
-    return { ok: true, solNumber: solNumber || "(broad)", ...captured, clipboard_len: (captured.clipboard || "").length };
+    return { ok: true, solNumber: solNumber || "(broad)", ...captured, clip_len: (captured.clip || "").length };
   } catch (e) {
     fail("AI recon error:", e.message);
     try { await browser.close(); } catch {}
