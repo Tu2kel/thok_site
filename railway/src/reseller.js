@@ -410,15 +410,9 @@ async function reconAiLink({ username, password, solNumber }) {
     try { await browser.defaultBrowserContext().overridePermissions("https://dibbsnavigator.com", ["clipboard-read", "clipboard-write"]); } catch {}
     page.on("dialog", async d => { captured.dialogs.push({ type: d.type(), message: d.message().slice(0, 200) }); try { await d.dismiss(); } catch {} });
     browser.on("targetcreated", async t => { try { captured.newPages.push(t.url()); } catch {} });
-    // capture any network response that smells like a Section-B / RFQ fetch
-    page.on("response", async r => {
-      try {
-        const url = r.url();
-        if (!/section|rfq|ai|analyze|getsol|solicit|clip|pdf/i.test(url)) return;
-        let sample = ""; try { sample = (await r.text()).slice(0, 400); } catch {}
-        captured.netHits.push({ url: url.slice(0, 160), ct: (r.headers()["content-type"] || "").slice(0, 40), sample });
-      } catch {}
-    });
+    // capture URLs of network requests that smell like a Section-B / RFQ fetch
+    // (URL only — reading bodies in the handler can hang the page)
+    page.on("request", r => { try { const url = r.url(); if (/section|rfq|ai|analyze|getsol|solicit|clip/i.test(url)) captured.netHits.push(url.slice(0, 180)); } catch {} });
 
     await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
     await page.waitForSelector("#Main_btnApplySelections", { timeout: 30000 });
