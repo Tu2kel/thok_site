@@ -177,6 +177,43 @@ async function dispatchRfqs(mdb, lane, rosterMin, cap) {
   rfqSendStatus = { last_run: new Date().toISOString(), sent, failed, skipped_disabled: false };
   return { sent, failed, attempted: batch.length, results };
 }
+
+// Enrich fresh sols from Section B before the RFQ step. Only spends Claude on
+// sols that (a) we just scraped, (b) are matched to a reseller-friendly contact,
+// (c) still lack P/N or ship-to. Batch-grabs the recent rows once. Section-B-only
+// fields are written — quantity/UI/NSN from the scrape are left untouched.
+async function enrichFreshSols(mdb, { maxRows = 60, maxEnrich = 20, dateRadio } = {}) {
+  const { grabSectionBBatch } = require("./reseller");
+  const { analyzeSectionB } = require("./section-b");
+  const roster = await mdb.collection("reseller_suppliers").find({ reseller_pct: { $gte: 90 } }).project({ cage: 1, contact_email: 1 }).toArray();
+  const rosterCages = new Set(roster.filter(r => r.contact_email).map(r => r.cage));
+  const batch = await grabSectionBBatch({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, maxRows, ...(dateRadio ? { dateRadio } : {}) });
+  if (!batch.ok) return { ok: false, error: batch.error, enriched: 0 };
+  let enriched = 0, considered = 0;
+  for (const row of batch.rows) {
+    if (enriched >= maxEnrich) break;
+    if (!row.sectionB || row.sectionB.length < 40) continue;
+    const sol = await mdb.collection("solicitations").findOne({ sol_number: row.sol }, { projection: { supplier_list: 1, ref_part_number: 1, ship_to: 1 } });
+    if (!sol) continue;                                   // not one of our scraped sols
+    if (sol.ref_part_number && sol.ship_to) continue;     // already enriched
+    const cages = String(sol.supplier_list || "").split(";").map(e => (e.split("|")[1] || "").trim().toUpperCase());
+    if (!cages.some(c => rosterCages.has(c))) continue;   // not matched to a reseller-friendly contact
+    considered++;
+    let a; try { a = await analyzeSectionB(row.sectionB, row.sol); } catch { continue; }
+    if (!a || !a.ok) continue;
+    const f = a.fields;
+    const set = { sol_number: row.sol };
+    const map = { ref_part_number: f.part_number, manufacturer_cage: f.mfr_cage, delivery_days: f.delivery_days,
+      inspection_point: f.inspection_point, acceptance_point: f.acceptance_point, fob: f.fob, ship_to: f.ship_to,
+      packaging_spec: f.packaging, section_b_certs: f.certs, commercial_standards: f.commercial_standards,
+      cmmc_cyber: f.cmmc_cyber, section_b_summary: f.summary };
+    for (const [k, v] of Object.entries(map)) { if (v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) set[k] = v; }
+    set.section_b_at = new Date();
+    await saveSol(mdb, set).catch(() => {});
+    enriched++;
+  }
+  return { ok: true, enriched, considered, rows_scanned: batch.rows.length };
+}
 const ESBD_CRON = process.env.ESBD_CRON || "0 5 * * *"; // 5 AM CT daily — ESBD scrape
 const { checkWatchList, updateWatchHits } = require("./nsn-watch");
 const { sendSummary }      = require("./notify");
@@ -718,6 +755,15 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
     });
   } catch (e) {
     err("Summary email failed:", e.message);
+  }
+
+  // ── 9c. Section B enrich (fill P/N + ship-to on fresh matched sols) ──
+  // Before RFQs go out. Guarded; gated by RESELLER_RFQ_ENABLED (same lane).
+  if (process.env.RESELLER_RFQ_ENABLED === "true" && process.env.SECTION_B_ENRICH_ENABLED !== "false") {
+    try {
+      const er = await enrichFreshSols(db, { maxEnrich: parseInt(process.env.SECTION_B_MAX_ENRICH || "20", 10) });
+      log(`Section B enrich: ${er.enriched} enriched (${er.considered} considered, ${er.rows_scanned} rows)`);
+    } catch (e) { err("Section B enrich failed:", e.message); }
   }
 
   // ── 10. Reseller RFQ auto-send (highest-$ first, idempotent, capped) ──
@@ -1727,11 +1773,28 @@ const httpServer = http.createServer((req, res) => {
         const rec = JSON.parse(body);
         if (!rec.sol_number) throw new Error("sol_number required");
         const mdb = await getDb();
+        if (rec._delete) {
+          const d = await mdb.collection("solicitations").deleteOne({ sol_number: rec.sol_number });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, deleted: d.deletedCount, sol: rec.sol_number }, null, 2));
+          return;
+        }
         await saveSol(mdb, rec);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, sol: rec.sol_number, fields: Object.keys(rec) }, null, 2));
       } catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
     });
+    return;
+  }
+
+  // Enrich fresh matched sols (standalone test of the pipeline step). ?rows=&max=
+  if (u === "/enrich-fresh" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const r = await enrichFreshSols(mdb, { maxRows: parseInt(qp.get("rows") || "60", 10), maxEnrich: parseInt(qp.get("max") || "20", 10) });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(r, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
 

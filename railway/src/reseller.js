@@ -535,4 +535,47 @@ async function grabSectionB({ username, password, solNumber, nsn }) {
   }
 }
 
-module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, scrapeResellerContacts, reconAiLink, grabSectionB, launchAndLogin };
+// Batch-grab Section B for the recent solicitations (one login). Returns
+// [{sol, sol_date, nom, sectionB}] for the first maxRows AI-rows of last-3-days.
+// The daily pipeline uses this to enrich fresh sols in-place (they ARE the recent
+// rows) — no per-sol re-search, sidestepping the NSN-filter quirk.
+async function grabSectionBBatch({ username, password, maxRows = 60, dateRadio = "Main_rbDateRange_1" }) {
+  const { browser, page } = await launchAndLogin(username, password);
+  try {
+    await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.waitForSelector("#Main_btnApplySelections", { timeout: 30000 });
+    await new Promise(r => setTimeout(r, 1200));
+    await page.evaluate((id) => { const el = document.querySelector("#" + id); if (el) el.click(); }, dateRadio);
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }).catch(() => {}),
+      page.click("#Main_btnApplySelections"),
+    ]);
+    await new Promise(r => setTimeout(r, 2500));
+    const rows = await page.evaluate((max) => {
+      const cells = [...document.querySelectorAll("[onclick]")].filter(e => /handleAI_Click/i.test(e.getAttribute("onclick") || "")).slice(0, max);
+      return cells.map(c => { const r = c.closest("tr"); const span = r.querySelector("span[data-sol_date]");
+        return { sol: (r.cells[0].innerText || "").trim(), sol_date: span ? span.getAttribute("data-sol_date") : "", nom: span ? span.getAttribute("data-nom") : "" }; });
+    }, maxRows);
+    const out = [];
+    for (const row of rows) {
+      if (!row.sol || !row.sol_date) { out.push({ ...row, sectionB: "" }); continue; }
+      const fp = "D:/Downloads/" + row.sol_date + "/" + row.sol + ".pdf";
+      const sb = await page.evaluate((f) => new Promise((resolve) => {
+        try {
+          window.$.ajax({ type: "POST", url: "dn.aspx/ExtractSectionBFromPDF", data: JSON.stringify({ filePath: f }),
+            contentType: "application/json; charset=utf-8", dataType: "json",
+            success: (ext) => resolve(ext.d || ""), error: () => resolve("") });
+        } catch (e) { resolve(""); }
+      }), fp).catch(() => "");
+      out.push({ ...row, sectionB: sb });
+    }
+    await browser.close();
+    return { ok: true, rows: out };
+  } catch (e) {
+    fail("grabSectionBBatch error:", e.message);
+    try { await browser.close(); } catch {}
+    return { ok: false, error: e.message, rows: [] };
+  }
+}
+
+module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, scrapeResellerContacts, reconAiLink, grabSectionB, grabSectionBBatch, launchAndLogin };
