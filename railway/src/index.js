@@ -27,8 +27,31 @@ let rfqSendStatus = { last_run: null, sent: 0, failed: 0, skipped_disabled: fals
 const RFQ_PRIMES = ["BOEING", "LOCKHEED", "RAYTHEON", "OSHKOSH", "NORTHROP", "GENERAL DYNAMICS",
   "BAE SYSTEMS", "SIKORSKY", "L3HARRIS", "L-3", "ROLLS-ROYCE", "GENERAL ELECTRIC",
   "NAVANTIA", "LEONARDO", "THALES", "CURTISS-WRIGHT", "HONEYWELL", "ELBIT", "SAAB"];
+// Parse a DIBBS due date ("MM/DD/YY"), days-until, and a "respond by" (due − 1 day).
+function parseDueDate(s) {
+  const m = String(s || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (!m) return null;
+  const yr = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+  const d = new Date(yr, parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+  return isNaN(d.getTime()) ? null : d;
+}
+function daysUntilDue(s) {
+  const d = parseDueDate(s); if (!d) return null;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  return Math.round((d - now) / 86400000);
+}
+function respondByStr(s) {
+  const d = parseDueDate(s); if (!d) return null;
+  const rb = new Date(d.getTime() - 86400000); // one day before the DLA due date
+  return String(rb.getMonth() + 1).padStart(2, "0") + "/" + String(rb.getDate()).padStart(2, "0") + "/" + String(rb.getFullYear()).slice(-2);
+}
+
 async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
   const isPrime = n => RFQ_PRIMES.some(p => (n || "").toUpperCase().includes(p));
+  // Never send a short-fuse RFQ — most suppliers won't bid in time. Require at
+  // least this many days before the DLA due date (env-tunable). Blank due (many
+  // reposts) is allowed through — no fixed deadline to miss.
+  const MIN_DAYS = parseInt(process.env.RESELLER_RFQ_MIN_DAYS || "3", 10);
   const roster = await mdb.collection("reseller_suppliers").find({ reseller_pct: { $gte: rosterMin } }).toArray();
   const byCage = {}; roster.forEach(r => { byCage[r.cage] = r; });
   // IDEMPOTENCY: never RFQ the same (supplier, sol) twice — a daily job must not
@@ -55,6 +78,8 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
     if (!String(s.ref_part_number || "").trim()) missing.push("part_number");
     if (!String(s.quantity || "").trim()) missing.push("quantity");
     if (!String(s.unit_of_issue || "").trim()) missing.push("unit_of_issue");
+    const dUntil = daysUntilDue(s.quote_due);
+    if (dUntil !== null && dUntil < MIN_DAYS) missing.push("due_too_soon"); // short fuse → hold
     for (const entry of String(s.supplier_list).split(";")) {
       const cage = (entry.split("|")[1] || "").trim().toUpperCase();
       if (!/^[A-Z0-9]{5}$/.test(cage)) continue;
@@ -77,10 +102,19 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
     if (!sup.ready.length) continue;
     sup.ready.sort((a, b) => b.ext - a.ext);                       // biggest-$ line first
     const supplierValue = sup.ready.reduce((a, l) => a + (l.ext || 0), 0);
-    const lines = sup.ready.map((l, i) =>
-      `  ${i + 1}. NSN ${l.nsn} | P/N ${l.part} | ${l.item} | Qty ${l.qty} ${l.ui}` +
-      (l.delivery_days ? ` | Deliver ${l.delivery_days} days ARO` : "") +
-      ` | (Sol ${l.sol}, due ${l.due || "n/a"})`).join("\n");
+    // Vertical, stacked line items — quicker to read than one long row. Sol # is
+    // intentionally omitted (the supplier only needs NSN/PN/qty to quote; the sol
+    // # invites them or a competitor to bid it around us). Respond-by = due − 1 day.
+    const lines = sup.ready.map((l, i) => {
+      const rb = respondByStr(l.due);
+      return `Item ${i + 1}` +
+        `\n   NSN:        ${l.nsn}` +
+        `\n   P/N:        ${l.part}` +
+        `\n   Item:       ${l.item}` +
+        `\n   Quantity:   ${l.qty} ${l.ui}` +
+        (l.delivery_days ? `\n   Delivery:   ${l.delivery_days} days ARO` : "") +
+        `\n   Respond by: ${rb || "at your earliest convenience"}`;
+    }).join("\n\n");
     const body =
 `Hello,
 
@@ -88,7 +122,6 @@ Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding DLA s
 
 For each item we require: Certificate of Conformance + full material/lot traceability; mil-spec / QPL compliance where applicable; MIL-STD-129 packaging & marking. FOB Origin preferred.
 
-Line items:
 ${lines}
 
 Please also confirm: (1) that you sell to resellers, (2) your minimum order quantity, and (3) lead time.
