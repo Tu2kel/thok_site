@@ -79,7 +79,7 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
     if (!String(s.quantity || "").trim()) missing.push("quantity");
     if (!String(s.unit_of_issue || "").trim()) missing.push("unit_of_issue");
     const dUntil = daysUntilDue(s.quote_due);
-    if (dUntil !== null && dUntil < MIN_DAYS) missing.push("due_too_soon"); // short fuse → hold
+    if (!includeSent && dUntil !== null && dUntil < MIN_DAYS) missing.push("due_too_soon"); // short fuse → hold (bypassed for test/preview)
     for (const entry of String(s.supplier_list).split(";")) {
       const cage = (entry.split("|")[1] || "").trim().toUpperCase();
       if (!/^[A-Z0-9]{5}$/.test(cage)) continue;
