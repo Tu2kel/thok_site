@@ -61,7 +61,8 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
     .forEach(r => (r.sols || []).forEach(s => alreadySent.add(r.cage + "|" + s)));
   const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } })
     .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
-      quantity: 1, ext_price: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1 }).toArray();
+      quantity: 1, ext_price: 1, delivery_days: 1, is_repost: 1, supplier_list: 1, quote_due: 1,
+      ship_to: 1, packaging_spec: 1, fob: 1 }).toArray();
   const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
   const inLane = s => {
     const isAero = AERO.test(String(s.ref_part_number || "").trim().toUpperCase());
@@ -91,7 +92,7 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
         reseller_pct: hit.reseller_pct, ready: [], held: [] };
       const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
         qty: s.quantity, ui: s.unit_of_issue, ext: Number(s.ext_price) || 0,
-        delivery_days: s.delivery_days, due: s.quote_due };
+        delivery_days: s.delivery_days, due: s.quote_due, ship_to: s.ship_to || "" };
       if (missing.length) bySupplier[cage].held.push({ ...line, missing });
       else bySupplier[cage].ready.push(line);
     }
@@ -113,14 +114,19 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
         `\n   Item:       ${l.item}` +
         `\n   Quantity:   ${l.qty} ${l.ui}` +
         (l.delivery_days ? `\n   Delivery:   ${l.delivery_days} days ARO` : "") +
+        (l.ship_to ? `\n   Ship to:    ${l.ship_to}` : "") +
         `\n   Respond by: ${rb || "at your earliest convenience"}`;
     }).join("\n\n");
+    const anyShipTo = sup.ready.some(l => l.ship_to);
+    const priceAsk = anyShipTo
+      ? `Please provide your best DEALER / RESELLER pricing on the ${sup.ready.length} item(s) below, DELIVERED to the ship-to point (freight included) so we can price our bid on a landed basis.`
+      : `Please provide your best DEALER / RESELLER pricing on the ${sup.ready.length} item(s) below. Include estimated freight to the government ship-to point so we can price landed cost.`;
     const body =
 `Hello,
 
-Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding DLA solicitations for which ${sup.supplier} is the designated/approved source. Please provide your best DEALER / RESELLER pricing on the ${sup.ready.length} item(s) below.
+Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding DLA solicitations for which ${sup.supplier} is the designated/approved source. ${priceAsk}
 
-For each item we require: Certificate of Conformance + full material/lot traceability; mil-spec / QPL compliance where applicable; MIL-STD-129 packaging & marking. FOB Origin preferred.
+For each item we require: Certificate of Conformance + full material/lot traceability; mil-spec / QPL compliance where applicable; MIL-STD-129 packaging & marking.
 
 ${lines}
 
@@ -1696,6 +1702,33 @@ const httpServer = http.createServer((req, res) => {
       const withEmail = await mdb.collection("reseller_suppliers").countDocuments({ contact_email: { $nin: ["", null] } });
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, status: contactsStatus, roster_with_email: withEmail }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Enrich a sol from Section B: grab → Claude analyze → store fields on the sol.
+  // ?sol=SPE4A626T05SY  (the sol must still be on dibbsnavigator to grab).
+  if (u === "/enrich-section-b" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      const sol = ((new URLSearchParams(req.url.split("?")[1] || "")).get("sol") || "").trim();
+      if (!sol) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "sol required" })); return; }
+      const { grabSectionB } = require("./reseller");
+      const { analyzeSectionB } = require("./section-b");
+      const g = await grabSectionB({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, solNumber: sol });
+      if (!g.ok || !g.sectionB) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "grab", detail: g }, null, 2)); return; }
+      const a = await analyzeSectionB(g.sectionB, sol);
+      if (!a.ok) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "analyze", detail: a }, null, 2)); return; }
+      const f = a.fields;
+      const set = { sol_number: g.sol };
+      const map = { ref_part_number: f.part_number, manufacturer_cage: f.mfr_cage, unit_of_issue: f.unit_of_issue,
+        delivery_days: f.delivery_days, inspection_point: f.inspection_point, acceptance_point: f.acceptance_point,
+        fob: f.fob, ship_to: f.ship_to, packaging_spec: f.packaging, section_b_certs: f.certs,
+        commercial_standards: f.commercial_standards, cmmc_cyber: f.cmmc_cyber, section_b_summary: f.summary };
+      for (const [k, v] of Object.entries(map)) { if (v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) set[k] = v; }
+      set.section_b_at = new Date();
+      await saveSol(mdb, set);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, sol: g.sol, stored_fields: Object.keys(set).filter(k => k !== "sol_number"), fields: f }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
