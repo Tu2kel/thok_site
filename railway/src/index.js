@@ -46,7 +46,7 @@ function respondByStr(s) {
   return String(rb.getMonth() + 1).padStart(2, "0") + "/" + String(rb.getDate()).padStart(2, "0") + "/" + String(rb.getFullYear()).slice(-2);
 }
 
-async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
+async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false, solFilter = "") {
   const isPrime = n => RFQ_PRIMES.some(p => (n || "").toUpperCase().includes(p));
   // Never send a short-fuse RFQ — most suppliers won't bid in time. Require at
   // least this many days before the DLA due date (env-tunable). Blank due (many
@@ -73,6 +73,7 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
   const bySupplier = {};
   let readyTotal = 0, heldTotal = 0;
   for (const s of sols) {
+    if (solFilter && s.sol_number.toUpperCase() !== solFilter.toUpperCase()) continue;
     if (!inLane(s)) continue;
     const missing = [];
     if (!s.nsn) missing.push("nsn");
@@ -1435,7 +1436,7 @@ const httpServer = http.createServer((req, res) => {
       const to = qp.get("to") || "anthony@ifedlog.com";
       const lane = qp.get("lane") || "all";
       const rosterMin = parseInt(qp.get("min") || "90", 10);
-      const { drafts } = await buildRfqDrafts(mdb, lane, rosterMin, true); // includeSent → show a real one
+      const { drafts } = await buildRfqDrafts(mdb, lane, rosterMin, true, qp.get("sol") || ""); // includeSent → show a real one
       if (!drafts.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, sent: false, note: "no complete RFQ to preview yet (all sols held for missing P/N/qty/UI)" }, null, 2)); return; }
       const d = drafts[0]; // highest-$
       const testBody = `*** THIS IS A TEST — would actually go to: ${d.email} (${d.supplier}) ***\n\n` + d.body;
