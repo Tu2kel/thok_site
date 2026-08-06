@@ -46,7 +46,7 @@ function respondByStr(s) {
   return String(rb.getMonth() + 1).padStart(2, "0") + "/" + String(rb.getDate()).padStart(2, "0") + "/" + String(rb.getFullYear()).slice(-2);
 }
 
-async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false, solFilter = "") {
+async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false, solFilter = "", previewMode = false) {
   const isPrime = n => RFQ_PRIMES.some(p => (n || "").toUpperCase().includes(p));
   // Never send a short-fuse RFQ — most suppliers won't bid in time. Require at
   // least this many days before the DLA due date (env-tunable). Blank due (many
@@ -85,12 +85,18 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false, solFilt
     for (const entry of String(s.supplier_list).split(";")) {
       const cage = (entry.split("|")[1] || "").trim().toUpperCase();
       if (!/^[A-Z0-9]{5}$/.test(cage)) continue;
-      const hit = byCage[cage];
-      if (!hit || isPrime(hit.company) || !hit.contact_email) continue;
-      if (hit.status === "paused" || hit.status === "dns") continue;
+      let sup = byCage[cage];
+      const usable = sup && !isPrime(sup.company) && sup.contact_email && sup.status !== "paused" && sup.status !== "dns";
+      if (!usable) {
+        if (!(previewMode && solFilter)) continue;
+        // preview fallback: synthesize the supplier from the supplier_list entry
+        const nm = (entry.split("|")[0] || "").trim();
+        sup = { company: nm || (sup && sup.company) || "Designated Supplier", cage,
+          contact_email: (sup && sup.contact_email) || "preview@internal", reseller_pct: (sup && sup.reseller_pct) || 0 };
+      }
       if (!includeSent && alreadySent.has(cage + "|" + s.sol_number)) continue; // idempotency: sent before
-      if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
-        reseller_pct: hit.reseller_pct, ready: [], held: [] };
+      if (!bySupplier[cage]) bySupplier[cage] = { supplier: sup.company, cage, email: sup.contact_email,
+        reseller_pct: sup.reseller_pct, ready: [], held: [] };
       const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
         qty: s.quantity, ui: s.unit_of_issue, ext: Number(s.ext_price) || 0,
         delivery_days: s.delivery_days, due: s.quote_due, ship_to: s.ship_to || "" };
@@ -1436,7 +1442,7 @@ const httpServer = http.createServer((req, res) => {
       const to = qp.get("to") || "anthony@ifedlog.com";
       const lane = qp.get("lane") || "all";
       const rosterMin = parseInt(qp.get("min") || "90", 10);
-      const { drafts } = await buildRfqDrafts(mdb, lane, rosterMin, true, qp.get("sol") || ""); // includeSent → show a real one
+      const { drafts } = await buildRfqDrafts(mdb, lane, rosterMin, true, qp.get("sol") || "", !!qp.get("sol")); // includeSent + preview when a specific sol is named
       if (!drafts.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, sent: false, note: "no complete RFQ to preview yet (all sols held for missing P/N/qty/UI)" }, null, 2)); return; }
       const d = drafts[0]; // highest-$
       const testBody = `*** THIS IS A TEST — would actually go to: ${d.email} (${d.supplier}) ***\n\n` + d.body;
