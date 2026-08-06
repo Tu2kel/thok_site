@@ -1717,6 +1717,24 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Debug: store sol fields from a POST JSON body (for testing the RFQ render
+  // with real analyzed data). Body = { sol_number, ...fields }.
+  if (u === "/debug-store-sol" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 100000) req.destroy(); });
+    req.on("end", async () => {
+      try {
+        const rec = JSON.parse(body);
+        if (!rec.sol_number) throw new Error("sol_number required");
+        const mdb = await getDb();
+        await saveSol(mdb, rec);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, sol: rec.sol_number, fields: Object.keys(rec) }, null, 2));
+      } catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
+    });
+    return;
+  }
+
   // Enrich a sol from Section B: grab → Claude analyze → store fields on the sol.
   // ?sol=SPE4A626T05SY  (the sol must still be on dibbsnavigator to grab).
   if (u === "/enrich-section-b" && (req.method === "GET" || req.method === "POST")) {
