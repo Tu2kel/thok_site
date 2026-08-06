@@ -1403,6 +1403,22 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Section B analyzer test — POST the raw Section B text, get structured fields
+  // + summary back (validates the Claude analyzer once ANTHROPIC_API_KEY is set).
+  if (u === "/section-b-test" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 200000) req.destroy(); });
+    req.on("end", async () => {
+      try {
+        const { analyzeSectionB } = require("./section-b");
+        const r = await analyzeSectionB(body, (new URLSearchParams(req.url.split("?")[1] || "")).get("sol") || "test");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r, null, 2));
+      } catch (e) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
+    });
+    return;
+  }
+
   // RFQ TEST — send a real RFQ draft to YOUR inbox so you see exactly what a
   // supplier gets. Marked [TEST], the real supplier email is shown in the body but
   // it goes to `to` only. NOT logged to rfq_log, does NOT bump counters, does NOT
