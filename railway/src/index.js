@@ -27,7 +27,7 @@ let rfqSendStatus = { last_run: null, sent: 0, failed: 0, skipped_disabled: fals
 const RFQ_PRIMES = ["BOEING", "LOCKHEED", "RAYTHEON", "OSHKOSH", "NORTHROP", "GENERAL DYNAMICS",
   "BAE SYSTEMS", "SIKORSKY", "L3HARRIS", "L-3", "ROLLS-ROYCE", "GENERAL ELECTRIC",
   "NAVANTIA", "LEONARDO", "THALES", "CURTISS-WRIGHT", "HONEYWELL", "ELBIT", "SAAB"];
-async function buildRfqDrafts(mdb, lane, rosterMin) {
+async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false) {
   const isPrime = n => RFQ_PRIMES.some(p => (n || "").toUpperCase().includes(p));
   const roster = await mdb.collection("reseller_suppliers").find({ reseller_pct: { $gte: rosterMin } }).toArray();
   const byCage = {}; roster.forEach(r => { byCage[r.cage] = r; });
@@ -61,7 +61,7 @@ async function buildRfqDrafts(mdb, lane, rosterMin) {
       const hit = byCage[cage];
       if (!hit || isPrime(hit.company) || !hit.contact_email) continue;
       if (hit.status === "paused" || hit.status === "dns") continue;
-      if (alreadySent.has(cage + "|" + s.sol_number)) continue; // idempotency: sent before
+      if (!includeSent && alreadySent.has(cage + "|" + s.sol_number)) continue; // idempotency: sent before
       if (!bySupplier[cage]) bySupplier[cage] = { supplier: hit.company, cage, email: hit.contact_email,
         reseller_pct: hit.reseller_pct, ready: [], held: [] };
       const line = { sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name,
@@ -1366,6 +1366,32 @@ const httpServer = http.createServer((req, res) => {
         line_items_ready: readyTotal, line_items_held_incomplete: heldTotal,
         note: "PREVIEW ONLY — nothing sent. Held lines are missing P/N/qty/UI and need fresh-sol PDF enrichment.",
         drafts: drafts.slice(0, 15) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // RFQ TEST — send a real RFQ draft to YOUR inbox so you see exactly what a
+  // supplier gets. Marked [TEST], the real supplier email is shown in the body but
+  // it goes to `to` only. NOT logged to rfq_log, does NOT bump counters, does NOT
+  // touch idempotency. ?to=addr (default anthony@ifedlog.com)  ?lane=  ?min=
+  if (u === "/rfq-test" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const to = qp.get("to") || "anthony@ifedlog.com";
+      const lane = qp.get("lane") || "all";
+      const rosterMin = parseInt(qp.get("min") || "90", 10);
+      const { drafts } = await buildRfqDrafts(mdb, lane, rosterMin, true); // includeSent → show a real one
+      if (!drafts.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, sent: false, note: "no complete RFQ to preview yet (all sols held for missing P/N/qty/UI)" }, null, 2)); return; }
+      const d = drafts[0]; // highest-$
+      const testBody = `*** THIS IS A TEST — would actually go to: ${d.email} (${d.supplier}) ***\n\n` + d.body;
+      const testSubject = `[TEST] ${d.subject}`;
+      const { sendEmailResend } = require("./email");
+      try {
+        await sendEmailResend({ to, subject: testSubject, body: testBody });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, sent: true, test_to: to, real_recipient_would_be: d.email,
+          supplier: d.supplier, total_value: d.total_value, subject: testSubject, body: testBody }, null, 2));
+      } catch (e) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
