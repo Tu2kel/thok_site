@@ -1712,10 +1712,12 @@ const httpServer = http.createServer((req, res) => {
     getDb().then(async (mdb) => {
       const sol = ((new URLSearchParams(req.url.split("?")[1] || "")).get("sol") || "").trim();
       if (!sol) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "sol required" })); return; }
+      const solDoc = await mdb.collection("solicitations").findOne({ sol_number: sol }, { projection: { nsn: 1 } });
       const { grabSectionB } = require("./reseller");
       const { analyzeSectionB } = require("./section-b");
-      const g = await grabSectionB({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, solNumber: sol });
+      const g = await grabSectionB({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, solNumber: sol, nsn: solDoc && solDoc.nsn });
       if (!g.ok || !g.sectionB) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "grab", detail: g }, null, 2)); return; }
+      if (g.sol && g.sol.toUpperCase() !== sol.toUpperCase()) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "match", error: "grabbed a different sol", grabbed: g.sol, wanted: sol }, null, 2)); return; }
       const a = await analyzeSectionB(g.sectionB, sol);
       if (!a.ok) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "analyze", detail: a }, null, 2)); return; }
       const f = a.fields;

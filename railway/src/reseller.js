@@ -455,14 +455,20 @@ async function reconAiLink({ username, password, solNumber }) {
 // (dn.aspx/ExtractSectionBFromPDF), the same call handleAI_Click makes. No
 // clicking/clipboard/ChatGPT. Needs Sol_No + Sol_Date (the download folder);
 // both come from the results row. Returns the raw Section B text.
-async function grabSectionB({ username, password, solNumber }) {
+async function grabSectionB({ username, password, solNumber, nsn }) {
   const { browser, page } = await launchAndLogin(username, password);
   try {
     await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
     await page.waitForSelector("#Main_btnApplySelections", { timeout: 30000 });
     await new Promise(r => setTimeout(r, 1200));
-    if (solNumber) {
-      await page.evaluate((sn) => { const el = document.querySelector("#Main_Solicitation_Search, #Main_SolicitationNo, input[id*='Solicitation']"); if (el) el.value = sn; }, solNumber);
+    if (nsn) {
+      // Search by NSN (known-good field) over 180 days incl. expired, so a
+      // past-due/repost sol still appears; we then match the exact sol number.
+      await page.evaluate((n) => {
+        const f = document.querySelector("#Main_NSN_Search"); if (f) { f.value = n; }
+        const d = document.querySelector("#Main_rbDateRange_5"); if (d) d.click();     // last 180 days
+        const ex = document.querySelector("#Main_chExpired"); if (ex && !ex.checked) ex.click(); // include expired
+      }, String(nsn).replace(/[^0-9]/g, ""));
     } else {
       await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_1"); if (el) el.click(); });
     }
