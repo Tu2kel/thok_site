@@ -481,6 +481,14 @@ async function grabSectionB({ username, password, solNumber, nsn }) {
     ]);
     await new Promise(r => setTimeout(r, 2500));
 
+    // DEBUG: what did the search actually return?
+    const dbg = await page.evaluate(() => {
+      const nsnVal = (document.querySelector("#Main_NSN_Search") || {}).value || "";
+      const cells = [...document.querySelectorAll("[onclick]")].filter(e => /handleAI_Click/i.test(e.getAttribute("onclick") || ""));
+      const firstSols = cells.slice(0, 6).map(c => { const r = c.closest("tr"); return r ? (r.cells[0].innerText || "").trim() : ""; });
+      return { nsnVal, rowCount: cells.length, firstSols };
+    });
+
     // Replicate handleAI_Click's row read → Sol_No + Sol_Date + Nomenclature
     const rowInfo = await page.evaluate((wantSol) => {
       const cells = [...document.querySelectorAll("[onclick]")].filter(e => /handleAI_Click/i.test(e.getAttribute("onclick") || ""));
@@ -494,7 +502,7 @@ async function grabSectionB({ username, password, solNumber, nsn }) {
       const span = row.querySelector("span[data-sol_date]");
       return { Sol_No: (row.cells[0].innerText || "").trim(), Sol_Date: span ? span.getAttribute("data-sol_date") : "", Nom: span ? span.getAttribute("data-nom") : "" };
     }, solNumber || "");
-    if (!rowInfo || !rowInfo.Sol_No) { await browser.close(); return { ok: false, error: "no AI row found" }; }
+    if (!rowInfo || !rowInfo.Sol_No) { await browser.close(); return { ok: false, error: "no AI row found", dbg }; }
 
     const filePath = "D:/Downloads/" + rowInfo.Sol_Date + "/" + rowInfo.Sol_No + ".pdf";
     // Call the two server methods in-session (jQuery is present on the page)
@@ -518,7 +526,7 @@ async function grabSectionB({ username, password, solNumber, nsn }) {
     }), filePath);
 
     await browser.close();
-    return { ok: true, sol: rowInfo.Sol_No, sol_date: rowInfo.Sol_Date, nomenclature: rowInfo.Nom,
+    return { ok: true, sol: rowInfo.Sol_No, sol_date: rowInfo.Sol_Date, nomenclature: rowInfo.Nom, dbg,
       filePath, exists: result.exists, err: result.err || "", sectionB_len: (result.sectionB || "").length, sectionB: result.sectionB || "" };
   } catch (e) {
     fail("grabSectionB error:", e.message);
