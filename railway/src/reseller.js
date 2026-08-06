@@ -464,11 +464,14 @@ async function grabSectionB({ username, password, solNumber, nsn }) {
     if (nsn) {
       // Search by NSN (known-good field) over 180 days incl. expired, so a
       // past-due/repost sol still appears; we then match the exact sol number.
-      await page.evaluate((n) => {
-        const f = document.querySelector("#Main_NSN_Search"); if (f) { f.value = n; }
+      // TYPE the NSN (setting .value doesn't register with the ASP.NET field).
+      const clean = String(nsn).replace(/[^0-9]/g, "");
+      const f = await page.$("#Main_NSN_Search");
+      if (f) { await f.click({ clickCount: 3 }); await page.keyboard.press("Backspace"); await page.type("#Main_NSN_Search", clean, { delay: 25 }); }
+      await page.evaluate(() => {
         const d = document.querySelector("#Main_rbDateRange_5"); if (d) d.click();     // last 180 days
         const ex = document.querySelector("#Main_chExpired"); if (ex && !ex.checked) ex.click(); // include expired
-      }, String(nsn).replace(/[^0-9]/g, ""));
+      });
     } else {
       await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_1"); if (el) el.click(); });
     }
