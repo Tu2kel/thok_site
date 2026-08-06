@@ -45,6 +45,12 @@ function respondByStr(s) {
   const rb = new Date(d.getTime() - 86400000); // one day before the DLA due date
   return String(rb.getMonth() + 1).padStart(2, "0") + "/" + String(rb.getDate()).padStart(2, "0") + "/" + String(rb.getFullYear()).slice(-2);
 }
+// Stack a ship-to address across lines for legibility.
+function shipToBlock(st) {
+  if (!st) return "";
+  const parts = String(st).split(/;\s*|,\s*/).map(x => x.trim()).filter(Boolean);
+  return "\n   Ship to:\n" + parts.map(p => "      " + p).join("\n");
+}
 
 async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false, solFilter = "", previewMode = false) {
   const isPrime = n => RFQ_PRIMES.some(p => (n || "").toUpperCase().includes(p));
@@ -121,7 +127,7 @@ async function buildRfqDrafts(mdb, lane, rosterMin, includeSent = false, solFilt
         `\n   Item:       ${l.item}` +
         `\n   Quantity:   ${l.qty} ${l.ui}` +
         (l.delivery_days ? `\n   Delivery:   ${l.delivery_days} days ARO` : "") +
-        (l.ship_to ? `\n   Ship to:    ${l.ship_to}` : "") +
+        shipToBlock(l.ship_to) +
         `\n   Respond by: ${rb || "at your earliest convenience"}`;
     }).join("\n\n");
     const anyShipTo = sup.ready.some(l => l.ship_to);
@@ -139,9 +145,7 @@ ${lines}
 
 Please also confirm: (1) that you sell to resellers, (2) your minimum order quantity, and (3) lead time.
 
-Thank you,
-Anthony Kelley
-Imperio Federal Logistics — SDVOSB | CAGE 152U4`;
+Thank you,`;
     drafts.push({ supplier: sup.supplier, cage: sup.cage, email: sup.email, reseller_pct: sup.reseller_pct,
       ready_lines: sup.ready.length, held_lines: sup.held.length, total_value: Math.round(supplierValue),
       subject: `RFQ — Dealer Pricing Request — ${sup.ready.length} item(s) (DLA resale)`, body,
