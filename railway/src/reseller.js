@@ -398,4 +398,58 @@ async function scrapeResellerContacts({ username, password, cages }, onOne) {
   }
 }
 
-module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, scrapeResellerContacts, launchAndLogin };
+// RECON the dibbsnavigator "AI" link — how does it expose Section B? Search a
+// sol, find its AI link, capture the confirm-dialog text, the clipboard content
+// (Section B is copied there), and whether a new tab/page opens. Tells us how to
+// grab Section B programmatically (skip the ChatGPT hand-off).
+async function reconAiLink({ username, password, solNumber }) {
+  const { browser, page } = await launchAndLogin(username, password);
+  const captured = { dialogs: [], clipboard: "", newPages: [], aiOnclick: "", rowFound: false };
+  try {
+    // grant clipboard read so we can pull what the AI link copies
+    try {
+      const ctx = browser.defaultBrowserContext();
+      await ctx.overridePermissions("https://dibbsnavigator.com", ["clipboard-read", "clipboard-write"]);
+    } catch {}
+    // auto-handle the confirm() dialog (capture text, then dismiss so we DON'T open ChatGPT)
+    page.on("dialog", async d => { captured.dialogs.push({ type: d.type(), message: d.message().slice(0, 200) }); try { await d.dismiss(); } catch {} });
+    browser.on("targetcreated", async t => { try { const p = await t.page(); if (p) captured.newPages.push(t.url()); } catch {} });
+
+    await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.waitForSelector("#Main_btnApplySelections", { timeout: 30000 });
+    await new Promise(r => setTimeout(r, 1500));
+    // search by solicitation number if given, else a broad recent apply
+    if (solNumber) {
+      await page.evaluate((sn) => { const el = document.querySelector("#Main_Solicitation_Search, #Main_SolicitationNo, input[id*='Solicitation']"); if (el) el.value = sn; }, solNumber);
+    } else {
+      await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_1"); if (el) el.click(); }); // last 3 days
+    }
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }).catch(() => {}),
+      page.click("#Main_btnApplySelections"),
+    ]);
+    await new Promise(r => setTimeout(r, 2500));
+
+    // find the AI link (onclick references handleAI_Click) and capture its onclick
+    const aiInfo = await page.evaluate(() => {
+      const el = [...document.querySelectorAll("td,a,span,img")].find(e => /handleAI_Click/i.test(e.getAttribute("onclick") || ""));
+      if (!el) return { found: false };
+      return { found: true, onclick: (el.getAttribute("onclick") || "").slice(0, 120), tag: el.tagName };
+    });
+    captured.rowFound = aiInfo.found;
+    captured.aiOnclick = aiInfo.onclick || "";
+    if (aiInfo.found) {
+      await page.evaluate(() => { const el = [...document.querySelectorAll("td,a,span,img")].find(e => /handleAI_Click/i.test(e.getAttribute("onclick") || "")); if (el) el.click(); });
+      await new Promise(r => setTimeout(r, 2500));
+      captured.clipboard = await page.evaluate(async () => { try { return (await navigator.clipboard.readText()).slice(0, 4000); } catch (e) { return "READ_FAIL:" + e.message; } });
+    }
+    await browser.close();
+    return { ok: true, solNumber: solNumber || "(broad)", ...captured, clipboard_len: (captured.clipboard || "").length };
+  } catch (e) {
+    fail("AI recon error:", e.message);
+    try { await browser.close(); } catch {}
+    return { ok: false, error: e.message, ...captured };
+  }
+}
+
+module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, scrapeResellerContacts, reconAiLink, launchAndLogin };

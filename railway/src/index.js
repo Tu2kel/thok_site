@@ -1700,6 +1700,20 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Recon the AI link — how Section B is exposed. ?sol=SPE1C126Q0399 (optional)
+  if (u === "/ai-link-recon" && req.method === "GET") {
+    (async () => {
+      try {
+        const { reconAiLink } = require("./reseller");
+        const dump = await reconAiLink({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD,
+          solNumber: (new URLSearchParams(req.url.split("?")[1] || "")).get("sol") || "" });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(dump, null, 2));
+      } catch (e) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
+    })();
+    return;
+  }
+
   // Recon a supplier's Details (contact source, no SAM). ?cage=XXXXX
   if (u === "/reseller-detail-recon" && req.method === "GET") {
     (async () => {
