@@ -1700,6 +1700,21 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Grab Section B for a live sol via dibbsnavigator's ExtractSectionBFromPDF.
+  // ?sol=SPE1C126Q0399 (optional — else first row of last-3-days).
+  if (u === "/section-b-grab" && req.method === "GET") {
+    (async () => {
+      try {
+        const { grabSectionB } = require("./reseller");
+        const r = await grabSectionB({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD,
+          solNumber: (new URLSearchParams(req.url.split("?")[1] || "")).get("sol") || "" });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r, null, 2));
+      } catch (e) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
+    })();
+    return;
+  }
+
   // Recon the AI link — how Section B is exposed. ?sol=SPE1C126Q0399 (optional)
   if (u === "/ai-link-recon" && req.method === "GET") {
     (async () => {

@@ -451,4 +451,71 @@ async function reconAiLink({ username, password, solNumber }) {
   }
 }
 
-module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, scrapeResellerContacts, reconAiLink, launchAndLogin };
+// Grab Section B for a sol via dibbsnavigator's own server endpoint
+// (dn.aspx/ExtractSectionBFromPDF), the same call handleAI_Click makes. No
+// clicking/clipboard/ChatGPT. Needs Sol_No + Sol_Date (the download folder);
+// both come from the results row. Returns the raw Section B text.
+async function grabSectionB({ username, password, solNumber }) {
+  const { browser, page } = await launchAndLogin(username, password);
+  try {
+    await page.goto("https://dibbsnavigator.com/dn.aspx", { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.waitForSelector("#Main_btnApplySelections", { timeout: 30000 });
+    await new Promise(r => setTimeout(r, 1200));
+    if (solNumber) {
+      await page.evaluate((sn) => { const el = document.querySelector("#Main_Solicitation_Search, #Main_SolicitationNo, input[id*='Solicitation']"); if (el) el.value = sn; }, solNumber);
+    } else {
+      await page.evaluate(() => { const el = document.querySelector("#Main_rbDateRange_1"); if (el) el.click(); });
+    }
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 120000 }).catch(() => {}),
+      page.click("#Main_btnApplySelections"),
+    ]);
+    await new Promise(r => setTimeout(r, 2500));
+
+    // Replicate handleAI_Click's row read → Sol_No + Sol_Date + Nomenclature
+    const rowInfo = await page.evaluate((wantSol) => {
+      const cells = [...document.querySelectorAll("[onclick]")].filter(e => /handleAI_Click/i.test(e.getAttribute("onclick") || ""));
+      let cell = cells[0];
+      if (wantSol) {
+        const match = cells.find(c => { const r = c.closest("tr"); return r && (r.cells[0].innerText || "").trim().toUpperCase() === wantSol.toUpperCase(); });
+        if (match) cell = match;
+      }
+      if (!cell) return null;
+      const row = cell.closest("tr");
+      const span = row.querySelector("span[data-sol_date]");
+      return { Sol_No: (row.cells[0].innerText || "").trim(), Sol_Date: span ? span.getAttribute("data-sol_date") : "", Nom: span ? span.getAttribute("data-nom") : "" };
+    }, solNumber || "");
+    if (!rowInfo || !rowInfo.Sol_No) { await browser.close(); return { ok: false, error: "no AI row found" }; }
+
+    const filePath = "D:/Downloads/" + rowInfo.Sol_Date + "/" + rowInfo.Sol_No + ".pdf";
+    // Call the two server methods in-session (jQuery is present on the page)
+    const result = await page.evaluate((fp) => new Promise((resolve) => {
+      try {
+        window.$.ajax({
+          type: "POST", url: "dn.aspx/CheckSolicitationFileExists",
+          data: JSON.stringify({ filePath: fp }), contentType: "application/json; charset=utf-8", dataType: "json",
+          success: (chk) => {
+            if (chk.d !== true) { resolve({ exists: false, sectionB: "" }); return; }
+            window.$.ajax({
+              type: "POST", url: "dn.aspx/ExtractSectionBFromPDF",
+              data: JSON.stringify({ filePath: fp }), contentType: "application/json; charset=utf-8", dataType: "json",
+              success: (ext) => resolve({ exists: true, sectionB: ext.d || "" }),
+              error: (x, s) => resolve({ exists: true, sectionB: "", err: "extract:" + s }),
+            });
+          },
+          error: (x, s) => resolve({ exists: false, err: "check:" + s }),
+        });
+      } catch (e) { resolve({ exists: false, err: "ajax:" + e.message }); }
+    }), filePath);
+
+    await browser.close();
+    return { ok: true, sol: rowInfo.Sol_No, sol_date: rowInfo.Sol_Date, nomenclature: rowInfo.Nom,
+      filePath, exists: result.exists, err: result.err || "", sectionB_len: (result.sectionB || "").length, sectionB: result.sectionB || "" };
+  } catch (e) {
+    fail("grabSectionB error:", e.message);
+    try { await browser.close(); } catch {}
+    return { ok: false, error: e.message };
+  }
+}
+
+module.exports = { reconResellerTool, scrapeResellerTool, reconResellerDetail, scrapeResellerContacts, reconAiLink, grabSectionB, launchAndLogin };
