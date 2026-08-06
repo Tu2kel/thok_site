@@ -1721,23 +1721,33 @@ const httpServer = http.createServer((req, res) => {
   // ?sol=SPE4A626T05SY  (the sol must still be on dibbsnavigator to grab).
   if (u === "/enrich-section-b" && (req.method === "GET" || req.method === "POST")) {
     getDb().then(async (mdb) => {
-      const sol = ((new URLSearchParams(req.url.split("?")[1] || "")).get("sol") || "").trim();
-      if (!sol) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "sol required" })); return; }
-      const solDoc = await mdb.collection("solicitations").findOne({ sol_number: sol }, { projection: { nsn: 1 } });
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const sol = (qp.get("sol") || "").trim();
+      const first = qp.get("first") === "1"; // enrich the first fresh sol (no target)
+      if (!sol && !first) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: "sol or first=1 required" })); return; }
+      const solDoc = sol ? await mdb.collection("solicitations").findOne({ sol_number: sol }, { projection: { nsn: 1 } }) : null;
       const { grabSectionB } = require("./reseller");
       const { analyzeSectionB } = require("./section-b");
-      const g = await grabSectionB({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, solNumber: sol, nsn: solDoc && solDoc.nsn });
+      const g = await grabSectionB({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, solNumber: first ? "" : sol, nsn: solDoc && solDoc.nsn });
       if (!g.ok || !g.sectionB) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "grab", detail: g }, null, 2)); return; }
-      if (g.sol && g.sol.toUpperCase() !== sol.toUpperCase()) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "match", error: "grabbed a different sol", grabbed: g.sol, wanted: sol, dbg: g.dbg }, null, 2)); return; }
-      const a = await analyzeSectionB(g.sectionB, sol);
+      if (sol && g.sol && g.sol.toUpperCase() !== sol.toUpperCase()) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "match", error: "grabbed a different sol", grabbed: g.sol, wanted: sol, dbg: g.dbg }, null, 2)); return; }
+      const a = await analyzeSectionB(g.sectionB, g.sol);
       if (!a.ok) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, step: "analyze", detail: a }, null, 2)); return; }
       const f = a.fields;
       const set = { sol_number: g.sol };
-      const map = { ref_part_number: f.part_number, manufacturer_cage: f.mfr_cage, unit_of_issue: f.unit_of_issue,
+      const map = { nsn: (f.nsn || "").replace(/[^0-9]/g, ""), ref_part_number: f.part_number, manufacturer_cage: f.mfr_cage,
+        item_name: f.item_name, quantity: f.quantity, unit_of_issue: f.unit_of_issue,
         delivery_days: f.delivery_days, inspection_point: f.inspection_point, acceptance_point: f.acceptance_point,
         fob: f.fob, ship_to: f.ship_to, packaging_spec: f.packaging, section_b_certs: f.certs,
         commercial_standards: f.commercial_standards, cmmc_cyber: f.cmmc_cyber, section_b_summary: f.summary };
       for (const [k, v] of Object.entries(map)) { if (v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) set[k] = v; }
+      // Synthesize a supplier_list from the designated manufacturer so the sol is
+      // matchable/previewable (only if the sol doesn't already have one).
+      const existing = await mdb.collection("solicitations").findOne({ sol_number: g.sol }, { projection: { supplier_list: 1 } });
+      if ((!existing || !existing.supplier_list) && f.mfr_cage) {
+        const cage = String(f.mfr_cage).match(/[A-Z0-9]{5}/i);
+        if (cage) set.supplier_list = `${(f.item_name || "MANUFACTURER").split("(")[0].trim()}|${cage[0].toUpperCase()}|${f.part_number || ""}`;
+      }
       set.section_b_at = new Date();
       await saveSol(mdb, set);
       res.writeHead(200, { "Content-Type": "application/json" });

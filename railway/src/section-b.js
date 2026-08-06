@@ -21,6 +21,7 @@ const EXTRACT_TOOL = {
   input_schema: {
     type: "object",
     properties: {
+      nsn:           { type: "string", description: "National Stock Number (13 digits, labeled NSN). Digits only. Empty if none." },
       part_number:   { type: "string", description: "Manufacturer part number (labeled P/N or PART NUMBER). Empty if none." },
       mfr_cage:      { type: "string", description: "Manufacturer CAGE code tied to the P/N. Empty if none." },
       item_name:     { type: "string", description: "Full nomenclature / item description." },
