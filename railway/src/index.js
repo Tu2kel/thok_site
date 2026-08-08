@@ -1783,6 +1783,20 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Debug: look up a sol in the solicitations collection. ?sol=X
+  if (u === "/sol-lookup" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const sol = ((new URLSearchParams(req.url.split("?")[1] || "")).get("sol") || "").trim();
+      const doc = await mdb.collection("solicitations").findOne({ sol_number: sol });
+      const totalSols = await mdb.collection("solicitations").countDocuments({});
+      const withSL = await mdb.collection("solicitations").countDocuments({ supplier_list: { $nin: ["", null] } });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, found: !!doc, total_sols: totalSols, sols_with_supplier_list: withSL,
+        sol: doc ? { sol_number: doc.sol_number, fsc: doc.fsc, nsn: doc.nsn, quote_due: doc.quote_due, supplier_list: doc.supplier_list, ref_part_number: doc.ref_part_number, quantity: doc.quantity, unit_of_issue: doc.unit_of_issue } : null }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Debug: store sol fields from a POST JSON body (for testing the RFQ render
   // with real analyzed data). Body = { sol_number, ...fields }.
   if (u === "/debug-store-sol" && req.method === "POST") {
