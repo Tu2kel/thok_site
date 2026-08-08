@@ -356,6 +356,24 @@ async function scrapeResellerContacts({ username, password, cages }, onOne) {
           page.click("#Main_btnApply"),
         ]);
         await new Promise(r => setTimeout(r, 1200));
+        // Capture the grid row (company + reseller% + NSN count) BEFORE opening
+        // Details — so an on-demand lookup builds a complete roster entry.
+        const gridRow = await page.evaluate((wantCage) => {
+          const numify = s => { const n = String(s || "").replace(/[^0-9.]/g, ""); return n ? Number(n) : 0; };
+          const cageRe = /^[A-Z0-9]{5}$/i;
+          for (const tr of document.querySelectorAll("table tr")) {
+            const cells = [...tr.querySelectorAll("td")];
+            const cageCell = cells.find(c => (c.innerText || "").trim().toUpperCase() === String(wantCage).toUpperCase());
+            if (!cageCell) continue;
+            const txt = cells.map(c => (c.innerText || "").trim());
+            const ci = txt.findIndex(t => cageRe.test(t) && t.toUpperCase() === String(wantCage).toUpperCase());
+            // layout: NSNs, Details, Company, CAGE, City, State, Zip, No.NSNs, Qty, TotalValue, Reseller%
+            return { company: txt[ci - 1] || "", state: txt[ci + 2] || "", no_nsns: numify(txt[ci + 4]),
+              total_value: numify(txt[ci + 6]), reseller_pct: numify(txt[ci + 7]) };
+          }
+          return null;
+        }, cage);
+        if (gridRow) { rec.company = gridRow.company; rec.reseller_pct = gridRow.reseller_pct; rec.no_nsns = gridRow.no_nsns; rec.total_value = gridRow.total_value; rec.grid_state = gridRow.state; }
         const beforeLen = await page.evaluate(() => document.body.innerText.length);
         const clicked = await page.evaluate(() => {
           const a = [...document.querySelectorAll("a")].find(x => (x.innerText || "").trim() === "Details");

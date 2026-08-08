@@ -1733,14 +1733,17 @@ const httpServer = http.createServer((req, res) => {
       if (qp.get("cages")) {
         cages = qp.get("cages").split(",").map(c => c.trim().toUpperCase()).filter(Boolean);
       } else {
-        // matched set: sols' designated-supplier CAGEs ∩ roster, missing email
-        const sols = await mdb.collection("solicitations").find({ supplier_list: { $nin: ["", null] } }).project({ supplier_list: 1 }).toArray();
+        // ON-DEMAND: any designated-supplier CAGE on our sols that lacks a
+        // contact-complete roster entry — including suppliers we never snapshotted.
+        // This is what makes fresh medical/approved-source sols actionable.
+        // Prioritize sols with a future due date (they can actually send).
+        const solQ = qp.get("recent") === "1" ? { supplier_list: { $nin: ["", null] }, quote_due: { $ne: "" } } : { supplier_list: { $nin: ["", null] } };
+        const sols = await mdb.collection("solicitations").find(solQ).project({ supplier_list: 1, quote_due: 1 }).toArray();
         const solCages = new Set();
         sols.forEach(s => String(s.supplier_list).split(";").forEach(e => { const c = (e.split("|")[1] || "").trim().toUpperCase(); if (/^[A-Z0-9]{5}$/.test(c)) solCages.add(c); }));
-        const inRoster = await mdb.collection("reseller_suppliers")
-          .find({ cage: { $in: [...solCages] } }).project({ cage: 1, contact_email: 1 }).toArray();
-        const pool = qp.get("all") === "1" ? inRoster : inRoster.filter(r => !r.contact_email);
-        cages = pool.map(r => r.cage);
+        const haveContact = new Set((await mdb.collection("reseller_suppliers")
+          .find({ cage: { $in: [...solCages] }, contact_email: { $nin: ["", null] } }).project({ cage: 1 }).toArray()).map(r => r.cage));
+        cages = [...solCages].filter(c => !haveContact.has(c)); // CAGEs missing a contact-complete entry
       }
       cages = cages.slice(0, limit);
       if (!cages.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, message: "no CAGEs to enrich", status: contactsStatus })); return; }
@@ -1754,10 +1757,14 @@ const httpServer = http.createServer((req, res) => {
         await scrapeResellerContacts({ username: process.env.NAVIGATOR_USERNAME, password: process.env.NAVIGATOR_PASSWORD, cages }, async (rec) => {
           contactsStatus.done++;
           if (rec.contact_email) contactsStatus.with_email++;
-          await coll.updateOne({ cage: rec.cage }, { $set: {
-            contact_email: rec.contact_email || "", contact_emails: rec.contact_emails || [],
-            address: rec.address || "", naics: rec.naics || "", small_business: rec.small_business,
-            contact_scraped_at: new Date() } }, { upsert: true }).catch(() => {});
+          const setDoc = { contact_email: rec.contact_email || "", contact_emails: rec.contact_emails || [],
+            address: rec.address || "", naics: rec.naics || "", small_business: rec.small_business, contact_scraped_at: new Date() };
+          if (rec.company) setDoc.company = rec.company;                 // grid data → complete on-demand entry
+          if (rec.reseller_pct) setDoc.reseller_pct = rec.reseller_pct;
+          if (rec.no_nsns) setDoc.no_nsns = rec.no_nsns;
+          if (rec.total_value) setDoc.total_value = rec.total_value;
+          if (rec.grid_state) setDoc.state = rec.grid_state;
+          await coll.updateOne({ cage: rec.cage }, { $set: setDoc }, { upsert: true }).catch(() => {});
         });
         log(`Contact enrichment done — ${contactsStatus.with_email}/${contactsStatus.total} got an email`);
       } catch (e) { contactsStatus.error = e.message; err("contact enrich:", e.message); }
