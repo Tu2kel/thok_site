@@ -178,6 +178,90 @@ async function dispatchRfqs(mdb, lane, rosterMin, cap) {
   return { sent, failed, attempted: batch.length, results };
 }
 
+// ── DISTRIBUTOR LANE ─────────────────────────────────────────────────────
+// Fixed, reachable distributor list (verified published RFQ contacts). Each
+// day's sols are bundled by type — AN/MS/NAS → aerospace distributors, general
+// hardware → industrial — into ONE RFQ per distributor. This is the reliable
+// engine (fixed recipients that quote resellers), vs. per-sol designated suppliers.
+const SEED_DISTRIBUTORS = [
+  { name: "Atlantic Fasteners (Aerospace)", email: "sales@afaero.com", category: "aerospace", active: true },
+  { name: "Genuine Aircraft Hardware", email: "sales@genhardware.com", category: "aerospace", active: true },
+  { name: "Preferred Airparts", email: "Jeff@preferredairparts.com", category: "aerospace", active: true },
+  { name: "Aircraft Spruce & Specialty", email: "info@aircraftspruce.com", category: "aerospace", active: true },
+  { name: "MSC Industrial (Gov Team)", email: "govteam@mscdirect.com", category: "industrial", active: true },
+  { name: "McMaster-Carr", email: "chi.sales@mcmaster.com", category: "industrial", active: true },
+];
+const DIST_AERO_PN = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
+const DIST_INDUSTRIAL_FSC = /^(?:5305|5306|5307|5310|5315|5320|5325|5330|5331|5335|5340|5342|5365|5136|5133|5120|5110|5977|5940|5945|4730)$/;
+
+// Build one bundled RFQ per active distributor for the sols they can quote.
+async function buildDistributorRfqs(mdb, { includeSent = false, minDays } = {}) {
+  const MIN_DAYS = minDays != null ? minDays : parseInt(process.env.RESELLER_RFQ_MIN_DAYS || "3", 10);
+  const dists = await mdb.collection("rfq_distributors").find({ active: true }).toArray();
+  if (!dists.length) return [];
+  const sols = await mdb.collection("solicitations").find({})
+    .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
+      quantity: 1, ext_price: 1, delivery_days: 1, quote_due: 1, ship_to: 1 }).toArray();
+  const inWindow = s => { const d = daysUntilDue(s.quote_due); return d === null || d >= MIN_DAYS; };
+  const aeroReady = s => s.nsn && String(s.ref_part_number || "").trim() && String(s.quantity || "").trim() && String(s.unit_of_issue || "").trim();
+  const indReady  = s => s.nsn && String(s.item_name || "").trim() && String(s.quantity || "").trim() && String(s.unit_of_issue || "").trim();
+  const aeroSols = sols.filter(s => inWindow(s) && aeroReady(s) && DIST_AERO_PN.test(String(s.ref_part_number || "").trim().toUpperCase()));
+  const indSols  = sols.filter(s => inWindow(s) && indReady(s) && DIST_INDUSTRIAL_FSC.test(String(s.fsc || "").trim()) && !DIST_AERO_PN.test(String(s.ref_part_number || "").trim().toUpperCase()));
+  // idempotency: (distributor email, sol) already sent?
+  const sent = new Set();
+  if (!includeSent) (await mdb.collection("rfq_log").find({ recipient_type: "distributor" }).project({ email: 1, sols: 1 }).toArray())
+    .forEach(r => (r.sols || []).forEach(s => sent.add((r.email || "").toLowerCase() + "|" + s)));
+  const drafts = [];
+  for (const d of dists) {
+    const pool = d.category === "aerospace" ? aeroSols : indSols;
+    const fresh = pool.filter(s => includeSent || !sent.has(d.email.toLowerCase() + "|" + s.sol_number))
+      .sort((a, b) => (Number(b.ext_price) || 0) - (Number(a.ext_price) || 0)).slice(0, 40); // cap items/email
+    if (!fresh.length) continue;
+    const lines = fresh.map((l, i) =>
+      `Item ${i + 1}` +
+      `\n   NSN:        ${l.nsn}` +
+      (String(l.ref_part_number || "").trim() ? `\n   P/N:        ${l.ref_part_number}` : "") +
+      `\n   Item:       ${l.item_name}` +
+      `\n   Quantity:   ${l.quantity} ${l.unit_of_issue}` +
+      (l.delivery_days ? `\n   Delivery:   ${l.delivery_days} days ARO` : "") +
+      shipToBlock(l.ship_to) +
+      `\n   Respond by: ${respondByStr(l.quote_due) || "at your earliest convenience"}`).join("\n\n");
+    const certLine = d.category === "aerospace"
+      ? "For these mil-spec/aerospace items we require Certificate of Conformance + full material/lot traceability; MIL-STD-129 packaging & marking."
+      : "Where applicable we require Certificate of Conformance + traceability; MIL-STD-129 packaging & marking.";
+    const body =
+`Hello,
+
+Imperio Federal Logistics (IFL) is an SDVOSB reseller (CAGE 152U4) bidding the DLA solicitations below. Please provide your best DEALER / RESELLER pricing on the ${fresh.length} item(s), DELIVERED to the ship-to point (freight included) so we can price our bid on a landed basis.
+
+${certLine}
+
+${lines}
+
+Please also confirm your minimum order quantity and lead time. If you cannot supply an item, no reply needed on that line.
+
+Thank you,`;
+    drafts.push({ distributor: d.name, email: d.email, category: d.category, item_count: fresh.length,
+      subject: `RFQ — Dealer Pricing Request — ${fresh.length} item(s) (DLA resale)`, body, sols: fresh.map(s => s.sol_number) });
+  }
+  return drafts;
+}
+
+async function dispatchDistributorRfqs(mdb, { minDays } = {}) {
+  const drafts = await buildDistributorRfqs(mdb, { minDays });
+  const { sendEmailResend } = require("./email");
+  let sent = 0, failed = 0; const results = [];
+  for (const d of drafts) {
+    try {
+      await sendEmailResend({ to: d.email, subject: d.subject, body: d.body });
+      await mdb.collection("rfq_log").insertOne({ recipient_type: "distributor", distributor: d.distributor,
+        email: d.email, category: d.category, subject: d.subject, sols: d.sols, item_count: d.item_count, sent_at: new Date() });
+      sent++; results.push({ distributor: d.distributor, email: d.email, items: d.item_count, ok: true });
+    } catch (e) { failed++; results.push({ distributor: d.distributor, email: d.email, ok: false, error: e.message }); }
+  }
+  return { sent, failed, results };
+}
+
 // Enrich fresh sols from Section B before the RFQ step. Only spends Claude on
 // sols that (a) we just scraped, (b) are matched to a reseller-friendly contact,
 // (c) still lack P/N or ship-to. Batch-grabs the recent rows once. Section-B-only
@@ -776,6 +860,13 @@ async function runPipeline(liveModeOverride, maxVendors = 0) {
       log(`Reseller RFQ auto-send: ${r.sent} sent, ${r.failed} failed (cap ${cap}, highest-$ first)`);
     } catch (e) {
       err("Reseller RFQ auto-send failed:", e.message);
+    }
+    // Distributor lane — bundle the day's sols by type to the fixed distributor list
+    try {
+      const dr = await dispatchDistributorRfqs(db, {});
+      log(`Distributor RFQ auto-send: ${dr.sent} sent, ${dr.failed} failed`);
+    } catch (e) {
+      err("Distributor RFQ auto-send failed:", e.message);
     }
   }
 
@@ -1442,6 +1533,63 @@ const httpServer = http.createServer((req, res) => {
       const r = await mdb.collection("reseller_suppliers").updateMany({ cage: { $in: cages } }, { $set: set });
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, matched: r.matchedCount, modified: r.modifiedCount, cages, set }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Seed / list the distributor RFQ list.
+  if (u === "/seed-distributors" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      for (const d of SEED_DISTRIBUTORS) {
+        await mdb.collection("rfq_distributors").updateOne({ email: d.email }, { $set: d }, { upsert: true });
+      }
+      const all = await mdb.collection("rfq_distributors").find({}).toArray();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, seeded: SEED_DISTRIBUTORS.length, total: all.length,
+        distributors: all.map(x => ({ name: x.name, email: x.email, category: x.category, active: x.active })) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Distributor RFQ preview — what would go to each distributor.
+  if (u === "/distributor-rfq-preview" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const drafts = await buildDistributorRfqs(mdb, { includeSent: (new URLSearchParams(req.url.split("?")[1] || "")).get("all") === "1" });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, distributor_emails: drafts.length,
+        drafts: drafts.map(d => ({ distributor: d.distributor, email: d.email, category: d.category, item_count: d.item_count, subject: d.subject, body: d.body })) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Distributor RFQ TEST — send the top draft to YOUR inbox ([TEST]). ?to=&all=1
+  if (u === "/distributor-rfq-test" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const to = qp.get("to") || "anthony@ifedlog.com";
+      const drafts = await buildDistributorRfqs(mdb, { includeSent: true });
+      if (!drafts.length) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, sent: false, note: "no distributor RFQ to preview (no complete in-window sols in a distributor category)" }, null, 2)); return; }
+      const d = drafts[0];
+      const { sendEmailResend } = require("./email");
+      await sendEmailResend({ to, subject: `[TEST] ${d.subject}`, body: `*** TEST — would go to: ${d.email} (${d.distributor}) ***\n\n${d.body}` });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, sent: true, test_to: to, would_go_to: d.email, distributor: d.distributor, items: d.item_count, body: d.body }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Distributor RFQ live send — gated by RESELLER_RFQ_ENABLED + ?confirm=1.
+  if (u === "/distributor-rfq-send" && (req.method === "GET" || req.method === "POST")) {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const enabled = process.env.RESELLER_RFQ_ENABLED === "true";
+      const drafts = await buildDistributorRfqs(mdb, {});
+      if (!enabled) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, disabled: true, sent: 0, would_send: drafts.length, note: "RESELLER_RFQ_ENABLED not true — dark" }, null, 2)); return; }
+      if (qp.get("confirm") !== "1") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, enabled: true, sent: 0, would_send: drafts.length, drafts: drafts.map(d => ({ distributor: d.distributor, items: d.item_count })), note: "add &confirm=1 to send" }, null, 2)); return; }
+      const r = await dispatchDistributorRfqs(mdb, {});
+      log(`Distributor RFQ send — ${r.sent} sent, ${r.failed} failed`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, sent: r.sent, failed: r.failed, results: r.results }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
