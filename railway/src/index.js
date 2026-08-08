@@ -1674,6 +1674,19 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // RFQ send log — actual RFQs sent (persistent). ?limit=20
+  if (u === "/rfq-log" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const limit = Math.min(parseInt((new URLSearchParams(req.url.split("?")[1] || "")).get("limit") || "20", 10), 200);
+      const total = await mdb.collection("rfq_log").countDocuments({});
+      const rows = await mdb.collection("rfq_log").find({}).sort({ sent_at: -1 }).limit(limit).toArray();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, total_ever_sent: total,
+        recent: rows.map(r => ({ sent_at: r.sent_at, supplier: r.supplier, email: r.email, sols: r.sols, lane: r.lane })) }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Reseller scrape status
   if (u === "/reseller-status" && req.method === "GET") {
     getDb().then(async (mdb) => {
