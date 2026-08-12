@@ -205,7 +205,11 @@ async function buildDistributorRfqs(mdb, { includeSent = false, minDays } = {}) 
   const inWindow = s => { const d = daysUntilDue(s.quote_due); return d === null || d >= MIN_DAYS; };
   const aeroReady = s => s.nsn && String(s.ref_part_number || "").trim() && String(s.quantity || "").trim() && String(s.unit_of_issue || "").trim();
   const indReady  = s => s.nsn && String(s.item_name || "").trim() && String(s.quantity || "").trim() && String(s.unit_of_issue || "").trim();
-  const aeroSols = sols.filter(s => inWindow(s) && aeroReady(s) && DIST_AERO_PN.test(String(s.ref_part_number || "").trim().toUpperCase()));
+  // Aircraft-hardware lane: AN/MS/NAS P/N AND a hardware/fastener FSC. Excludes
+  // 59xx electrical (MS3147 connectors etc.) and 58xx comms — "MS" fooled us into
+  // sending an electrical connector to a fastener shop (Genuine no-bid, 2026-08-12).
+  const isHardwareFsc = s => { const f = String(s.fsc || "").trim(); return !/^(?:59|58|60|65|66|61)/.test(f); };
+  const aeroSols = sols.filter(s => inWindow(s) && aeroReady(s) && DIST_AERO_PN.test(String(s.ref_part_number || "").trim().toUpperCase()) && isHardwareFsc(s));
   const indSols  = sols.filter(s => inWindow(s) && indReady(s) && DIST_INDUSTRIAL_FSC.test(String(s.fsc || "").trim()) && !DIST_AERO_PN.test(String(s.ref_part_number || "").trim().toUpperCase()));
   // idempotency: (distributor email, sol) already sent?
   const sent = new Set();
