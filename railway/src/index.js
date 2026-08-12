@@ -1931,6 +1931,28 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Top opportunities — the highest-$ AN/MS/NAS sols to chase with a distributor.
+  if (u === "/top-opportunities" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      const limit = Math.min(parseInt(qp.get("limit") || "15", 10), 50);
+      const MIN_DAYS = parseInt(process.env.RESELLER_RFQ_MIN_DAYS || "3", 10);
+      const sols = await mdb.collection("solicitations").find({})
+        .project({ sol_number: 1, nsn: 1, item_name: 1, ref_part_number: 1, quantity: 1, unit_of_issue: 1, ext_price: 1, hist_price: 1, unit_price: 1, quote_due: 1, delivery_days: 1 }).toArray();
+      const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
+      const inWindow = s => { const d = daysUntilDue(s.quote_due); return d === null || d >= MIN_DAYS; };
+      const opps = sols
+        .filter(s => s.nsn && String(s.ref_part_number || "").trim() && AERO.test(String(s.ref_part_number).trim().toUpperCase()) && inWindow(s))
+        .map(s => ({ sol: s.sol_number, nsn: s.nsn, part: s.ref_part_number, item: s.item_name, qty: s.quantity, ui: s.unit_of_issue,
+          ext: Math.round(Number(s.ext_price) || 0), unit_hist: s.hist_price || s.unit_price || null, due: s.quote_due,
+          respond_by: respondByStr(s.quote_due) || "open (repost)", delivery_days: s.delivery_days }))
+        .sort((a, b) => b.ext - a.ext).slice(0, limit);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, count: opps.length, opportunities: opps }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
   // Debug: look up a sol in the solicitations collection. ?sol=X
   if (u === "/sol-lookup" && req.method === "GET") {
     getDb().then(async (mdb) => {
