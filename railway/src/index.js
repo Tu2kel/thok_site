@@ -1615,9 +1615,10 @@ const httpServer = http.createServer((req, res) => {
         const mdb = await getDb();
         const doc = { name: p.name, email: p.email || "", phone: p.phone || "", contact: p.contact || "",
           category: p.category === "industrial" ? "industrial" : "aerospace", program: !!p.program,
-          blast: !!p.email && p.blast !== false, active: true, ask: p.ask || "", call_status: "none", call_note: "" };
-        const q = p.email ? { email: p.email } : { name: p.name };
-        await mdb.collection("rfq_distributors").updateOne(q, { $set: doc }, { upsert: true });
+          blast: !!p.email && p.blast !== false, active: true, ask: p.ask || "" };
+        // upsert by NAME (unique); only set call_status/note on first insert
+        await mdb.collection("rfq_distributors").updateOne({ name: p.name },
+          { $set: doc, $setOnInsert: { call_status: "none", call_note: "" } }, { upsert: true });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, added: p.name }));
       } catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
