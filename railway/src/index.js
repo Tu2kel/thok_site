@@ -1635,10 +1635,14 @@ const httpServer = http.createServer((req, res) => {
   // Seed / list the distributor RFQ list.
   if (u === "/seed-distributors" && (req.method === "GET" || req.method === "POST")) {
     getDb().then(async (mdb) => {
+      const coll = mdb.collection("rfq_distributors");
+      const qp = new URLSearchParams(req.url.split("?")[1] || "");
+      // ?reset=1 clears seed docs first (keeps user-added ones that carry call notes)
+      if (qp.get("reset") === "1") await coll.deleteMany({ $or: [{ call_status: { $in: [null, "none"] } }, { call_status: { $exists: false } }] });
       for (const d of SEED_DISTRIBUTORS) {
-        await mdb.collection("rfq_distributors").updateOne({ email: d.email }, { $set: d }, { upsert: true });
+        await coll.updateOne({ name: d.name }, { $set: d }, { upsert: true }); // key by NAME (email may be blank)
       }
-      const all = await mdb.collection("rfq_distributors").find({}).toArray();
+      const all = await coll.find({}).toArray();
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, seeded: SEED_DISTRIBUTORS.length, total: all.length,
         distributors: all.map(x => ({ name: x.name, email: x.email, category: x.category, active: x.active })) }, null, 2));
