@@ -184,20 +184,39 @@ async function dispatchRfqs(mdb, lane, rosterMin, cap) {
 // hardware → industrial — into ONE RFQ per distributor. This is the reliable
 // engine (fixed recipients that quote resellers), vs. per-sol designated suppliers.
 const SEED_DISTRIBUTORS = [
-  { name: "Atlantic Fasteners (Aerospace)", email: "sales@afaero.com", category: "aerospace", active: true },
-  { name: "Genuine Aircraft Hardware", email: "sales@genhardware.com", category: "aerospace", active: true },
-  { name: "Preferred Airparts", email: "Jeff@preferredairparts.com", category: "aerospace", active: true },
-  { name: "Aircraft Spruce & Specialty", email: "info@aircraftspruce.com", category: "aerospace", active: true },
-  { name: "MSC Industrial (Gov Team)", email: "govteam@mscdirect.com", category: "industrial", active: true },
-  { name: "McMaster-Carr", email: "chi.sales@mcmaster.com", category: "industrial", active: true },
+  { name: "Atlantic Fasteners", email: "sales@afaero.com", phone: "1-800-313-1487", contact: "Adam Perreault (413-241-2227)", category: "aerospace", program: false, blast: true, active: true,
+    ask: "Best fit — free certs + traceability, sells to resellers. Push the NAS9307 rivets, MS21084/MS14156 nuts, MS14157 bolt." },
+  { name: "Genuine Aircraft Hardware", email: "sales@genhardware.com", phone: "1-888-247-2738", contact: "Karla Montano", category: "aerospace", program: false, blast: true, active: true,
+    ask: "Already replied to you — warm, build the account. Stick to AN/MS/NAS hardware (they don't do connectors)." },
+  { name: "Preferred Airparts", email: "Jeff@preferredairparts.com", phone: "1-800-433-0814", contact: "Jeff", category: "aerospace", program: false, blast: true, active: true,
+    ask: "42k+ new-surplus P/Ns, fast quotes. Ask the NAS/MS fastener lines." },
+  { name: "Dialogic Fasteners", email: "", phone: "1-215-245-7373", contact: "", category: "aerospace", program: false, blast: false, active: true,
+    ask: "Aerospace fastener specialist — same rivet/nut/bolt lines. Phone only." },
+  { name: "Aircraft Spruce & Specialty", email: "info@aircraftspruce.com", phone: "1-877-477-7823", contact: "", category: "aerospace", program: false, blast: true, active: true,
+    ask: "Full AN/MS/NAS line — confirm certs per line (more retail-oriented)." },
+  { name: "Grainger Federal Reseller Network", email: "", phone: "1-800-472-4643", contact: "", category: "industrial", program: true, blast: false, active: true,
+    ask: "You're REGISTERED. Built for your model — call to quote commercial hardware/MRO." },
+  { name: "MSC Industrial — Gov Team", email: "govteam@mscdirect.com", phone: "1-888-672-9722", contact: "", category: "industrial", program: true, blast: true, active: true,
+    ask: "You're REGISTERED (ResaleLink). Run metalworking/fastener/MRO lines through them." },
+  { name: "McMaster-Carr", email: "chi.sales@mcmaster.com", phone: "1-630-833-0300", contact: "", category: "industrial", program: false, blast: true, active: true,
+    ask: "Fast COTS hardware. Best when a line doesn't demand mil-spec certs." },
+  { name: "Fastenal", email: "", phone: "1-877-507-7555", contact: "", category: "industrial", program: false, blast: false, active: true,
+    ask: "Fastener core strength + gov arrangements. Ask about a reseller account." },
+  { name: "Motion Industries", email: "", phone: "1-800-526-9328", contact: "", category: "industrial", program: false, blast: false, active: true,
+    ask: "Bearings/power transmission/hydraulics — for those FSCs." },
+  { name: "Applied Industrial Technologies", email: "", phone: "1-877-279-2799", contact: "", category: "industrial", program: false, blast: false, active: true,
+    ask: "Bearings/fluid power, holds a GSA contract. Open a reseller account." },
 ];
+let CALL_BOARD_HTML = "<h1>Call board file not found</h1>";
+try { CALL_BOARD_HTML = require("fs").readFileSync(require("path").join(__dirname, "call-board.html"), "utf8"); }
+catch (e) { console.error("call-board.html load:", e.message); }
 const DIST_AERO_PN = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
 const DIST_INDUSTRIAL_FSC = /^(?:5305|5306|5307|5310|5315|5320|5325|5330|5331|5335|5340|5342|5365|5136|5133|5120|5110|5977|5940|5945|4730)$/;
 
 // Build one bundled RFQ per active distributor for the sols they can quote.
 async function buildDistributorRfqs(mdb, { includeSent = false, minDays } = {}) {
   const MIN_DAYS = minDays != null ? minDays : parseInt(process.env.RESELLER_RFQ_MIN_DAYS || "3", 10);
-  const dists = await mdb.collection("rfq_distributors").find({ active: true }).toArray();
+  const dists = await mdb.collection("rfq_distributors").find({ active: true, blast: { $ne: false }, email: { $nin: ["", null] } }).toArray();
   if (!dists.length) return [];
   const sols = await mdb.collection("solicitations").find({})
     .project({ sol_number: 1, nsn: 1, fsc: 1, item_name: 1, ref_part_number: 1, unit_of_issue: 1,
@@ -1538,6 +1557,78 @@ const httpServer = http.createServer((req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, matched: r.matchedCount, modified: r.modifiedCount, cages, set }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Call board data — distributors (with call status) + the day's money list.
+  if (u === "/call-targets" && req.method === "GET") {
+    getDb().then(async (mdb) => {
+      const dists = await mdb.collection("rfq_distributors").find({ active: true }).sort({ program: -1, category: 1, name: 1 }).toArray();
+      // top opportunities (live money list)
+      const MIN_DAYS = parseInt(process.env.RESELLER_RFQ_MIN_DAYS || "3", 10);
+      const sols = await mdb.collection("solicitations").find({})
+        .project({ sol_number: 1, item_name: 1, ref_part_number: 1, quantity: 1, unit_of_issue: 1, ext_price: 1, hist_price: 1, unit_price: 1, quote_due: 1, fsc: 1 }).toArray();
+      const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
+      const inWin = s => { const d = daysUntilDue(s.quote_due); return d === null || d >= MIN_DAYS; };
+      const money = sols.filter(s => s.ref_part_number && AERO.test(String(s.ref_part_number).trim().toUpperCase()) && !/^(?:59|58|60|65|66|61)/.test(String(s.fsc || "")) && inWin(s))
+        .map(s => ({ part: s.ref_part_number, item: s.item_name, qty: s.quantity, ui: s.unit_of_issue, ext: Math.round(Number(s.ext_price) || 0), hist: s.hist_price || s.unit_price || null, due: s.quote_due }))
+        .sort((a, b) => b.ext - a.ext).slice(0, 12);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true,
+        distributors: dists.map(d => ({ email: d.email || "", name: d.name, phone: d.phone || "", contact: d.contact || "",
+          category: d.category, program: !!d.program, ask: d.ask || "", call_status: d.call_status || "none", call_note: d.call_note || "", call_updated: d.call_updated || null })),
+        money }, null, 2));
+    }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+
+  // Save a call outcome (status + note), keyed by email or name.
+  if (u === "/call-log" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 20000) req.destroy(); });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        const key = (p.email || "").trim() || (p.name || "").trim();
+        if (!key) throw new Error("email or name required");
+        const mdb = await getDb();
+        const set = { call_updated: new Date() };
+        if (p.status != null) set.call_status = p.status;
+        if (p.note != null) set.call_note = p.note;
+        const q = p.email ? { email: p.email } : { name: p.name };
+        await mdb.collection("rfq_distributors").updateOne(q, { $set: set });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
+    });
+    return;
+  }
+
+  // Add a new call contact (so you can update who you're dialing).
+  if (u === "/call-add" && req.method === "POST") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 20000) req.destroy(); });
+    req.on("end", async () => {
+      try {
+        const p = JSON.parse(body || "{}");
+        if (!p.name) throw new Error("name required");
+        const mdb = await getDb();
+        const doc = { name: p.name, email: p.email || "", phone: p.phone || "", contact: p.contact || "",
+          category: p.category === "industrial" ? "industrial" : "aerospace", program: !!p.program,
+          blast: !!p.email && p.blast !== false, active: true, ask: p.ask || "", call_status: "none", call_note: "" };
+        const q = p.email ? { email: p.email } : { name: p.name };
+        await mdb.collection("rfq_distributors").updateOne(q, { $set: doc }, { upsert: true });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, added: p.name }));
+      } catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); }
+    });
+    return;
+  }
+
+  // Serve the live call board (HTML app; pulls /call-targets, saves via /call-log).
+  if (u === "/call-board" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(CALL_BOARD_HTML);
     return;
   }
 
