@@ -1574,7 +1574,8 @@ const httpServer = http.createServer((req, res) => {
       // shows the SPECIFIC parts to read them on the phone (not a generic pitch).
       const lanes = { fastener: [], bearing: [], medical: [], industrial: [] };
       for (const s of sols) {
-        if (!(s.nsn && String(s.ref_part_number || "").trim() && String(s.quantity || "").trim() && String(s.unit_of_issue || "").trim() && inWin(s))) continue;
+        // For a phone call, P/N + qty is enough (UI shown when present).
+        if (!(String(s.ref_part_number || "").trim() && String(s.quantity || "").trim() && inWin(s))) continue;
         const fsc = String(s.fsc || "").trim(), pn = String(s.ref_part_number).trim().toUpperCase();
         const line = { part: s.ref_part_number, item: s.item_name, qty: s.quantity, ui: s.unit_of_issue, nsn: s.nsn,
           ext: Math.round(Number(s.ext_price) || 0), hist: s.hist_price || s.unit_price || null, due: s.quote_due };
