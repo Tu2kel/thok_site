@@ -71,6 +71,14 @@ table.money tr:last-child td{border-bottom:none}
 .altcol .lbl{color:var(--mute);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
 .altcol a{color:var(--dim);text-decoration:none;word-break:break-word}.altcol a:hover{color:var(--gold-2)}
 .ask{font-size:13px;color:var(--dim);background:var(--surface-2);border-radius:8px;padding:9px 11px}
+.qparts{background:var(--surface-2);border-radius:8px;padding:9px 11px}
+.qlbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-2);font-weight:600;margin-bottom:6px}
+.qrow{display:flex;gap:8px;align-items:baseline;padding:3px 0;border-top:1px solid var(--border);font-size:12.5px}
+.qrow:first-of-type{border-top:none}
+.qpn{font-family:var(--mono);color:var(--ink);font-weight:600;flex:1;min-width:0;word-break:break-word}
+.qqty{font-family:var(--mono);color:var(--dim);white-space:nowrap}
+.qhist{font-family:var(--mono);color:var(--s-quoted);white-space:nowrap;min-width:50px;text-align:right}
+.qnone{font-size:12px;color:var(--mute);background:var(--surface-2);border-radius:8px;padding:9px 11px}
 .pills{display:flex;flex-wrap:wrap;gap:6px}
 .pill{font-size:11.5px;border:1px solid var(--border-2);background:transparent;color:var(--dim);border-radius:7px;padding:5px 9px;cursor:pointer;font-weight:600;font-family:inherit;transition:.12s}
 .pill:hover{border-color:var(--mute)}
@@ -185,6 +193,13 @@ function renderBoard(){
   });
 }
 
+function partsBlock(d){
+  const p=d.parts||[];
+  const lbl={fastener:"AN/MS/NAS fasteners",bearing:"bearings",medical:"medical items",industrial:"hardware"}[d.lane]||"parts";
+  if(!p.length) return '<div class="qnone">No current '+lbl+' on the board — <b>open the account now</b> so they quote you the moment one hits.</div>';
+  return '<div class="qparts"><div class="qlbl">Read them these '+lbl+' ('+p.length+')</div>'+
+    p.map(x=>'<div class="qrow"><span class="qpn">'+esc(x.part)+'</span><span class="qqty">'+Number(x.qty||0).toLocaleString()+' '+esc(x.ui||"")+'</span><span class="qhist">'+(x.hist?'$'+x.hist:'—')+'</span></div>').join('')+'</div>';
+}
 function card(d){
   const el=document.createElement("div");el.className="card";
   const alt=d.contact?'<div class="altcol"><span class="lbl">Contact</span><span>'+esc(d.contact)+'</span></div>':(d.email?'<div class="altcol"><span class="lbl">Email</span><a href="mailto:'+esc(d.email)+'">'+esc(d.email)+'</a></div>':"");
@@ -193,6 +208,7 @@ function card(d){
     '<div class="callrow"><a class="call" href="'+telHref(d.phone)+'">'+phoneSvg+esc(d.phone||"no phone")+'</a>'+alt+'</div>'+
     (d.email&&d.contact?'<div class="altcol" style="flex-direction:row;gap:6px"><span class="lbl">Email</span><a href="mailto:'+esc(d.email)+'">'+esc(d.email)+'</a></div>':'')+
     (d.ask?'<div class="ask">'+esc(d.ask)+'</div>':'')+
+    partsBlock(d)+
     '<div class="pills"></div><textarea class="note" placeholder="Notes — who you talked to, pricing, next step…"></textarea><div class="stamp"></div>';
   const pills=el.querySelector(".pills");
   STATES.forEach(([k,label,color])=>{

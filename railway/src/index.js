@@ -1570,14 +1570,32 @@ const httpServer = http.createServer((req, res) => {
         .project({ sol_number: 1, item_name: 1, ref_part_number: 1, quantity: 1, unit_of_issue: 1, ext_price: 1, hist_price: 1, unit_price: 1, quote_due: 1, fsc: 1 }).toArray();
       const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
       const inWin = s => { const d = daysUntilDue(s.quote_due); return d === null || d >= MIN_DAYS; };
-      const money = sols.filter(s => s.ref_part_number && AERO.test(String(s.ref_part_number).trim().toUpperCase()) && !/^(?:59|58|60|65|66|61)/.test(String(s.fsc || "")) && inWin(s))
-        .map(s => ({ part: s.ref_part_number, item: s.item_name, qty: s.quantity, ui: s.unit_of_issue, ext: Math.round(Number(s.ext_price) || 0), hist: s.hist_price || s.unit_price || null, due: s.quote_due }))
-        .sort((a, b) => b.ext - a.ext).slice(0, 12);
+      // Bucket in-window, complete sols into part-type lanes so each distributor
+      // shows the SPECIFIC parts to read them on the phone (not a generic pitch).
+      const lanes = { fastener: [], bearing: [], medical: [], industrial: [] };
+      for (const s of sols) {
+        if (!(s.nsn && String(s.ref_part_number || "").trim() && String(s.quantity || "").trim() && String(s.unit_of_issue || "").trim() && inWin(s))) continue;
+        const fsc = String(s.fsc || "").trim(), pn = String(s.ref_part_number).trim().toUpperCase();
+        const line = { part: s.ref_part_number, item: s.item_name, qty: s.quantity, ui: s.unit_of_issue, nsn: s.nsn,
+          ext: Math.round(Number(s.ext_price) || 0), hist: s.hist_price || s.unit_price || null, due: s.quote_due };
+        if (/^31(1|2|3)0/.test(fsc)) lanes.bearing.push(line);
+        else if (/^65/.test(fsc)) lanes.medical.push(line);
+        else if (AERO.test(pn) && !/^(?:59|58|60|65|66|61)/.test(fsc)) lanes.fastener.push(line);
+        else if (/^(?:5305|5306|5307|5310|5315|5320|5325|5330|5331|5335|5340|5342|5365)/.test(fsc)) lanes.industrial.push(line);
+      }
+      for (const k of Object.keys(lanes)) lanes[k].sort((a, b) => b.ext - a.ext);
+      const laneOf = d => {
+        const t = (d.name + " " + (d.ask || "")).toLowerCase();
+        if (/bearing|nhbb|rbc|rexnord/.test(t)) return "bearing";
+        if (/medical|rescue|medline|teleflex|narescue/.test(t)) return "medical";
+        return d.category === "aerospace" ? "fastener" : "industrial";
+      };
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true,
-        distributors: dists.map(d => ({ email: d.email || "", name: d.name, phone: d.phone || "", contact: d.contact || "",
-          category: d.category, program: !!d.program, ask: d.ask || "", call_status: d.call_status || "none", call_note: d.call_note || "", call_updated: d.call_updated || null })),
-        money }, null, 2));
+        distributors: dists.map(d => { const ln = laneOf(d); return { email: d.email || "", name: d.name, phone: d.phone || "", contact: d.contact || "",
+          category: d.category, program: !!d.program, ask: d.ask || "", lane: ln, parts: lanes[ln].slice(0, 8),
+          call_status: d.call_status || "none", call_note: d.call_note || "", call_updated: d.call_updated || null }; }),
+        money: lanes.fastener.slice(0, 12) }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
