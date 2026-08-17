@@ -1628,10 +1628,16 @@ const httpServer = http.createServer((req, res) => {
       for (const k of Object.keys(lanes)) lanes[k] = dedupeSort(lanes[k]);
       const money = dedupeSort(allOpps).slice(0, 14);
       const laneOf = d => {
-        const t = (d.name + " " + (d.ask || "")).toLowerCase();
-        if (/bearing|nhbb|rbc|rexnord/.test(t)) return "bearing";
-        if (/medical|rescue|medline|teleflex|narescue/.test(t)) return "medical";
-        return d.category === "aerospace" ? "fastener" : "industrial";
+        // Route by what the distributor IS (name/category), not brand names that
+        // happen to appear in its line-card notes — else a fastener house like Incora
+        // whose ask lists NHBB/RBC gets mis-filed into the bearing lane.
+        const nm = (d.name || "").toLowerCase();
+        const t = (nm + " " + (d.ask || "")).toLowerCase();
+        if (/rescue|medline|medical/.test(nm)) return "medical";
+        if (/bearing/.test(nm)) return "bearing";
+        if (d.category === "aerospace") return "fastener"; // aero fastener houses stay fasteners
+        if (/bearing|rbc|nhbb|rexnord|motion industries|applied industrial/.test(t)) return "bearing";
+        return "industrial";
       };
       const scored = dists.map(d => { const ln = laneOf(d); return {
         email: d.email || "", name: d.name, phone: d.phone || "", contact: d.contact || "",
