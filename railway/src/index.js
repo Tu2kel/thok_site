@@ -1589,7 +1589,7 @@ const httpServer = http.createServer((req, res) => {
         // dated sols first (real deadline beats a repost copy), then by $; dedupe by part #
         lanes[k].sort((a, b) => (b.respond_by ? 1 : 0) - (a.respond_by ? 1 : 0) || b.ext - a.ext);
         const seen = new Set();
-        lanes[k] = lanes[k].filter(x => { const key = (x.part || "").toUpperCase(); if (seen.has(key)) return false; seen.add(key); return true; });
+        lanes[k] = lanes[k].filter(x => { const key = (x.part || "").trim().toUpperCase(); if (!key || seen.has(key)) return false; seen.add(key); return true; });
         lanes[k].sort((a, b) => b.ext - a.ext); // final display order = biggest $ first
       }
       const laneOf = d => {
