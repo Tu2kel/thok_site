@@ -1563,6 +1563,25 @@ const httpServer = http.createServer((req, res) => {
   // Call board data — distributors (with call status) + the day's money list.
   if (u === "/call-targets" && req.method === "GET") {
     getDb().then(async (mdb) => {
+      // Odds each distributor actually SELLS to a small SDVOSB reseller (certs + margin room).
+      // Curated from authorized-dealer status, small-account friendliness, reachability, margin.
+      // The board sorts by this so you work highest-odds first, not alphabetical.
+      const SELL_SCORES = [
+        ["genuine aircraft", 92], ["atlantic fasteners", 90], ["adept", 88], ["incora", 87],
+        ["tps aviation", 84], ["usatco", 82], ["century fasteners", 80], ["preferred airparts", 76],
+        ["aircraft spruce", 75], ["peerless", 74], ["fdh aero", 73], ["aero-glen", 72],
+        ["msc industrial", 72], ["align aerospace", 70], ["jamaica bearings", 70], ["grainger", 68],
+        ["fastenal", 68], ["national precision", 68], ["jackson aerospace", 65], ["north american rescue", 65],
+        ["medline", 65], ["applied industrial", 62], ["motion industries", 62], ["dialogic", 60],
+        ["skygeek", 58], ["alpine bearing", 58], ["ibsco", 55], ["mcmaster", 55], ["ast bearings", 52],
+        ["boeing distribution", 50], ["proponent", 50], ["w.s. wilson", 50], ["cia medical", 48],
+        ["wencor", 45], ["don industrial", 40], ["rbc bearings", 30],
+      ];
+      const sellScore = d => {
+        const n = String(d.name || "").toLowerCase();
+        for (const [k, v] of SELL_SCORES) if (n.includes(k)) return v;
+        return (d.email ? 60 : 45) + (d.category === "aerospace" ? 8 : 0); // fallback for new adds
+      };
       const dists = await mdb.collection("rfq_distributors").find({ active: true }).sort({ program: -1, category: 1, name: 1 }).toArray();
       // top opportunities (live money list)
       const MIN_DAYS = parseInt(process.env.RESELLER_RFQ_MIN_DAYS || "3", 10);
@@ -1614,12 +1633,16 @@ const httpServer = http.createServer((req, res) => {
         if (/medical|rescue|medline|teleflex|narescue/.test(t)) return "medical";
         return d.category === "aerospace" ? "fastener" : "industrial";
       };
+      const scored = dists.map(d => { const ln = laneOf(d); return {
+        email: d.email || "", name: d.name, phone: d.phone || "", contact: d.contact || "",
+        category: d.category, program: !!d.program, ask: d.ask || "", lane: ln,
+        sell_score: sellScore(d),
+        reach: (d.blast && d.email) ? "auto" : (d.phone ? "call" : "none"), // auto=emailing daily, call=phone-only
+        parts: lanes[ln].slice(0, 8),
+        call_status: d.call_status || "none", call_note: d.call_note || "", call_updated: d.call_updated || null }; });
+      scored.sort((a, b) => b.sell_score - a.sell_score || b.parts.length - a.parts.length); // best odds first
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true,
-        distributors: dists.map(d => { const ln = laneOf(d); return { email: d.email || "", name: d.name, phone: d.phone || "", contact: d.contact || "",
-          category: d.category, program: !!d.program, ask: d.ask || "", lane: ln, parts: lanes[ln].slice(0, 8),
-          call_status: d.call_status || "none", call_note: d.call_note || "", call_updated: d.call_updated || null }; }),
-        money }, null, 2));
+      res.end(JSON.stringify({ ok: true, distributors: scored, money }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
