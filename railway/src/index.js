@@ -1585,7 +1585,13 @@ const httpServer = http.createServer((req, res) => {
         else if (AERO.test(pn) && !/^(?:59|58|60|65|66|61)/.test(fsc)) lanes.fastener.push(line);
         else if (/^(?:5305|5306|5307|5310|5315|5320|5325|5330|5331|5335|5340|5342|5365)/.test(fsc)) lanes.industrial.push(line);
       }
-      for (const k of Object.keys(lanes)) lanes[k].sort((a, b) => b.ext - a.ext);
+      for (const k of Object.keys(lanes)) {
+        // dated sols first (real deadline beats a repost copy), then by $; dedupe by part #
+        lanes[k].sort((a, b) => (b.respond_by ? 1 : 0) - (a.respond_by ? 1 : 0) || b.ext - a.ext);
+        const seen = new Set();
+        lanes[k] = lanes[k].filter(x => { const key = (x.part || "").toUpperCase(); if (seen.has(key)) return false; seen.add(key); return true; });
+        lanes[k].sort((a, b) => b.ext - a.ext); // final display order = biggest $ first
+      }
       const laneOf = d => {
         const t = (d.name + " " + (d.ask || "")).toLowerCase();
         if (/bearing|nhbb|rbc|rexnord/.test(t)) return "bearing";
