@@ -53,8 +53,12 @@ table.money tr:last-child td{border-bottom:none}
 .hist{font-family:var(--mono);text-align:right;color:var(--s-quoted);font-weight:600}
 .ext{font-family:var(--mono);text-align:right;color:var(--gold-2);font-weight:700;white-space:nowrap}
 
-.tier{margin:32px 0 14px;display:flex;align-items:baseline;gap:11px;padding-bottom:9px;border-bottom:2px solid var(--gold);flex-wrap:wrap}
-.tier:first-of-type{margin-top:8px}
+.tier{margin:32px 0 14px;display:flex;align-items:baseline;gap:11px;padding-bottom:9px;border-bottom:2px solid var(--gold);flex-wrap:wrap;cursor:pointer;user-select:none}
+.section:first-of-type .tier{margin-top:8px}
+.tier:hover h2{color:var(--gold)}
+.tchev{align-self:center;display:inline-block;transition:transform .2s;color:var(--gold-2);font-size:12px;transform:rotate(90deg)}
+.section.collapsed .tchev{transform:rotate(0deg)}
+.section.collapsed .cards{display:none}
 .tier h2{font-size:17px;margin:0;color:var(--gold-2);letter-spacing:-.01em}
 .tier .sub{font-size:12.5px;color:var(--mute)}
 .tier .tcount{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:3px 10px}
@@ -204,12 +208,21 @@ function renderMoney(){
 
 function renderBoard(){
   const board=document.getElementById("board");board.innerHTML="";
+  const collapsed=JSON.parse(localStorage.getItem("cb_collapsed")||"{}");
   TIERS.forEach(([g,name,sub])=>{
     const items=DATA.distributors.filter(d=>groupOf(d)===g);
     if(!items.length)return;
-    const t=document.createElement("div");
+    const t=document.createElement("div");t.className="section";
+    if(collapsed[g])t.classList.add("collapsed");
     const nAuto=items.filter(d=>d.reach==="auto").length,nCall=items.filter(d=>d.reach==="call").length;
-    const hd=document.createElement("div");hd.className="tier";hd.innerHTML='<h2>'+name+'</h2><span class="sub">'+sub+'</span><span class="tcount">'+items.length+' &middot; '+nAuto+' auto / '+nCall+' call</span>';t.appendChild(hd);
+    const hd=document.createElement("div");hd.className="tier";
+    hd.innerHTML='<span class="tchev">▸</span><h2>'+name+'</h2><span class="sub">'+sub+'</span><span class="tcount">'+items.length+' &middot; '+nAuto+' auto / '+nCall+' call</span>';
+    hd.addEventListener("click",()=>{
+      t.classList.toggle("collapsed");
+      const c=JSON.parse(localStorage.getItem("cb_collapsed")||"{}");
+      c[g]=t.classList.contains("collapsed");localStorage.setItem("cb_collapsed",JSON.stringify(c));
+    });
+    t.appendChild(hd);
     const grid=document.createElement("div");grid.className="cards";
     items.forEach(d=>grid.appendChild(card(d)));t.appendChild(grid);board.appendChild(t);
   });
