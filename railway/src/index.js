@@ -1578,7 +1578,8 @@ const httpServer = http.createServer((req, res) => {
         if (!(String(s.ref_part_number || "").trim() && String(s.quantity || "").trim() && inWin(s))) continue;
         const fsc = String(s.fsc || "").trim(), pn = String(s.ref_part_number).trim().toUpperCase();
         const line = { part: s.ref_part_number, item: s.item_name, qty: s.quantity, ui: s.unit_of_issue, nsn: s.nsn,
-          ext: Math.round(Number(s.ext_price) || 0), hist: s.hist_price || s.unit_price || null, due: s.quote_due };
+          ext: Math.round(Number(s.ext_price) || 0), hist: s.hist_price || s.unit_price || null,
+          due: s.quote_due, respond_by: respondByStr(s.quote_due) || "" };
         if (/^31(1|2|3)0/.test(fsc)) lanes.bearing.push(line);
         else if (/^65/.test(fsc)) lanes.medical.push(line);
         else if (AERO.test(pn) && !/^(?:59|58|60|65|66|61)/.test(fsc)) lanes.fastener.push(line);

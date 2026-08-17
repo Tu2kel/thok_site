@@ -74,12 +74,14 @@ table.money tr:last-child td{border-bottom:none}
 .ask{font-size:13px;color:var(--dim);background:var(--surface-2);border-radius:8px;padding:9px 11px}
 .qparts{background:var(--surface-2);border-radius:8px;padding:9px 11px}
 .qlbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-2);font-weight:600;margin-bottom:6px}
-.qrow{display:flex;gap:8px;align-items:baseline;padding:3px 0;border-top:1px solid var(--border);font-size:12.5px}
+.qrow{padding:6px 0;border-top:1px solid var(--border)}
 .qrow:first-of-type{border-top:none}
-.qpn{font-family:var(--mono);color:var(--ink);font-weight:600;flex:1;min-width:0;word-break:break-word}
-.qqty{font-family:var(--mono);color:var(--dim);white-space:nowrap}
-.qhist{font-family:var(--mono);color:var(--s-quoted);white-space:nowrap;min-width:50px;text-align:right}
-.qext{font-family:var(--mono);color:var(--gold-2);font-weight:700;white-space:nowrap;min-width:62px;text-align:right}
+.qr1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.qr2{font-size:11px;color:var(--mute);font-family:var(--mono);margin-top:2px}
+.qpn{font-family:var(--mono);color:var(--ink);font-weight:600;font-size:13px;word-break:break-word}
+.qext{font-family:var(--mono);color:var(--gold-2);font-weight:700;white-space:nowrap}
+.qby{color:var(--s-tried);font-weight:600}
+.qopen{color:var(--dim)}
 .qnone{font-size:12px;color:var(--mute);background:var(--surface-2);border-radius:8px;padding:9px 11px}
 .pills{display:flex;flex-wrap:wrap;gap:6px}
 .pill{font-size:11.5px;border:1px solid var(--border-2);background:transparent;color:var(--dim);border-radius:7px;padding:5px 9px;cursor:pointer;font-weight:600;font-family:inherit;transition:.12s}
@@ -179,8 +181,8 @@ function groupOf(d){return d.program?"prog":(d.category==="industrial"?"ind":"ae
 function renderMoney(){
   const m=DATA.money||[];
   if(!m.length){document.getElementById("money").innerHTML='<span class="hint">No in-window AN/MS/NAS opportunities right now — refreshes each morning.</span>';return;}
-  document.getElementById("money").innerHTML='<table class="money"><thead><tr><th>Part #</th><th class="num">Qty</th><th class="ext" style="text-align:right">Ext $ (the fight)</th><th class="hist" style="text-align:right">hist/ea</th></tr></thead><tbody>'+
-    m.map(o=>'<tr><td class="pn">'+esc(o.part)+'</td><td class="num">'+Number(o.qty||0).toLocaleString()+' '+esc(o.ui||"")+'</td><td class="ext">'+(o.ext?'$'+Number(o.ext).toLocaleString():'—')+'</td><td class="hist">'+(o.hist?'$'+o.hist:'—')+'</td></tr>').join("")+'</tbody></table>';
+  document.getElementById("money").innerHTML='<table class="money"><thead><tr><th>Part #</th><th class="num">Qty</th><th class="ext" style="text-align:right">Ext $ (the fight)</th><th style="text-align:right">Respond by</th></tr></thead><tbody>'+
+    m.map(o=>'<tr><td class="pn">'+esc(o.part)+'</td><td class="num">'+Number(o.qty||0).toLocaleString()+' '+esc(o.ui||"")+'</td><td class="ext">'+(o.ext?'$'+Number(o.ext).toLocaleString():'—')+'</td><td style="text-align:right;font-family:var(--mono);font-weight:600" class="'+(o.respond_by?'qby':'qopen')+'">'+(o.respond_by||'open')+'</td></tr>').join("")+'</tbody></table>';
 }
 
 function renderBoard(){
@@ -201,7 +203,12 @@ function partsBlock(d){
   if(!p.length) return '<div class="qnone">No current '+lbl+' on the board — <b>open the account now</b> so they quote you the moment one hits.</div>';
   const tot=p.reduce((a,x)=>a+(x.ext||0),0);
   return '<div class="qparts"><div class="qlbl">Read them these '+lbl+' ('+p.length+' · $'+tot.toLocaleString()+' total)</div>'+
-    p.map(x=>'<div class="qrow"><span class="qpn">'+esc(x.part)+'</span><span class="qqty">'+Number(x.qty||0).toLocaleString()+' '+esc(x.ui||"")+'</span><span class="qext">'+(x.ext?'$'+Number(x.ext).toLocaleString():'—')+'</span><span class="qhist">'+(x.hist?'$'+x.hist:'—')+'</span></div>').join('')+'</div>';
+    p.map(x=>{
+      const by=x.respond_by?'by <span class="qby">'+esc(x.respond_by)+'</span>':'<span class="qopen">open (repost)</span>';
+      const hist=x.hist?' · hist $'+x.hist+'/ea':'';
+      return '<div class="qrow"><div class="qr1"><span class="qpn">'+esc(x.part)+'</span><span class="qext">'+(x.ext?'$'+Number(x.ext).toLocaleString():'—')+'</span></div>'+
+        '<div class="qr2">'+Number(x.qty||0).toLocaleString()+' '+esc(x.ui||"")+hist+' · '+by+'</div></div>';
+    }).join('')+'</div>';
 }
 function card(d){
   const el=document.createElement("div");el.className="card";
