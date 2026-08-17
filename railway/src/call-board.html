@@ -51,6 +51,7 @@ table.money tr:last-child td{border-bottom:none}
 .pn{font-family:var(--mono);color:var(--ink);font-weight:600}
 .num{font-family:var(--mono);text-align:right;color:var(--dim)}
 .hist{font-family:var(--mono);text-align:right;color:var(--s-quoted);font-weight:600}
+.ext{font-family:var(--mono);text-align:right;color:var(--gold-2);font-weight:700;white-space:nowrap}
 
 .tier{margin:24px 0 11px;display:flex;align-items:baseline;gap:10px}
 .tier h2{font-size:14px;margin:0}
@@ -78,6 +79,7 @@ table.money tr:last-child td{border-bottom:none}
 .qpn{font-family:var(--mono);color:var(--ink);font-weight:600;flex:1;min-width:0;word-break:break-word}
 .qqty{font-family:var(--mono);color:var(--dim);white-space:nowrap}
 .qhist{font-family:var(--mono);color:var(--s-quoted);white-space:nowrap;min-width:50px;text-align:right}
+.qext{font-family:var(--mono);color:var(--gold-2);font-weight:700;white-space:nowrap;min-width:62px;text-align:right}
 .qnone{font-size:12px;color:var(--mute);background:var(--surface-2);border-radius:8px;padding:9px 11px}
 .pills{display:flex;flex-wrap:wrap;gap:6px}
 .pill{font-size:11.5px;border:1px solid var(--border-2);background:transparent;color:var(--dim);border-radius:7px;padding:5px 9px;cursor:pointer;font-weight:600;font-family:inherit;transition:.12s}
@@ -177,8 +179,8 @@ function groupOf(d){return d.program?"prog":(d.category==="industrial"?"ind":"ae
 function renderMoney(){
   const m=DATA.money||[];
   if(!m.length){document.getElementById("money").innerHTML='<span class="hint">No in-window AN/MS/NAS opportunities right now — refreshes each morning.</span>';return;}
-  document.getElementById("money").innerHTML='<table class="money"><thead><tr><th>Part #</th><th>Item</th><th class="num">Qty</th><th class="hist" style="text-align:right">hist/ea</th></tr></thead><tbody>'+
-    m.map(o=>'<tr><td class="pn">'+esc(o.part)+'</td><td>'+esc((o.item||"").slice(0,20))+(o.due?' · '+esc(o.due):'')+'</td><td class="num">'+Number(o.qty||0).toLocaleString()+' '+esc(o.ui||"")+'</td><td class="hist">'+(o.hist?'$'+o.hist:'—')+'</td></tr>').join("")+'</tbody></table>';
+  document.getElementById("money").innerHTML='<table class="money"><thead><tr><th>Part #</th><th class="num">Qty</th><th class="ext" style="text-align:right">Ext $ (the fight)</th><th class="hist" style="text-align:right">hist/ea</th></tr></thead><tbody>'+
+    m.map(o=>'<tr><td class="pn">'+esc(o.part)+'</td><td class="num">'+Number(o.qty||0).toLocaleString()+' '+esc(o.ui||"")+'</td><td class="ext">'+(o.ext?'$'+Number(o.ext).toLocaleString():'—')+'</td><td class="hist">'+(o.hist?'$'+o.hist:'—')+'</td></tr>').join("")+'</tbody></table>';
 }
 
 function renderBoard(){
@@ -197,8 +199,9 @@ function partsBlock(d){
   const p=d.parts||[];
   const lbl={fastener:"AN/MS/NAS fasteners",bearing:"bearings",medical:"medical items",industrial:"hardware"}[d.lane]||"parts";
   if(!p.length) return '<div class="qnone">No current '+lbl+' on the board — <b>open the account now</b> so they quote you the moment one hits.</div>';
-  return '<div class="qparts"><div class="qlbl">Read them these '+lbl+' ('+p.length+')</div>'+
-    p.map(x=>'<div class="qrow"><span class="qpn">'+esc(x.part)+'</span><span class="qqty">'+Number(x.qty||0).toLocaleString()+' '+esc(x.ui||"")+'</span><span class="qhist">'+(x.hist?'$'+x.hist:'—')+'</span></div>').join('')+'</div>';
+  const tot=p.reduce((a,x)=>a+(x.ext||0),0);
+  return '<div class="qparts"><div class="qlbl">Read them these '+lbl+' ('+p.length+' · $'+tot.toLocaleString()+' total)</div>'+
+    p.map(x=>'<div class="qrow"><span class="qpn">'+esc(x.part)+'</span><span class="qqty">'+Number(x.qty||0).toLocaleString()+' '+esc(x.ui||"")+'</span><span class="qext">'+(x.ext?'$'+Number(x.ext).toLocaleString():'—')+'</span><span class="qhist">'+(x.hist?'$'+x.hist:'—')+'</span></div>').join('')+'</div>';
 }
 function card(d){
   const el=document.createElement("div");el.className="card";
