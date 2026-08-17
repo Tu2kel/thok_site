@@ -1570,28 +1570,44 @@ const httpServer = http.createServer((req, res) => {
         .project({ sol_number: 1, item_name: 1, ref_part_number: 1, quantity: 1, unit_of_issue: 1, ext_price: 1, hist_price: 1, unit_price: 1, quote_due: 1, fsc: 1 }).toArray();
       const AERO = /^(?:NASM|NAS|NSA|AN|MS|MIL|AS|DIN)[\d-]|^BAC[A-Z]?\d/i;
       const inWin = s => { const d = daysUntilDue(s.quote_due); return d === null || d >= MIN_DAYS; };
-      // Bucket in-window, complete sols into part-type lanes so each distributor
-      // shows the SPECIFIC parts to read them on the phone (not a generic pitch).
+      // Route by PART TYPE (FSC), not just the AN/MS/NAS prefix — a pulley (30xx)
+      // or check-valve (48xx) has an MS number but ISN'T a fastener. `type` labels
+      // each part so its category is visible, and keeps non-fasteners off the
+      // fastener distributor cards.
+      const typeOf = (fsc, pn) => {
+        if (/^53/.test(fsc)) return AERO.test(pn) ? "fastener" : "hardware";
+        if (/^31[123]0/.test(fsc)) return "bearing";
+        if (/^30[1234]0/.test(fsc)) return "power transmission";
+        if (/^48/.test(fsc)) return "valve/hydraulic";
+        if (/^59|^58/.test(fsc)) return "electrical";
+        if (/^65/.test(fsc)) return "medical";
+        return "other";
+      };
       const lanes = { fastener: [], bearing: [], medical: [], industrial: [] };
+      const allOpps = [];
       for (const s of sols) {
-        // For a phone call, P/N + qty is enough (UI shown when present).
         if (!(String(s.ref_part_number || "").trim() && String(s.quantity || "").trim() && inWin(s))) continue;
         const fsc = String(s.fsc || "").trim(), pn = String(s.ref_part_number).trim().toUpperCase();
-        const line = { part: s.ref_part_number, item: s.item_name, qty: s.quantity, ui: s.unit_of_issue, nsn: s.nsn,
+        const type = typeOf(fsc, pn);
+        const line = { part: s.ref_part_number, item: s.item_name, type, fsc, qty: s.quantity, ui: s.unit_of_issue, nsn: s.nsn,
           ext: Math.round(Number(s.ext_price) || 0), hist: s.hist_price || s.unit_price || null,
           due: s.quote_due, respond_by: respondByStr(s.quote_due) || "" };
-        if (/^31(1|2|3)0/.test(fsc)) lanes.bearing.push(line);
-        else if (/^65/.test(fsc)) lanes.medical.push(line);
-        else if (AERO.test(pn) && !/^(?:59|58|60|65|66|61)/.test(fsc)) lanes.fastener.push(line);
-        else if (/^(?:5305|5306|5307|5310|5315|5320|5325|5330|5331|5335|5340|5342|5365)/.test(fsc)) lanes.industrial.push(line);
+        allOpps.push(line);
+        if (type === "fastener") lanes.fastener.push(line);
+        else if (type === "hardware") lanes.industrial.push(line);
+        else if (type === "bearing" || type === "power transmission") lanes.bearing.push(line);
+        else if (type === "medical") lanes.medical.push(line);
+        // valve/hydraulic, electrical, other → money list only (no matching distributor on the board yet)
       }
-      for (const k of Object.keys(lanes)) {
-        // dated sols first (real deadline beats a repost copy), then by $; dedupe by part #
-        lanes[k].sort((a, b) => (b.respond_by ? 1 : 0) - (a.respond_by ? 1 : 0) || b.ext - a.ext);
+      const dedupeSort = arr => {
+        arr.sort((a, b) => (b.respond_by ? 1 : 0) - (a.respond_by ? 1 : 0) || b.ext - a.ext); // dated copy wins
         const seen = new Set();
-        lanes[k] = lanes[k].filter(x => { const key = (x.part || "").trim().toUpperCase(); if (!key || seen.has(key)) return false; seen.add(key); return true; });
-        lanes[k].sort((a, b) => b.ext - a.ext); // final display order = biggest $ first
-      }
+        const out = arr.filter(x => { const key = (x.part || "").trim().toUpperCase(); if (!key || seen.has(key)) return false; seen.add(key); return true; });
+        out.sort((a, b) => b.ext - a.ext); // display biggest-$ first
+        return out;
+      };
+      for (const k of Object.keys(lanes)) lanes[k] = dedupeSort(lanes[k]);
+      const money = dedupeSort(allOpps).slice(0, 14);
       const laneOf = d => {
         const t = (d.name + " " + (d.ask || "")).toLowerCase();
         if (/bearing|nhbb|rbc|rexnord/.test(t)) return "bearing";
@@ -1603,7 +1619,7 @@ const httpServer = http.createServer((req, res) => {
         distributors: dists.map(d => { const ln = laneOf(d); return { email: d.email || "", name: d.name, phone: d.phone || "", contact: d.contact || "",
           category: d.category, program: !!d.program, ask: d.ask || "", lane: ln, parts: lanes[ln].slice(0, 8),
           call_status: d.call_status || "none", call_note: d.call_note || "", call_updated: d.call_updated || null }; }),
-        money: lanes.fastener.slice(0, 12) }, null, 2));
+        money }, null, 2));
     }).catch(e => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
