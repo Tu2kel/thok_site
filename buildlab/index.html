@@ -54347,6 +54347,12 @@ No matching component was found for:
             errS = Ts.useState(null), error = errS[0], setError = errS[1],
             facingS = Ts.useState("environment"), facing = facingS[0], setFacing = facingS[1],
             busyS = Ts.useState(false), busy = busyS[0], setBusy = busyS[1],
+            camerasS = Ts.useState(0), cameras = camerasS[0], setCameras = camerasS[1],
+            // The stream lives in state, not just a ref. Flipping keeps mode
+            // at "live", so an effect keyed on mode alone never re-runs and
+            // the <video> stays bound to the stream we just stopped -- which
+            // looks exactly like "flip works once and never comes back".
+            streamS = Ts.useState(null), stream = streamS[0], setStream = streamS[1],
             videoRef = Ts.useRef(null),
             streamRef = Ts.useRef(null),
             objectUrlRef = Ts.useRef(null),
@@ -54366,6 +54372,7 @@ No matching component was found for:
                 streamRef.current.getTracks().forEach(function (t) { t.stop(); });
                 streamRef.current = null;
             }
+            setStream(null);
         }
 
         // Tear the stream down when the component goes away -- a camera left
@@ -54374,14 +54381,16 @@ No matching component was found for:
             return function () { stopStream(); releaseUrl(); };
         }, []);
 
-        // The <video> only exists once we are in live mode, so attach then.
+        // The <video> only exists once we are in live mode, so attach then --
+        // and again whenever the stream itself is swapped, which is what a
+        // flip does.
         Ts.useEffect(function () {
             var v = videoRef.current;
-            if (mode !== "live" || !v || !streamRef.current) return;
-            if (v.srcObject !== streamRef.current) v.srcObject = streamRef.current;
+            if (mode !== "live" || !v || !stream) return;
+            if (v.srcObject !== stream) v.srcObject = stream;
             var p = v.play();
             if (p && p.catch) p.catch(function () { /* autoplay guard; the tap already primed it */ });
-        }, [mode]);
+        }, [mode, stream]);
 
         function start(which) {
             var want = which || facing;
@@ -54392,16 +54401,32 @@ No matching component was found for:
             navigator.mediaDevices.getUserMedia({
                 video: { facingMode: { ideal: want }, width: { ideal: 1920 }, height: { ideal: 1080 } },
                 audio: false
-            }).then(function (stream) {
-                streamRef.current = stream;
-                setFacing(want);
+            }).then(function (s) {
+                streamRef.current = s;
+                setStream(s);
+                // A device may quietly hand back the camera it already had.
+                // Read what we actually got so the mirroring matches reality.
+                var track = s.getVideoTracks()[0],
+                    got = track && track.getSettings && track.getSettings().facingMode;
+                setFacing(got === "user" || got === "environment" ? got : want);
                 releaseUrl();
                 setSrc(null);
                 setMode("live");
                 setBusy(false);
                 if (changed.current) changed.current();
+                // Now that permission is granted the device list carries labels,
+                // so we can tell whether flipping is even possible.
+                if (navigator.mediaDevices.enumerateDevices)
+                    navigator.mediaDevices.enumerateDevices().then(function (list) {
+                        setCameras(list.filter(function (d) { return d.kind === "videoinput"; }).length);
+                    }).catch(function () {});
             }).catch(function (e) {
                 setBusy(false);
+                // The old stream is already stopped, so do not sit on a dead
+                // black frame -- drop back to the start screen with the reason.
+                streamRef.current = null;
+                setStream(null);
+                setMode("idle");
                 var name = e && e.name;
                 var framed = false;
                 try { framed = window.self !== window.top; } catch (_) { framed = true; }
@@ -54449,7 +54474,7 @@ No matching component was found for:
             }
         }
 
-        function flip() { start(facing === "environment" ? "user" : "environment"); }
+        function flip() { start(facing === "user" ? "environment" : "user"); }
 
         function useFile(file) {
             if (!file) return;
@@ -54472,6 +54497,7 @@ No matching component was found for:
 
         return {
             mode: mode, src: src, error: error, busy: busy, facing: facing,
+            cameras: cameras, canFlip: cameras !== 1,
             support: support, videoRef: videoRef,
             ready: mode !== "idle",
             live: mode === "live",
@@ -54507,7 +54533,14 @@ No matching component was found for:
                 cam.live
                     ? Fx_Jx(W.Fragment, { children: [
                         Fx_J("button", { className: "cam-shutter", onClick: cam.freeze, children: "FREEZE FRAME" }),
-                        Fx_J("button", { onClick: cam.flip, children: "FLIP CAMERA" })
+                        Fx_J("button", {
+                            onClick: cam.flip,
+                            disabled: cam.busy || !cam.canFlip,
+                            title: cam.canFlip ? "" : "This device only has one camera",
+                            children: cam.busy
+                                ? "SWITCHING…"
+                                : (cam.facing === "user" ? "USE BACK CAMERA" : "USE FRONT CAMERA")
+                        })
                     ]})
                     : Fx_Jx(W.Fragment, { children: [
                         Fx_J("button", {
@@ -54528,7 +54561,8 @@ No matching component was found for:
                 Fx_J("span", {
                     className: "cam-state",
                     children: cam.live
-                        ? "LIVE — freeze the frame before you measure"
+                        ? (cam.facing === "user" ? "LIVE · FRONT — freeze the frame before you measure"
+                                                 : "LIVE · BACK — freeze the frame before you measure")
                         : cam.mode === "still" ? "HELD FRAME — safe to calibrate and place" : ""
                 })
             ]
