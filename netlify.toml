@@ -33,3 +33,17 @@
 # Schedule removed 2026-07-16 — same reason as gmail-ingest above.
 [functions."navigator-ingest"]
   timeout = 900
+
+# Jobsite Build Lab is an unlisted product prototype, reachable only from the
+# hidden trigger on thok.html. Keep it out of search results -- crawling stays
+# allowed on purpose, because a robots.txt Disallow would stop crawlers from
+# ever reading this directive.
+[[headers]]
+  for = "/buildlab/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/buildlab/"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

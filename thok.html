@@ -158,6 +158,7 @@ Built on a foundation of military precision and strategic leadership, The House 
         <article class="venture-card">
           <div class="v-icon-col">
             <img
+              id="digital-icon"
               class="icon-wide"
               src="./images/newest_castle.png"
               alt="THOK digital tools and contracting automation software"
@@ -350,18 +351,6 @@ Built on a foundation of military precision and strategic leadership, The House 
           >
         </a>
 
-        <a href="./buildlab/" class="nav-btn">
-          <span class="c tl"></span><span class="c tr"></span>
-          <span class="c bl"></span><span class="c br"></span>
-          <span class="btn-icon"
-            ><img src="./images/buildlab.svg" alt=""
-          /></span>
-          <span class="btn-label">Jobsite Build Lab</span>
-          <span class="btn-desc"
-            >Framing Simulator — Built to the 2024 IRC &amp; IBC</span
-          >
-        </a>
-
         <a href="mailto:info@imperiovita.co" class="nav-btn">
           <span class="c tl"></span><span class="c tr"></span>
           <span class="c bl"></span><span class="c br"></span>
@@ -467,6 +456,23 @@ Built on a foundation of military precision and strategic leadership, The House 
           if (_t >= 3) {
             _t = 0;
             window.open("https://levram-studios-pro-production.up.railway.app", "_blank");
+            return;
+          }
+          _tm = setTimeout(() => (_t = 0), 1500);
+        });
+      })();
+
+      (function () {
+        let _t = 0, _tm;
+        const digital = document.getElementById("digital-icon");
+        if (!digital) return;
+        digital.style.cursor = "pointer";
+        digital.addEventListener("click", function () {
+          _t++;
+          clearTimeout(_tm);
+          if (_t >= 3) {
+            _t = 0;
+            window.open("https://thehouseofkel.com/buildlab/", "_blank");
             return;
           }
           _tm = setTimeout(() => (_t = 0), 1500);
