@@ -153,6 +153,44 @@
 }
 .guided-stage>.layout-panel{grid-column:1;margin-top:0}
 @media (max-width:1100px){.guided-stage>.layout-panel{grid-column:1}}
+/* --- live camera --- */
+/* contain, to match the still image exactly -- a frozen frame and the live
+   feed must map a point to the same pixel or the calibrated scale is a lie */
+.cam-live{object-fit:contain;pointer-events:none;display:block;width:100%;height:100%;background:#070907}
+.cam-live.mirrored{transform:scaleX(-1)}
+.photo-fit-stage>.cam-live{min-height:280px;max-height:620px}
+.landscape-photo>.cam-live{height:100%}
+.landscape-photo-stage{display:grid}
+.landscape-photo-stage>.landscape-photo,.landscape-photo-stage>.landscape-empty{height:100%;min-height:0}
+.cam-bar{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.cam-bar button,.cam-empty-actions button,.cam-file{color:#dfe6dc;background:#141a12;border:1px solid #ffffff24;border-radius:.35rem;padding:.55rem .7rem;font:900 .62rem ui-monospace;letter-spacing:.05em;cursor:pointer;white-space:nowrap;line-height:1.1}
+.cam-bar button:hover,.cam-empty-actions button:hover,.cam-file:hover{border-color:#e9a329;color:#ffc65c}
+.cam-bar button:disabled,.cam-empty-actions button:disabled{opacity:.55;cursor:default}
+.cam-shutter{color:#10130f!important;background:#e99b19!important;border-color:#e99b19!important}
+.cam-shutter:hover{background:#ffb43a!important}
+.cam-file{display:inline-flex;align-items:center}
+.cam-file input{display:none}
+.cam-state{color:#8f9a8a;font:700 .58rem ui-monospace;letter-spacing:.04em}
+.cam-empty{display:grid;justify-items:center;align-content:center;gap:.55rem;text-align:center;padding:1.2rem .9rem}
+.cam-empty b{color:#f7f1e5;font-size:1.05rem}
+.cam-empty>span{color:#7e897c;max-width:44ch;font-size:.72rem;line-height:1.45}
+.cam-empty-actions{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.2rem}
+.cam-error{color:#f0b4ac;background:#1c1210;border:1px solid #d2564a55;border-radius:.35rem;padding:.5rem .6rem;max-width:46ch;font-size:.68rem;line-height:1.4}
+.photo-fit-empty,.landscape-empty{cursor:default}
+.photo-fit-empty{display:grid;place-items:center}
+.landscape-empty{display:grid;place-items:center}
+/* On a phone the viewfinder was buried under the setback form — put the
+   picture directly under the controls you use while pointing the camera. */
+@media (max-width:760px){
+  .photo-fit{display:flex;flex-direction:column}
+  .photo-fit>header{order:0}
+  .photo-fit-stage,.photo-fit-empty{order:1;margin-top:.65rem}
+  .photo-fit-toolbar{order:2}
+  .setback-controls{order:3}
+  .photo-fit>footer{order:4}
+  .cam-bar{width:100%}
+  .cam-state{flex-basis:100%}
+}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -54273,6 +54311,265 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // LIVE CAMERA
+    // ---------------------------------------------------------------------
+    // A real viewfinder, not a file picker: getUserMedia into a <video>, with
+    // the project overlay drawn on top of the moving picture.
+    //
+    // Honest about what it is. Nothing here tracks the world -- the overlay is
+    // anchored to the screen, not to the ground -- so the scale you calibrate
+    // is only true for the framing you calibrated it in. FREEZE grabs the
+    // current frame so you can measure and place against something that holds
+    // still, then GO LIVE to re-frame. Uploading a photo still works, and is
+    // the fallback wherever the camera is unavailable.
+    //
+    // getUserMedia needs a secure context: it works on https://, and on
+    // localhost, but never on a file:// copy of this page.
+    // =====================================================================
+    function Fx_cameraSupport() {
+        if (typeof navigator === "undefined" || !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia) {
+            var secure = typeof window !== "undefined" && window.isSecureContext;
+            return {
+                ok: false,
+                reason: secure
+                    ? "This browser does not offer camera access to web pages."
+                    : "The camera only works over https. Open the hosted page instead of a downloaded copy of the file."
+            };
+        }
+        return { ok: true, reason: null };
+    }
+
+    function Fx_useCamera(onSourceChange) {
+        var support = Ts.useMemo(Fx_cameraSupport, []),
+            modeS = Ts.useState("idle"), mode = modeS[0], setMode = modeS[1],
+            srcS = Ts.useState(null), src = srcS[0], setSrc = srcS[1],
+            errS = Ts.useState(null), error = errS[0], setError = errS[1],
+            facingS = Ts.useState("environment"), facing = facingS[0], setFacing = facingS[1],
+            busyS = Ts.useState(false), busy = busyS[0], setBusy = busyS[1],
+            videoRef = Ts.useRef(null),
+            streamRef = Ts.useRef(null),
+            objectUrlRef = Ts.useRef(null),
+            changed = Ts.useRef(onSourceChange);
+
+        changed.current = onSourceChange;
+
+        function releaseUrl() {
+            if (objectUrlRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
+                objectUrlRef.current = null;
+            }
+        }
+
+        function stopStream() {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(function (t) { t.stop(); });
+                streamRef.current = null;
+            }
+        }
+
+        // Tear the stream down when the component goes away -- a camera left
+        // running is a light left on.
+        Ts.useEffect(function () {
+            return function () { stopStream(); releaseUrl(); };
+        }, []);
+
+        // The <video> only exists once we are in live mode, so attach then.
+        Ts.useEffect(function () {
+            var v = videoRef.current;
+            if (mode !== "live" || !v || !streamRef.current) return;
+            if (v.srcObject !== streamRef.current) v.srcObject = streamRef.current;
+            var p = v.play();
+            if (p && p.catch) p.catch(function () { /* autoplay guard; the tap already primed it */ });
+        }, [mode]);
+
+        function start(which) {
+            var want = which || facing;
+            if (!support.ok) { setError(support.reason); return; }
+            setBusy(true);
+            setError(null);
+            stopStream();
+            navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: want }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                audio: false
+            }).then(function (stream) {
+                streamRef.current = stream;
+                setFacing(want);
+                releaseUrl();
+                setSrc(null);
+                setMode("live");
+                setBusy(false);
+                if (changed.current) changed.current();
+            }).catch(function (e) {
+                setBusy(false);
+                var name = e && e.name;
+                var framed = false;
+                try { framed = window.self !== window.top; } catch (_) { framed = true; }
+                setError(
+                    name === "NotAllowedError" || name === "SecurityError"
+                        ? (framed
+                            ? "Camera blocked. This page is embedded in another one, which is not allowed to hand over the camera — open it in its own tab and try again."
+                            : "Camera blocked. Allow camera access for this site in your browser settings, then tap Start camera again.")
+                    : name === "NotFoundError" || name === "OverconstrainedError"
+                        ? "No camera found on this device. Choose a photo instead."
+                    : name === "NotReadableError"
+                        ? "Another app is using the camera. Close it and try again."
+                    : "Could not start the camera. Choose a photo instead."
+                );
+            });
+        }
+
+        // Grab the frame on screen so measurements have something that holds still.
+        function freeze() {
+            var v = videoRef.current;
+            if (!v || !v.videoWidth) return;
+            var c = document.createElement("canvas");
+            c.width = v.videoWidth;
+            c.height = v.videoHeight;
+            var ctx = c.getContext("2d");
+            if (facing === "user") { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+            ctx.drawImage(v, 0, 0, c.width, c.height);
+            releaseUrl();
+            setSrc(c.toDataURL("image/jpeg", 0.92));
+            setMode("still");
+            if (changed.current) changed.current();
+        }
+
+        // Returning to the moving picture keeps whatever was calibrated: it is
+        // the same camera at the same framing, so the scale still holds. Only a
+        // NEW source (a fresh freeze, a chosen file, a restarted camera) throws
+        // the calibration away.
+        function goLive() {
+            if (streamRef.current && streamRef.current.getTracks().some(function (t) { return t.readyState === "live"; })) {
+                releaseUrl();
+                setSrc(null);
+                setMode("live");
+            } else {
+                start(facing);
+            }
+        }
+
+        function flip() { start(facing === "environment" ? "user" : "environment"); }
+
+        function useFile(file) {
+            if (!file) return;
+            stopStream();
+            releaseUrl();
+            objectUrlRef.current = URL.createObjectURL(file);
+            setSrc(objectUrlRef.current);
+            setMode("still");
+            setError(null);
+            if (changed.current) changed.current();
+        }
+
+        function reset() {
+            stopStream();
+            releaseUrl();
+            setSrc(null);
+            setMode("idle");
+            if (changed.current) changed.current();
+        }
+
+        return {
+            mode: mode, src: src, error: error, busy: busy, facing: facing,
+            support: support, videoRef: videoRef,
+            ready: mode !== "idle",
+            live: mode === "live",
+            start: start, freeze: freeze, goLive: goLive, flip: flip,
+            useFile: useFile, reset: reset
+        };
+    }
+
+    // ---- the picture itself: moving or held ------------------------------
+    function Fx_CameraSurface(props) {
+        var cam = props.cam;
+        if (cam.mode === "live")
+            return Fx_J("video", {
+                ref: cam.videoRef,
+                className: "cam-live" + (cam.facing === "user" ? " mirrored" : ""),
+                autoPlay: true,
+                playsInline: true,
+                muted: true,
+                "aria-label": "Live camera view of the build area"
+            });
+        return Fx_J("img", { src: cam.src, alt: props.alt || "Build area" });
+    }
+
+    // ---- viewfinder controls --------------------------------------------
+    function Fx_CameraBar(props) {
+        var cam = props.cam;
+        // Nothing running yet: the empty state already offers both actions,
+        // and two sets of the same buttons is just noise.
+        if (!cam.ready) return null;
+        return Fx_Jx("div", {
+            className: "cam-bar",
+            children: [
+                cam.live
+                    ? Fx_Jx(W.Fragment, { children: [
+                        Fx_J("button", { className: "cam-shutter", onClick: cam.freeze, children: "FREEZE FRAME" }),
+                        Fx_J("button", { onClick: cam.flip, children: "FLIP CAMERA" })
+                    ]})
+                    : Fx_Jx(W.Fragment, { children: [
+                        Fx_J("button", {
+                            className: "cam-shutter",
+                            onClick: function () { cam.goLive(); },
+                            disabled: cam.busy || !cam.support.ok,
+                            children: cam.busy ? "STARTING…" : "GO LIVE"
+                        }),
+                        Fx_Jx("label", { className: "cam-file", children: [
+                            "USE A PHOTO",
+                            Fx_J("input", {
+                                type: "file", accept: "image/*",
+                                onChange: function (e) { cam.useFile(e.target.files && e.target.files[0]); }
+                            })
+                        ]}),
+                        Fx_J("button", { onClick: cam.reset, children: "CLEAR" })
+                    ]}),
+                Fx_J("span", {
+                    className: "cam-state",
+                    children: cam.live
+                        ? "LIVE — freeze the frame before you measure"
+                        : cam.mode === "still" ? "HELD FRAME — safe to calibrate and place" : ""
+                })
+            ]
+        });
+    }
+
+    // ---- nothing running yet ---------------------------------------------
+    function Fx_CameraEmpty(props) {
+        var cam = props.cam;
+        return Fx_Jx("div", {
+            className: "cam-empty",
+            children: [
+                Fx_J("b", { children: props.title }),
+                Fx_J("span", { children: props.hint }),
+                Fx_Jx("div", {
+                    className: "cam-empty-actions",
+                    children: [
+                        Fx_J("button", {
+                            className: "cam-shutter",
+                            onClick: function () { cam.start(); },
+                            disabled: cam.busy || !cam.support.ok,
+                            children: cam.busy ? "STARTING…" : "START CAMERA"
+                        }),
+                        Fx_Jx("label", { className: "cam-file", children: [
+                            "CHOOSE A PHOTO",
+                            Fx_J("input", {
+                                type: "file", accept: "image/*", capture: "environment",
+                                onChange: function (e) { cam.useFile(e.target.files && e.target.files[0]); }
+                            })
+                        ]})
+                    ]
+                }),
+                cam.error ? Fx_J("p", { className: "cam-error", children: cam.error }) : null,
+                !cam.support.ok && !cam.error
+                    ? Fx_J("p", { className: "cam-error", children: cam.support.reason })
+                    : null
+            ]
+        });
+    }
+
+    // =====================================================================
     // PLATE LAYOUT PANEL
     // ---------------------------------------------------------------------
     // Enter the wall you are actually standing in front of. Everything below
@@ -54806,9 +55103,8 @@ No matching component was found for:
             left: 5,
             right: 5
         }), A = (0, Ni.useRef)(null);
-        (0, Ni.useEffect)(() => () => {
-            a && URL.revokeObjectURL(a)
-        }, [a]);
+        let cam = Fx_useCamera(() => o([]));
+        a = cam.src;
         let L = (0, Ni.useMemo)(() => {
                 if (r.length !== 2 || l <= 0) return 0;
                 let F = r[1].x - r[0].x,
@@ -54821,12 +55117,11 @@ No matching component was found for:
             D = Math.min(72, Math.max(24, v * L * .42));
 
         function O(F) {
-            let Y = F.target.files?.[0];
-            Y && (a && URL.revokeObjectURL(a), i(URL.createObjectURL(Y)), o([]))
+            cam.useFile(F.target.files?.[0])
         }
 
         function H(F) {
-            if (!a || r.length >= 2 || A.current) return;
+            if (!cam.ready || r.length >= 2 || A.current) return;
             let Y = F.currentTarget.getBoundingClientRect();
             o([...r, {
                 x: F.clientX - Y.left,
@@ -54864,15 +55159,10 @@ No matching component was found for:
                     }), (0, nt.jsx)("span", {
                         children: "Photograph the build area, mark one known distance, then position the scaled project."
                     })]
-                }), (0, nt.jsxs)("label", {
-                    children: [(0, nt.jsx)(Pf, {}), "UPLOAD SPACE PHOTO", (0, nt.jsx)("input", {
-                        type: "file",
-                        accept: "image/*",
-                        capture: "environment",
-                        onChange: O
-                    })]
+                }), (0, nt.jsx)(Fx_CameraBar, {
+                    cam: cam
                 })]
-            }), a ? (0, nt.jsxs)(nt.Fragment, {
+            }), cam.ready ? (0, nt.jsxs)(nt.Fragment, {
                 children: [(0, nt.jsxs)("div", {
                     className: "photo-fit-toolbar",
                     children: [(0, nt.jsx)("b", {
@@ -54988,9 +55278,9 @@ No matching component was found for:
                 }), (0, nt.jsxs)("div", {
                     className: "photo-fit-stage",
                     onPointerDown: H,
-                    children: [(0, nt.jsx)("img", {
-                        src: a,
-                        alt: "Uploaded project location"
+                    children: [(0, nt.jsx)(Fx_CameraSurface, {
+                        cam: cam,
+                        alt: "Build area"
                     }), r.map((F, Y) => (0, nt.jsx)("span", {
                         className: "calibration-point",
                         style: {
@@ -55066,18 +55356,13 @@ No matching component was found for:
                         })]
                     })]
                 })]
-            }) : (0, nt.jsxs)("label", {
+            }) : (0, nt.jsx)("div", {
                 className: "photo-fit-empty",
-                children: [(0, nt.jsx)(Af, {}), (0, nt.jsx)("b", {
-                    children: "Take or choose a photo of the build area"
-                }), (0, nt.jsx)("span", {
-                    children: "For the best scale, face the area squarely and include something you can measure."
-                }), (0, nt.jsx)("input", {
-                    type: "file",
-                    accept: "image/*",
-                    capture: "environment",
-                    onChange: O
-                })]
+                children: (0, nt.jsx)(Fx_CameraEmpty, {
+                    cam: cam,
+                    title: "Point the camera at the build area",
+                    hint: "Face the area squarely and keep something you can measure in shot — a door, a sheet of ply, a tape on the ground. Freeze the frame before you mark the two calibration points."
+                })
             }), (0, nt.jsx)("footer", {
                 children: "Setback values vary by address, zoning, easements and project type. The red overlay is a planning warning until the property-specific values are verified."
             })]
@@ -55109,13 +55394,12 @@ No matching component was found for:
             x: 50,
             y: 68
         }), [l, c] = (0, To.useState)(70), [f, h] = (0, To.useState)(18), [p, m] = (0, To.useState)(0), [g, x] = (0, To.useState)(88), _ = (0, To.useRef)(null);
-        (0, To.useEffect)(() => () => {
-            e && URL.revokeObjectURL(e)
-        }, [e]);
+        let cam = Fx_useCamera();
+        e = cam.src;
 
         function b(C) {
             let w = C.target.files?.[0];
-            w && (e && URL.revokeObjectURL(e), n(URL.createObjectURL(w)))
+            cam.useFile(w)
         }
 
         function v(C) {
@@ -55151,23 +55435,17 @@ No matching component was found for:
                     }), (0, kt.jsx)("p", {
                         children: "Use your current photo, then move and reshape the material overlay until it follows the area you want to change."
                     })]
-                }), (0, kt.jsxs)("label", {
-                    className: "landscape-upload",
-                    children: [(0, kt.jsx)(Pf, {}), " ", e ? "CHANGE PHOTO" : "ADD YARD PHOTO", (0, kt.jsx)("input", {
-                        type: "file",
-                        accept: "image/*",
-                        capture: "environment",
-                        onChange: b
-                    })]
+                }), (0, kt.jsx)(Fx_CameraBar, {
+                    cam: cam
                 })]
             }), (0, kt.jsxs)("div", {
                 className: "landscape-workspace",
                 children: [(0, kt.jsx)("main", {
                     className: "landscape-photo-stage",
-                    children: e ? (0, kt.jsxs)("div", {
+                    children: cam.ready ? (0, kt.jsxs)("div", {
                         className: "landscape-photo",
-                        children: [(0, kt.jsx)("img", {
-                            src: e,
+                        children: [(0, kt.jsx)(Fx_CameraSurface, {
+                            cam: cam,
                             alt: "Current landscaping area"
                         }), (0, kt.jsxs)("div", {
                             className: `landscape-brick-overlay ${a.className}`,
@@ -55188,18 +55466,13 @@ No matching component was found for:
                                 children: "DRAG MATERIAL"
                             })]
                         })]
-                    }) : (0, kt.jsxs)("label", {
+                    }) : (0, kt.jsx)("div", {
                         className: "landscape-empty",
-                        children: [(0, kt.jsx)(Af, {}), (0, kt.jsx)("b", {
-                            children: "Take or choose a photo of the current area"
-                        }), (0, kt.jsx)("span", {
-                            children: "Keep the bed edge, walkway, or border visible."
-                        }), (0, kt.jsx)("input", {
-                            type: "file",
-                            accept: "image/*",
-                            capture: "environment",
-                            onChange: b
-                        })]
+                        children: (0, kt.jsx)(Fx_CameraEmpty, {
+                            cam: cam,
+                            title: "Point the camera at the area you want to change",
+                            hint: "Keep the bed edge, walkway or border in shot. Freeze the frame when you want the material overlay to hold still."
+                        })
                     })
                 }), (0, kt.jsxs)("aside", {
                     className: "landscape-controls",
