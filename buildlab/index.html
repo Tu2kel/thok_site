@@ -106,20 +106,21 @@
 .lay-mark:after{content:"";width:1px;flex:1 1 auto;min-height:6px;background:currentColor}
 .lay-mark em{font:900 10px ui-monospace;font-style:normal;color:currentColor}
 .lay-mark s{font:700 8px ui-monospace;text-decoration:none;color:#8f9a8a;white-space:nowrap}
-.lay-mark.k-stud,.lay-mark.k-end{color:#ffb529}
-.lay-mark.k-king{color:#ff8f3d}
-.lay-mark.k-jack{color:#ffcf4a}
-.lay-mark.k-cripple{color:#7fd0ff}
-.lay-mark.k-cl,.lay-mark.k-ro{color:#59df8a}
+.lay-mark.k-stud,.lay-mark.k-end{color:#e0a53c}
+.lay-mark.k-king{color:#ff5f3c}
+.lay-mark.k-jack{color:#ffd23f}
+.lay-mark.k-cripple{color:#4fc3f7}
+.lay-mark.k-cl,.lay-mark.k-ro{color:#e9f0e4}
 .lay-mark.k-void{color:#7b8a7d}
 .lay-tape-note{color:#8f9a8a;font-size:.6rem;margin-top:.35rem}
 .lay-marks>b,.lay-issues>b,.lay-cuts>b{display:block;color:#f0ac37;letter-spacing:.08em;font-size:.58rem;margin-bottom:.35rem}
 .lay-marks ol{display:grid;gap:.18rem;list-style:none;max-height:260px;overflow-y:auto}
 .lay-marks li{display:grid;grid-template-columns:5.2rem 4.6rem 2.2rem 1fr;align-items:baseline;gap:.4rem;background:#131a12;border-left:3px solid #ffb529;border-radius:.25rem;padding:.28rem .4rem}
-.lay-marks li.k-king{border-left-color:#ff8f3d}
-.lay-marks li.k-jack{border-left-color:#ffcf4a}
-.lay-marks li.k-cripple{border-left-color:#7fd0ff}
-.lay-marks li.k-cl,.lay-marks li.k-ro{border-left-color:#59df8a}
+.lay-marks li{border-left-color:#e0a53c}
+.lay-marks li.k-king{border-left-color:#ff5f3c}
+.lay-marks li.k-jack{border-left-color:#ffd23f}
+.lay-marks li.k-cripple{border-left-color:#4fc3f7}
+.lay-marks li.k-cl,.lay-marks li.k-ro{border-left-color:#e9f0e4}
 .lay-marks li.k-void{border-left-color:#4d574f;opacity:.75}
 .lay-marks code{color:#ffe0a6;font:900 .72rem ui-monospace;font-variant-numeric:tabular-nums}
 .lay-marks u{color:#8f9a8a;text-decoration:none;font:700 .64rem ui-monospace}
@@ -139,14 +140,14 @@
 .plate-mark{display:grid;justify-items:center;gap:0;white-space:nowrap;background:#171207f2;border:1px solid #efb13f;border-radius:3px;padding:1px 3px;box-shadow:0 3px 10px #000a}
 .plate-mark b{font:900 10px ui-monospace;color:#ffd476}
 .plate-mark i{font:700 7.5px ui-monospace;font-style:normal;color:#c8b184}
-.plate-mark.king{border-color:#ff8f3d}.plate-mark.king b{color:#ffb37a}
-.plate-mark.jack{border-color:#ffcf4a}.plate-mark.jack b{color:#ffe08a}
-.plate-mark.cripple{border-color:#7fd0ff}.plate-mark.cripple b{color:#a8e2ff}
-.plate-mark.ref{border-color:#59df8a}.plate-mark.ref b{color:#8fe8b0}
+.plate-mark.king{border-color:#ff5f3c}.plate-mark.king b{color:#ff9270}
+.plate-mark.jack{border-color:#ffd23f}.plate-mark.jack b{color:#ffe488}
+.plate-mark.cripple{border-color:#4fc3f7}.plate-mark.cripple b{color:#9adcff}
+.plate-mark.ref{border-color:#e9f0e4}.plate-mark.ref b{color:#f4f8f1}
 .plate-mark.void{border-color:#4d574f}.plate-mark.void b{color:#8f9a8a}
 @media (max-width:760px){
   .lay-marks li{grid-template-columns:4.4rem 2rem 1fr;row-gap:.1rem}
-  .lay-marks u{display:none}
+  .lay-marks>ol>li>u{display:none}
   .lay-cuts li{grid-template-columns:2.8rem 1fr 4.4rem}
   .lay-cuts u{display:none}
   .lay-grid{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
@@ -191,6 +192,43 @@
   .cam-bar{width:100%}
   .cam-state{flex-basis:100%}
 }
+/* --- fasteners on every mark --- */
+.lay-marks li{grid-template-columns:5.2rem 4.6rem 2.2rem 1fr;row-gap:.3rem}
+.lay-drives{grid-column:1/-1;display:grid;gap:.3rem;margin-top:.1rem}
+.lay-drive{display:grid;grid-template-columns:auto 1fr;gap:.45rem;align-items:start;background:#0d120c;border:1px solid #ffffff10;border-radius:.28rem;padding:.35rem .45rem}
+.lay-dot{width:.6rem;height:.6rem;border-radius:50%;margin-top:.25rem;box-shadow:0 0 0 2px #0d120c,0 0 0 3px #ffffff22}
+.lay-drive>div{display:grid;gap:.12rem;min-width:0}
+.lay-drive b{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem}
+.lay-drive b>span{color:#ffe0a6;font:800 .72rem ui-monospace}
+.lay-drive b>u{color:#8f9a8a;text-decoration:none;font:700 .58rem ui-monospace;white-space:nowrap}
+.lay-drive-where{color:#a9b3a5;font-size:.64rem}
+.lay-drive-alt{color:#7f8f7a;font:600 .62rem ui-monospace}
+.lay-drive em{color:#c8b184;font-size:.62rem;line-height:1.35}
+/* --- colour key --- */
+.lay-key{background:#0d120c;border:1px solid #ffffff14;border-radius:.4rem;padding:.6rem}
+.lay-key>b{display:block;color:#f0ac37;letter-spacing:.08em;font-size:.58rem;margin-bottom:.4rem}
+.lay-key .lay-key-second{margin-top:.6rem}
+.lay-key ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.3rem .6rem}
+.lay-key li{display:grid;grid-template-columns:auto auto 1fr;align-items:baseline;gap:.4rem}
+.lay-key li i{width:.85rem;height:.85rem;border-radius:2px;align-self:center;box-shadow:0 0 0 1px #ffffff2b}
+.lay-key li b{color:#e9f0e4;font-size:.68rem;white-space:nowrap}
+.lay-key li span{color:#8f9a8a;font-size:.62rem}
+/* --- member-by-member schedule --- */
+.lay-schedule>b{display:block;color:#f0ac37;letter-spacing:.08em;font-size:.58rem;margin-bottom:.4rem}
+.lay-schedule>div{display:grid;gap:.45rem}
+.lay-schedule section{background:#131a12;border-radius:.35rem;padding:.45rem .5rem;display:grid;gap:.35rem}
+.lay-schedule section>header{display:flex;align-items:center;gap:.45rem}
+.lay-schedule section>header i{width:.85rem;height:.85rem;border-radius:2px;box-shadow:0 0 0 1px #ffffff2b}
+.lay-schedule section>header b{color:#e9f0e4;font:900 .68rem ui-monospace;letter-spacing:.04em}
+.lay-schedule section>div{display:grid;gap:.3rem}
+@media (max-width:760px){
+  .lay-marks li{grid-template-columns:4.4rem 2rem 1fr}
+  .lay-drive b>span{font-size:.68rem}
+  .lay-key ul{grid-template-columns:1fr}
+}
+.lay-key-nails li i{border-radius:50%;box-shadow:0 0 0 1px #ffffff33}
+.lay-key-nails li{align-items:center}
+.lay-dot{flex:0 0 auto;border-radius:50%}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -52385,18 +52423,26 @@ No matching component was found for:
     var Fx_MIN_BEARING = 1.5;      // IRC R602.7.5 / IBC 2308.5.5.1
     var Fx_PANEL_GAP = 0.125;      // 1/8" panel edge gap
 
+    // Diagram mode. The old palette was six shades of the same tan -- king vs
+    // sill measured dE 2.8, which reads as one colour. Every role you see in
+    // one wall now separates by at least dE 22 (the two plates stay close to
+    // each other on purpose, they are the same thing twice).
     var Fx_TONE = {
-        spf: "#c1934f",
-        lit: "#ffcf7d",
-        pt: "#8e9f6c",
-        king: "#d8a95d",
-        jack: "#cf9a46",
-        header: "#b8813f",
-        spacer: "#6d757a",
-        sill: "#cfa257",
-        cripple: "#b3874a",
-        rim: "#c59a5c",
-        joist: "#c1934f",
+        spf: "#e0a53c",
+        lit: "#fff3c4",
+        pt: "#8fbf5a",
+        king: "#ff5f3c",
+        jack: "#ffd23f",
+        header: "#e0384f",
+        spacer: "#9aa3a8",
+        sill: "#3fd48a",
+        cripple: "#4fc3f7",
+        plate: "#7f9ad6",
+        cap: "#5f7cc4",
+        rim: "#c97ad6",
+        joist: "#e0a53c",
+        rafter: "#a97ff0",
+        ridgeTone: "#7f5fd6",
         osb: "#c0a06d",
         concrete: "#9a9a94",
         steel: "#ced3d5",
@@ -52409,13 +52455,29 @@ No matching component was found for:
     };
 
     var Fx_KIND_TONE = {
-        plate: Fx_TONE.spf, ptplate: Fx_TONE.pt, stud: Fx_TONE.spf, king: Fx_TONE.king,
+        plate: Fx_TONE.plate, cap: Fx_TONE.cap, ptplate: Fx_TONE.pt, stud: Fx_TONE.spf, king: Fx_TONE.king,
         jack: Fx_TONE.jack, header: Fx_TONE.header, spacer: Fx_TONE.spacer,
         sill: Fx_TONE.sill, cripple: Fx_TONE.cripple, rim: Fx_TONE.rim,
         joist: Fx_TONE.joist, sheathing: Fx_TONE.osb, subfloor: Fx_TONE.osb,
-        concrete: Fx_TONE.concrete, steel: Fx_TONE.steel, rafter: Fx_TONE.spf,
-        ridge: Fx_TONE.rim, brace: Fx_TONE.brace, deck: Fx_TONE.osb
+        concrete: Fx_TONE.concrete, steel: Fx_TONE.steel, rafter: Fx_TONE.rafter,
+        ridge: Fx_TONE.ridgeTone, brace: Fx_TONE.brace, deck: Fx_TONE.osb
     };
+
+    // What each colour means, in the order you meet it building a wall.
+    var Fx_ROLE_KEY = [
+        { kind: "plate", tone: Fx_TONE.plate, name: "Plates", note: "bottom plate and top plate" },
+        { kind: "stud", tone: Fx_TONE.spf, name: "Common stud", note: "on the o.c. layout" },
+        { kind: "king", tone: Fx_TONE.king, name: "King stud", note: "full height, beside the opening" },
+        { kind: "jack", tone: Fx_TONE.jack, name: "Jack / trimmer", note: "carries the header" },
+        { kind: "header", tone: Fx_TONE.header, name: "Header", note: "spans the opening" },
+        { kind: "spacer", tone: Fx_TONE.spacer, name: "Header spacer", note: "1/2″ between the plies" },
+        { kind: "sill", tone: Fx_TONE.sill, name: "Rough sill", note: "sets the RO height" },
+        { kind: "cripple", tone: Fx_TONE.cripple, name: "Cripple", note: "over the header, under the sill" },
+        { kind: "ptplate", tone: Fx_TONE.pt, name: "PT sill plate", note: "wood on concrete — IRC R317.1" },
+        { kind: "joist", tone: Fx_TONE.joist, name: "Joists", note: "floor framing" },
+        { kind: "rim", tone: Fx_TONE.rim, name: "Rim board", note: "closes the joist ends" },
+        { kind: "rafter", tone: Fx_TONE.rafter, name: "Rafters", note: "roof framing" }
+    ];
 
     // ---- inch formatting to the nearest 1/16" ---------------------------
     function Fx_inFmt(v) {
@@ -52531,8 +52593,8 @@ No matching component was found for:
         });
         put("plate", 1, runStart, L, 0, plateB, undefined, undefined, { name: "BOTTOM PLATE" });
         for (var p = 0; p < topPlies; p++)
-            put("plate", 1, 0, L, studTop + p * S.t, studTop + (p + 1) * S.t, undefined, undefined,
-                { name: p === 0 ? "TOP PLATE" : "DOUBLE TOP PLATE (CAP)" });
+            put(p === 0 ? "plate" : "cap", 1, 0, L, studTop + p * S.t, studTop + (p + 1) * S.t,
+                undefined, undefined, { name: p === 0 ? "TOP PLATE" : "DOUBLE TOP PLATE (CAP)" });
 
         // ---- layout: first stud edge at oc - t/2 so its CENTRE lands on oc
         var layout = [];
@@ -53096,24 +53158,24 @@ No matching component was found for:
     // ---- cut list, straight off the members ------------------------------
     function Fx_cutList(w) {
         var NAMES = {
-            plate: "Plate", stud: "Common stud", king: "King stud", jack: "Jack stud",
+            plate: "Plate", cap: "Plate", stud: "Common stud", king: "King stud", jack: "Jack stud",
             header: "Header ply", spacer: "Header spacer", sill: "Rough sill", cripple: "Cripple"
         };
         var rows = {};
         w.members.forEach(function (m) {
             var b = m.box,
-                len = m.kind === "plate" ? b.x1 - b.x0
+                len = (m.kind === "plate" || m.kind === "cap") ? b.x1 - b.x0
                     : (m.kind === "header" || m.kind === "spacer" || m.kind === "sill") ? b.x1 - b.x0
                     : b.y1 - b.y0,
                 key = m.kind + "|" + len.toFixed(3);
-            var name = m.kind === "plate" && m.name
+            var name = (m.kind === "plate" || m.kind === "cap") && m.name
                     ? m.name.charAt(0) + m.name.slice(1).toLowerCase()
                     : (NAMES[m.kind] || m.kind);
             key = m.kind + "|" + name + "|" + len.toFixed(3);
             if (!rows[key]) rows[key] = { kind: m.kind, name: name, len: len, qty: 0 };
             rows[key].qty++;
         });
-        var order = ["plate", "stud", "king", "jack", "header", "spacer", "sill", "cripple"];
+        var order = ["plate", "cap", "stud", "king", "jack", "header", "spacer", "sill", "cripple"];
         return Object.keys(rows).map(function (k) { return rows[k]; })
             .sort(function (p, q) {
                 return order.indexOf(p.kind) - order.indexOf(q.kind) || q.len - p.len;
@@ -53135,6 +53197,239 @@ No matching component was found for:
             out.push(r);
         });
         return out;
+    }
+
+    // =====================================================================
+    // FASTENER SCHEDULE, PER JOINT
+    // ---------------------------------------------------------------------
+    // A step is not one fastener. "Assemble and nail the wall" makes six
+    // different connections, and IRC Table R602.3(1) gives each its own row,
+    // its own count and its own spacing. Every member below carries the joints
+    // it actually makes, so a mark can say what to drive at THAT spot.
+    //
+    // Rows are IRC Table R602.3(1) / IBC Table 2304.10.2. Item numbers are
+    // given only where the table numbers the row; the sill and cripple
+    // connections follow the plate-to-stud row rather than having one of
+    // their own, and say so.
+    // =====================================================================
+    // Fasteners are steel and are told apart by SIZE, so they are drawn as
+    // circles scaled to shank diameter -- not as another set of hues. Colour in
+    // this app means one thing only: which member you are looking at. An
+    // orange dot must never be ambiguous between "king stud" and "16d common".
+    var Fx_NAIL = {
+        "16dc": { label: "16d common", size: "3 1/2″ × 0.162″", dia: 0.162, tone: "#f2f7fa" },
+        "16db": { label: "16d box", size: "3 1/2″ × 0.135″", dia: 0.135, tone: "#d3dde3" },
+        "10db": { label: "10d box", size: "3″ × 0.128″", dia: 0.128, tone: "#c2ced6" },
+        "8dc": { label: "8d common", size: "2 1/2″ × 0.131″", dia: 0.131, tone: "#c8d4da" },
+        "8db": { label: "8d box", size: "2 1/2″ × 0.113″", dia: 0.113, tone: "#aebcc5" },
+        "6dc": { label: "6d common", size: "2″ × 0.113″", dia: 0.113, tone: "#9dadb7" },
+        "sdws": { label: "structural screw", size: "listed length", dia: 0.16, tone: "#c08ae0" },
+        "anchor": { label: "anchor bolt", size: "1/2″ dia min", dia: 0.28, tone: "#8fa6b5" },
+        "conn": { label: "connector nail", size: "per the connector", dia: 0.148, tone: "#4fd6d6" }
+    };
+
+    // 0.113″ shank -> 8px, 0.162″ -> 13px, clamped.
+    function Fx_nailPx(dia) {
+        return Math.round(Math.max(7, Math.min(15, 8 + (dia - 0.113) / 0.049 * 5)));
+    }
+
+    function Fx_drive(nail, count, method, spacing) {
+        return { nail: nail, count: count || null, method: method, spacing: spacing || null };
+    }
+
+    function Fx_driveText(d) {
+        var n = Fx_NAIL[d.nail];
+        return (d.count ? d.count + " × " : "") + n.label +
+               (d.spacing ? " at " + d.spacing : "") + " — " + d.method;
+    }
+
+    // ---- the joints each member makes ------------------------------------
+    function Fx_jointsFor(kind, ctx) {
+        ctx = ctx || {};
+        var plates = ctx.topPlies === 1 ? "the top plate" : "the top plates";
+        switch (kind) {
+            case "stud":
+            case "end":
+                return [{
+                    where: "Each end, into the plate",
+                    to: "bottom plate and " + plates,
+                    item: 17, row: "Top or bottom plate to stud",
+                    primary: Fx_drive("16dc", 2, "end nail through the plate into the stud"),
+                    alt: [Fx_drive("16db", 3, "end nail"), Fx_drive("8db", 4, "toe nail where you cannot end nail")]
+                }];
+            case "king":
+                return [{
+                    where: "Each end, into the plate",
+                    to: "bottom plate and " + plates,
+                    item: 17, row: "Top or bottom plate to stud",
+                    primary: Fx_drive("16dc", 2, "end nail"),
+                    alt: [Fx_drive("16db", 3, "end nail")]
+                }, {
+                    where: "Face, into the end of the header",
+                    to: "header",
+                    item: 12, row: "Adjacent full-height stud to end of header",
+                    primary: Fx_drive("16dc", 3, "end nail into the header end"),
+                    alt: [Fx_drive("16db", 4, "end nail")]
+                }];
+            case "jack":
+                return [{
+                    where: "Bottom, into the plate",
+                    to: "bottom plate",
+                    item: 17, row: "Top or bottom plate to stud",
+                    primary: Fx_drive("16dc", 2, "end nail"),
+                    alt: [Fx_drive("16db", 3, "end nail")]
+                }, {
+                    where: "Full length, face to face with the king",
+                    to: "king stud",
+                    item: null, row: "Double studs, face nail",
+                    primary: Fx_drive("10db", null, "face nail", "24″ o.c."),
+                    alt: [Fx_drive("16dc", null, "face nail", "24″ o.c.")]
+                }];
+            case "header":
+                return [{
+                    where: "Along each edge, ply to ply",
+                    to: "the other header ply and the spacer",
+                    item: 10, row: "Built-up header, 2″ to 2″ with 1/2″ spacer",
+                    primary: Fx_drive("16dc", null, "face nail along each edge", "16″ o.c."),
+                    alt: [Fx_drive("16db", null, "face nail along each edge", "12″ o.c.")]
+                }, {
+                    where: "Each end, bearing on the jack",
+                    to: "jack studs",
+                    item: 12, row: "Adjacent full-height stud to end of header",
+                    primary: Fx_drive("16dc", 3, "end nail from the king through into the header"),
+                    alt: [Fx_drive("16db", 4, "end nail")],
+                    note: "The header carries load in bearing on the jack — the nails hold it in place, they do not carry the load."
+                }];
+            case "cripple":
+                if (ctx.over && ctx.under)
+                    return Fx_jointsFor("cripple", { over: true, topPlies: ctx.topPlies })
+                        .concat(Fx_jointsFor("cripple", { over: false, topPlies: ctx.topPlies }));
+                return ctx.over ? [{
+                    where: "Bottom into the header, top into the plate",
+                    to: "header and " + plates,
+                    item: 17, row: "Top or bottom plate to stud (cripples follow this row)",
+                    primary: Fx_drive("16dc", 2, "end nail each end"),
+                    alt: [Fx_drive("16db", 3, "end nail"), Fx_drive("8db", 4, "toe nail into the header")]
+                }] : [{
+                    where: "Bottom into the plate, top into the sill",
+                    to: "bottom plate and rough sill",
+                    item: 17, row: "Top or bottom plate to stud (cripples follow this row)",
+                    primary: Fx_drive("16dc", 2, "end nail each end"),
+                    alt: [Fx_drive("16db", 3, "end nail")]
+                }];
+            case "sill":
+                return [{
+                    where: "Down through the sill into every cripple",
+                    to: "cripple studs",
+                    item: 17, row: "Top or bottom plate to stud (the sill acts as a plate)",
+                    primary: Fx_drive("16dc", 2, "face nail into each cripple below"),
+                    alt: [Fx_drive("16db", 3, "face nail")]
+                }, {
+                    where: "Each end, into the jack",
+                    to: "jack studs",
+                    item: null, row: "End nail through the jack into the sill",
+                    primary: Fx_drive("16dc", 2, "toe nail or end nail"),
+                    alt: [Fx_drive("16db", 3, "toe nail")]
+                }];
+            case "cap":
+            case "plate":
+                if (ctx.name && ctx.name.indexOf("BOTTOM") === 0) return [{
+                    where: "Down into the floor",
+                    to: "joist, rim joist, band joist or blocking below",
+                    item: 15, row: "Bottom plate to joist, rim joist, band joist or blocking",
+                    primary: Fx_drive("16dc", null, "face nail", "16″ o.c."),
+                    alt: [Fx_drive("16db", null, "face nail", "12″ o.c.")],
+                    note: "At a braced wall panel this becomes item 16 — 3-16d box or 2-16d common at 16″ o.c."
+                }, {
+                    where: "Into every stud on the layout",
+                    to: "studs",
+                    item: 17, row: "Top or bottom plate to stud",
+                    primary: Fx_drive("16dc", 2, "end nail"),
+                    alt: [Fx_drive("16db", 3, "end nail")]
+                }];
+                if (ctx.name && ctx.name.indexOf("DOUBLE") === 0) return [{
+                    where: "Down into the plate below",
+                    to: "the top plate below",
+                    item: 13, row: "Top plate to top plate",
+                    primary: Fx_drive("16dc", null, "face nail", "16″ o.c."),
+                    alt: [Fx_drive("10db", null, "face nail", "12″ o.c.")]
+                }, {
+                    where: "At every splice",
+                    to: "the plate below, across the joint",
+                    item: 14, row: "Double top plate splice",
+                    primary: Fx_drive("16dc", 8, "face nail each side of the end joint"),
+                    alt: [Fx_drive("16db", 12, "face nail each side")],
+                    note: "End joints offset not less than 24″ from the joint in the plate below (IRC R602.3.2)."
+                }, {
+                    where: "At corners and intersections",
+                    to: "the lapped plate",
+                    item: 18, row: "Top plates, laps at corners and intersections",
+                    primary: Fx_drive("16dc", 2, "face nail"),
+                    alt: [Fx_drive("10db", 3, "face nail")]
+                }];
+                return [{
+                    where: "Into every stud on the layout",
+                    to: "studs",
+                    item: 17, row: "Top or bottom plate to stud",
+                    primary: Fx_drive("16dc", 2, "end nail"),
+                    alt: [Fx_drive("16db", 3, "end nail")]
+                }];
+            case "spacer":
+                return [{
+                    where: "Sandwiched between the plies",
+                    to: "header plies",
+                    item: 10, row: "Built-up header, 2″ to 2″ with 1/2″ spacer",
+                    primary: Fx_drive("16dc", null, "the ply nailing passes through it", "16″ o.c. each edge"),
+                    alt: []
+                }];
+            default:
+                return [];
+        }
+    }
+
+    // Marks carry the joints of whatever member lands on that line.
+    function Fx_marksWithFasteners(w, marks) {
+        var at = {};
+        w.members.forEach(function (m) {
+            if (m.kind !== "cripple" || m.center == null) return;
+            var k = Math.round(m.center * 8);
+            at[k] = at[k] || { over: false, under: false };
+            if (m.over) at[k].over = true; else at[k].under = true;
+        });
+        return marks.map(function (m) {
+            var ctx = { topPlies: w.topPlies, name: m.name };
+            if (m.kind === "cripple" && m.centre != null) {
+                var f = at[Math.round(m.centre * 8)] || {};
+                ctx.over = !!f.over;
+                ctx.under = !!f.under;
+            }
+            return Object.assign({}, m, { joints: Fx_jointsFor(m.kind, ctx) });
+        });
+    }
+
+    // Plates, header, spacer and sill are spans, not lines on the tape -- they
+    // never get a mark, so they need their own place in the schedule.
+    function Fx_wallJoints(w) {
+        var seen = {}, out = [];
+        w.members.forEach(function (m) {
+            var key = m.kind + "|" + (m.name || "");
+            if (seen[key]) return;
+            seen[key] = true;
+            var joints = Fx_jointsFor(m.kind, { topPlies: w.topPlies, name: m.name, over: m.over, under: !m.over });
+            if (!joints.length) return;
+            out.push({
+                kind: m.kind,
+                tone: Fx_KIND_TONE[m.kind] || Fx_TONE.spf,
+                name: m.name
+                    ? m.name.charAt(0) + m.name.slice(1).toLowerCase()
+                    : ({ stud: "Common stud", king: "King stud", jack: "Jack stud",
+                         header: "Header ply", spacer: "Header spacer", sill: "Rough sill",
+                         cripple: "Cripple" }[m.kind] || m.kind),
+                joints: joints
+            });
+        });
+        var order = ["plate", "cap", "stud", "king", "jack", "header", "spacer", "sill", "cripple"];
+        return out.sort(function (a, b) { return order.indexOf(a.kind) - order.indexOf(b.kind); });
     }
 
     // =====================================================================
@@ -53188,7 +53483,9 @@ No matching component was found for:
 
     function Fx_Board(props) {
         var b = props.box,
-            tone = props.active ? Fx_TONE.lit : (props.tone || Fx_TONE.spf);
+            // Highlighting used to repaint the member near-white, which threw
+            // away the very colour that says what it is. Light it up instead.
+            tone = props.tone || Fx_TONE.spf;
         return Fx_Jx("group", {
             position: b.pos,
             children: [
@@ -53200,6 +53497,8 @@ No matching component was found for:
                         Fx_J("meshStandardMaterial", {
                             color: tone,
                             map: props.map || null,
+                            emissive: props.active ? tone : "#000000",
+                            emissiveIntensity: props.active ? 0.55 : 0,
                             roughness: props.roughness == null ? 0.82 : props.roughness,
                             metalness: props.metalness || 0,
                             transparent: props.opacity != null && props.opacity < 1,
@@ -53353,13 +53652,15 @@ No matching component was found for:
                 if (routine) plain++;
                 var showChip = !dense || !routine || plain % 2 === 1,
                     tall = m.kind === "cl" || m.kind === "ro",
-                    tone = m.kind === "king" ? "#ff8f3d"
-                         : m.kind === "jack" ? "#ffcf4a"
-                         : m.kind === "cripple" ? "#7fd0ff"
-                         : m.kind === "cl" ? "#59df8a"
-                         : m.kind === "ro" ? "#59df8a"
+                    // Same palette as the member it stands for, so the tick,
+                    // the stick in the model and the key all say one thing.
+                    // Reference lines are white: they are not members.
+                    tone = m.kind === "king" ? Fx_TONE.king
+                         : m.kind === "jack" ? Fx_TONE.jack
+                         : m.kind === "cripple" ? Fx_TONE.cripple
+                         : m.kind === "cl" || m.kind === "ro" ? "#e9f0e4"
                          : m.kind === "void" ? "#7b8a7d"
-                         : "#ffb529";
+                         : Fx_TONE.spf;
                 return Fx_Jx("group", {
                     position: [(m.at - half) * Fx_IN, (y0 + y1) / 2 * Fx_IN, z * Fx_IN],
                     children: [
@@ -54832,12 +55133,47 @@ No matching component was found for:
         });
     }
 
+    // One connection: the colour is the fastener, not the member.
+    function Fx_Drive(props) {
+        var j = props.joint, n = Fx_NAIL[j.primary.nail];
+        return Fx_Jx("div", {
+            className: "lay-drive",
+            children: [
+                Fx_J("i", {
+                    className: "lay-dot",
+                    style: {
+                        background: n.tone,
+                        width: Fx_nailPx(n.dia) + "px",
+                        height: Fx_nailPx(n.dia) + "px"
+                    }
+                }),
+                Fx_Jx("div", {
+                    children: [
+                        Fx_Jx("b", { children: [
+                            Fx_J("span", { children: Fx_driveText(j.primary) }),
+                            Fx_J("u", { children: j.item ? "Table R602.3(1) item " + j.item : j.row })
+                        ]}),
+                        Fx_J("span", { className: "lay-drive-where", children: j.where }),
+                        (j.alt && j.alt.length)
+                            ? Fx_J("span", { className: "lay-drive-alt",
+                                children: "or " + j.alt.map(Fx_driveText).join("  ·  ") })
+                            : null,
+                        j.note ? Fx_J("em", { children: j.note }) : null
+                    ]
+                })
+            ]
+        });
+    }
+
     function Fx_LayoutPanel(props) {
         var scene = props.sceneType === "window" ? "window" : "structure",
             spec = Fx_useSpec(scene),
             fromState = Ts.useState("cl"), fromMode = fromState[0], setFromMode = fromState[1],
             wall = Ts.useMemo(function () { return Fx_buildWall(spec); }, [spec]),
-            marks = Ts.useMemo(function () { return Fx_plateMarks(wall); }, [wall]),
+            marks = Ts.useMemo(function () {
+                return Fx_marksWithFasteners(wall, Fx_plateMarks(wall));
+            }, [wall]),
+            schedule = Ts.useMemo(function () { return Fx_wallJoints(wall); }, [wall]),
             issues = Ts.useMemo(function () { return Fx_layoutIssues(wall); }, [wall]),
             cuts = Ts.useMemo(function () { return Fx_cutList(wall); }, [wall]);
 
@@ -54965,7 +55301,15 @@ No matching component was found for:
                                         Fx_J("code", { children: Fx_inFmt(m.at) }),
                                         Fx_J("u", { children: Fx_ftIn(m.at) }),
                                         Fx_J("em", { children: m.letter + (m.side === "R" ? "→" : m.side === "L" ? "←" : "") }),
-                                        Fx_J("span", { children: m.label })
+                                        Fx_J("span", { children: m.label }),
+                                        (m.joints && m.joints.length)
+                                            ? Fx_J("div", {
+                                                className: "lay-drives",
+                                                children: m.joints.map(function (j, k) {
+                                                    return Fx_J(Fx_Drive, { joint: j }, "j" + k);
+                                                })
+                                            })
+                                            : null
                                     ]
                                 }, "r" + i);
                             })
@@ -54973,6 +55317,73 @@ No matching component was found for:
                         Fx_J("p", {
                             className: "lay-legend",
                             children: "X common stud · K king · J jack · C cripple · CL centreline · ▸◂ rough opening. The arrow is the side of the line the wood sits on — put your X there."
+                        })
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "lay-key",
+                    children: [
+                        Fx_J("b", { children: "WHAT THE COLOURS MEAN" }),
+                        Fx_J("ul", {
+                            children: Fx_ROLE_KEY.map(function (r) {
+                                return Fx_Jx("li", { children: [
+                                    Fx_J("i", { style: { background: r.tone } }),
+                                    Fx_J("b", { children: r.name }),
+                                    Fx_J("span", { children: r.note })
+                                ]}, r.kind);
+                            })
+                        }),
+                        Fx_J("b", { className: "lay-key-second", children: "FASTENERS — ROUND, AND SIZED TO THE SHANK" }),
+                        Fx_J("ul", {
+                            className: "lay-key-nails",
+                            children: Object.keys(Fx_NAIL).map(function (k) {
+                                var n = Fx_NAIL[k];
+                                return Fx_Jx("li", { children: [
+                                    Fx_J("i", {
+                                        className: "lay-dot",
+                                        style: {
+                                            background: n.tone,
+                                            width: Fx_nailPx(n.dia) + "px",
+                                            height: Fx_nailPx(n.dia) + "px"
+                                        }
+                                    }),
+                                    Fx_J("b", { children: n.label }),
+                                    Fx_J("span", { children: n.size })
+                                ]}, k);
+                            })
+                        }),
+                        Fx_J("p", {
+                            className: "lay-legend",
+                            children: "Square swatch = a member. Round dot = a fastener, drawn to its shank diameter. Colour never means both."
+                        })
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "lay-schedule",
+                    children: [
+                        Fx_J("b", { children: "WHAT TO DRIVE, MEMBER BY MEMBER" }),
+                        Fx_J("div", {
+                            children: schedule.map(function (r) {
+                                return Fx_Jx("section", {
+                                    children: [
+                                        Fx_Jx("header", { children: [
+                                            Fx_J("i", { style: { background: r.tone } }),
+                                            Fx_J("b", { children: r.name })
+                                        ]}),
+                                        Fx_J("div", {
+                                            children: r.joints.map(function (j, k) {
+                                                return Fx_J(Fx_Drive, { joint: j }, "sj" + k);
+                                            })
+                                        })
+                                    ]
+                                }, r.kind + r.name);
+                            })
+                        }),
+                        Fx_J("p", {
+                            className: "lay-legend",
+                            children: "Counts and spacings are the IRC Table R602.3(1) / IBC Table 2304.10.2 rows for each connection. Where the table has no row of its own — the rough sill, the cripples — the plate-to-stud row governs and the line says so. A screw is only a substitute where its evaluation report covers that exact connection."
                         })
                     ]
                 }),
