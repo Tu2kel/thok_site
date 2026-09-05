@@ -66,6 +66,93 @@
   .model-label,.measure-label{max-width:76vw}
   .guided-step-list>button{min-width:170px}
 }
+/* --- plate layout panel --- */
+.layout-panel{background:#0e1310;border:1px solid #e6a62f55;border-radius:.5rem;margin-top:.65rem;padding:.75rem;display:grid;gap:.7rem}
+.layout-panel>header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.layout-panel>header b{display:block;color:#f0ac37;letter-spacing:.1em;font-size:.62rem}
+.layout-panel>header span{display:block;color:#8f9a8a;font-size:.66rem}
+.lay-from{display:flex;align-items:center;gap:.3rem}
+.lay-from span{color:#8f9a8a;font-size:.6rem;margin-right:.15rem}
+.lay-from button{color:#cbd4c4;background:#141a12;border:1px solid #ffffff20;border-radius:.3rem;padding:.3rem .5rem;font:900 .6rem ui-monospace}
+.lay-from button.on{color:#171006;background:#e9a329;border-color:#e9a329}
+.lay-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.5rem}
+.lay-grid.top{background:#141a11;border:1px solid #ffffff12;border-radius:.4rem;padding:.55rem}
+.lay-field{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.2rem .35rem}
+.lay-field.wide{grid-column:1/-1}
+.lay-field>span{grid-column:1/-1;color:#8f9a8a;font-size:.58rem;letter-spacing:.05em;text-transform:uppercase}
+.lay-field input,.lay-field select{width:100%;color:#ffe0a6;background:#0b0f0b;border:1px solid #ffffff20;border-radius:.3rem;padding:.35rem .4rem;font:800 .78rem ui-monospace;font-variant-numeric:tabular-nums}
+.lay-field input:focus,.lay-field select:focus{outline:2px solid #e9a329;outline-offset:1px}
+.lay-field>i{color:#8f9a8a;font:700 .6rem ui-monospace;font-style:normal}
+.lay-openings{display:grid;gap:.5rem}
+.lay-openings-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.lay-openings-head b{color:#f0ac37;letter-spacing:.08em;font-size:.58rem}
+.lay-add{color:#171006;background:#e9a329;border-radius:.3rem;padding:.32rem .55rem;font:900 .58rem ui-monospace}
+.lay-opening{background:#141a11;border:1px solid #ffffff14;border-radius:.4rem;padding:.55rem;display:grid;gap:.45rem}
+.lay-opening>header{display:flex;align-items:center;gap:.5rem}
+.lay-opening>header b{color:#ffd27a;font:900 .62rem ui-monospace;letter-spacing:.06em}
+.lay-opening>header select{color:#cbd4c4;background:#0b0f0b;border:1px solid #ffffff20;border-radius:.3rem;padding:.25rem .35rem;font:700 .65rem ui-monospace}
+.lay-remove{margin-left:auto;color:#e2837a;border:1px solid #d2564a55;border-radius:.3rem;padding:.28rem .45rem;font:900 .55rem ui-monospace}
+.lay-opening-read{color:#9fd0b0;font:700 .66rem ui-monospace;font-variant-numeric:tabular-nums}
+.lay-empty{color:#8f9a8a;font-size:.68rem}
+.lay-tape-scroll{overflow-x:auto;background:#0b0f0b;border:1px solid #ffffff14;border-radius:.4rem;padding:.6rem .5rem .5rem}
+.lay-tape{position:relative}
+.lay-tape-plate{position:absolute;left:0;right:0;height:16px;background:linear-gradient(#c1934f,#8d6a35);border-radius:2px}
+.lay-tape-open{position:absolute;top:-1px;bottom:-1px;background:#0b0f0bdd;border:1px dashed #59df8a;border-radius:2px;color:#59df8a;font:900 8px ui-monospace;font-style:normal;display:grid;place-items:center;overflow:hidden;white-space:nowrap}
+.lay-tape-feet{position:absolute;left:0;right:0;height:16px}
+.lay-tape-feet i{position:absolute;transform:translateX(-50%);color:#7b8a7d;font:700 9px ui-monospace;font-style:normal}
+.lay-tape-feet i:before{content:"";position:absolute;left:50%;top:-6px;width:1px;height:5px;background:#7b8a7d}
+.lay-tape-marks{position:absolute;left:0;right:0;top:0}
+.lay-mark{position:absolute;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px}
+.lay-mark:after{content:"";width:1px;flex:1 1 auto;min-height:6px;background:currentColor}
+.lay-mark em{font:900 10px ui-monospace;font-style:normal;color:currentColor}
+.lay-mark s{font:700 8px ui-monospace;text-decoration:none;color:#8f9a8a;white-space:nowrap}
+.lay-mark.k-stud,.lay-mark.k-end{color:#ffb529}
+.lay-mark.k-king{color:#ff8f3d}
+.lay-mark.k-jack{color:#ffcf4a}
+.lay-mark.k-cripple{color:#7fd0ff}
+.lay-mark.k-cl,.lay-mark.k-ro{color:#59df8a}
+.lay-mark.k-void{color:#7b8a7d}
+.lay-tape-note{color:#8f9a8a;font-size:.6rem;margin-top:.35rem}
+.lay-marks>b,.lay-issues>b,.lay-cuts>b{display:block;color:#f0ac37;letter-spacing:.08em;font-size:.58rem;margin-bottom:.35rem}
+.lay-marks ol{display:grid;gap:.18rem;list-style:none;max-height:260px;overflow-y:auto}
+.lay-marks li{display:grid;grid-template-columns:5.2rem 4.6rem 2.2rem 1fr;align-items:baseline;gap:.4rem;background:#131a12;border-left:3px solid #ffb529;border-radius:.25rem;padding:.28rem .4rem}
+.lay-marks li.k-king{border-left-color:#ff8f3d}
+.lay-marks li.k-jack{border-left-color:#ffcf4a}
+.lay-marks li.k-cripple{border-left-color:#7fd0ff}
+.lay-marks li.k-cl,.lay-marks li.k-ro{border-left-color:#59df8a}
+.lay-marks li.k-void{border-left-color:#4d574f;opacity:.75}
+.lay-marks code{color:#ffe0a6;font:900 .72rem ui-monospace;font-variant-numeric:tabular-nums}
+.lay-marks u{color:#8f9a8a;text-decoration:none;font:700 .64rem ui-monospace}
+.lay-marks em{color:#ffd27a;font:900 .78rem ui-monospace;font-style:normal;text-align:center}
+.lay-marks li>span{color:#c3ccbd;font-size:.66rem;line-height:1.3}
+.lay-legend{color:#8f9a8a;font-size:.6rem;line-height:1.4;margin-top:.35rem}
+.lay-issues ul{display:grid;gap:.3rem}
+.lay-issues li{border-left:3px solid #59df8a;background:#131a12;border-radius:.25rem;padding:.35rem .45rem;color:#c3ccbd;font-size:.68rem;line-height:1.35}
+.lay-issues li.warn{border-left-color:#e9a329;background:#1a1509}
+.lay-issues li.error{border-left-color:#e2695c;background:#1c1210;color:#f0c0b9}
+.lay-cuts ul{display:grid;gap:.2rem}
+.lay-cuts li{display:grid;grid-template-columns:3.2rem 1fr 5rem 5rem;align-items:baseline;gap:.4rem;background:#131a12;border-radius:.25rem;padding:.28rem .4rem}
+.lay-cuts code{color:#ffd27a;font:900 .72rem ui-monospace;font-variant-numeric:tabular-nums;text-align:right}
+.lay-cuts li>span{color:#e9f0e4;font-size:.68rem}
+.lay-cuts em{color:#ffe0a6;font:800 .7rem ui-monospace;font-style:normal;font-variant-numeric:tabular-nums}
+.lay-cuts u{color:#8f9a8a;text-decoration:none;font:700 .66rem ui-monospace}
+.plate-mark{display:grid;justify-items:center;gap:0;white-space:nowrap;background:#171207f2;border:1px solid #efb13f;border-radius:3px;padding:1px 3px;box-shadow:0 3px 10px #000a}
+.plate-mark b{font:900 10px ui-monospace;color:#ffd476}
+.plate-mark i{font:700 7.5px ui-monospace;font-style:normal;color:#c8b184}
+.plate-mark.king{border-color:#ff8f3d}.plate-mark.king b{color:#ffb37a}
+.plate-mark.jack{border-color:#ffcf4a}.plate-mark.jack b{color:#ffe08a}
+.plate-mark.cripple{border-color:#7fd0ff}.plate-mark.cripple b{color:#a8e2ff}
+.plate-mark.ref{border-color:#59df8a}.plate-mark.ref b{color:#8fe8b0}
+.plate-mark.void{border-color:#4d574f}.plate-mark.void b{color:#8f9a8a}
+@media (max-width:760px){
+  .lay-marks li{grid-template-columns:4.4rem 2rem 1fr;row-gap:.1rem}
+  .lay-marks u{display:none}
+  .lay-cuts li{grid-template-columns:2.8rem 1fr 4.4rem}
+  .lay-cuts u{display:none}
+  .lay-grid{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+}
+.guided-stage>.layout-panel{grid-column:1;margin-top:0}
+@media (max-width:1100px){.guided-stage>.layout-panel{grid-column:1}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -52823,6 +52910,196 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // PLATE LAYOUT
+    // ---------------------------------------------------------------------
+    // What a framer actually pencils on the stacked plates: one pencil line
+    // per member, the letter that goes beside it, and which side of the line
+    // the wood lands on. Read back off the generated members, so the marks
+    // and the model can never disagree.
+    //
+    // Convention: hook the tape on the reference end and pull one running
+    // dimension for the whole wall -- never measure bay to bay, the error
+    // stacks. First common stud line at (o.c. - half a stud) so the stud's
+    // CENTRE lands on the module and sheathing breaks on framing.
+    // =====================================================================
+    function Fx_plateMarks(w) {
+        var t = w.S.t, L = w.length, out = [];
+
+        function push(at, letter, side, kind, label, onModule, centre) {
+            out.push({
+                at: at, letter: letter, side: side, kind: kind, label: label,
+                onModule: !!onModule, centre: centre == null ? null : centre
+            });
+        }
+
+        var spans = w.openings.map(function (op) { return [op.kingL0, op.kingR1]; });
+        function insideOpening(x0, x1) {
+            for (var i = 0; i < spans.length; i++)
+                if (x1 > spans[i][0] + 0.01 && x0 < spans[i][1] - 0.01) return true;
+            return false;
+        }
+
+        push(0, "X", "R", "end", "End stud — flush with the end of the plate", false, t / 2);
+
+        w.layout.forEach(function (c) {
+            var x0 = c - t / 2;
+            if (insideOpening(x0, c + t / 2)) {
+                // Say which cripple actually lands on this line -- over the
+                // header, under the sill, or both -- by reading the members
+                // back rather than assuming.
+                var over = false, under = false;
+                w.members.forEach(function (m) {
+                    if (m.kind !== "cripple") return;
+                    var mid = (m.box.x0 + m.box.x1) / 2 + L / 2;
+                    if (Math.abs(mid - c) > 0.01) return;
+                    if (m.over) over = true; else under = true;
+                });
+                var text = over && under
+                        ? "Common stud omitted — cripple over the header and under the sill"
+                        : over ? "Common stud omitted — cripple over the header"
+                        : under ? "Common stud omitted — cripple under the sill"
+                        : "Common stud omitted — the opening framing already fills this line";
+                push(x0, over || under ? "C" : "·", "R", over || under ? "cripple" : "void",
+                     text, true, c);
+            } else
+                push(x0, "X", "R", "stud", "Common stud — centre lands on " + Fx_inFmt(c), true, c);
+        });
+
+        w.openings.forEach(function (op, i) {
+            var o = op.spec,
+                tag = (o.type === "door" ? "Door" : "Window") +
+                      (w.openings.length > 1 ? " " + (i + 1) : "");
+            push(op.kingL0, "K", "R", "king", tag + " — king stud, plate to plate", false);
+            push(op.kingL1, "J", "R", "jack", tag + " — jack stud, carries the header", false);
+            push(op.roL, "▸", null, "ro", tag + " — rough opening starts", false);
+            push((op.roL + op.roR) / 2, "CL", null, "cl", tag + " — centreline", false);
+            push(op.roR, "◂", null, "ro", tag + " — rough opening ends", false);
+            push(op.jackR1, "J", "L", "jack", tag + " — jack stud, carries the header", false);
+            push(op.kingR1, "K", "L", "king", tag + " — king stud, plate to plate", false);
+        });
+
+        push(L - t, "X", "R", "end", "End stud — flush with the end of the plate", false, L - t / 2);
+
+        var order = { cl: 3, ro: 2 };
+        out.sort(function (a, b) {
+            return a.at - b.at || (order[a.kind] || 0) - (order[b.kind] || 0);
+        });
+        return out;
+    }
+
+    // ---- things the layout is trying to tell you -------------------------
+    function Fx_layoutIssues(w) {
+        var t = w.S.t, out = [];
+
+        function say(level, text) { out.push({ level: level, text: text }); }
+
+        w.openings.forEach(function (op, i) {
+            var o = op.spec,
+                tag = (o.type === "door" ? "Door" : "Window") +
+                      (w.openings.length > 1 ? " " + (i + 1) : "");
+
+            if (op.kingL0 < 0 || op.kingR1 > w.length) {
+                say("error", tag + ": the opening plus its king studs runs past the end of the wall. " +
+                    "Move it in, or lengthen the wall.");
+                return;
+            }
+
+            // A common stud landing just clear of a king leaves an unnailable sliver.
+            var below = null, above = null;
+            w.layout.forEach(function (c) {
+                var x0 = c - t / 2, x1 = c + t / 2;
+                if (x1 <= op.kingL0 + 0.01) below = x1;
+                if (above === null && x0 >= op.kingR1 - 0.01) above = x0;
+            });
+            [[below, op.kingL0, "before"], [above === null ? null : op.kingR1, above, "after"]]
+                .forEach(function (pair) {
+                    if (pair[0] == null || pair[1] == null) return;
+                    var gap = pair[1] - pair[0];
+                    if (gap > 0.01 && gap < 1.5)
+                        say("warn", tag + ": only " + Fx_inFmt(gap) + " of gap " + pair[2] +
+                            " the king stud. Nail the two together as a built-up post, or shift the " +
+                            "opening onto the layout so the bay stays full.");
+                });
+
+            // Header depth decides whether a cripple even fits above it.
+            var crippleLen = w.studTop - op.hdrY1;
+            if (crippleLen > 0.01 && crippleLen < 3)
+                say("warn", tag + ": only " + Fx_inFmt(crippleLen) + " between the header and the top " +
+                    "plate — too short for a cripple. Run the header tight to the plate, or block it solid.");
+            if (crippleLen <= 0.01)
+                say("ok", tag + ": header runs tight to the top plate — no cripples needed above it.");
+
+            var span = op.roR - op.roL;
+            if (span > 72 && (o.jacks || 1) < 2)
+                say("warn", tag + ": " + Fx_ftIn(span) + " of clear span on one jack each end. " +
+                    "Check IRC Table R602.7.5 — that span usually calls for two.");
+
+            if (o.type !== "door") {
+                var lower = op.sillY0 - w.plateB;
+                if (lower > 0.01 && lower < 3)
+                    say("warn", tag + ": only " + Fx_inFmt(lower) + " under the rough sill. " +
+                        "Block it solid instead of cutting cripples that short.");
+            }
+        });
+
+        // Openings that Fx_overlap each other's framing.
+        for (var a = 0; a < w.openings.length; a++)
+            for (var b = a + 1; b < w.openings.length; b++) {
+                var A = w.openings[a], B = w.openings[b];
+                if (Math.min(A.kingR1, B.kingR1) - Math.max(A.kingL0, B.kingL0) > -0.01)
+                    say("error", "Two openings Fx_overlap. Their king studs collide — separate them or " +
+                        "frame one wider opening.");
+            }
+
+        if (!out.length) say("ok", "Layout is clean — every bay closes on the module and nothing collides.");
+        return out;
+    }
+
+    // ---- cut list, straight off the members ------------------------------
+    function Fx_cutList(w) {
+        var NAMES = {
+            plate: "Plate", stud: "Common stud", king: "King stud", jack: "Jack stud",
+            header: "Header ply", spacer: "Header spacer", sill: "Rough sill", cripple: "Cripple"
+        };
+        var rows = {};
+        w.members.forEach(function (m) {
+            var b = m.box,
+                len = m.kind === "plate" ? b.x1 - b.x0
+                    : (m.kind === "header" || m.kind === "spacer" || m.kind === "sill") ? b.x1 - b.x0
+                    : b.y1 - b.y0,
+                key = m.kind + "|" + len.toFixed(3);
+            var name = m.kind === "plate" && m.name
+                    ? m.name.charAt(0) + m.name.slice(1).toLowerCase()
+                    : (NAMES[m.kind] || m.kind);
+            key = m.kind + "|" + name + "|" + len.toFixed(3);
+            if (!rows[key]) rows[key] = { kind: m.kind, name: name, len: len, qty: 0 };
+            rows[key].qty++;
+        });
+        var order = ["plate", "stud", "king", "jack", "header", "spacer", "sill", "cripple"];
+        return Object.keys(rows).map(function (k) { return rows[k]; })
+            .sort(function (p, q) {
+                return order.indexOf(p.kind) - order.indexOf(q.kind) || q.len - p.len;
+            });
+    }
+
+    // ---- stack labels that would otherwise sit on top of each other ------
+    // Marks bunch up hard at an opening -- king, jack and RO edge land within
+    // 3 inches of one another. Greedy row assignment: each label takes the
+    // lowest row that still has clearance behind it.
+    function Fx_stagger(marks, clearanceIn, rows) {
+        var last = [], out = [];
+        rows = rows || 4;
+        marks.forEach(function (m) {
+            var r = 0;
+            while (r < rows && last[r] != null && m.at - last[r] < clearanceIn) r++;
+            if (r >= rows) r = 0;
+            last[r] = m.at;
+            out.push(r);
+        });
+        return out;
+    }
+
+    // =====================================================================
     // RENDERING -- turns generated members into meshes. One material per
     // mesh, all sharing the same shader program, so a few hundred sticks
     // stay cheap.
@@ -52831,22 +53108,32 @@ No matching component was found for:
     // Where the orbit target should sit for each stage, in feet, so the part
     // of the assembly being worked on is actually in the middle of the view.
     function Fx_camTarget(sceneType, stage) {
-        if (sceneType === "window") return stage <= 1 ? 0.6 : 4.2;
+        if (sceneType === "window") return stage <= 1 ? 0.55 : 4.2;
         if (stage <= 1) return 0.4;
         if (stage <= 6) return 1.1;
         if (stage <= 8) return 1.7;   // wall built flat on the deck
         if (stage <= 10) return 4.8;
         return 7.4;
     }
-    // Matching eye position, so a 4 1/2" stack of plates and a 12'-6" gable
-    // both fill the frame instead of sharing one compromise view.
-    function Fx_camPos(sceneType, stage) {
-        if (sceneType === "window") return stage <= 1 ? [8, 5, 10] : [11, 8, 14];
-        if (stage <= 1) return [14, 8, 17];
-        if (stage <= 6) return [15, 9, 18];
-        if (stage <= 8) return [16, 11, 18];
-        if (stage <= 10) return [16, 11, 20];
-        return [18, 14, 22];
+    // Matching eye position. The distance is derived from the wall the user
+    // actually entered, so an 8-foot wall and a 40-foot one both fill the
+    // frame -- the whole point of a scaled tool.
+    function Fx_camPos(sceneType, stage, spec) {
+        var ft = spec
+            ? (sceneType === "window"
+                ? spec.wallLength / 12
+                : Math.max(spec.wallLength, spec.depth || 0) / 12)
+            : 14;
+        var d = Math.max(9, ft * 1.28);
+        if (sceneType === "window")
+            return stage <= 1
+                ? [d * 0.34, d * 0.40, d * 0.56]   // low and close: the marks are the subject
+                : [d * 0.6, d * 0.46, d * 0.76];
+        if (stage <= 1) return [d * 0.72, d * 0.42, d * 0.88];
+        if (stage <= 6) return [d * 0.78, d * 0.47, d * 0.94];
+        if (stage <= 8) return [d * 0.82, d * 0.56, d * 0.92];
+        if (stage <= 10) return [d * 0.84, d * 0.6, d * 1.05];
+        return [d * 0.94, d * 0.76, d * 1.16];
     }
     function Fx_useTiled(src, rx, ry) {
         var tex = Wc(src);
@@ -52935,6 +53222,60 @@ No matching component was found for:
         });
     }
 
+
+    // =====================================================================
+    // LIVE SPEC STORE
+    // The layout panel and the 3-D view read the same wall spec, so the marks
+    // on the plate and the model on screen can never drift apart. Kept
+    // outside React so both trees see one source of truth.
+    // =====================================================================
+    var Fx_DEFAULT_WINDOW = {
+        type: "window", center: 72, roWidth: 36, roHeight: 36, headHeight: 72,
+        headerSize: "2x8", headerPlies: 2, spacer: 0.5, jacks: 1, kings: 1
+    };
+    var Fx_DEFAULT_DOOR = {
+        type: "door", center: 60, roWidth: 38, roHeight: 82.5, tightToPlate: true,
+        headerSize: "2x12", headerPlies: 2, spacer: 0.5, jacks: 1, kings: 1
+    };
+
+    function Fx_clone(v) { return JSON.parse(JSON.stringify(v)); }
+
+    var Fx_store = {
+        specs: {
+            window: {
+                studSize: "2x4", wallLength: 144, spacing: 16,
+                openings: [Fx_clone(Fx_DEFAULT_WINDOW)]
+            },
+            structure: {
+                studSize: "2x4", wallLength: 192, depth: 144, spacing: 16,
+                openings: [Fx_clone(Fx_DEFAULT_DOOR),
+                           Object.assign(Fx_clone(Fx_DEFAULT_WINDOW), { center: 144 })]
+            }
+        },
+        listeners: [],
+        get: function (scene) { return this.specs[scene === "window" ? "window" : "structure"]; },
+        set: function (scene, next) {
+            this.specs[scene === "window" ? "window" : "structure"] = next;
+            this.listeners.slice().forEach(function (f) { f(); });
+        },
+        subscribe: function (f) {
+            var self = this;
+            this.listeners.push(f);
+            return function () {
+                var i = self.listeners.indexOf(f);
+                if (i >= 0) self.listeners.splice(i, 1);
+            };
+        }
+    };
+
+    function Fx_useSpec(scene) {
+        var st = Ts.useState(0), bump = st[1];
+        Ts.useEffect(function () {
+            return Fx_store.subscribe(function () { bump(function (n) { return n + 1; }); });
+        }, []);
+        return Fx_store.get(scene);
+    }
+
     // ---- a rectangle with rectangular holes cut out of it ----------------
     function Fx_panelPieces(x0, x1, y0, y1, holes) {
         var out = [[x0, x1, y0, y1]];
@@ -52954,37 +53295,53 @@ No matching component was found for:
         return out.filter(function (r) { return r[1] - r[0] > 0.5 && r[3] - r[2] > 0.5; });
     }
 
-    // ---- layout tick marks drawn on the plate ---------------------------
+    // ---- the pencil marks, drawn on the plate ---------------------------
+    // Letter and running dimension at every line, so the model shows the same
+    // layout the panel lists: K for king, J for jack, X for a common stud,
+    // C for a cripple. The arrow is the side of the line the wood goes on.
     function Fx_LayoutMarks(props) {
-        var wall = props.wall, S = wall.S, half = wall.length / 2,
+        var wall = props.wall, half = wall.length / 2,
             y0 = props.y0 == null ? 0 : props.y0,
             y1 = props.y1 == null ? wall.plateB : props.y1,
-            z = (props.z == null ? wall.depth / 2 : props.z) + 0.05;
-        var marks = wall.layout.map(function (c) {
-            return { x: c - S.t / 2, label: c === wall.oc ? Fx_inFmt(c - S.t / 2) : null };
-        });
-        wall.openings.forEach(function (op) {
-            marks.push({ x: op.kingL0, label: "KING", lift: 1.55 });
-            marks.push({ x: op.jackL0, label: "JACK", lift: 1.1 });
-            marks.push({ x: op.roL, label: "RO " + Fx_inFmt(op.spec.roWidth), lift: 0.65 });
-            marks.push({ x: op.roR, label: null });
-            marks.push({ x: op.jackR1, label: "JACK", lift: 1.1 });
-            marks.push({ x: op.kingR1, label: "KING", lift: 1.55 });
-        });
+            z = (props.z == null ? wall.depth / 2 : props.z) + 0.05,
+            marks = Ts.useMemo(function () { return Fx_plateMarks(wall); }, [wall]),
+            rows = Ts.useMemo(function () {
+                return Fx_stagger(marks, Math.max(8, wall.length / 16), 6);
+            }, [marks, wall]);
+        var dense = marks.length > 22, plain = 0;
         return Fx_J(W.Fragment, {
             children: marks.map(function (m, i) {
+                var routine = m.kind === "stud" || m.kind === "end";
+                if (routine) plain++;
+                var showChip = !dense || !routine || plain % 2 === 1,
+                    tall = m.kind === "cl" || m.kind === "ro",
+                    tone = m.kind === "king" ? "#ff8f3d"
+                         : m.kind === "jack" ? "#ffcf4a"
+                         : m.kind === "cripple" ? "#7fd0ff"
+                         : m.kind === "cl" ? "#59df8a"
+                         : m.kind === "ro" ? "#59df8a"
+                         : m.kind === "void" ? "#7b8a7d"
+                         : "#ffb529";
                 return Fx_Jx("group", {
-                    position: [(m.x - half) * Fx_IN, (y0 + y1) / 2 * Fx_IN, z * Fx_IN],
+                    position: [(m.at - half) * Fx_IN, (y0 + y1) / 2 * Fx_IN, z * Fx_IN],
                     children: [
                         Fx_Jx("mesh", {
                             children: [
-                                Fx_J("boxGeometry", { args: [0.35 * Fx_IN, (y1 - y0) * Fx_IN, 0.75 * Fx_IN] }),
-                                Fx_J("meshBasicMaterial", { color: "#ffb529" })
+                                Fx_J("boxGeometry", { args: [0.3 * Fx_IN, (y1 - y0) * Fx_IN, 0.75 * Fx_IN] }),
+                                Fx_J("meshBasicMaterial", { color: tone })
                             ]
                         }),
-                        m.label ? Fx_J(Es, {
-                            center: true, position: [0, m.lift == null ? 0.5 : m.lift, 0], distanceFactor: 10,
-                            children: Fx_J("span", { className: "measure-label", children: m.label })
+                        showChip ? Fx_J(Es, {
+                            center: true,
+                            position: [0, 0.34 + rows[i] * 0.4 + (tall ? 0.2 : 0), 0],
+                            distanceFactor: 7,
+                            children: Fx_Jx("span", {
+                                className: "plate-mark" + (m.kind === "king" ? " king" : m.kind === "jack" ? " jack" : m.kind === "cripple" ? " cripple" : m.kind === "cl" || m.kind === "ro" ? " ref" : m.kind === "void" ? " void" : ""),
+                                children: [
+                                    Fx_J("b", { children: m.letter + (m.side === "R" ? "→" : m.side === "L" ? "←" : "") }),
+                                    Fx_J("i", { children: Fx_inFmt(m.at) })
+                                ]
+                            })
                         }) : null
                     ]
                 }, "mk" + i);
@@ -53035,8 +53392,13 @@ No matching component was found for:
         var stage = props.stage,
             focus = props.focus,
             osb = Fx_useTiled(Fx_TEX_OSB, 4, 4),
-            wall = Ts.useMemo(function () { return Fx_buildWall(Fx_WINDOW_WALL_SPEC); }, []),
+            spec = Fx_useSpec("window"),
+            wall = Ts.useMemo(function () { return Fx_buildWall(spec); }, [spec]),
             op = wall.openings[0],
+            spanFt = wall.length / 12,
+            fogNear = Math.max(12, spanFt * 1.1),
+            fogFar = Math.max(28, spanFt * 3.4),
+            gridSize = Math.max(24, Math.round(spanFt * 2.4)),
             half = wall.length / 2,
             D = wall.depth,
             face = D / 2,
@@ -53084,14 +53446,15 @@ No matching component was found for:
         return Fx_Jx(W.Fragment, {
             children: [
                 Fx_J("color", { attach: "background", args: ["#101610"] }),
-                Fx_J("fog", { attach: "fog", args: ["#101610", 16, 30] }),
+                Fx_J("fog", { attach: "fog", args: ["#101610", fogNear, fogFar] }),
                 Fx_J("ambientLight", { intensity: 1.15 }),
-                Fx_J("directionalLight", { castShadow: true, position: [6, 12, 9], intensity: 2.9,
+                Fx_J("directionalLight", { castShadow: true, position: [spanFt * 0.5, spanFt, spanFt * 0.7], intensity: 2.9,
                     "shadow-mapSize-width": 2048, "shadow-mapSize-height": 2048 }),
                 Fx_J("directionalLight", { position: [-7, 6, -5], intensity: 1, color: "#c8dcff" }),
 
                 // the deck the wall is built on
-                Fx_J(Fx_Board, { box: Fx_bx(-half - 12, half + 12, -0.75, 0, -30, 30),
+                Fx_J(Fx_Board, { box: Fx_bx(-half - 12, half + 12, -0.75, 0,
+                                            -Math.max(22, wall.length * 0.12), Math.max(22, wall.length * 0.12)),
                            tone: "#6d5a3c", map: osb, roughness: 0.95, flat: true }),
 
                 // Step 1 is the real thing framers do: stack the three plates,
@@ -53101,8 +53464,7 @@ No matching component was found for:
                     ? Fx_Jx(W.Fragment, { children: [
                         Fx_J(Fx_Board, { box: Fx_bx(-half, half, 0, wall.S.t, -wall.S.w / 2, wall.S.w / 2), tone: Fx_TONE.spf }),
                         Fx_J(Fx_Board, { box: Fx_bx(-half, half, wall.S.t, 2 * wall.S.t, -wall.S.w / 2, wall.S.w / 2), tone: Fx_TONE.spf }),
-                        Fx_J(Fx_Board, { box: Fx_bx(-half, half, 2 * wall.S.t, 3 * wall.S.t, -wall.S.w / 2, wall.S.w / 2), tone: Fx_TONE.lit,
-                                         label: "3 PLATES STACKED · MARK ALL AT ONCE" }),
+                        Fx_J(Fx_Board, { box: Fx_bx(-half, half, 2 * wall.S.t, 3 * wall.S.t, -wall.S.w / 2, wall.S.w / 2), tone: Fx_TONE.lit }),
                         Fx_J(Fx_LayoutMarks, { wall: wall, y0: 2 * wall.S.t, y1: 3 * wall.S.t, z: wall.S.w / 2 })
                       ]})
                     : Fx_J(Fx_Members, { list: wall.members, stage: stage, map: osb }),
@@ -53221,8 +53583,8 @@ No matching component was found for:
                               position: arrow.fastener.position, label: props.fastenerLabel })
                     : Fx_J(K8, arrow[pick] || arrow.action),
 
-                Fx_J("gridHelper", { args: [24, 24, "#415044", "#263027"], position: [0, -0.08, 0] }),
-                Fx_J(Dw, { position: [0, -0.07, 0], opacity: 0.6, scale: 20, blur: 2.2, far: 14 })
+                Fx_J("gridHelper", { args: [gridSize, gridSize, "#415044", "#263027"], position: [0, -0.08, 0] }),
+                Fx_J(Dw, { position: [0, -0.07, 0], opacity: 0.6, scale: gridSize * 0.85, blur: 2.2, far: 14 })
             ]
         });
     }
@@ -53284,8 +53646,22 @@ No matching component was found for:
             focus = props.focus,
             osb = Fx_useTiled(Fx_TEX_OSB, 5, 3),
             concrete = Fx_useTiled(Fx_TEX_CONCRETE, 8, 1),
-            b = Ts.useMemo(function () { return Fx_buildBuilding(Fx_BUILD_SPEC); }, []),
-            hw = b.width / 2, hd = b.depth / 2, R = b.roof, wd = b.wallDepth;
+            spec = Fx_useSpec("structure"),
+            b = Ts.useMemo(function () {
+                return Fx_buildBuilding(Object.assign({}, Fx_BUILD_SPEC, {
+                    width: spec.wallLength,
+                    depth: spec.depth,
+                    wall: Object.assign({}, Fx_BUILD_SPEC.wall, {
+                        studSize: spec.studSize, spacing: spec.spacing
+                    }),
+                    frontOpenings: spec.openings
+                }));
+            }, [spec]),
+            hw = b.width / 2, hd = b.depth / 2, R = b.roof, wd = b.wallDepth,
+            spanFt = Math.max(b.width, b.depth) / 12,
+            fogNear = Math.max(14, spanFt * 1.2),
+            fogFar = Math.max(34, spanFt * 3.6),
+            gridSize = Math.max(30, Math.round(spanFt * 2.4));
 
         // ---- joist layout marks on the rim (step 3) ----------------------
         var marks = Ts.useMemo(function () {
@@ -53381,9 +53757,9 @@ No matching component was found for:
         return Fx_Jx(W.Fragment, {
             children: [
                 Fx_J("color", { attach: "background", args: ["#101610"] }),
-                Fx_J("fog", { attach: "fog", args: ["#101610", 20, 38] }),
+                Fx_J("fog", { attach: "fog", args: ["#101610", fogNear, fogFar] }),
                 Fx_J("ambientLight", { intensity: 1.1 }),
-                Fx_J("directionalLight", { castShadow: true, position: [8, 16, 10], intensity: 3,
+                Fx_J("directionalLight", { castShadow: true, position: [spanFt * 0.5, spanFt, spanFt * 0.65], intensity: 3,
                     "shadow-mapSize-width": 2048, "shadow-mapSize-height": 2048 }),
                 Fx_J("directionalLight", { position: [-9, 8, -6], intensity: 1.05, color: "#c8dcff" }),
 
@@ -53546,8 +53922,8 @@ No matching component was found for:
                               position: arrow.fastener.position, label: props.fastenerLabel })
                     : Fx_J(K8, arrow[pick] || arrow.action),
 
-                Fx_J("gridHelper", { args: [34, 34, "#415044", "#263027"], position: [0, -(b.spec.stem.h + 0.5) * Fx_IN, 0] }),
-                Fx_J(Dw, { position: [0, -(b.spec.stem.h + 0.4) * Fx_IN, 0], opacity: 0.6, scale: 26, blur: 2.4, far: 18 })
+                Fx_J("gridHelper", { args: [gridSize, gridSize, "#415044", "#263027"], position: [0, -(b.spec.stem.h + 0.5) * Fx_IN, 0] }),
+                Fx_J(Dw, { position: [0, -(b.spec.stem.h + 0.4) * Fx_IN, 0], opacity: 0.6, scale: gridSize * 0.85, blur: 2.4, far: 18 })
             ]
         });
     }
@@ -53837,11 +54213,29 @@ No matching component was found for:
     function Fx_SpecPanel(props) {
         var step = props.step,
             isWindow = step.phase && step.phase.indexOf("Window") === 0,
+            spec = Fx_useSpec(isWindow ? "window" : "structure"),
             data = Ts.useMemo(function () {
-                return isWindow
-                    ? { rows: Fx_measureWall(Fx_buildWall(Fx_WINDOW_WALL_SPEC)), what: "12′-0″ × 8′-1 1/8″ 2×4 wall with a 36″ × 36″ window opening" }
-                    : { rows: Fx_measureBuilding(Fx_buildBuilding(Fx_BUILD_SPEC)), what: "16′-0″ × 12′-0″ platform-framed shell" };
-            }, [isWindow]),
+                if (isWindow) {
+                    var w = Fx_buildWall(spec);
+                    return {
+                        rows: Fx_measureWall(w),
+                        what: Fx_ftIn(w.length) + " × " + Fx_ftIn(w.wallTop) + " " +
+                              spec.studSize + " wall, " + spec.openings.length +
+                              (spec.openings.length === 1 ? " opening" : " openings")
+                    };
+                }
+                var b = Fx_buildBuilding(Object.assign({}, Fx_BUILD_SPEC, {
+                    width: spec.wallLength, depth: spec.depth,
+                    wall: Object.assign({}, Fx_BUILD_SPEC.wall, {
+                        studSize: spec.studSize, spacing: spec.spacing
+                    }),
+                    frontOpenings: spec.openings
+                }));
+                return {
+                    rows: Fx_measureBuilding(b),
+                    what: Fx_ftIn(b.width) + " × " + Fx_ftIn(b.depth) + " platform-framed shell"
+                };
+            }, [isWindow, spec]),
             groups = Fx_STEP_GROUPS[step.phase] || null,
             rows = groups ? data.rows.filter(function (r) { return groups.indexOf(r.group) >= 0; }) : data.rows;
         if (!rows.length) rows = data.rows;
@@ -53878,6 +54272,418 @@ No matching component was found for:
         });
     }
 
+    // =====================================================================
+    // PLATE LAYOUT PANEL
+    // ---------------------------------------------------------------------
+    // Enter the wall you are actually standing in front of. Everything below
+    // -- the tape, the mark list, the warnings, the cut list and the 3-D
+    // model -- regenerates from those numbers, so the marks on screen are the
+    // marks to pencil on your plates.
+    // =====================================================================
+    var Fx_STUD_SIZES = ["2x4", "2x6"];
+    var Fx_HEADER_SIZES = ["2x6", "2x8", "2x10", "2x12"];
+    var Fx_SPACINGS = [12, 16, 19.2, 24];
+
+    function Fx_num(v, fallback) {
+        var n = parseFloat(v);
+        return isFinite(n) ? n : fallback;
+    }
+
+    // ---- one labelled control -------------------------------------------
+    function Fx_Field(props) {
+        return Fx_Jx("label", {
+            className: "lay-field" + (props.wide ? " wide" : ""),
+            children: [
+                Fx_J("span", { children: props.label }),
+                props.children,
+                props.unit ? Fx_J("i", { children: props.unit }) : null
+            ]
+        });
+    }
+
+    function Fx_NumberInput(props) {
+        return Fx_J("input", {
+            type: "number",
+            inputMode: "decimal",
+            step: props.step || "0.125",
+            min: props.min == null ? "0" : String(props.min),
+            value: props.value,
+            onChange: function (e) { props.onChange(e.target.value); }
+        });
+    }
+
+    function Fx_Select(props) {
+        return Fx_J("select", {
+            value: props.value,
+            onChange: function (e) { props.onChange(e.target.value); },
+            children: props.options.map(function (o) {
+                return Fx_J("option", { value: String(o.value), children: o.label }, String(o.value));
+            })
+        });
+    }
+
+    // ---- the tape: a scaled plate with every pencil line on it ----------
+    function Fx_Tape(props) {
+        var wall = props.wall, marks = props.marks, L = wall.length,
+            width = Math.max(600, Math.round(L * 6.5)),
+            pxPerIn = width / L,
+            rows = Fx_stagger(marks, 46 / pxPerIn, 4),
+            depth = (Math.max.apply(null, rows.concat([0])) + 1) * 21 + 8;
+        return Fx_Jx("div", {
+            className: "lay-tape-scroll",
+            children: [
+                Fx_Jx("div", {
+                    className: "lay-tape",
+                    style: { minWidth: width + "px", height: (depth + 62) + "px" },
+                    children: [
+                        // the openings, shaded behind the marks
+                        Fx_J("div", {
+                            className: "lay-tape-plate",
+                            style: { top: depth + "px" },
+                            children: wall.openings.map(function (op, i) {
+                                return Fx_J("i", {
+                                    className: "lay-tape-open",
+                                    style: {
+                                        left: (op.roL / L * 100) + "%",
+                                        width: ((op.roR - op.roL) / L * 100) + "%"
+                                    },
+                                    children: op.spec.type === "door" ? "DOOR RO" : "WINDOW RO"
+                                }, "op" + i);
+                            })
+                        }),
+                        // every foot, so you can find your place on the tape
+                        Fx_J("div", {
+                            className: "lay-tape-feet",
+                            style: { top: (depth + 20) + "px" },
+                            children: Array.from({ length: Math.floor(L / 12) + 1 }).map(function (_, f) {
+                                return Fx_J("i", {
+                                    style: { left: (f * 12 / L * 100) + "%" },
+                                    children: f + "′"
+                                }, "ft" + f);
+                            })
+                        }),
+                        // the marks themselves
+                        Fx_J("div", {
+                            className: "lay-tape-marks",
+                            style: { height: depth + "px" },
+                            children: marks.map(function (m, i) {
+                                return Fx_Jx("b", {
+                                    className: "lay-mark k-" + m.kind,
+                                    style: {
+                                        left: (m.at / L * 100) + "%",
+                                        top: (rows[i] * 21) + "px",
+                                        bottom: "0px"
+                                    },
+                                    title: Fx_inFmt(m.at) + " — " + m.label,
+                                    children: [
+                                        Fx_J("em", { children: m.letter + (m.side === "R" ? "→" : m.side === "L" ? "←" : "") }),
+                                        Fx_J("s", { children: Fx_inFmt(m.at) })
+                                    ]
+                                }, "m" + i);
+                            })
+                        })
+                    ]
+                }),
+                Fx_J("p", {
+                    className: "lay-tape-note",
+                    children: "Hook the tape on the left end and pull one running dimension for the whole wall. Never measure bay to bay — the error stacks."
+                })
+            ]
+        });
+    }
+
+    // ---- one opening's controls ------------------------------------------
+    function Fx_OpeningRow(props) {
+        var o = props.opening, i = props.index, wallLength = props.wallLength,
+            fromMode = props.fromMode,
+            shown = fromMode === "edge" ? o.center - o.roWidth / 2 : o.center;
+
+        function patch(changes) { props.onChange(Object.assign({}, o, changes)); }
+
+        return Fx_Jx("div", {
+            className: "lay-opening",
+            children: [
+                Fx_Jx("header", {
+                    children: [
+                        Fx_J("b", { children: (o.type === "door" ? "DOOR" : "WINDOW") + " " + (i + 1) }),
+                        Fx_J(Fx_Select, {
+                            value: o.type,
+                            onChange: function (v) {
+                                patch(v === "door"
+                                    ? { type: "door", tightToPlate: true, roHeight: Math.max(o.roHeight, 80), headerSize: "2x12" }
+                                    : { type: "window", tightToPlate: false, headHeight: o.headHeight || 72 });
+                            },
+                            options: [{ value: "window", label: "Window" }, { value: "door", label: "Door" }]
+                        }),
+                        props.onRemove
+                            ? Fx_J("button", { className: "lay-remove", onClick: props.onRemove, children: "REMOVE" })
+                            : null
+                    ]
+                }),
+                Fx_Jx("div", {
+                    className: "lay-grid",
+                    children: [
+                        Fx_J(Fx_Field, {
+                            label: "RO width", unit: "in",
+                            children: Fx_J(Fx_NumberInput, {
+                                value: o.roWidth, min: 6,
+                                onChange: function (v) { patch({ roWidth: Fx_num(v, o.roWidth) }); }
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
+                            label: "RO height", unit: "in",
+                            children: Fx_J(Fx_NumberInput, {
+                                value: o.roHeight, min: 6,
+                                onChange: function (v) { patch({ roHeight: Fx_num(v, o.roHeight) }); }
+                            })
+                        }),
+                        o.type === "door"
+                            ? Fx_J(Fx_Field, {
+                                label: "Header", unit: "",
+                                children: Fx_J(Fx_Select, {
+                                    value: o.headerSize,
+                                    onChange: function (v) { patch({ headerSize: v }); },
+                                    options: Fx_HEADER_SIZES.map(function (h) { return { value: h, label: "2-" + h }; })
+                                })
+                            })
+                            : Fx_J(Fx_Field, {
+                                label: "Head height AFF", unit: "in",
+                                children: Fx_J(Fx_NumberInput, {
+                                    value: o.headHeight, min: 12,
+                                    onChange: function (v) { patch({ headHeight: Fx_num(v, o.headHeight) }); }
+                                })
+                            }),
+                        o.type === "door" ? null : Fx_J(Fx_Field, {
+                            label: "Header", unit: "",
+                            children: Fx_J(Fx_Select, {
+                                value: o.headerSize,
+                                onChange: function (v) { patch({ headerSize: v }); },
+                                options: Fx_HEADER_SIZES.map(function (h) { return { value: h, label: "2-" + h }; })
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
+                            label: "Jacks each end", unit: "",
+                            children: Fx_J(Fx_Select, {
+                                value: o.jacks || 1,
+                                onChange: function (v) { patch({ jacks: Fx_num(v, 1) }); },
+                                options: [{ value: 1, label: "1" }, { value: 2, label: "2" }, { value: 3, label: "3" }]
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
+                            label: "Kings each end", unit: "",
+                            children: Fx_J(Fx_Select, {
+                                value: o.kings || 1,
+                                onChange: function (v) { patch({ kings: Fx_num(v, 1) }); },
+                                options: [{ value: 1, label: "1" }, { value: 2, label: "2" }]
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
+                            wide: true,
+                            label: "From the left end to the " + (fromMode === "edge" ? "RO edge" : "centreline"),
+                            unit: "in",
+                            children: Fx_J(Fx_NumberInput, {
+                                value: Math.round(shown * 1000) / 1000, min: 0,
+                                onChange: function (v) {
+                                    var n = Fx_num(v, shown);
+                                    patch({ center: fromMode === "edge" ? n + o.roWidth / 2 : n });
+                                }
+                            })
+                        })
+                    ]
+                }),
+                Fx_J("p", {
+                    className: "lay-opening-read",
+                    children: "CL at " + Fx_inFmt(o.center) + " · RO " + Fx_inFmt(o.center - o.roWidth / 2) +
+                              " to " + Fx_inFmt(o.center + o.roWidth / 2) +
+                              " · " + Fx_inFmt(wallLength - (o.center + o.roWidth / 2)) + " left to the far end"
+                })
+            ]
+        });
+    }
+
+    function Fx_LayoutPanel(props) {
+        var scene = props.sceneType === "window" ? "window" : "structure",
+            spec = Fx_useSpec(scene),
+            fromState = Ts.useState("cl"), fromMode = fromState[0], setFromMode = fromState[1],
+            wall = Ts.useMemo(function () { return Fx_buildWall(spec); }, [spec]),
+            marks = Ts.useMemo(function () { return Fx_plateMarks(wall); }, [wall]),
+            issues = Ts.useMemo(function () { return Fx_layoutIssues(wall); }, [wall]),
+            cuts = Ts.useMemo(function () { return Fx_cutList(wall); }, [wall]);
+
+        function patch(changes) { Fx_store.set(scene, Object.assign({}, spec, changes)); }
+        function patchOpening(i, next) {
+            var list = spec.openings.slice();
+            list[i] = next;
+            patch({ openings: list });
+        }
+
+        var feet = Math.floor(spec.wallLength / 12),
+            inches = Math.round((spec.wallLength - feet * 12) * 1000) / 1000;
+
+        return Fx_Jx("section", {
+            className: "layout-panel",
+            children: [
+                Fx_Jx("header", {
+                    children: [
+                        Fx_Jx("div", { children: [
+                            Fx_J("b", { children: "PLATE LAYOUT — MARK IT LIKE THIS" }),
+                            Fx_J("span", { children: "Enter the wall you are building. The tape, the marks and the model all follow it." })
+                        ]}),
+                        Fx_Jx("div", { className: "lay-from", children: [
+                            Fx_J("span", { children: "Measure from the left end to" }),
+                            Fx_J("button", {
+                                className: fromMode === "cl" ? "on" : "",
+                                onClick: function () { setFromMode("cl"); },
+                                children: "CENTRELINE"
+                            }),
+                            Fx_J("button", {
+                                className: fromMode === "edge" ? "on" : "",
+                                onClick: function () { setFromMode("edge"); },
+                                children: "RO EDGE"
+                            })
+                        ]})
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "lay-grid top",
+                    children: [
+                        Fx_J(Fx_Field, {
+                            label: scene === "window" ? "Wall length" : "Building width", unit: "ft",
+                            children: Fx_J(Fx_NumberInput, {
+                                value: feet, min: 1, step: "1",
+                                onChange: function (v) { patch({ wallLength: Fx_num(v, feet) * 12 + inches }); }
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
+                            label: "plus", unit: "in",
+                            children: Fx_J(Fx_NumberInput, {
+                                value: inches, min: 0,
+                                onChange: function (v) { patch({ wallLength: feet * 12 + Fx_num(v, inches) }); }
+                            })
+                        }),
+                        scene === "structure" ? Fx_J(Fx_Field, {
+                            label: "Building depth", unit: "ft",
+                            children: Fx_J(Fx_NumberInput, {
+                                value: Math.round(spec.depth / 12 * 100) / 100, min: 4, step: "0.5",
+                                onChange: function (v) { patch({ depth: Fx_num(v, spec.depth / 12) * 12 }); }
+                            })
+                        }) : null,
+                        Fx_J(Fx_Field, {
+                            label: "Studs", unit: "",
+                            children: Fx_J(Fx_Select, {
+                                value: spec.studSize,
+                                onChange: function (v) { patch({ studSize: v }); },
+                                options: Fx_STUD_SIZES.map(function (v) { return { value: v, label: v }; })
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
+                            label: "Spacing", unit: "o.c.",
+                            children: Fx_J(Fx_Select, {
+                                value: spec.spacing,
+                                onChange: function (v) { patch({ spacing: Fx_num(v, 16) }); },
+                                options: Fx_SPACINGS.map(function (v) { return { value: v, label: v + "″" }; })
+                            })
+                        })
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "lay-openings",
+                    children: [
+                        Fx_Jx("div", { className: "lay-openings-head", children: [
+                            Fx_J("b", { children: "OPENINGS ON THIS WALL" }),
+                            Fx_J("button", {
+                                className: "lay-add",
+                                onClick: function () {
+                                    var next = Object.assign(Fx_clone(Fx_DEFAULT_WINDOW), {
+                                        center: Math.min(spec.wallLength - 30, spec.wallLength / 2 + 40)
+                                    });
+                                    patch({ openings: spec.openings.concat([next]) });
+                                },
+                                children: "+ ADD OPENING"
+                            })
+                        ]}),
+                        spec.openings.length
+                            ? Fx_J(W.Fragment, {
+                                children: spec.openings.map(function (o, i) {
+                                    return Fx_J(Fx_OpeningRow, {
+                                        opening: o, index: i, wallLength: spec.wallLength, fromMode: fromMode,
+                                        onChange: function (next) { patchOpening(i, next); },
+                                        onRemove: spec.openings.length > 1 ? function () {
+                                            patch({ openings: spec.openings.filter(function (_, j) { return j !== i; }) });
+                                        } : null
+                                    }, "o" + i);
+                                })
+                            })
+                            : Fx_J("p", { className: "lay-empty", children: "Solid wall — no openings to lay out." })
+                    ]
+                }),
+
+                Fx_J(Fx_Tape, { wall: wall, marks: marks }),
+
+                Fx_Jx("div", {
+                    className: "lay-marks",
+                    children: [
+                        Fx_J("b", { children: "EVERY MARK, FROM THE LEFT END" }),
+                        Fx_J("ol", {
+                            children: marks.map(function (m, i) {
+                                return Fx_Jx("li", {
+                                    className: "k-" + m.kind,
+                                    children: [
+                                        Fx_J("code", { children: Fx_inFmt(m.at) }),
+                                        Fx_J("u", { children: Fx_ftIn(m.at) }),
+                                        Fx_J("em", { children: m.letter + (m.side === "R" ? "→" : m.side === "L" ? "←" : "") }),
+                                        Fx_J("span", { children: m.label })
+                                    ]
+                                }, "r" + i);
+                            })
+                        }),
+                        Fx_J("p", {
+                            className: "lay-legend",
+                            children: "X common stud · K king · J jack · C cripple · CL centreline · ▸◂ rough opening. The arrow is the side of the line the wood sits on — put your X there."
+                        })
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "lay-issues",
+                    children: [
+                        Fx_J("b", { children: "WHAT THIS LAYOUT IS TELLING YOU" }),
+                        Fx_J("ul", {
+                            children: issues.map(function (t, i) {
+                                return Fx_J("li", { className: t.level, children: t.text }, "i" + i);
+                            })
+                        })
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "lay-cuts",
+                    children: [
+                        Fx_J("b", { children: "CUT LIST FOR THIS WALL" }),
+                        Fx_J("ul", {
+                            children: cuts.map(function (c, i) {
+                                return Fx_Jx("li", {
+                                    children: [
+                                        Fx_J("code", { children: c.qty + " ×" }),
+                                        Fx_J("span", { children: c.name }),
+                                        Fx_J("em", { children: Fx_inFmt(c.len) }),
+                                        Fx_J("u", { children: Fx_ftIn(c.len) })
+                                    ]
+                                }, "c" + i);
+                            })
+                        }),
+                        Fx_J("p", {
+                            className: "lay-legend",
+                            children: "Lengths are finished cut sizes off the model. Header size still comes from IRC Table R602.7(1) for your span, building width and load — this list follows what you entered, it does not size the beam for you."
+                        })
+                    ]
+                })
+            ]
+        });
+    }
+
     function hP({
         stage: t,
         title: e,
@@ -53889,9 +54695,10 @@ No matching component was found for:
         lumberCheck: l
     }) {
         let [c, f] = (0, Ts.useState)(Fx_camTarget(r, t)), [h, p] = (0, Ts.useState)(0);
+        let _spec = Fx_useSpec(r);
         (0, Ts.useEffect)(() => {
             f(Fx_camTarget(r, t)), p(g => g + 1)
-        }, [r, t]);
+        }, [r, t, _spec]);
 
         function m() {
             f(Fx_camTarget(r, t)), p(g => g + 1)
@@ -53918,7 +54725,7 @@ No matching component was found for:
                 },
                 children: [(0, W.jsx)(fP, {
                     makeDefault: !0,
-                    position: Fx_camPos(r, t),
+                    position: Fx_camPos(r, t, _spec),
                     fov: 45
                 }), (0, W.jsx)(Ts.Suspense, {
                     fallback: (0, W.jsx)(Es, {
@@ -53939,8 +54746,8 @@ No matching component was found for:
                 }), (0, W.jsx)(dP, {
                     makeDefault: !0,
                     target: [0, c, 0],
-                    minDistance: 8,
-                    maxDistance: 34,
+                    minDistance: 4,
+                    maxDistance: 220,
                     maxPolarAngle: Math.PI / 2.03,
                     enablePan: !0,
                     screenSpacePanning: !0,
@@ -55426,7 +56233,9 @@ No matching component was found for:
                             marked: H,
                             bow: G
                         }
-                    }), (0, k.jsx)(Fx_SpecPanel, {
+                    }), C.phase === "Wall frame" || C.phase === "Window framing" ? (0, k.jsx)(Fx_LayoutPanel, {
+                        sceneType: A ? "window" : "structure"
+                    }) : null, (0, k.jsx)(Fx_SpecPanel, {
                         step: C
                     }), (0, k.jsxs)("section", {
                         className: "current-instruction",
