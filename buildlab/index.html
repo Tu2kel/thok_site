@@ -229,6 +229,48 @@
 .lay-key-nails li i{border-radius:50%;box-shadow:0 0 0 1px #ffffff33}
 .lay-key-nails li{align-items:center}
 .lay-dot{flex:0 0 auto;border-radius:50%}
+/* --- knowledge check --- */
+.quiz-panel{background:#0e1216;border:1px solid #5f86a855;border-radius:.5rem;margin-top:.7rem;padding:.75rem;display:grid;gap:.6rem}
+.quiz-panel.done{border-color:#e9a32955}
+.quiz-panel.aced{border-color:#59df8a66}
+.quiz-panel>header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.quiz-panel>header b{display:block;color:#8fc4e8;letter-spacing:.1em;font-size:.62rem}
+.quiz-panel>header span{display:block;color:#8f9a8a;font-size:.66rem;max-width:46ch}
+.quiz-score{display:flex;align-items:center;gap:.45rem}
+.quiz-score>b{color:#e9f0e4;font:900 .8rem ui-monospace;font-variant-numeric:tabular-nums}
+.quiz-panel.aced .quiz-score>b{color:#8fe8b0}
+.quiz-score button{color:#8f9a8a;border:1px solid #ffffff20;border-radius:.3rem;padding:.25rem .45rem;font:800 .55rem ui-monospace}
+.quiz-score button:hover{color:#ffc65c;border-color:#e9a329}
+.quiz-list{display:grid;gap:.6rem;list-style:none}
+.quiz-list>li{background:#131a1e;border-left:3px solid #3f5a6e;border-radius:.35rem;padding:.55rem .6rem;display:grid;gap:.45rem}
+.quiz-list>li.right{border-left-color:#59df8a}
+.quiz-list>li.wrong{border-left-color:#e2695c}
+.quiz-ask{display:grid;grid-template-columns:1.35rem 1fr;gap:.45rem;align-items:baseline}
+.quiz-ask i{color:#8fc4e8;font:900 .7rem ui-monospace;font-style:normal}
+.quiz-ask span{color:#e9f0e4;font-size:.78rem;line-height:1.4}
+.quiz-choices{display:grid;gap:.3rem}
+.quiz-choice{display:grid;grid-template-columns:1.3rem 1fr auto;gap:.45rem;align-items:baseline;text-align:left;background:#0d1216;border:1px solid #ffffff18;border-radius:.3rem;padding:.42rem .5rem;cursor:pointer}
+.quiz-choice:hover:not(:disabled){border-color:#8fc4e8;background:#111a20}
+.quiz-choice:disabled{cursor:default}
+.quiz-choice em{color:#7f8f9a;font:900 .62rem ui-monospace;font-style:normal}
+.quiz-choice>span{color:#c3ccbd;font-size:.72rem;line-height:1.35}
+.quiz-choice s{text-decoration:none;font-weight:900}
+.quiz-choice.is-right{border-color:#59df8a;background:#0f1c14}
+.quiz-choice.is-right>span{color:#c9f0d8}
+.quiz-choice.is-right s{color:#59df8a}
+.quiz-choice.is-wrong{border-color:#e2695c;background:#1c1210}
+.quiz-choice.is-wrong>span{color:#f0c0b9}
+.quiz-choice.is-wrong s{color:#e2695c}
+.quiz-choice.is-dim{opacity:.45}
+.quiz-why{background:#0d1216;border-radius:.3rem;padding:.45rem .5rem;display:grid;gap:.15rem}
+.quiz-why b{color:#8fe8b0;font-size:.7rem}
+.quiz-list>li.wrong .quiz-why b{color:#f0b4ac}
+.quiz-why span{color:#c3ccbd;font-size:.7rem;line-height:1.45}
+.quiz-why u{color:#8f9a8a;text-decoration:none;font:700 .6rem ui-monospace}
+@media (max-width:760px){
+  .quiz-choice{grid-template-columns:1.1rem 1fr auto}
+  .quiz-ask span{font-size:.75rem}
+}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -55426,6 +55468,459 @@ No matching component was found for:
         });
     }
 
+    // =====================================================================
+    // KNOWLEDGE CHECK
+    // ---------------------------------------------------------------------
+    // Two kinds of question, mixed:
+    //
+    //   static     — the "why" behind the step. Fixed wording, fixed answer.
+    //   generated  — read off the wall the user actually entered, so the
+    //                answer moves when the spec moves. The wrong choices are
+    //                built from the mistakes people really make (forgetting
+    //                the jacks in a header length, measuring the RO to the
+    //                king instead of the jack), which is where the teaching is.
+    //
+    // Answers are checked against the framing engine, not against a stored
+    // number, so a question can never drift out of step with the model.
+    // =====================================================================
+    var Fx_quizStore = {
+        answers: {},
+        listeners: [],
+        pick: function (id, choice) {
+            this.answers[id] = choice;
+            this.listeners.slice().forEach(function (f) { f(); });
+        },
+        reset: function (ids) {
+            var self = this;
+            ids.forEach(function (id) { delete self.answers[id]; });
+            this.listeners.slice().forEach(function (f) { f(); });
+        },
+        subscribe: function (f) {
+            var self = this;
+            this.listeners.push(f);
+            return function () {
+                var i = self.listeners.indexOf(f);
+                if (i >= 0) self.listeners.splice(i, 1);
+            };
+        }
+    };
+
+    function Fx_useQuizAnswers() {
+        var st = Ts.useState(0), bump = st[1];
+        Ts.useEffect(function () {
+            return Fx_quizStore.subscribe(function () { bump(function (n) { return n + 1; }); });
+        }, []);
+        return Fx_quizStore.answers;
+    }
+
+    function Fx_q(id, ask, choices, answer, why, code) {
+        return { id: id, ask: ask, choices: choices, answer: answer, why: why, code: code };
+    }
+
+    // ---- the "why" questions, keyed the same way as the code panel --------
+    var Fx_STATIC_QUIZ = {
+        s1: [
+            Fx_q("s1a", "The sill plate sits on the concrete stem wall. Why does it have to be pressure-treated?",
+                ["Wood in contact with concrete is subject to decay",
+                 "It has to hold the anchor bolts without splitting",
+                 "Treated lumber is straighter, so the walls start true",
+                 "It stops the concrete from wicking heat out of the floor"],
+                0,
+                "Concrete holds and passes moisture. Any wood bearing on it must be pressure-preservative treated or naturally durable — the fastener and the straightness are separate issues.",
+                "IRC R317.1 · IBC 2304.12.1.4"),
+            Fx_q("s1b", "Anchor bolts through the sill plate: what is the maximum spacing, and how close to the end of each plate section must the first one be?",
+                ["6 ft o.c. maximum, one within 12 in of each end",
+                 "8 ft o.c. maximum, one within 12 in of each end",
+                 "6 ft o.c. maximum, one within 24 in of each end",
+                 "4 ft o.c. maximum, one within 6 in of each end"],
+                0,
+                "6 ft o.c. is the ceiling, and every plate section needs a bolt within 12 in of each end — a short offcut with no bolt near its end is a common miss.",
+                "IRC R403.1.6")
+        ],
+        s3: [
+            Fx_q("s3a", "The first joist line is marked at 15¼ in, not 16 in. Why?",
+                ["So the joist's centre lands on 16 in once its 1½ in thickness sits behind the line",
+                 "To leave a ¾ in gap for the rim board",
+                 "So the first sheet of subfloor breaks ¾ in short of the edge",
+                 "Because the tape is hooked on the outside face of the rim"],
+                0,
+                "You set the near edge on the line. Half of 1½ in is ¾ in, so 15¼ + ¾ = 16 — the centre lands on the module and every 4 ft sheet edge finds framing.",
+                "IRC R502.3.1"),
+            Fx_q("s3b", "Why pull one running dimension for the whole wall instead of measuring 16 in from each joist to the next?",
+                ["Bay-to-bay measuring stacks the error; by the far end the layout has drifted",
+                 "It is faster, but either method lands in the same place",
+                 "The code requires a single running dimension",
+                 "Bay-to-bay measuring is fine as long as you use the same tape"],
+                0,
+                "Every bay-to-bay reading carries its own small error and they add up. One running dimension from a single reference end keeps every mark independent of the last.",
+                "Layout practice — the module it protects is IRC R502.3.1")
+        ],
+        s6: [
+            Fx_q("s6a", "Which way does the strength axis of a subfloor panel run relative to the joists?",
+                ["Perpendicular — across the supports",
+                 "Parallel — along the supports",
+                 "Either way, as long as the edges are blocked",
+                 "Diagonally, to brace the floor"],
+                0,
+                "The panel is stiffest along its strength axis, so that axis has to span across the joists. Laying it parallel puts the weak direction over the span.",
+                "IRC R503.2.1 / Table R503.2.1.1(1)")
+        ],
+        s7: [
+            Fx_q("s7a", "Why are the bottom plate and both top plates marked while stacked together?",
+                ["Every mark transfers to all three at once, so nothing can drift out of line",
+                 "It saves a trip back to the pile",
+                 "The plates must be nailed together before the wall is stood",
+                 "So the crowns all face the same way"],
+                0,
+                "Mark them apart and the top and bottom marks disagree — studs rack, cripples miss the header, the opening ends up out of square. Stacked, one pencil line serves all three.",
+                "IRC R602.3.1 · IBC 2308.5.1")
+        ],
+        s8: [
+            Fx_q("s8a", "Stud into the plate, end-nailed. How many and what size?",
+                ["2 × 16d common", "3 × 16d common", "2 × 10d box", "4 × 8d common"],
+                0,
+                "Two 16d common end nails per end (or three 16d box). Four 8d box is the TOE-nail alternative, for where you cannot get at the end.",
+                "IRC Table R602.3(1) item 17"),
+            Fx_q("s8b", "A built-up header made of two plies with a ½ in spacer — how is it nailed together?",
+                ["16d common at 16 in o.c. along each edge",
+                 "16d common at 16 in o.c. down the centre",
+                 "2 × 16d common at each end only",
+                 "10d box at 24 in o.c. along each edge"],
+                0,
+                "Along EACH edge, top and bottom, at 16 in o.c. — a single line down the middle lets the plies work independently. 10d at 24 in is the double-stud row, not the header row.",
+                "IRC Table R602.3(1) item 10")
+        ],
+        s9: [
+            Fx_q("s9a", "The second (cap) plate laps the first. How far must its end joints be offset from the joints below?",
+                ["Not less than 24 in", "Not less than 16 in", "Not less than 48 in", "Anywhere, as long as it lands on a stud"],
+                0,
+                "24 in minimum offset. The double top plate ties wall segments together, and joints stacked over each other leave a hinge.",
+                "IRC R602.3.2 · IBC 2308.5.3")
+        ],
+        s10: [
+            Fx_q("s10a", "Wood structural panel wall sheathing — what is the usual nail spacing?",
+                ["6 in at panel edges, 12 in at intermediate supports",
+                 "12 in at panel edges, 6 in at intermediate supports",
+                 "6 in everywhere",
+                 "4 in at panel edges, 8 in at intermediate supports"],
+                0,
+                "6 in on the edges, 12 in in the field, unless the braced-wall schedule for your job tightens it. Edges are where the panel does its shear work.",
+                "IRC Table R602.3(1) items 31–33 · R602.10")
+        ],
+        s11: [
+            Fx_q("s11a", "How deep must the ridge board be?",
+                ["Not less than the depth of the cut end of the rafter",
+                 "Not less than half the rafter depth",
+                 "The same nominal size as the top plate",
+                 "Whatever the roof sheathing can span"],
+                0,
+                "The rafter is cut at the roof angle, so its end is deeper than the lumber is wide. The ridge has to bear on that whole cut end.",
+                "IRC R802.3")
+        ],
+        s12: [
+            Fx_q("s12a", "In what order does flashing lap so that water drains out of the wall?",
+                ["Each upper layer laps over the one below it, shingle fashion",
+                 "Each lower layer laps over the one above it",
+                 "Order does not matter once it is sealed",
+                 "All laps are taped, so the sequence is irrelevant"],
+                0,
+                "Water runs down. Every layer has to shed onto the face of the one below. A single reverse lap turns the whole assembly into a funnel, no matter how much sealant is on it.",
+                "IRC R703.4 · IBC 1404.4")
+        ],
+        w1: [
+            Fx_q("w1a", "Where does the rough-opening size come from?",
+                ["The window manufacturer's installation instructions",
+                 "The glass size plus 2 in all round",
+                 "The outside of the flange plus ½ in",
+                 "A standard table of window sizes"],
+                0,
+                "Only the instructions for that exact unit. Glass size and flange size are not rough-opening size, and 'standard' sizes vary between makers.",
+                "IRC R609.3")
+        ],
+        w2: [
+            Fx_q("w2a", "How far does a king stud run?",
+                ["Plate to plate, full height, like a common stud",
+                 "From the bottom plate to the underside of the header",
+                 "From the top of the rough sill to the top plate",
+                 "Only as far as the header is deep"],
+                0,
+                "Full height, plate to plate. The stud that stops under the header is the JACK — that is the whole difference between the two.",
+                "IRC R602.7.5")
+        ],
+        w3: [
+            Fx_q("w3a", "How much bearing does a header need at each end?",
+                ["1½ in minimum, for the full width of the header",
+                 "3 in minimum, for the full width",
+                 "¾ in is enough if it is nailed to the king",
+                 "None — the nails into the king stud carry it"],
+                0,
+                "1½ in minimum each end, full width. The jack carries the load in bearing; the nails only hold the header in place.",
+                "IRC R602.7.5 · IBC 2308.5.5.1"),
+            Fx_q("w3b", "Where does the header size come from?",
+                ["Table R602.7(1), from the clear span, building width and load",
+                 "The width of the window",
+                 "Whatever matches the wall thickness",
+                 "Two plies of the same size as the studs"],
+                0,
+                "Span, building width and what is above it — roof only, one floor plus roof, two floors plus roof. Window width alone tells you nothing about the load path.",
+                "IRC R602.7 / Table R602.7(1)")
+        ],
+        w4: [
+            Fx_q("w4a", "Cripple studs over the header and under the sill sit where?",
+                ["On the same o.c. layout as the wall's common studs",
+                 "Evenly spaced across the opening, wherever they land",
+                 "One at each end of the opening only",
+                 "Directly above and below the jack studs"],
+                0,
+                "They continue the wall's layout straight through the opening, so sheathing edges and drywall still find framing on the module.",
+                "IRC R602.3.1 · IBC 2308.5.1")
+        ],
+        w5: [
+            Fx_q("w5a", "You measure both diagonals of the rough opening and they differ by ⅜ in. What does that tell you?",
+                ["The opening is out of square and must be corrected before sheathing",
+                 "Nothing — ⅜ in is within tolerance for framing",
+                 "The header is undersized",
+                 "The sill is not level"],
+                0,
+                "Equal diagonals is the definition of square. Unequal ones say the opening is racked — fix it before the sheathing locks the wall in that shape.",
+                "IRC R609.3")
+        ],
+        w7: [
+            Fx_q("w7a", "In what order does the flashing go on around a window?",
+                ["Sill pan first, then the jambs, then the head",
+                 "Head first, then the jambs, then the sill",
+                 "Jambs first, then sill and head together",
+                 "All four at once, then tape the corners"],
+                0,
+                "Bottom up, so each piece laps over the one below. The head goes on last, over the jamb tops, and the WRB head flap returns over it.",
+                "IRC R703.4")
+        ],
+        w9: [
+            Fx_q("w9a", "Which fastener do you use to attach the window?",
+                ["The one the window's own instructions specify",
+                 "The same 16d common used for the framing",
+                 "Any exterior screw of the right length",
+                 "8d roofing nails through the flange"],
+                0,
+                "There is no universal swap. Type, length, material, which holes, and spacing all come from that unit's instructions — and using anything else usually voids the warranty as well as the listing.",
+                "IRC R609.3")
+        ],
+        w11: [
+            Fx_q("w11a", "You are foaming the gap between the window frame and the framing. What is the risk?",
+                ["Over-filling bows the jamb and binds the sash; packed foam can block the weeps",
+                 "None — fill it as full as possible",
+                 "Foam is not permitted at windows",
+                 "It must be filled from the exterior side"],
+                0,
+                "Use low-expansion window-and-door foam in controlled lifts from the interior, and keep the exterior weeps clear so the pan can still drain.",
+                "IRC N1102.4.1 · R609.3")
+        ]
+    };
+
+    // ---- questions read off the wall the user actually entered ------------
+    function Fx_generatedQuiz(wall, key) {
+        var out = [], t = wall.S.t, op = wall.openings[0];
+
+        if (key === "w1" || key === "s7") {
+            var first = wall.layout[0] - t / 2;
+            out.push(Fx_q("g-first-" + wall.oc,
+                "On YOUR wall — studs at " + wall.oc + " in o.c. with " + wall.spec.studSize +
+                " lumber. Where does the first common stud line go?",
+                [Fx_inFmt(first), Fx_inFmt(wall.oc), Fx_inFmt(wall.oc + t / 2), Fx_inFmt(wall.oc - t)]
+                    .map(function (v) { return v; }),
+                0,
+                "Half a stud back from the module: " + wall.oc + " − " + Fx_inFmt(t / 2) + " = " +
+                Fx_inFmt(first) + ". Set the near edge on that line and the centre lands on " +
+                Fx_inFmt(wall.oc) + ".",
+                "IRC R602.3.1"));
+        }
+
+        if (op && (key === "w3" || key === "s8")) {
+            var span = op.roR - op.roL,
+                jack = t * (op.spec.jacks || 1),
+                right = span + 2 * jack,
+                king = t * (op.spec.kings || 1);
+            out.push(Fx_q("g-hdr-" + Math.round(span * 8) + "-" + Math.round(jack * 8),
+                "On YOUR wall — the rough opening is " + Fx_inFmt(span) +
+                " wide with " + (op.spec.jacks || 1) + " jack each end. How long is the header?",
+                [Fx_inFmt(right), Fx_inFmt(span), Fx_inFmt(right + 2 * king), Fx_inFmt(span + jack)],
+                0,
+                "The header runs king face to king face, sitting on the jacks: " + Fx_inFmt(span) +
+                " of opening plus " + Fx_inFmt(jack) + " of jack at each end = " + Fx_inFmt(right) +
+                ". Cutting it to the opening width (" + Fx_inFmt(span) +
+                ") leaves it with no bearing at all.",
+                "IRC R602.7.5 · IBC 2308.5.5.1"));
+
+            var jackLen = op.hdrY0 - wall.plateB;
+            out.push(Fx_q("g-jack-" + Math.round(jackLen * 8),
+                "On YOUR wall — how long is each jack stud?",
+                [Fx_inFmt(jackLen), Fx_inFmt(op.hdrY0), Fx_inFmt(op.hdrY1 - wall.plateB),
+                 Fx_inFmt(wall.studTop - wall.plateB)],
+                0,
+                "From the top of the bottom plate to the UNDERSIDE of the header: " +
+                Fx_inFmt(op.hdrY0) + " head height − " + Fx_inFmt(wall.plateB) + " plate = " +
+                Fx_inFmt(jackLen) + ". The full plate-to-plate length (" +
+                Fx_inFmt(wall.studTop - wall.plateB) + ") is the KING.",
+                "IRC R602.7.5"));
+        }
+
+        if (op && (key === "w4" || key === "s8")) {
+            var overLen = wall.studTop - op.hdrY1,
+                overs = wall.members.filter(function (m) { return m.kind === "cripple" && m.over; }).length;
+            if (overLen > 0.25)
+                out.push(Fx_q("g-crip-" + Math.round(overLen * 8) + "-" + overs,
+                    "On YOUR wall — how many cripples sit over the header, and how long are they?",
+                    [overs + " at " + Fx_inFmt(overLen),
+                     (overs + 1) + " at " + Fx_inFmt(overLen),
+                     overs + " at " + Fx_inFmt(op.hdrY1),
+                     "None — the header carries the plate"],
+                    0,
+                    overs + " cripple" + (overs === 1 ? "" : "s") + ", one on each wall layout line that " +
+                    "falls inside the opening, each " + Fx_inFmt(wall.studTop) + " − " +
+                    Fx_inFmt(op.hdrY1) + " = " + Fx_inFmt(overLen) + " long.",
+                    "IRC R602.3.1"));
+        }
+
+        return out;
+    }
+
+    // Every question above is authored with the right answer first, which makes
+    // "always pick A" a winning strategy. Shuffle deterministically off the
+    // question id: stable across re-renders (so the choices do not dance while
+    // you read them) but different per question.
+    function Fx_seedFrom(id) {
+        var h = 2166136261;
+        for (var i = 0; i < id.length; i++) {
+            h ^= id.charCodeAt(i);
+            h = (h * 16777619) >>> 0;
+        }
+        return h;
+    }
+
+    function Fx_shuffleQuestion(q) {
+        var seed = Fx_seedFrom(q.id) || 1,
+            idx = q.choices.map(function (_, i) { return i; });
+        // xorshift32 — stays inside 32 bits. A plain LCG here overflowed the
+        // 53-bit safe range, the low bits collapsed to zero, and every answer
+        // ended up in the same slot.
+        function next() {
+            seed ^= (seed << 13); seed >>>= 0;
+            seed ^= (seed >>> 17);
+            seed ^= (seed << 5); seed >>>= 0;
+            return seed;
+        }
+        for (var i = idx.length - 1; i > 0; i--) {
+            var j = next() % (i + 1), tmp = idx[i];
+            idx[i] = idx[j];
+            idx[j] = tmp;
+        }
+        return Object.assign({}, q, {
+            choices: idx.map(function (i) { return q.choices[i]; }),
+            answer: idx.indexOf(q.answer)
+        });
+    }
+
+    function Fx_quizFor(step, wall) {
+        var key = (step.phase && step.phase.indexOf("Window") === 0 ? "w" : "s") + step.diagram;
+        return (Fx_STATIC_QUIZ[key] || [])
+            .concat(wall ? Fx_generatedQuiz(wall, key) : [])
+            .map(Fx_shuffleQuestion);
+    }
+
+    // ---- the panel --------------------------------------------------------
+    function Fx_QuizPanel(props) {
+        var step = props.step,
+            isWindow = step.phase && step.phase.indexOf("Window") === 0,
+            spec = Fx_useSpec(isWindow ? "window" : "structure"),
+            wall = Ts.useMemo(function () {
+                return Fx_buildWall(isWindow ? spec : {
+                    studSize: spec.studSize, wallLength: spec.wallLength,
+                    spacing: spec.spacing, openings: spec.openings
+                });
+            }, [spec, isWindow]),
+            questions = Ts.useMemo(function () { return Fx_quizFor(step, wall); }, [step, wall]),
+            answers = Fx_useQuizAnswers();
+
+        if (!questions.length) return null;
+
+        var done = questions.filter(function (q) { return answers[q.id] != null; }),
+            right = done.filter(function (q) { return answers[q.id] === q.answer; }).length,
+            all = done.length === questions.length;
+
+        return Fx_Jx("section", {
+            className: "quiz-panel" + (all ? (right === questions.length ? " aced" : " done") : ""),
+            children: [
+                Fx_Jx("header", {
+                    children: [
+                        Fx_Jx("div", { children: [
+                            Fx_J("b", { children: "CHECK YOURSELF" }),
+                            Fx_J("span", {
+                                children: all
+                                    ? (right === questions.length
+                                        ? "All correct — you know why, not just what."
+                                        : "Read the ones you missed. The reason matters more than the score.")
+                                    : "Answer before you move on. Wrong answers explain themselves."
+                            })
+                        ]}),
+                        Fx_Jx("div", { className: "quiz-score", children: [
+                            Fx_J("b", { children: right + " / " + questions.length }),
+                            done.length ? Fx_J("button", {
+                                onClick: function () {
+                                    Fx_quizStore.reset(questions.map(function (q) { return q.id; }));
+                                },
+                                children: "RESET"
+                            }) : null
+                        ]})
+                    ]
+                }),
+                Fx_J("ol", {
+                    className: "quiz-list",
+                    children: questions.map(function (q, i) {
+                        var picked = answers[q.id],
+                            answered = picked != null,
+                            correct = picked === q.answer;
+                        return Fx_Jx("li", {
+                            className: answered ? (correct ? "right" : "wrong") : "",
+                            children: [
+                                Fx_Jx("p", { className: "quiz-ask", children: [
+                                    Fx_J("i", { children: String(i + 1) }),
+                                    Fx_J("span", { children: q.ask })
+                                ]}),
+                                Fx_J("div", {
+                                    className: "quiz-choices",
+                                    children: q.choices.map(function (c, ci) {
+                                        var state = !answered ? ""
+                                            : ci === q.answer ? " is-right"
+                                            : ci === picked ? " is-wrong" : " is-dim";
+                                        return Fx_Jx("button", {
+                                            className: "quiz-choice" + state,
+                                            disabled: answered,
+                                            onClick: function () { Fx_quizStore.pick(q.id, ci); },
+                                            children: [
+                                                Fx_J("em", { children: String.fromCharCode(65 + ci) }),
+                                                Fx_J("span", { children: c }),
+                                                answered && ci === q.answer ? Fx_J("s", { children: "✓" }) : null,
+                                                answered && ci === picked && ci !== q.answer ? Fx_J("s", { children: "✕" }) : null
+                                            ]
+                                        }, ci);
+                                    })
+                                }),
+                                answered ? Fx_Jx("div", {
+                                    className: "quiz-why",
+                                    children: [
+                                        Fx_J("b", { children: correct ? "Right — " : "Not quite — " }),
+                                        Fx_J("span", { children: q.why }),
+                                        Fx_J("u", { children: q.code })
+                                    ]
+                                }) : null
+                            ]
+                        }, q.id);
+                    })
+                })
+            ]
+        });
+    }
+
     function hP({
         stage: t,
         title: e,
@@ -57080,6 +57575,8 @@ No matching component was found for:
                                 })]
                             })]
                         }), (0, k.jsx)(Fx_CodePanel, {
+                            step: C
+                        }), (0, k.jsx)(Fx_QuizPanel, {
                             step: C
                         }), (0, k.jsx)("button", {
                             className: n.has(f + p) ? "undo-step" : "complete-step",
