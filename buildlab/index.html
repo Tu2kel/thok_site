@@ -53642,6 +53642,136 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // CORNER POSTS AND PARTITION INTERSECTIONS
+    // ---------------------------------------------------------------------
+    // IRC Figure R602.3(2), Framing Details — Corner and Partition Posts, and
+    // APA Advanced Framing Figures 3 and 4.
+    //
+    // Plan coordinates, looking down. The outside corner is at (0,0):
+    //   wall A runs away in +X, its exterior face on z = 0
+    //   wall B runs away in +Z, its exterior face on x = 0, butting into A
+    // so wall A is continuous through the corner and wall B lands on it.
+    //
+    // The whole point of the California corner is what it does to the cavity.
+    // The conventional three-stud corner traps a pocket that insulation
+    // cannot reach; the same three sticks rearranged leave it open to the
+    // bay. That difference is computed here from the geometry, not asserted.
+    // =====================================================================
+    function Fx_cornerPlan(type, studSize) {
+        var S = Fx_LUMBER[studSize], d = S.w, t = S.t, m = [];
+
+        function put(kind, label, x0, x1, z0, z1, wall, flat) {
+            m.push({ kind: kind, label: label, x0: x0, x1: x1, z0: z0, z1: z1,
+                     wall: wall, flat: !!flat });
+        }
+
+        // Wall A's end stud always sits at the very end of the run.
+        put("stud", "Wall A end stud", 0, t, 0, d, "A");
+        // Wall B butts into wall A's inside face; its end stud is the first
+        // thing wall B has, and it is what wall A's drywall dies into.
+        put("stud", "Wall B end stud", 0, d, d, d + t, "B");
+
+        if (type === "california") {
+            // Third stud laid FLAT on wall A's inside face, starting where the
+            // end stud finishes -- it must not occupy the same wood. It backs
+            // the drywall returning off wall B, and because it is only 1 1/2
+            // deep the rest of the corner stays open to wall A's bay.
+            put("stud", "Backing stud, laid flat", t, t + d, d - t, d, "A", true);
+        } else if (type === "conventional") {
+            // Two full-depth studs with a pocket between them. Sheathing
+            // closes it outside, drywall closes it inside: that pocket is the
+            // isolated cavity the figure calls out.
+            put("stud", "Second corner stud", 2 * t, 3 * t, 0, d, "A");
+        } else if (type === "twoStud") {
+            // Nothing added. Backing for the returning drywall comes from
+            // clips or ladder blocking, which are not lumber in the cavity.
+        }
+        return { type: type, S: S, depth: d, members: m };
+    }
+
+    // Is there a pocket of cavity that framing seals off on all four sides?
+    // Sampled on a 1/8" grid across the corner, then flood-filled from the
+    // open edges: anything the fill cannot reach is an isolated cavity.
+    function Fx_isolatedCavity(corner, reach) {
+        var d = corner.depth, step = 0.125,
+            W = Math.round((reach || d * 2) / step), H = Math.round(d / step),
+            solid = function (x, z) {
+                return corner.members.some(function (p) {
+                    return x >= p.x0 - 1e-9 && x <= p.x1 + 1e-9 && z >= p.z0 - 1e-9 && z <= p.z1 + 1e-9;
+                });
+            };
+        var grid = [], i, j;
+        for (i = 0; i <= W; i++) {
+            grid[i] = [];
+            for (j = 0; j <= H; j++) grid[i][j] = solid(i * step + step / 2, j * step + step / 2) ? 1 : 0;
+        }
+        // flood from the far edge of wall A's bay (x = reach), which is open
+        var seen = {}, stack = [];
+        for (j = 0; j <= H; j++) if (!grid[W][j]) { stack.push([W, j]); seen[W + "," + j] = 1; }
+        while (stack.length) {
+            var c = stack.pop(), x = c[0], z = c[1];
+            [[1,0],[-1,0],[0,1],[0,-1]].forEach(function (dxz) {
+                var nx = x + dxz[0], nz = z + dxz[1], k = nx + "," + nz;
+                if (nx < 0 || nz < 0 || nx > W || nz > H || seen[k] || grid[nx][nz]) return;
+                seen[k] = 1; stack.push([nx, nz]);
+            });
+        }
+        var trapped = 0;
+        for (i = 0; i <= W; i++) for (j = 0; j <= H; j++)
+            if (!grid[i][j] && !seen[i + "," + j]) trapped++;
+        return { trappedSqIn: trapped * step * step, hasIsolatedCavity: trapped * step * step > 1 };
+    }
+
+    // Does the drywall returning off each wall land on something?
+    function Fx_cornerBacking(corner) {
+        var d = corner.depth, eps = 1e-6;
+        // Wall A's inside face is the plane z = d; wall B's is x = d.
+        // Drywall needs a face lying IN the finish plane to nail to.
+        // Wall A's interior face is z = d; wall B's is x = d.
+        var backsA = corner.members.some(function (p) {
+                return Math.abs(p.z1 - d) < eps && p.x0 < d - eps;
+            }),
+            backsB = corner.members.some(function (p) {
+                return Math.abs(p.x1 - d) < eps && p.z1 > d - eps;
+            }) || corner.members.some(function (p) {
+                // a flat backing stud crossing the plane presents a face there
+                return p.flat && p.x0 < d - eps && p.x1 > d + eps && p.z1 > d - t - eps;
+            });
+        return { wallA: backsA, wallB: backsB };
+    }
+
+    // Every pair of members that should be in contact, and by how much they
+    // miss. This is the "no gaps because the geometry is right" check.
+    function Fx_cornerFit(corner) {
+        var out = [], ms = corner.members, eps = 1e-6;
+        for (var i = 0; i < ms.length; i++)
+            for (var j = i + 1; j < ms.length; j++) {
+                var a = ms[i], b = ms[j],
+                    ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0),
+                    oz = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0);
+                if (ox > eps && oz > eps) {
+                    out.push({ a: a.label, b: b.label, state: "overlap",
+                               amount: Math.min(ox, oz) });
+                } else if ((Math.abs(ox) < eps && oz > eps) || (Math.abs(oz) < eps && ox > eps)) {
+                    out.push({ a: a.label, b: b.label, state: "touching", amount: 0 });
+                }
+            }
+        return out;
+    }
+
+    var Fx_CORNER_TYPES = [
+        { value: "california", label: "Insulated three-stud (California corner)",
+          note: "Third stud laid flat on the inside face. Backs the returning drywall and leaves the corner open to the bay.",
+          code: "APA Advanced Framing Fig. 3 · IRC Fig. R602.3(2)" },
+        { value: "conventional", label: "Conventional three-stud corner",
+          note: "Two studs with blocking between. Works, but it traps a cavity insulation cannot reach.",
+          code: "IRC Fig. R602.3(2)" },
+        { value: "twoStud", label: "Two-stud corner (clips or ladder blocking)",
+          note: "No third stud. The code permits omitting it where clips, backup cleats or 2x ladder blocking at 24″ o.c. back the finish.",
+          code: "APA Advanced Framing Fig. 4 · IRC Fig. R602.3(2)" }
+    ];
+
+    // =====================================================================
     // RENDERING -- turns generated members into meshes. One material per
     // mesh, all sharing the same shader program, so a few hundred sticks
     // stay cheap.
