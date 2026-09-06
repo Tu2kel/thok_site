@@ -514,6 +514,69 @@
   .model-fastener-tally div{font-size:.6rem}
   .model-fastener-tally b{font-size:.54rem}
 }
+
+/* ---- ground-plane overlay ------------------------------------------- */
+/* The picture fills the stage instead of letterboxing into it, so the
+   ground you tap is the ground you see. */
+.photo-fit-stage>.cam-live,.photo-fit-stage>img,
+.landscape-photo>.cam-live,.landscape-photo>img{object-fit:cover;width:100%;height:100%}
+.photo-fit-stage{position:relative;overflow:hidden;touch-action:none;
+  min-height:300px;max-height:620px;border-radius:.5rem;background:#070907}
+.ground-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ground-grid line{stroke:#7fd4ff;stroke-width:.6;opacity:.22}
+.ground-grid line.major{stroke:#ffd166;stroke-width:1.1;opacity:.4}
+.ground-lot{fill:none;stroke:#ff6b6b;stroke-width:2;stroke-dasharray:7 5}
+.ground-buildable{fill:#48e08a14;stroke:#48e08a;stroke-width:1.6}
+.ground-ref{fill:#7fd4ff1f;stroke:#7fd4ff;stroke-width:1.6;stroke-dasharray:4 3}
+.ground-foot{pointer-events:auto;cursor:move}
+.ground-foot path{fill:#ffb02e38;stroke:#ffb02e;stroke-width:2.4;stroke-linejoin:round}
+.ground-foot path.riser{fill:none;stroke:#fff2d4;stroke-width:1;opacity:.55;
+  transform:translateY(-9px)}
+.ground-taps circle{fill:#0b0f12cc;stroke:#ffd166;stroke-width:2}
+.ground-taps text{fill:#ffd166;font:800 11px ui-monospace;text-anchor:middle}
+
+/* labels ride their own shape's centre, so they no longer pile up */
+.ground-tag{position:absolute;transform:translate(-50%,-50%);pointer-events:none;
+  background:#070a0ce0;border:1px solid #ffffff2e;border-radius:.3rem;
+  padding:.2rem .4rem;font:800 .58rem ui-monospace;letter-spacing:.05em;
+  color:#e9f1f5;white-space:nowrap;text-align:center;line-height:1.35}
+.ground-tag b{display:block;color:#ffc65c;font-size:.66rem}
+.ground-tag i{display:block;font-style:normal;color:#cfe0e8}
+.ground-tag em{display:block;font-style:normal;color:#8fa3ad;font-size:.5rem;margin-top:.12rem}
+.ground-tag.zone-tag{color:#8ff0b6;border-color:#48e08a55}
+.ground-tag.ref-tag{color:#a9e2ff;border-color:#7fd4ff55;font-size:.52rem}
+
+.ground-hold{position:absolute;left:50%;bottom:.7rem;transform:translateX(-50%);
+  background:#0b0f12e8;border:1px solid #ffd16659;border-radius:.3rem;
+  padding:.32rem .6rem;font:900 .6rem ui-monospace;letter-spacing:.08em;color:#ffd166}
+.ground-hold.steady{border-color:#7fd4ff59;color:#a9e2ff}
+
+.ground-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:.5rem .6rem;margin-bottom:.5rem;border:1px solid #ffffff1c;
+  border-radius:.4rem;background:#0e1316}
+.ground-bar>b{color:#ffc65c;font:800 .66rem ui-monospace;letter-spacing:.04em;flex:1 1 16rem}
+.ground-bar.fitted>b{color:#8ff0b6}
+.ground-bar label{display:flex;align-items:center;gap:.3rem;
+  font:700 .56rem ui-monospace;letter-spacing:.05em;color:#93a3ac}
+.ground-bar select,.ground-bar input[type=number]{background:#141a1d;color:#e6eef2;
+  border:1px solid #ffffff24;border-radius:.28rem;padding:.28rem .35rem;
+  font:700 .6rem ui-monospace}
+.ground-bar input[type=number]{width:4.2rem}
+.ground-bar button{background:#141a12;color:#dfe6dc;border:1px solid #ffffff24;
+  border-radius:.3rem;padding:.35rem .55rem;font:900 .56rem ui-monospace;
+  letter-spacing:.05em;cursor:pointer}
+.ground-bar button:hover{border-color:#e9a329;color:#ffc65c}
+.ground-note{margin-top:.45rem;color:#7e897c;font-size:.66rem;line-height:1.5}
+@media (max-width:640px){
+  .ground-bar>b{flex:1 1 100%}
+  .photo-fit-stage{min-height:260px}
+  .ground-tag{font-size:.5rem;padding:.15rem .3rem}
+  .ground-tag b{font-size:.58rem}
+}
+.ground-tag.lot-tag{color:#ffb0b0;border-color:#ff6b6b55}
+.ground-foot path{fill:#ffb02e4d}
+.ground-warn{margin-top:.45rem;padding:.4rem .55rem;border:1px solid #ff6b6b4d;
+  border-radius:.35rem;background:#2a12128c;color:#ffb3b3;font-size:.66rem;line-height:1.5}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -56090,6 +56153,524 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // GROUND PLANE
+    // ---------------------------------------------------------------------
+    // The overlays used to be divs with a fixed skewX(-9deg) on them: a
+    // rectangle pasted flat on the screen that tilted the same amount no
+    // matter where the camera was pointing. Nothing lay on the ground, so a
+    // footprint you dragged "into" the yard was never actually in the yard.
+    //
+    // This solves the real thing. Tap the four corners of something you can
+    // measure that is lying on the ground -- a sheet of ply, a slab, a door
+    // blank, a tape square -- and say how big it is. That gives four point
+    // pairs, which is exactly enough to pin down the 8-degree-of-freedom
+    // homography between the ground and the picture. After that any ground
+    // geometry in feet can be drawn where it truly falls, and anything
+    // measured in the picture can be read back in feet.
+    //
+    // Straight lines stay straight under a homography, so a rectangle on the
+    // ground comes out as a proper trapezoid -- which is what makes it look
+    // like it is lying there instead of stuck to the lens.
+    // =====================================================================
+
+    // Solve A x = b by Gaussian elimination with partial pivoting.
+    function Fx_solve(A, b) {
+        var n = b.length, i, j, k, M = A.map(function (r, ri) { return r.concat([b[ri]]); });
+        for (i = 0; i < n; i++) {
+            var p = i;
+            for (j = i + 1; j < n; j++)
+                if (Math.abs(M[j][i]) > Math.abs(M[p][i])) p = j;
+            if (Math.abs(M[p][i]) < 1e-12) return null;      // degenerate taps
+            var t = M[i]; M[i] = M[p]; M[p] = t;
+            for (j = i + 1; j < n; j++) {
+                var f = M[j][i] / M[i][i];
+                if (!f) continue;
+                for (k = i; k <= n; k++) M[j][k] -= f * M[i][k];
+            }
+        }
+        var x = new Array(n);
+        for (i = n - 1; i >= 0; i--) {
+            var s = M[i][n];
+            for (j = i + 1; j < n; j++) s -= M[i][j] * x[j];
+            x[i] = s / M[i][i];
+        }
+        return x;
+    }
+
+    // Homography taking ground (feet) -> picture, from 4 correspondences.
+    function Fx_homography(g, p) {
+        if (!g || !p || g.length < 4 || p.length < 4) return null;
+        var A = [], b = [];
+        for (var i = 0; i < 4; i++) {
+            var X = g[i].x, Y = g[i].y, u = p[i].x, v = p[i].y;
+            A.push([X, Y, 1, 0, 0, 0, -u * X, -u * Y]); b.push(u);
+            A.push([0, 0, 0, X, Y, 1, -v * X, -v * Y]); b.push(v);
+        }
+        var h = Fx_solve(A, b);
+        if (!h) return null;
+        for (var k = 0; k < 8; k++) if (!isFinite(h[k])) return null;
+        return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
+    }
+
+    function Fx_applyH(H, x, y) {
+        var w = H[6] * x + H[7] * y + H[8];
+        if (Math.abs(w) < 1e-9) return null;                 // on the horizon
+        return { x: (H[0] * x + H[1] * y + H[2]) / w,
+                 y: (H[3] * x + H[4] * y + H[5]) / w, w: w };
+    }
+
+    function Fx_invertH(H) {
+        var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5],
+            g = H[6], h = H[7], i = H[8],
+            det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+        if (!det || !isFinite(det)) return null;
+        return [ (e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det,
+                 (f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det,
+                 (d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det ];
+    }
+
+    // A tapped quad is only usable if it is convex and actually has area --
+    // taps in the wrong order fold it into a bow tie and every projection
+    // afterwards is nonsense.
+    function Fx_quadOk(p) {
+        if (!p || p.length !== 4) return false;
+        var sign = 0;
+        for (var i = 0; i < 4; i++) {
+            var a = p[i], b = p[(i + 1) % 4], c = p[(i + 2) % 4],
+                z = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+            if (Math.abs(z) < 1e-6) return false;
+            if (sign === 0) sign = z > 0 ? 1 : -1;
+            else if ((z > 0 ? 1 : -1) !== sign) return false;
+        }
+        return true;
+    }
+
+    // The reference rectangle, tapped near-left, near-right, far-right,
+    // far-left, is the ground square: (0,0) (w,0) (w,d) (0,d) in feet.
+    function Fx_groundFit(taps, w, d) {
+        if (!Fx_quadOk(taps)) return null;
+        var g = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: d }, { x: 0, y: d }],
+            H = Fx_homography(g, taps);
+        if (!H) return null;
+        var Hi = Fx_invertH(H);
+        if (!Hi) return null;
+        return {
+            H: H, Hi: Hi, w: w, d: d,
+            toImage: function (x, y) { return Fx_applyH(H, x, y); },
+            toGround: function (u, v) { return Fx_applyH(Hi, u, v); }
+        };
+    }
+
+    // Project a ground polygon, dropping it if any corner falls behind the
+    // camera or on the horizon -- better no shape than a shape turned inside
+    // out.
+    function Fx_projectPoly(fit, pts) {
+        var out = [], ref = null;
+        for (var i = 0; i < pts.length; i++) {
+            var q = fit.toImage(pts[i].x, pts[i].y);
+            if (!q) return null;
+            if (ref === null) ref = q.w > 0 ? 1 : -1;
+            else if ((q.w > 0 ? 1 : -1) !== ref) return null;
+            out.push(q);
+        }
+        return out;
+    }
+
+    // A rectangle on the ground, centred at cx,cy, turned by deg.
+    function Fx_groundRect(cx, cy, w, d, deg) {
+        var a = (deg || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a),
+            hw = w / 2, hd = d / 2;
+        return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(function (p) {
+            return { x: cx + p[0] * c - p[1] * s, y: cy + p[0] * s + p[1] * c };
+        });
+    }
+
+    function Fx_polyPath(p) {
+        return p.map(function (q, i) {
+            return (i ? "L" : "M") + q.x.toFixed(2) + " " + q.y.toFixed(2);
+        }).join(" ") + " Z";
+    }
+
+    function Fx_polyCentre(p) {
+        var x = 0, y = 0;
+        p.forEach(function (q) { x += q.x; y += q.y; });
+        return { x: x / p.length, y: y / p.length };
+    }
+
+    // Common things on a site that are already a known size, so nobody has to
+    // go and measure something before the app will work.
+    var Fx_GROUND_REFS = [
+        { id: "ply", label: "Sheet of ply / OSB", w: 4, d: 8 },
+        { id: "ply2", label: "Sheet, laid the other way", w: 8, d: 4 },
+        { id: "door", label: "Door blank 3′ × 6′-8″", w: 3, d: 6.667 },
+        { id: "slab", label: "Paver / slab 2′ × 2′", w: 2, d: 2 },
+        { id: "tape", label: "Tape square 10′ × 10′", w: 10, d: 10 },
+        { id: "custom", label: "Something else I measured", w: 4, d: 8 }
+    ];
+
+    // =====================================================================
+    // PHOTO-TO-SCALE STAGE
+    // ---------------------------------------------------------------------
+    // What this replaces: the footprint and the lot were <div>s carrying a
+    // fixed skewX(-9deg), sized by a px-per-foot number that was then clamped
+    // to between 12 and 72 pixels wide. So the shed came out the same postage
+    // stamp whether the lot was 20 ft or 200, it tilted by the same 9 degrees
+    // wherever the camera pointed, and none of it sat on the ground.
+    //
+    // And the calibration would run on a moving picture. You could tap both
+    // points on a live feed and the toolbar would answer SCALE SET, for a
+    // frame that was already gone. That is the one that actually costs you
+    // material, so the frame now holds still before anything is measured.
+    // =====================================================================
+    var Fx_TAP_ORDER = [
+        { n: 1, hint: "near-left corner" },
+        { n: 2, hint: "near-right corner" },
+        { n: 3, hint: "far-right corner" },
+        { n: 4, hint: "far-left corner" }
+    ];
+
+    // Midpoint of one edge of a projected quad: 0 = the near edge, 2 = the
+    // far edge. Tags hang off an edge rather than sitting in the middle,
+    // which is what let them collide in the first place.
+    function Fx_edgeMid(poly, i) {
+        var a = poly[i % poly.length], b = poly[(i + 1) % poly.length];
+        return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
+
+    // Place tags, then separate any that still overlap by sliding the lower
+    // one further down. Cheap, stable, and good enough for four labels.
+    function Fx_layoutTags(tags, size) {
+        var live = tags.filter(Boolean).map(function (t) {
+            return { t: t, x: t.at.x, y: t.at.y + (t.dy || 0) };
+        });
+        // Input order is priority order: the first tag keeps the spot it
+        // asked for and every later one moves out of its way, away from it
+        // rather than always downward.
+        for (var i = 1; i < live.length; i++) {
+            for (var j = 0; j < i; j++) {
+                var A = live[i], B = live[j],
+                    needY = (A.t.h + B.t.h) / 2 + 8,
+                    needX = (A.t.w + B.t.w) / 2;
+                if (Math.abs(A.x - B.x) < needX && Math.abs(A.y - B.y) < needY)
+                    A.y = A.y < B.y ? B.y - needY : B.y + needY;
+            }
+        }
+        return live.map(function (L) {
+            var x = Math.max(L.t.w / 2 + 4, Math.min(size.w - L.t.w / 2 - 4, L.x)),
+                y = Math.max(L.t.h / 2 + 4, Math.min(size.h - L.t.h / 2 - 4, L.y));
+            return Fx_J("span", {
+                className: "ground-tag " + L.t.cls,
+                style: { left: x + "px", top: y + "px" },
+                children: L.t.children
+            }, L.t.key);
+        });
+    }
+
+    function Fx_GroundStage(props) {
+        var cam = props.cam,
+            tapsS = Ts.useState([]), taps = tapsS[0], setTaps = tapsS[1],
+            refS = Ts.useState("ply"), refId = refS[0], setRefId = refS[1],
+            rwS = Ts.useState(4), refW = rwS[0], setRefW = rwS[1],
+            rdS = Ts.useState(8), refD = rdS[0], setRefD = rdS[1],
+            posS = Ts.useState(null), pos = posS[0], setPos = posS[1],
+            rotS = Ts.useState(0), rot = rotS[0], setRot = rotS[1],
+            gridS = Ts.useState(true), grid = gridS[0], setGrid = gridS[1],
+            sizeS = Ts.useState({ w: 0, h: 0 }), size = sizeS[0], setSize = sizeS[1],
+            stageRef = Ts.useRef(null),
+            dragRef = Ts.useRef(false);
+
+        // The stage is the coordinate system for every tap and every polygon,
+        // so its pixel size has to be known, and re-known when the phone turns.
+        Ts.useEffect(function () {
+            var el = stageRef.current;
+            if (!el) return;
+            function read() {
+                var r = el.getBoundingClientRect();
+                setSize({ w: r.width, h: r.height });
+            }
+            read();
+            if (typeof ResizeObserver === "function") {
+                var ro = new ResizeObserver(read);
+                ro.observe(el);
+                return function () { ro.disconnect(); };
+            }
+            window.addEventListener("resize", read);
+            return function () { window.removeEventListener("resize", read); };
+        }, [cam.mode]);
+
+        // Going back to a moving picture throws the fit away. The old code
+        // kept it, on the reasoning that it was "the same camera at the same
+        // framing" -- but the whole reason to go live is to re-frame, and a
+        // homography is only true for the shot it was solved on.
+        Ts.useEffect(function () {
+            if (cam.mode === "live" && taps.length) { setTaps([]); setPos(null); }
+        }, [cam.mode]);
+
+        var fit = Ts.useMemo(function () {
+            return taps.length === 4 ? Fx_groundFit(taps, refW, refD) : null;
+        }, [taps, refW, refD]);
+
+        var badQuad = taps.length === 4 && !fit;
+
+        function pick(id) {
+            setRefId(id);
+            var r = Fx_GROUND_REFS.filter(function (x) { return x.id === id; })[0];
+            if (r && id !== "custom") { setRefW(r.w); setRefD(r.d); }
+            setTaps([]); setPos(null);
+        }
+
+        function onTap(e) {
+            if (dragRef.current) return;
+            if (taps.length >= 4) return;
+            // A tap on a live picture measures a frame that is already gone.
+            // Hold the frame first; the tap that froze it does not also land,
+            // so nothing is placed against a picture the user never saw still.
+            if (cam.mode === "live") { cam.freeze(); return; }
+            if (!cam.ready) return;
+            var r = e.currentTarget.getBoundingClientRect();
+            setTaps(taps.concat([{ x: e.clientX - r.left, y: e.clientY - r.top }]));
+        }
+
+        // Dragging moves the footprint across the GROUND, not across the
+        // screen: the pointer is read back through the inverse homography, so
+        // it lands where you actually pointed on the dirt.
+        function onDragMove(e) {
+            if (!dragRef.current || !fit) return;
+            var r = stageRef.current.getBoundingClientRect(),
+                g = fit.toGround(e.clientX - r.left, e.clientY - r.top);
+            if (g && isFinite(g.x) && isFinite(g.y)) setPos({ x: g.x, y: g.y });
+        }
+
+        var W_ft = props.width || 8, D_ft = props.length || 10,
+            centre = pos || { x: refW / 2, y: refD + D_ft / 2 };
+
+        // ---- everything drawn on the ground, in feet, then projected ------
+        var shapes = Ts.useMemo(function () {
+            if (!fit) return null;
+            function poly(pts) { return Fx_projectPoly(fit, pts); }
+            var out = { grid: [], marks: [] };
+
+            if (grid) {
+                // a 1 ft grid near the reference, coarse further out, so the
+                // ground reads as ground without turning into a moiré
+                var span = Math.max(24, D_ft * 2 + refD * 2), half = Math.max(16, W_ft * 2);
+                // Lines fade with distance instead of stopping at a hard
+                // edge, which is what a grid painted on real ground does.
+                function fade(d) { return Math.max(0, 1 - d / span); }
+                for (var gx = -half; gx <= half; gx += 1) {
+                    // walk each line out in short hops so it can die away
+                    for (var y0 = -refD; y0 < span; y0 += 2) {
+                        var a = fit.toImage(gx, y0), b = fit.toImage(gx, y0 + 2);
+                        if (a && b && a.w > 0 && b.w > 0)
+                            out.grid.push({ a: a, b: b, major: gx % 5 === 0,
+                                            o: fade(y0) });
+                    }
+                }
+                for (var gy = -refD; gy <= span; gy += 1) {
+                    var c = fit.toImage(-half, gy), d = fit.toImage(half, gy);
+                    if (c && d && c.w > 0 && d.w > 0)
+                        out.grid.push({ a: c, b: d, major: gy % 5 === 0,
+                                        o: fade(gy) });
+                }
+            }
+
+            out.ref = poly([{ x: 0, y: 0 }, { x: refW, y: 0 },
+                            { x: refW, y: refD }, { x: 0, y: refD }]);
+
+            if (props.showZone && props.lotW > 0 && props.lotD > 0) {
+                var lw = props.lotW, ld = props.lotD,
+                    ox = refW / 2 - lw / 2, oy = -props.setbacks.front;
+                out.lot = poly(Fx_groundRect(ox + lw / 2, oy + ld / 2, lw, ld, 0));
+                var bw = lw - props.setbacks.left - props.setbacks.right,
+                    bd = ld - props.setbacks.front - props.setbacks.rear;
+                if (bw > 0 && bd > 0)
+                    out.buildable = poly(Fx_groundRect(
+                        ox + props.setbacks.left + bw / 2,
+                        oy + props.setbacks.front + bd / 2, bw, bd, 0));
+            }
+
+            out.foot = poly(Fx_groundRect(centre.x, centre.y, W_ft, D_ft, rot));
+            // A lot 60 ft across will not fit in a shot taken from inside it.
+            // The projection correctly refuses to draw a shape that wraps
+            // behind the lens -- but silence looks like a bug, so say it.
+            out.zoneTooBig = !!(props.showZone && props.lotW > 0 && !out.lot);
+            return out;
+        }, [fit, grid, centre.x, centre.y, W_ft, D_ft, rot, refW, refD,
+            props.showZone, props.lotW, props.lotD, props.setbacks]);
+
+        var step = Fx_TAP_ORDER[taps.length];
+
+        return Fx_Jx("div", {
+            className: "ground-stage-wrap",
+            children: [
+                // ---- calibration bar -------------------------------------
+                Fx_Jx("div", {
+                    className: "ground-bar" + (fit ? " fitted" : ""),
+                    children: [
+                        Fx_J("b", {
+                            children: !cam.ready ? "Start the camera or choose a photo"
+                                : cam.mode === "live" ? "TAP THE PICTURE TO HOLD THE FRAME — nothing can be measured while it moves"
+                                : badQuad ? "Those four taps cross over. RESET and go round the edge in order."
+                                : fit ? "GROUND LOCKED — the overlay is lying on the ground, not stuck to the screen"
+                                : "Tap the " + step.hint + " of the reference  (" + step.n + " of 4)"
+                        }),
+                        Fx_Jx("label", { children: ["Reference on the ground",
+                            Fx_J("select", {
+                                value: refId,
+                                onChange: function (e) { pick(e.target.value); },
+                                children: Fx_GROUND_REFS.map(function (r) {
+                                    return Fx_J("option", { value: r.id, children: r.label }, r.id);
+                                })
+                            })] }),
+                        refId === "custom" ? Fx_Jx(W.Fragment, { children: [
+                            Fx_Jx("label", { children: ["Across",
+                                Fx_J("input", { type: "number", min: "0.5", step: "0.5", value: refW,
+                                    onChange: function (e) { setRefW(Number(e.target.value) || 1); setTaps([]); } }),
+                                Fx_J("span", { children: "ft" })] }),
+                            Fx_Jx("label", { children: ["Away",
+                                Fx_J("input", { type: "number", min: "0.5", step: "0.5", value: refD,
+                                    onChange: function (e) { setRefD(Number(e.target.value) || 1); setTaps([]); } }),
+                                Fx_J("span", { children: "ft" })] })
+                        ] }) : null,
+                        fit ? Fx_Jx("label", { children: ["Turn",
+                            Fx_J("input", { type: "range", min: "-180", max: "180", value: rot,
+                                onChange: function (e) { setRot(Number(e.target.value)); } }),
+                            Fx_J("span", { children: rot + "°" })] }) : null,
+                        fit ? Fx_J("button", {
+                            onClick: function () { setGrid(!grid); },
+                            children: grid ? "HIDE 1 FT GRID" : "SHOW 1 FT GRID"
+                        }) : null,
+                        taps.length ? Fx_J("button", {
+                            onClick: function () { setTaps([]); setPos(null); },
+                            children: "RESET MARKS"
+                        }) : null
+                    ]
+                }),
+
+                // ---- the picture with the ground drawn on it -------------
+                Fx_Jx("div", {
+                    className: "photo-fit-stage",
+                    ref: stageRef,
+                    onPointerDown: onTap,
+                    onPointerMove: onDragMove,
+                    onPointerUp: function () { dragRef.current = false; },
+                    children: [
+                        Fx_J(Fx_CameraSurface, { cam: cam, alt: "Build area" }),
+
+                        size.w > 0 ? Fx_Jx("svg", {
+                            className: "ground-svg",
+                            viewBox: "0 0 " + size.w + " " + size.h,
+                            preserveAspectRatio: "none",
+                            children: [
+                                shapes && shapes.grid.length ? Fx_J("g", {
+                                    className: "ground-grid",
+                                    children: shapes.grid.map(function (l, i) {
+                                        return Fx_J("line", {
+                                            x1: l.a.x, y1: l.a.y, x2: l.b.x, y2: l.b.y,
+                                            className: l.major ? "major" : "",
+                                            style: { opacity: (l.major ? 0.45 : 0.26) * l.o }
+                                        }, "g" + i);
+                                    })
+                                }) : null,
+
+                                shapes && shapes.lot ? Fx_J("path", {
+                                    className: "ground-lot", d: Fx_polyPath(shapes.lot)
+                                }) : null,
+                                shapes && shapes.buildable ? Fx_J("path", {
+                                    className: "ground-buildable", d: Fx_polyPath(shapes.buildable)
+                                }) : null,
+                                shapes && shapes.ref ? Fx_J("path", {
+                                    className: "ground-ref", d: Fx_polyPath(shapes.ref)
+                                }) : null,
+                                shapes && shapes.foot ? Fx_Jx("g", {
+                                    className: "ground-foot",
+                                    onPointerDown: function (e) {
+                                        e.stopPropagation(); dragRef.current = true;
+                                        e.currentTarget.setPointerCapture &&
+                                            e.currentTarget.setPointerCapture(e.pointerId);
+                                    },
+                                    children: [
+                                        Fx_J("path", { d: Fx_polyPath(shapes.foot) }),
+                                        Fx_J("path", { className: "riser",
+                                            d: Fx_polyPath(shapes.foot) })
+                                    ]
+                                }) : null,
+
+                                // taps, drawn last so they are never buried
+                                Fx_J("g", { className: "ground-taps",
+                                    children: taps.map(function (t, i) {
+                                        return Fx_Jx("g", { children: [
+                                            Fx_J("circle", { cx: t.x, cy: t.y, r: 11 }),
+                                            Fx_J("text", { x: t.x, y: t.y + 4, children: i + 1 })
+                                        ] }, "t" + i);
+                                    })
+                                })
+                            ]
+                        }) : null,
+
+                        // ---- labels, anchored then pushed apart ----------
+                        // Every tag used to sit on its polygon's centroid, so
+                        // the shed, the buildable area and the reference all
+                        // landed in the same place and stacked into a clump.
+                        // Each one now rides an edge of its own shape, and
+                        // whatever still touches gets nudged clear.
+                        shapes ? Fx_layoutTags([
+                            shapes.foot ? {
+                                key: "foot", cls: "foot-tag", h: 52, w: 160,
+                                at: Fx_edgeMid(shapes.foot, 2), dy: -32,
+                                children: [
+                                    Fx_J("b", { children: props.project || "Project" }, "n"),
+                                    Fx_J("i", { children: Fx_ftIn(W_ft * 12) + " × " + Fx_ftIn(D_ft * 12) }, "d"),
+                                    Fx_J("em", { children: "DRAG ONTO THE GROUND" }, "h")
+                                ]
+                            } : null,
+                            shapes.buildable ? {
+                                key: "zone", cls: "zone-tag", h: 20, w: 120,
+                                at: Fx_edgeMid(shapes.buildable, 2), dy: 16,
+                                children: "BUILDABLE AREA"
+                            } : null,
+                            shapes.lot ? {
+                                key: "lot", cls: "lot-tag", h: 20, w: 110,
+                                at: Fx_edgeMid(shapes.lot, 2), dy: 16,
+                                children: "PROPERTY LINE"
+                            } : null,
+                            shapes.ref ? {
+                                key: "ref", cls: "ref-tag", h: 20, w: 150,
+                                at: Fx_edgeMid(shapes.ref, 0), dy: 18,
+                                children: Fx_ftIn(refW * 12) + " × " + Fx_ftIn(refD * 12) + " reference"
+                            } : null
+                        ], size) : null,
+
+                        !cam.ready ? null : cam.mode === "live"
+                            ? Fx_J("div", { className: "ground-hold",
+                                children: "TAP TO HOLD THE FRAME" })
+                            : taps.length < 4
+                                ? Fx_J("div", { className: "ground-hold steady",
+                                    children: "TAP " + step.n + " · " + step.hint.toUpperCase() })
+                                : null
+                    ]
+                }),
+
+                shapes && shapes.zoneTooBig ? Fx_J("p", {
+                    className: "ground-warn",
+                    children: "The " + props.lotW + " × " + props.lotD + " ft lot runs behind the camera "
+                        + "from here, so the property lines cannot be drawn on this frame. Shoot from "
+                        + "further back, or turn the zone off and place the building against the reference."
+                }) : null,
+                Fx_J("p", {
+                    className: "ground-note",
+                    children: fit
+                        ? "Measured off the " + Fx_ftIn(refW * 12) + " × " + Fx_ftIn(refD * 12)
+                          + " reference you tapped. The fit belongs to this frame only — going live again clears it. "
+                          + "Setbacks and property lines still have to be confirmed with the city or a survey."
+                        : "Put something you know the size of flat on the ground, hold the frame, then tap its four corners going round the edge. "
+                          + "That is what lets the app draw on the ground instead of on the screen."
+                })
+            ]
+        });
+    }
+
+    // =====================================================================
     // PLATE LAYOUT PANEL
     // ---------------------------------------------------------------------
     // Enter the wall you are actually standing in front of. Everything below
@@ -59139,35 +59720,7 @@ No matching component was found for:
                     cam: cam
                 })]
             }), cam.ready ? (0, nt.jsxs)(nt.Fragment, {
-                children: [(0, nt.jsxs)("div", {
-                    className: "photo-fit-toolbar",
-                    children: [(0, nt.jsx)("b", {
-                        children: r.length < 2 ? `Tap calibration point ${r.length+1} on the photo` : (0, nt.jsxs)(nt.Fragment, {
-                            children: [(0, nt.jsx)(Rf, {}), " SCALE SET"]
-                        })
-                    }), (0, nt.jsxs)("label", {
-                        children: ["Known distance", " ", (0, nt.jsx)("input", {
-                            type: "number",
-                            min: ".5",
-                            step: ".5",
-                            value: l,
-                            onChange: F => c(Number(F.target.value))
-                        }), (0, nt.jsx)("span", {
-                            children: "ft"
-                        })]
-                    }), (0, nt.jsxs)("label", {
-                        children: ["Rotate", " ", (0, nt.jsx)("input", {
-                            type: "range",
-                            min: "-55",
-                            max: "55",
-                            value: p,
-                            onChange: F => m(Number(F.target.value))
-                        })]
-                    }), (0, nt.jsxs)("button", {
-                        onClick: () => o([]),
-                        children: [(0, nt.jsx)(Fl, {}), "RESET MARKS"]
-                    })]
-                }), (0, nt.jsxs)("section", {
+                children: [(0, nt.jsxs)("section", {
                     className: "setback-controls",
                     children: [(0, nt.jsxs)("header", {
                         children: [(0, nt.jsx)(Py, {}), (0, nt.jsxs)("div", {
@@ -59251,86 +59804,15 @@ No matching component was found for:
                     }), (0, nt.jsxs)("p", {
                         children: [(0, nt.jsx)(jo, {}), "Confirm property lines, easements, zoning district and the proposed structure with the city or survey before treating this as approved."]
                     })]
-                }), (0, nt.jsxs)("div", {
-                    className: "photo-fit-stage",
-                    onPointerDown: H,
-                    children: [(0, nt.jsx)(Fx_CameraSurface, {
-                        cam: cam,
-                        alt: "Build area"
-                    }), r.map((F, Y) => (0, nt.jsx)("span", {
-                        className: "calibration-point",
-                        style: {
-                            left: F.x,
-                            top: F.y
-                        },
-                        children: Y + 1
-                    }, Y)), r.length === 2 && (0, nt.jsxs)("svg", {
-                        className: "calibration-line",
-                        children: [(0, nt.jsx)("line", {
-                            x1: r[0].x,
-                            y1: r[0].y,
-                            x2: r[1].x,
-                            y2: r[1].y
-                        }), (0, nt.jsxs)("text", {
-                            x: (r[0].x + r[1].x) / 2,
-                            y: (r[0].y + r[1].y) / 2 - 10,
-                            children: [l, " ft reference"]
-                        })]
-                    }), L > 0 && g && (0, nt.jsxs)("div", {
-                        className: "lot-zone",
-                        style: {
-                            width: R,
-                            height: D
-                        },
-                        children: [(0, nt.jsx)("span", {
-                            children: "PROPERTY LINE"
-                        }), (0, nt.jsx)("i", {
-                            className: "no-build front",
-                            style: {
-                                height: Math.min(45, C.front / v * 100) + "%"
-                            },
-                            children: "FRONT NO-BUILD"
-                        }), (0, nt.jsx)("i", {
-                            className: "no-build rear",
-                            style: {
-                                height: Math.min(45, C.rear / v * 100) + "%"
-                            },
-                            children: "REAR"
-                        }), (0, nt.jsx)("i", {
-                            className: "no-build left",
-                            style: {
-                                width: Math.min(45, C.left / _ * 100) + "%"
-                            },
-                            children: "SIDE"
-                        }), (0, nt.jsx)("i", {
-                            className: "no-build right",
-                            style: {
-                                width: Math.min(45, C.right / _ * 100) + "%"
-                            },
-                            children: "SIDE"
-                        }), (0, nt.jsx)("b", {
-                            children: "BUILDABLE AREA"
-                        })]
-                    }), L > 0 && (0, nt.jsxs)("div", {
-                        className: "fit-model",
-                        onPointerDown: G,
-                        onPointerMove: V,
-                        onPointerUp: () => A.current = null,
-                        style: {
-                            left: `${f.x}%`,
-                            top: `${f.y}%`,
-                            width: I,
-                            height: E,
-                            transform: `translate(-50%,-50%) rotate(${p}deg) skewX(-9deg)`
-                        },
-                        children: [(0, nt.jsx)("i", {}), (0, nt.jsx)("b", {
-                            children: n
-                        }), (0, nt.jsxs)("span", {
-                            children: [t, "\u2032 \xD7 ", e, "\u2032"]
-                        }), (0, nt.jsxs)("em", {
-                            children: [(0, nt.jsx)(If, {}), " DRAG TO POSITION"]
-                        })]
-                    })]
+                }), (0, nt.jsx)(Fx_GroundStage, {
+                    cam: cam,
+                    width: t,
+                    length: e,
+                    project: n,
+                    lotW: _,
+                    lotD: v,
+                    setbacks: C,
+                    showZone: g
                 })]
             }) : (0, nt.jsx)("div", {
                 className: "photo-fit-empty",
