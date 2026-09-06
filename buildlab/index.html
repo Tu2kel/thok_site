@@ -445,6 +445,56 @@
 .hard-source{color:#8f9a8a;font-size:.62rem;line-height:1.45}
 .hard-panel{margin:.7rem 1rem 1rem}
 @media (max-width:760px){.hard-panel{margin:.6rem .6rem 1rem}}
+/* --- one step, one screen --- */
+.step-tabs{grid-column:1;display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem;margin-top:.65rem}
+.step-tabs button{display:grid;gap:.05rem;text-align:left;background:#141a12;border:1px solid #ffffff20;border-radius:.4rem;padding:.5rem .6rem;cursor:pointer}
+.step-tabs button.on{background:#1d1708;border-color:#e9a329;box-shadow:0 0 0 1px #e9a32966}
+.step-tabs b{color:#cbd4c4;font:900 .66rem ui-monospace;letter-spacing:.08em}
+.step-tabs button.on b{color:#ffc65c}
+.step-tabs span{color:#7f8f7a;font-size:.58rem;line-height:1.25}
+@media (max-width:1100px){.step-tabs{grid-column:1}}
+
+/* DO IT — the model, the instruction, the fastener. Nothing else. */
+.guided-stage.tab-do .layout-panel,
+.guided-stage.tab-do .spec-check,
+.guided-stage.tab-do .code-panel,
+.guided-stage.tab-do .quiz-panel{display:none}
+
+/* CHECK IT — the marks, the cut list, the verification */
+.guided-stage.tab-check .current-instruction>*:not(.complete-step):not(.undo-step){display:none}
+.guided-stage.tab-check .current-instruction{background:none;border:0;padding:0}
+
+/* LEARN IT — the code and the knowledge check */
+.guided-stage.tab-learn .layout-panel,
+.guided-stage.tab-learn .spec-check{display:none}
+.guided-stage.tab-learn .current-instruction>*:not(.code-panel):not(.quiz-panel):not(.complete-step):not(.undo-step){display:none}
+
+/* the complete button stays reachable from every tab */
+.guided-stage.tab-check .complete-step,
+.guided-stage.tab-check .undo-step,
+.guided-stage.tab-learn .complete-step,
+.guided-stage.tab-learn .undo-step{margin-top:.7rem}
+/* collapsible reference blocks inside CHECK IT */
+.lay-key,.lay-schedule,.lay-cuts{display:block}
+.lay-key>summary,.lay-schedule>summary,.lay-cuts>summary{
+  cursor:pointer;list-style:none;color:#f0ac37;letter-spacing:.08em;font:900 .58rem ui-monospace;
+  padding:.45rem .5rem;background:#131a12;border-radius:.3rem;margin-bottom:.35rem;
+  display:flex;align-items:center;gap:.4rem}
+.lay-key>summary::-webkit-details-marker,.lay-schedule>summary::-webkit-details-marker,
+.lay-cuts>summary::-webkit-details-marker{display:none}
+.lay-key>summary::before,.lay-schedule>summary::before,.lay-cuts>summary::before{
+  content:"▸";color:#8f9a8a;font-size:.7rem;transition:transform .12s}
+.lay-key[open]>summary::before,.lay-schedule[open]>summary::before,.lay-cuts[open]>summary::before{
+  content:"▾"}
+.lay-key>summary:hover,.lay-schedule>summary:hover,.lay-cuts>summary:hover{color:#ffc65c}
+/* the mark list is the point of this tab — let it breathe instead of scrolling
+   inside a 260px window that showed two marks at a time */
+.lay-marks ol{max-height:none;overflow:visible}
+.lay-marks-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.35rem}
+.lay-marks-head>b{color:#f0ac37;letter-spacing:.08em;font-size:.58rem}
+.lay-marks-head button{color:#cbd4c4;background:#141a12;border:1px solid #ffffff20;border-radius:.3rem;padding:.3rem .5rem;font:900 .55rem ui-monospace;cursor:pointer}
+.lay-marks-head button.on{color:#171006;background:#e9a329;border-color:#e9a329}
+.lay-marks:not(.with-drives) .lay-drives{display:none}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -56061,6 +56111,7 @@ No matching component was found for:
         var scene = props.sceneType === "window" ? "window" : "structure",
             spec = Fx_useSpec(scene),
             fromState = Ts.useState("cl"), fromMode = fromState[0], setFromMode = fromState[1],
+            drvState = Ts.useState(false), showDrives = drvState[0], setShowDrives = drvState[1],
             wall = Ts.useMemo(function () { return Fx_buildWall(spec); }, [spec]),
             marks = Ts.useMemo(function () {
                 return Fx_marksWithFasteners(wall, Fx_plateMarks(wall));
@@ -56197,9 +56248,16 @@ No matching component was found for:
                 Fx_J(Fx_Tape, { wall: wall, marks: marks }),
 
                 Fx_Jx("div", {
-                    className: "lay-marks",
+                    className: "lay-marks" + (showDrives ? " with-drives" : ""),
                     children: [
-                        Fx_J("b", { children: "EVERY MARK, FROM THE LEFT END" }),
+                        Fx_Jx("div", { className: "lay-marks-head", children: [
+                            Fx_J("b", { children: "EVERY MARK, FROM THE LEFT END" }),
+                            Fx_J("button", {
+                                className: showDrives ? "on" : "",
+                                onClick: function () { setShowDrives(!showDrives); },
+                                children: showDrives ? "HIDE FASTENERS" : "SHOW FASTENERS"
+                            })
+                        ]}),
                         Fx_J("ol", {
                             children: marks.map(function (m, i) {
                                 return Fx_Jx("li", {
@@ -56228,10 +56286,10 @@ No matching component was found for:
                     ]
                 }),
 
-                Fx_Jx("div", {
+                Fx_Jx("details", {
                     className: "lay-key",
                     children: [
-                        Fx_J("b", { children: "WHAT THE COLOURS MEAN" }),
+                        Fx_J("summary", { children: "WHAT THE COLOURS MEAN" }),
                         Fx_J("ul", {
                             children: Fx_ROLE_KEY.map(function (r) {
                                 return Fx_Jx("li", { children: [
@@ -56267,10 +56325,10 @@ No matching component was found for:
                     ]
                 }),
 
-                Fx_Jx("div", {
+                Fx_Jx("details", {
                     className: "lay-schedule",
                     children: [
-                        Fx_J("b", { children: "WHAT TO DRIVE, MEMBER BY MEMBER" }),
+                        Fx_J("summary", { children: "WHAT TO DRIVE, MEMBER BY MEMBER — every joint in the wall" }),
                         Fx_J("div", {
                             children: schedule.map(function (r) {
                                 return Fx_Jx("section", {
@@ -56321,10 +56379,11 @@ No matching component was found for:
                     ]
                 }),
 
-                Fx_Jx("div", {
+                Fx_Jx("details", {
                     className: "lay-cuts",
+                    open: true,
                     children: [
-                        Fx_J("b", { children: "CUT LIST FOR THIS WALL" }),
+                        Fx_J("summary", { children: "CUT LIST FOR THIS WALL" }),
                         Fx_J("ul", {
                             children: cuts.map(function (c, i) {
                                 return Fx_Jx("li", {
@@ -57991,6 +58050,38 @@ No matching component was found for:
         });
     }
 
+    // =====================================================================
+    // ONE STEP, ONE SCREEN
+    // ---------------------------------------------------------------------
+    // Measured before this went in: a single step was 4,746 words and 12
+    // phone screens, with the actual instruction 9,652px down the page. Every
+    // panel was worth having and together they buried the thing you came for.
+    //
+    // DO IT is what you need standing at the wall. The rest is one tap away
+    // and nothing is removed.
+    // =====================================================================
+    var Fx_STEP_TABS = [
+        { id: "do", label: "DO IT", hint: "the model and the instruction" },
+        { id: "check", label: "CHECK IT", hint: "marks, cut list, verification" },
+        { id: "learn", label: "LEARN IT", hint: "the code and a knowledge check" }
+    ];
+
+    function Fx_StepTabs(props) {
+        return Fx_J("div", {
+            className: "step-tabs",
+            children: Fx_STEP_TABS.map(function (t) {
+                return Fx_Jx("button", {
+                    className: props.tab === t.id ? "on" : "",
+                    onClick: function () { props.onTab(t.id); },
+                    children: [
+                        Fx_J("b", { children: t.label }),
+                        Fx_J("span", { children: t.hint })
+                    ]
+                }, t.id);
+            })
+        });
+    }
+
     function hP({
         stage: t,
         title: e,
@@ -59403,6 +59494,7 @@ No matching component was found for:
             [g, x] = (0, Fn.useState)("fastener"),
             [_, b] = (0, Fn.useState)("primary"),
             [v, S] = (0, Fn.useState)(new Set),
+            [Fx_tab, Fx_setTab] = (0, Fn.useState)("do"),
             C = c[p],
             w = tG(C),
             A = C.phase.startsWith("Window"),
@@ -59487,7 +59579,7 @@ No matching component was found for:
                     children: c.map((Q, ee) => (0, k.jsxs)("button", {
                         className: p === ee ? "current" : "",
                         onClick: () => {
-                            m(ee), x(yP(Q) === "none" ? "action" : "fastener"), b("primary")
+                            m(ee), x(yP(Q) === "none" ? "action" : "fastener"), b("primary"), Fx_setTab("do")
                         },
                         children: [(0, k.jsx)("span", {
                             children: n.has(f + ee) ? "\u2713" : String(ee + 1).padStart(2, "0")
@@ -59500,7 +59592,7 @@ No matching component was found for:
                         })]
                     }, Q.title))
                 }), (0, k.jsxs)("main", {
-                    className: "guided-stage",
+                    className: "guided-stage tab-" + Fx_tab,
                     children: [(0, k.jsx)(hP, {
                         stage: n.has(f + p) ? Math.min(12, C.diagram + 1) : C.diagram,
                         title: C.title,
@@ -59515,6 +59607,9 @@ No matching component was found for:
                             marked: H,
                             bow: G
                         }
+                    }), (0, k.jsx)(Fx_StepTabs, {
+                        tab: Fx_tab,
+                        onTab: Fx_setTab
                     }), (0, k.jsx)(Fx_ProjectDims, {
                     width: Fx_pw,
                     length: Fx_pl
