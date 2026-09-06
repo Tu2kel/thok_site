@@ -291,6 +291,58 @@
 .lay-derive b{color:#f0ac37;font:900 .55rem ui-monospace;letter-spacing:.07em}
 .lay-derive span{color:#c9f0d8;font:700 .68rem ui-monospace;line-height:1.4}
 @media (max-width:760px){.lay-derive p{grid-template-columns:1fr;gap:.1rem}}
+/* --- corner studio --- */
+.corner-studio{display:grid;gap:.8rem;padding:1rem;max-width:1500px;margin:0 auto}
+.corner-studio>header{display:flex;align-items:center;gap:1rem}
+.corner-studio>header button{color:#e8b252;letter-spacing:.06em;border:1px solid #fff2;border-radius:.35rem;padding:.6rem .8rem;font-size:.68rem;font-weight:900}
+.corner-studio h1{font-size:1.5rem}
+.corner-controls{display:grid;gap:.6rem}
+.corner-types{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.5rem}
+.corner-types button{text-align:left;background:#141a12;border:1px solid #ffffff20;border-radius:.45rem;padding:.6rem .7rem;display:grid;gap:.2rem;cursor:pointer}
+.corner-types button.on{border-color:#e9a329;background:#1d1708;box-shadow:0 0 0 1px #e9a32966}
+.corner-types b{color:#ffd27a;font-size:.75rem}
+.corner-types span{color:#9aa694;font-size:.66rem;line-height:1.35}
+.corner-toggles{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem}
+.corner-toggles label{display:flex;align-items:center;gap:.35rem;color:#8f9a8a;font:800 .6rem ui-monospace}
+.corner-toggles select{color:#ffe0a6;background:#0b0f0b;border:1px solid #ffffff20;border-radius:.3rem;padding:.35rem .4rem;font:800 .7rem ui-monospace}
+.corner-toggles>button{color:#cbd4c4;background:#141a12;border:1px solid #ffffff20;border-radius:.3rem;padding:.42rem .6rem;font:900 .6rem ui-monospace;cursor:pointer}
+.corner-toggles>button.on{color:#171006;background:#e9a329;border-color:#e9a329}
+.corner-stage{position:relative;background:#101610;border:1px solid #ffffff1c;border-radius:.6rem;overflow:hidden;min-height:460px}
+.corner-stage canvas{touch-action:none;width:100%!important;height:460px!important;cursor:grab}
+.corner-stage canvas:active{cursor:grabbing}
+.corner-hover{position:absolute;left:.7rem;bottom:.7rem;background:#090d0be8;border:1px solid #ffffff1c;border-radius:.4rem;padding:.45rem .6rem;display:grid;gap:.1rem;pointer-events:none}
+.corner-hover b{color:#ffd27a;font-size:.72rem}
+.corner-hover span{color:#9aa694;font:700 .66rem ui-monospace}
+.corner-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:.7rem}
+.corner-card{background:#0e1310;border:1px solid #ffffff18;border-radius:.5rem;padding:.75rem;display:grid;gap:.5rem;align-content:start}
+.corner-card.bad{border-color:#d2564a88}
+.corner-card h2{color:#f0ac37;letter-spacing:.08em;font-size:.6rem;text-transform:uppercase}
+.corner-checks{display:grid;gap:.35rem}
+.corner-checks li{display:grid;grid-template-columns:1.1rem 1fr;gap:.45rem;align-items:baseline;background:#131a12;border-left:3px solid #59df8a;border-radius:.3rem;padding:.4rem .5rem}
+.corner-checks li.warn{border-left-color:#e9a329;background:#1a1509}
+.corner-checks li.bad{border-left-color:#e2695c;background:#1c1210}
+.corner-checks i{font-style:normal;font-weight:900;color:#59df8a}
+.corner-checks li.warn i{color:#e9a329}
+.corner-checks li.bad i{color:#e2695c}
+.corner-checks span{color:#d2dbcd;font-size:.7rem;line-height:1.4}
+.corner-nails,.corner-cuts{display:grid;gap:.35rem}
+.corner-nails li{display:grid;grid-template-columns:auto 1fr;gap:.5rem;align-items:start;background:#131a12;border-radius:.3rem;padding:.4rem .5rem}
+.corner-nails li>i{margin-top:.25rem}
+.corner-nails b{display:block;color:#ffe0a6;font:800 .72rem ui-monospace}
+.corner-nails span{color:#9aa694;font-size:.66rem}
+.corner-cuts li{display:grid;grid-template-columns:1fr auto;gap:.5rem;background:#131a12;border-radius:.3rem;padding:.35rem .5rem}
+.corner-cuts b{color:#e9f0e4;font-size:.7rem;font-weight:700}
+.corner-cuts span{color:#ffd27a;font:800 .68rem ui-monospace}
+.corner-note{color:#9aa694;font-size:.66rem;line-height:1.45}
+.corner-code{color:#7f8f7a;font:700 .6rem ui-monospace;font-style:normal}
+@media (max-width:760px){
+  .corner-studio{padding:.6rem}
+  .corner-stage canvas{height:340px!important}
+  .corner-types{grid-template-columns:1fr}
+}
+.corner-stage canvas{height:520px!important}
+.corner-scale{position:absolute;right:.7rem;top:.7rem;background:#090d0be8;border:1px solid #ffffff1c;border-radius:.35rem;padding:.35rem .55rem;color:#9aa694;font:800 .6rem ui-monospace;pointer-events:none}
+@media (max-width:760px){.corner-stage canvas{height:360px!important}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -53771,6 +53823,107 @@ No matching component was found for:
           code: "APA Advanced Framing Fig. 4 · IRC Fig. R602.3(2)" }
     ];
 
+    // ---- the corner as real 3-D members, with its fasteners --------------
+    // Ladder blocking is just the intermittent version of the California
+    // corner's continuous flat backing stud, which is why the code treats
+    // them as alternatives to the same job.
+    function Fx_cornerAssembly(type, studSize, studHeight, run) {
+        var plan = Fx_cornerPlan(type, studSize),
+            S = plan.S, d = plan.depth, t = S.t,
+            H = studHeight || Fx_PRECUT_STUD,
+            bay = run || d * 2 + 16,
+            members = [], seq = 0;
+
+        function put(kind, label, x0, x1, y0, y1, z0, z1, extra) {
+            var m = { key: "c" + seq++, kind: kind, label: label,
+                      box: Fx_bx(x0, x1, y0, y1, z0, z1) };
+            if (extra) for (var k in extra) m[k] = extra[k];
+            members.push(m);
+            return m;
+        }
+
+        // Plates under and over, so the corner reads as part of a wall.
+        put("plate", "Wall A bottom plate", 0, bay, 0, t, 0, d);
+        put("plate", "Wall B bottom plate", 0, d, 0, t, d, bay);
+        // First top plate: each wall's own, butting at the corner.
+        put("plate", "Wall A top plate", 0, bay, t + H, t + H + t, 0, d);
+        put("plate", "Wall B top plate", 0, d, t + H, t + H + t, d, bay);
+        // Cap plate LAPS the corner the other way — that lap is what ties the
+        // two walls together, and it is why the double top plate exists.
+        put("cap", "Wall B cap plate — laps over wall A", 0, d, t + H + t, t + H + 2 * t, 0, bay);
+        put("cap", "Wall A cap plate — starts clear of the lap", d, bay, t + H + t, t + H + 2 * t, 0, d);
+
+        plan.members.forEach(function (p) {
+            put(p.kind === "block" ? "block" : (p.flat ? "cripple" : "king"),
+                p.label, p.x0, p.x1, t, t + H, p.z0, p.z1,
+                { flat: p.flat, wall: p.wall });
+        });
+
+        if (type === "twoStud") {
+            // 2x ladder blocking at 24" o.c. — the same job the flat stud
+            // does, done intermittently.
+            for (var y = 24; y < H; y += 24)
+                put("block", "2x ladder block", t, t + d, t + y, t + y + t, d - t, d,
+                    { flat: true, ladder: true });
+        }
+
+        // the next common stud along wall A, so the bay reads as a bay
+        put("stud", "Next common stud on layout", bay - t, bay, t, t + H, 0, d);
+
+        return { type: type, plan: plan, S: S, depth: d, height: H, bay: bay,
+                 wallTop: t + H + 2 * t, members: members };
+    }
+
+    // Where the nails go, and how far apart. Corner studs are the "abutting
+    // studs at intersecting wall corners" row: 16d at 12" o.c.
+    function Fx_cornerNails(asm) {
+        var t = asm.S.t, d = asm.depth, H = asm.height, out = [], eps = 1e-6;
+
+        function run(x, z, axis, label, spacing, nail) {
+            for (var y = 6; y <= H - 4; y += spacing)
+                out.push({ x: x, y: t + y, z: z, axis: axis, label: label,
+                           nail: nail, spacing: spacing });
+        }
+
+        var ms = asm.members.filter(function (m) { return m.kind === "king" || m.kind === "cripple"; });
+        for (var i = 0; i < ms.length; i++)
+            for (var j = i + 1; j < ms.length; j++) {
+                var a = ms[i].box, b = ms[j].box,
+                    ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0),
+                    oz = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0);
+                // face-to-face on a shared plane
+                if (Math.abs(ox) < eps && oz > eps)
+                    run(Math.max(a.x0, b.x0), (Math.max(a.z0, b.z0) + Math.min(a.z1, b.z1)) / 2,
+                        "x", ms[i].label + " → " + ms[j].label, 12, "16dc");
+                else if (Math.abs(oz) < eps && ox > eps)
+                    run((Math.max(a.x0, b.x0) + Math.min(a.x1, b.x1)) / 2, Math.max(a.z0, b.z0),
+                        "z", ms[i].label + " → " + ms[j].label, 12, "16dc");
+            }
+
+        asm.members.filter(function (m) { return m.ladder; }).forEach(function (m) {
+            out.push({ x: m.box.x0, y: (m.box.y0 + m.box.y1) / 2, z: (m.box.z0 + m.box.z1) / 2,
+                       axis: "x", label: "Ladder block → corner stud", nail: "16dc", spacing: 24 });
+        });
+        return out;
+    }
+
+    // The X marks on the plates, so the corner lays out like the rest of the wall.
+    function Fx_cornerMarks(asm) {
+        var t = asm.S.t, out = [];
+        asm.members.forEach(function (m) {
+            if (m.kind !== "king" && m.kind !== "stud" && m.kind !== "cripple") return;
+            out.push({
+                x: (m.box.x0 + m.box.x1) / 2,
+                z: (m.box.z0 + m.box.z1) / 2,
+                at: m.box.x0,
+                letter: m.kind === "stud" ? "X" : m.flat ? "B" : "C",
+                label: m.label,
+                wall: m.wall || "A"
+            });
+        });
+        return out;
+    }
+
     // =====================================================================
     // RENDERING -- turns generated members into meshes. One material per
     // mesh, all sharing the same shader program, so a few hundred sticks
@@ -56366,6 +56519,314 @@ No matching component was found for:
         });
     }
 
+    // =====================================================================
+    // CORNER STUDIO
+    // ---------------------------------------------------------------------
+    // Follow-along for the one thing you cannot fake: does the corner
+    // actually go together. Every stick is placed by the engine, every pair
+    // is checked for touching / overlapping / gapped, and the nails sit at
+    // their real positions and spacing rather than being described in prose.
+    // =====================================================================
+    function Fx_CornerBoard(props) {
+        var m = props.m, b = m.box, I = Fx_IN,
+            tone = props.tone || Fx_KIND_TONE[m.kind] || Fx_TONE.spf;
+        return Fx_Jx("mesh", {
+            position: [(b.x0 + b.x1) / 2 * I, (b.y0 + b.y1) / 2 * I, (b.z0 + b.z1) / 2 * I],
+            castShadow: true, receiveShadow: true,
+            onPointerOver: props.onHover ? function (e) { e.stopPropagation(); props.onHover(m); } : undefined,
+            onPointerOut: props.onHover ? function () { props.onHover(null); } : undefined,
+            children: [
+                Fx_J("boxGeometry", { args: [(b.x1 - b.x0) * I, (b.y1 - b.y0) * I, (b.z1 - b.z0) * I] }),
+                Fx_J("meshStandardMaterial", {
+                    color: tone,
+                    emissive: props.lit ? tone : "#000000",
+                    emissiveIntensity: props.lit ? 0.6 : 0,
+                    transparent: props.ghost, opacity: props.ghost ? 0.28 : 1,
+                    roughness: 0.82
+                })
+            ]
+        });
+    }
+
+    function Fx_CornerScene(props) {
+        var asm = props.asm, nails = props.nails, I = Fx_IN,
+            showNails = props.showNails, hovered = props.hovered;
+
+        return Fx_Jx(W.Fragment, {
+            children: [
+                Fx_J("color", { attach: "background", args: ["#101610"] }),
+                Fx_J("ambientLight", { intensity: 1.2 }),
+                Fx_J("directionalLight", { castShadow: true, position: [8, 14, 10], intensity: 2.8,
+                    "shadow-mapSize-width": 2048, "shadow-mapSize-height": 2048 }),
+                Fx_J("directionalLight", { position: [-8, 6, -6], intensity: 1, color: "#c8dcff" }),
+                Fx_Jx("group", {
+                    // The corner sits at the origin and the bay runs away from
+                    // it, so the camera can frame the joint rather than the
+                    // whole stick of wall.
+                    position: [-asm.depth / 2 * I, 0, -asm.depth / 2 * I],
+                    children: [
+                        Fx_J(W.Fragment, {
+                            children: asm.members.map(function (m) {
+                                return Fx_J(Fx_CornerBoard, {
+                                    m: m,
+                                    lit: hovered && hovered.key === m.key,
+                                    ghost: props.ghostPlates && (m.kind === "plate" || m.kind === "cap"),
+                                    onHover: props.onHover
+                                }, m.key);
+                            })
+                        }),
+                        showNails ? Fx_J(W.Fragment, {
+                            children: nails.map(function (n, i) {
+                                var len = 4 * I, r = 0.21 * I;
+                                return Fx_Jx("mesh", {
+                                    position: [n.x * I, n.y * I, n.z * I],
+                                    rotation: n.axis === "x" ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0],
+                                    children: [
+                                        Fx_J("cylinderGeometry", { args: [r, r, len, 8] }),
+                                        Fx_J("meshStandardMaterial", {
+                                            color: "#f2f7fa", metalness: 0.8, roughness: 0.22,
+                                            emissive: "#8fb6cc", emissiveIntensity: 0.35
+                                        })
+                                    ]
+                                }, "n" + i);
+                            })
+                        }) : null
+                    ]
+                }),
+                Fx_J("gridHelper", { args: [16, 16, "#415044", "#263027"], position: [0, -0.03, 0] }),
+                Fx_J(Dw, { position: [0, -0.02, 0], opacity: 0.55, scale: 14, blur: 2.2, far: 10 })
+            ]
+        });
+    }
+
+    function Fx_CornerStudio(props) {
+        var tS = Ts.useState("california"), type = tS[0], setType = tS[1],
+            sS = Ts.useState("2x6"), studSize = sS[0], setStudSize = sS[1],
+            nS = Ts.useState(true), showNails = nS[0], setShowNails = nS[1],
+            gS = Ts.useState(true), ghost = gS[0], setGhost = gS[1],
+            hS = Ts.useState(null), hovered = hS[0], setHovered = hS[1],
+            fS = Ts.useState(false), fullHeight = fS[0], setFullHeight = fS[1],
+            kS = Ts.useState(0), camKey = kS[0], bumpCam = kS[1];
+
+        // A corner is a detail. Showing all 92 5/8" of stud puts the joint two
+        // inches tall on screen, so the default is a 3-foot section — enough
+        // to show three nails at 12" o.c. and read them.
+        var sectionH = fullHeight ? Fx_PRECUT_STUD : 36,
+            asm = Ts.useMemo(function () {
+                return Fx_cornerAssembly(type, studSize, sectionH);
+            }, [type, studSize, sectionH]),
+            nails = Ts.useMemo(function () { return Fx_cornerNails(asm); }, [asm]),
+            fit = Ts.useMemo(function () { return Fx_cornerFit(asm.plan); }, [asm]),
+            cavity = Ts.useMemo(function () { return Fx_isolatedCavity(asm.plan); }, [asm]),
+            backing = Ts.useMemo(function () { return Fx_cornerBacking(asm.plan); }, [asm]),
+            marks = Ts.useMemo(function () { return Fx_cornerMarks(asm); }, [asm]),
+            meta = Fx_CORNER_TYPES.filter(function (c) { return c.value === type; })[0],
+            overlaps = fit.filter(function (f) { return f.state === "overlap"; }),
+            touching = fit.filter(function (f) { return f.state === "touching"; });
+
+        function chip(ok, text, warn) {
+            return Fx_Jx("li", { className: ok ? "ok" : (warn ? "warn" : "bad"), children: [
+                Fx_J("i", { children: ok ? "✓" : (warn ? "!" : "✕") }),
+                Fx_J("span", { children: text })
+            ]});
+        }
+
+        var nailRuns = {};
+        nails.forEach(function (n) {
+            nailRuns[n.label] = nailRuns[n.label] || { n: 0, spacing: n.spacing, nail: n.nail };
+            nailRuns[n.label].n++;
+        });
+
+        return Fx_Jx("section", {
+            className: "corner-studio",
+            children: [
+                Fx_Jx("header", {
+                    children: [
+                        Fx_J("button", { onClick: props.onBack, children: "← PRACTICE LIBRARY" }),
+                        Fx_Jx("div", { children: [
+                            Fx_J("p", { className: "eyebrow", children: "Follow along · corner posts" }),
+                            Fx_J("h1", { children: "Build the corner" })
+                        ]})
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "corner-controls",
+                    children: [
+                        Fx_J("div", {
+                            className: "corner-types",
+                            children: Fx_CORNER_TYPES.map(function (c) {
+                                return Fx_Jx("button", {
+                                    className: type === c.value ? "on" : "",
+                                    onClick: function () { setType(c.value); },
+                                    children: [Fx_J("b", { children: c.label }), Fx_J("span", { children: c.note })]
+                                }, c.value);
+                            })
+                        }),
+                        Fx_Jx("div", { className: "corner-toggles", children: [
+                            Fx_Jx("label", { children: [
+                                Fx_J("span", { children: "Studs" }),
+                                Fx_J("select", {
+                                    value: studSize,
+                                    onChange: function (e) { setStudSize(e.target.value); },
+                                    children: ["2x4", "2x6"].map(function (v) {
+                                        return Fx_J("option", { value: v, children: v }, v);
+                                    })
+                                })
+                            ]}),
+                            Fx_J("button", { className: showNails ? "on" : "",
+                                onClick: function () { setShowNails(!showNails); }, children: "NAILS" }),
+                            Fx_J("button", { className: ghost ? "on" : "",
+                                onClick: function () { setGhost(!ghost); }, children: "SEE THROUGH PLATES" }),
+                            Fx_J("button", { className: fullHeight ? "on" : "",
+                                onClick: function () { setFullHeight(!fullHeight); bumpCam(function (k) { return k + 1; }); },
+                                children: fullHeight ? "FULL 92 5/8″ STUD" : "3′-0″ DETAIL SECTION" }),
+                            Fx_J("button", { onClick: function () { bumpCam(function (k) { return k + 1; }); },
+                                children: "RESET VIEW" })
+                        ]})
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "corner-stage",
+                    children: [
+                        Fx_Jx(H8, {
+                            shadows: true, dpr: [1, 1.75], gl: { antialias: true },
+                            children: [
+                                Fx_J(fP, {
+                                    makeDefault: true,
+                                    // Stand OUTSIDE the corner so both walls run
+                                    // away from you and nothing hides behind
+                                    // anything else.
+                                    position: fullHeight ? [-7.5, 9, -8.5] : [-3.6, 3.2, -4.1],
+                                    fov: 38
+                                }),
+                                Fx_J(Ts.Suspense, {
+                                    fallback: null,
+                                    children: Fx_J(Fx_CornerScene, {
+                                        asm: asm, nails: nails, showNails: showNails,
+                                        ghostPlates: ghost, hovered: hovered, onHover: setHovered
+                                    })
+                                }),
+                                Fx_J(dP, {
+                                    makeDefault: true, target: [0, asm.wallTop / 2 * Fx_IN, 0],
+                                    minDistance: 1.2, maxDistance: 40, enablePan: true,
+                                    enableDamping: true, dampingFactor: 0.08,
+                                    maxPolarAngle: Math.PI / 2.03
+                                }, camKey)
+                            ]
+                        }),
+                        Fx_J("div", {
+                            className: "corner-scale",
+                            children: fullHeight
+                                ? "Full stud — " + Fx_ftIn(asm.wallTop) + " of wall"
+                                : "Detail section — " + Fx_ftIn(asm.wallTop) + " of an 8′-1 1/8″ wall"
+                        }),
+                        Fx_J("div", {
+                            className: "corner-hover",
+                            children: hovered
+                                ? Fx_Jx(W.Fragment, { children: [
+                                    Fx_J("b", { children: hovered.label }),
+                                    Fx_J("span", {
+                                        children: Fx_inFmt(hovered.box.x1 - hovered.box.x0) + " × " +
+                                                  Fx_inFmt(hovered.box.y1 - hovered.box.y0) + " × " +
+                                                  Fx_inFmt(hovered.box.z1 - hovered.box.z0)
+                                    })
+                                ]})
+                                : Fx_J("span", { children: "Point at a member to size it" })
+                        })
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "corner-grid",
+                    children: [
+                        Fx_Jx("section", {
+                            className: "corner-card" + (overlaps.length ? " bad" : ""),
+                            children: [
+                                Fx_J("h2", { children: "Does it go together" }),
+                                Fx_Jx("ul", { className: "corner-checks", children: [
+                                    chip(overlaps.length === 0,
+                                        overlaps.length === 0
+                                            ? touching.length + " member pairs in contact · 0 overlapping · 0 gapped"
+                                            : overlaps.map(function (o) {
+                                                return o.a + " and " + o.b + " occupy the same wood by " + Fx_inFmt(o.amount);
+                                              }).join("; ")),
+                                    chip(!cavity.hasIsolatedCavity,
+                                        cavity.hasIsolatedCavity
+                                            ? "Isolated cavity — " + cavity.trappedSqIn.toFixed(2) +
+                                              " sq in that insulation cannot reach"
+                                            : "No isolated cavity — the corner stays open to the bay",
+                                        cavity.hasIsolatedCavity),
+                                    chip(backing.wallA, backing.wallA
+                                        ? "Wall A's finish has backing at the corner"
+                                        : "Nothing for wall A's finish to land on"),
+                                    chip(backing.wallB || type === "twoStud", backing.wallB
+                                        ? "Wall B's finish has backing at the corner"
+                                        : "Wall B's finish needs clips, cleats or ladder blocking",
+                                        !backing.wallB)
+                                ]}),
+                                Fx_J("p", { className: "corner-note", children: meta.note }),
+                                Fx_J("em", { className: "corner-code", children: meta.code })
+                            ]
+                        }),
+
+                        Fx_Jx("section", {
+                            className: "corner-card",
+                            children: [
+                                Fx_J("h2", { children: "What to drive, and where" }),
+                                Fx_J("ul", {
+                                    className: "corner-nails",
+                                    children: Object.keys(nailRuns).map(function (k) {
+                                        var r = nailRuns[k], n = Fx_NAIL[r.nail];
+                                        return Fx_Jx("li", { children: [
+                                            Fx_J("i", { className: "lay-dot", style: {
+                                                background: n.tone,
+                                                width: Fx_nailPx(n.dia) + "px", height: Fx_nailPx(n.dia) + "px"
+                                            }}),
+                                            Fx_Jx("div", { children: [
+                                                Fx_J("b", { children: r.n + " × " + n.label + " at " + r.spacing + "″ o.c." }),
+                                                Fx_J("span", { children: k })
+                                            ]})
+                                        ]}, k);
+                                    })
+                                }),
+                                Fx_J("p", { className: "corner-note", children:
+                                    "Abutting studs at an intersecting wall corner are the 16d-at-12″ row — tighter than the 24″ o.c. used for ordinary built-up studs, because this joint is what ties the two walls together." }),
+                                Fx_J("em", { className: "corner-code", children: "IRC Table R602.3(1) · IBC Table 2304.10.2" })
+                            ]
+                        }),
+
+                        Fx_Jx("section", {
+                            className: "corner-card",
+                            children: [
+                                Fx_J("h2", { children: "Cut list for this corner" }),
+                                Fx_J("ul", {
+                                    className: "corner-cuts",
+                                    children: asm.members.filter(function (m) {
+                                        return m.kind === "king" || m.kind === "cripple" || m.kind === "block";
+                                    }).map(function (m, i) {
+                                        var b = m.box;
+                                        return Fx_Jx("li", { children: [
+                                            Fx_J("b", { children: m.label }),
+                                            Fx_J("span", { children:
+                                                Fx_inFmt(b.x1 - b.x0) + " × " + Fx_inFmt(b.y1 - b.y0) +
+                                                " × " + Fx_inFmt(b.z1 - b.z0) })
+                                        ]}, "c" + i);
+                                    })
+                                }),
+                                Fx_J("p", { className: "corner-note", children:
+                                    "Marks on the plate: " + marks.map(function (m) {
+                                        return m.letter + " at " + Fx_inFmt(m.at);
+                                    }).join(" · ") })
+                            ]
+                        })
+                    ]
+                })
+            ]
+        });
+    }
+
     function hP({
         stage: t,
         title: e,
@@ -58082,6 +58543,12 @@ No matching component was found for:
         kind: "guided",
         phases: ["Roof"]
     }, {
+        name: "Corner posts and wall intersections",
+        category: "Wall framing",
+        description: "Build a California corner, a conventional corner and a two-stud corner, and see which one traps a cavity insulation cannot reach.",
+        kind: "corner",
+        phases: ["Wall frame"]
+    }, {
         name: "Frame a window opening",
         category: "Windows",
         description: "Lay out king and jack studs, size the opening from the product instructions, and install the header and sill.",
@@ -58101,6 +58568,9 @@ No matching component was found for:
         let [e, n] = (0, Fn.useState)(""), [a, i] = (0, Fn.useState)("All skills"), [r, o] = (0, Fn.useState)(null), [l, c] = (0, Fn.useState)(new Set), f = ["All skills", ...Array.from(new Set(eG.map(p => p.category)))], h = eG.filter(p => (a === "All skills" || p.category === a) && (!e.trim() || `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(e.toLowerCase())));
         if (r) {
             if (r.kind === "landscape") return (0, k.jsx)(mP, {
+                onBack: () => o(null)
+            });
+            if (r.kind === "corner") return (0, k.jsx)(Fx_CornerStudio, {
                 onBack: () => o(null)
             });
             let p = {
