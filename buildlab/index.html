@@ -391,6 +391,26 @@
 .raf-dimbad{fill:#f0b4ac;font:800 10px ui-monospace}
 .raf-lead{stroke:#59df8a;stroke-width:1;stroke-dasharray:3 3}
 .raf-detail{min-width:460px;max-width:560px}
+/* --- not built yet --- */
+.notbuilt{display:grid;gap:1rem;padding:1.2rem;max-width:820px;margin:0 auto}
+.notbuilt>header{display:flex;align-items:center;gap:1rem}
+.notbuilt>header button{color:#e8b252;letter-spacing:.06em;border:1px solid #fff2;border-radius:.35rem;padding:.6rem .8rem;font-size:.68rem;font-weight:900}
+.notbuilt h1{font-size:1.6rem}
+.notbuilt-body{display:grid;gap:.8rem;background:#12160f;border:1px solid #ffffff18;border-radius:.6rem;padding:1rem}
+.notbuilt-lead{color:#ffd27a;font-size:.92rem;line-height:1.5}
+.notbuilt-body>p{color:#b9c1b7;font-size:.8rem;line-height:1.6;max-width:62ch}
+.notbuilt-list{background:#0e1310;border:1px solid #ffffff14;border-radius:.4rem;padding:.7rem;display:grid;gap:.4rem}
+.notbuilt-list>b{color:#f0ac37;letter-spacing:.08em;font-size:.58rem}
+.notbuilt-list ul{display:grid;gap:.3rem}
+.notbuilt-list li{display:grid;gap:.05rem;background:#131a12;border-radius:.3rem;padding:.4rem .55rem}
+.notbuilt-list li b{color:#e9f0e4;font-size:.74rem}
+.notbuilt-list li span{color:#8f9a8a;font-size:.66rem}
+.notbuilt-go{color:#10130f;background:#e99b19;border-radius:.35rem;padding:.7rem 1rem;font-weight:900;font-size:.72rem;justify-self:start}
+/* --- shell honesty banner --- */
+.shell-note{display:grid;grid-template-columns:auto 1fr;gap:.5rem;align-items:baseline;background:#1a1509;border:1px solid #e9a32955;border-left:3px solid #e9a329;border-radius:.4rem;margin:.65rem 1rem 0;padding:.55rem .7rem}
+.shell-note b{color:#f0ac37;font:900 .56rem ui-monospace;letter-spacing:.08em;white-space:nowrap}
+.shell-note span{color:#d8c9a4;font-size:.68rem;line-height:1.45}
+@media (max-width:760px){.shell-note{grid-template-columns:1fr;margin:.5rem .6rem 0}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -57248,6 +57268,133 @@ No matching component was found for:
         });
     }
 
+    // =====================================================================
+    // WHAT THIS APP ACTUALLY COVERS
+    // ---------------------------------------------------------------------
+    // The reference books in this folder are about conventional wood-frame
+    // construction: the AWC detail set, APA advanced framing, the Speed Square
+    // rafter book, IECC wall assemblies, concrete, and the owner's own class
+    // notes. They say nothing about french drains or chain-link fence.
+    //
+    // The catalogue offers 61 projects and 51 of them used to be handed the
+    // same twelve platform-framing steps — so picking "Paver patio" walked you
+    // through setting a rim board. Confidently wrong is worse than absent.
+    //
+    //   full   the step set genuinely matches the project
+    //   shell  platform-framed building; the steps cover the STRUCTURAL SHELL
+    //          and the app says so rather than implying a finished building
+    //   none   not built. Say so, and point at what is.
+    // =====================================================================
+    var Fx_COVERAGE = {
+        // --- the steps genuinely match ---
+        "Wall framing": "full", "Floor framing": "full",
+        "Window opening": "full", "Door opening": "full",
+        "Load-bearing wall opening": "full", "Interior partition wall": "full",
+        "Window replacement": "full",
+
+        // --- platform-framed shells ---
+        "Storage shed": "shell", "Workshop": "shell",
+        "Detached garage": "shell", "Attached garage": "shell",
+        "Accessory dwelling unit (ADU)": "shell", "Single-family house": "shell",
+        "Outdoor sauna": "shell", "Indoor sauna conversion": "shell",
+        "Room addition": "shell", "Enclosed porch": "shell",
+        "Second-story addition": "shell",
+        "Complete roof": "shell", "Gable roof framing": "shell",
+        "Hip roof framing": "shell", "Roof repair": "shell"
+        // everything else falls through to "none"
+    };
+
+    // What to point someone at instead.
+    var Fx_INSTEAD = {
+        fence: "Fencing is not in the reference set this app is built from, so there are no steps for it yet.",
+        landscape: "Landscaping and hardscape are not in the reference set yet. The landscape visualiser will let you try materials over a photo of your own yard in the meantime.",
+        concrete: "Foundations and flatwork are in the CONCRETE reference but the step-by-step has not been built yet.",
+        interior: "Interior fit-out is not in the reference set this app is built from.",
+        envelope: "The envelope work is partly covered inside the building shell steps, but does not have a sequence of its own yet.",
+        exterior: "Decks and exterior stairs are in the AWC detail set this app draws on, but their step sequence has not been built yet.",
+        other: "This one has not been built yet."
+    };
+
+    function Fx_coverage(project) {
+        var name = project && project.name, cat = (project && project.category) || "";
+        var level = Fx_COVERAGE[name] || "none";
+        var why = /Fenc/i.test(cat) ? "fence"
+                : /Landscap/i.test(cat) ? "landscape"
+                : /Concrete|foundation/i.test(cat) ? "concrete"
+                : /Interior/i.test(cat) ? "interior"
+                : /Exterior projects/i.test(cat) ? "exterior"
+                : /envelope/i.test(cat) ? "envelope" : "other";
+        return { level: level, built: level !== "none", why: Fx_INSTEAD[why] };
+    }
+
+    var Fx_BUILT_LIST = [
+        ["Frame a window opening", "layout, king and jack studs, header, sill and cripples"],
+        ["Install and flash a window", "sill pan, setting, fastening, flashing, air seal"],
+        ["Corner posts and wall intersections", "California, conventional and two-stud corners"],
+        ["Cut a rafter", "common, hip and valley, jacks, birdsmouth"],
+        ["Wall layout and framing", "plate layout, assembly, raising and bracing"],
+        ["Floor framing system", "rim boards, joist layout, seating, fastening, subfloor"],
+        ["Foundation and sill plates", "anchorage, decay protection, inspection points"],
+        ["Wall sheathing and bracing", "panel layout and the braced-wall schedule"]
+    ];
+
+    function Fx_NotBuilt(props) {
+        var p = props.project, cov = Fx_coverage(p);
+        return Fx_Jx("section", {
+            className: "notbuilt",
+            children: [
+                Fx_Jx("header", {
+                    children: [
+                        Fx_J("button", { onClick: props.onBack, children: "← BACK" }),
+                        Fx_Jx("div", { children: [
+                            Fx_J("p", { className: "eyebrow", children: "Not built yet" }),
+                            Fx_J("h1", { children: p.name })
+                        ]})
+                    ]
+                }),
+                Fx_Jx("div", {
+                    className: "notbuilt-body",
+                    children: [
+                        Fx_J("p", { className: "notbuilt-lead", children: cov.why }),
+                        Fx_J("p", {
+                            children: "This app is built from a specific set of references — the AWC conventional wood-frame detail set, APA advanced framing, the Speed Square rafter book, IECC wall assemblies and a set of class notes. It teaches what those cover, to the 1/16 inch, and it would rather tell you it has nothing than walk you through the wrong build."
+                        }),
+                        Fx_Jx("div", {
+                            className: "notbuilt-list",
+                            children: [
+                                Fx_J("b", { children: "WHAT IS BUILT" }),
+                                Fx_J("ul", {
+                                    children: Fx_BUILT_LIST.map(function (r) {
+                                        return Fx_Jx("li", { children: [
+                                            Fx_J("b", { children: r[0] }),
+                                            Fx_J("span", { children: r[1] })
+                                        ]}, r[0]);
+                                    })
+                                })
+                            ]
+                        }),
+                        Fx_J("button", { className: "notbuilt-go", onClick: props.onBack,
+                                         children: "GO BACK AND PICK ONE OF THOSE" })
+                    ]
+                })
+            ]
+        });
+    }
+
+    // A one-line honesty banner for the shells.
+    function Fx_ShellNote(props) {
+        if (props.level !== "shell") return null;
+        return Fx_Jx("div", {
+            className: "shell-note",
+            children: [
+                Fx_J("b", { children: "STRUCTURAL SHELL ONLY" }),
+                Fx_J("span", {
+                    children: "These steps take you from the foundation to a framed, sheathed and dried-in shell. Interior fit-out, services and finishes are not covered — and the roof step is one step for the whole roof, so use Cut a rafter for the actual cuts."
+                })
+            ]
+        });
+    }
+
     function hP({
         stage: t,
         title: e,
@@ -58696,6 +58843,11 @@ No matching component was found for:
             Q.has(ee) ? Q.delete(ee) : Q.add(ee), a(Q), !n.has(ee) && p < c.length - 1 && m(p + 1)
         }
         let q = /killeen/i.test(e);
+        let Fx_cov = Fx_coverage(t);
+        if (!Fx_cov.built && !o) return (0, k.jsx)(Fx_NotBuilt, {
+            project: t,
+            onBack: i
+        });
         return (0, k.jsxs)("section", {
             className: "guided-build",
             children: [(0, k.jsxs)("header", {
@@ -58740,6 +58892,8 @@ No matching component was found for:
                     rel: "noreferrer",
                     children: ["PERMIT APPLICATION ", (0, k.jsx)(sc, {})]
                 })]
+            }), (0, k.jsx)(Fx_ShellNote, {
+                level: Fx_cov.level
             }), (0, k.jsxs)("div", {
                 className: "guided-layout",
                 children: [(0, k.jsx)("aside", {
