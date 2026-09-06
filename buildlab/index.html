@@ -343,6 +343,54 @@
 .corner-stage canvas{height:520px!important}
 .corner-scale{position:absolute;right:.7rem;top:.7rem;background:#090d0be8;border:1px solid #ffffff1c;border-radius:.35rem;padding:.35rem .55rem;color:#9aa694;font:800 .6rem ui-monospace;pointer-events:none}
 @media (max-width:760px){.corner-stage canvas{height:360px!important}}
+/* --- rafter studio --- */
+.rafter-studio{display:grid;gap:.8rem;padding:1rem;max-width:1500px;margin:0 auto}
+.rafter-studio>header{display:flex;align-items:center;gap:1rem}
+.rafter-studio>header button{color:#e8b252;letter-spacing:.06em;border:1px solid #fff2;border-radius:.35rem;padding:.6rem .8rem;font-size:.68rem;font-weight:900}
+.rafter-studio h1{font-size:1.5rem}
+.raf-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;background:#141a11;border:1px solid #ffffff14;border-radius:.45rem;padding:.6rem}
+.raf-controls label{display:grid;grid-template-columns:1fr auto;gap:.15rem .35rem;align-items:center}
+.raf-controls label>span{grid-column:1/-1;color:#8f9a8a;font-size:.56rem;letter-spacing:.05em;text-transform:uppercase}
+.raf-controls input,.raf-controls select{width:100%;color:#ffe0a6;background:#0b0f0b;border:1px solid #ffffff20;border-radius:.3rem;padding:.35rem .4rem;font:800 .78rem ui-monospace;font-variant-numeric:tabular-nums}
+.raf-controls i{color:#8f9a8a;font:700 .6rem ui-monospace;font-style:normal}
+.raf-draw{background:#0b0f0b;border:1px solid #ffffff18;border-radius:.5rem;padding:.5rem;overflow-x:auto}
+.raf-svg{display:block;width:100%;min-width:640px}
+.raf-body{fill:#c1934f22;stroke:#e0a53c;stroke-width:1.6}
+.raf-plate{fill:#7f9ad655;stroke:#7f9ad6;stroke-width:1.2}
+.raf-ridge{fill:#c97ad655;stroke:#c97ad6;stroke-width:1.2}
+.raf-cuts line{stroke:#ff5f3c;stroke-width:2.6;stroke-linecap:round}
+.raf-dim line{stroke:#59df8a;stroke-width:1;stroke-dasharray:4 3}
+.raf-dim text{fill:#8fe8b0;font:700 10px ui-monospace}
+.raf-note{fill:#ffd27a;font:800 11px ui-monospace}
+.raf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:.7rem}
+.raf-card{background:#0e1310;border:1px solid #ffffff18;border-radius:.5rem;padding:.75rem;display:grid;gap:.45rem;align-content:start}
+.raf-card.bad{border-color:#d2564a88}
+.raf-card h2{color:#f0ac37;letter-spacing:.08em;font-size:.6rem;text-transform:uppercase}
+.raf-rows{display:grid;gap:.25rem}
+.raf-rows li{display:grid;grid-template-columns:1fr auto;gap:.1rem .5rem;background:#131a12;border-radius:.3rem;padding:.35rem .5rem}
+.raf-rows b{color:#e9f0e4;font-size:.7rem;font-weight:700}
+.raf-rows>li>span{color:#ffd27a;font:800 .72rem ui-monospace;text-align:right;font-variant-numeric:tabular-nums}
+.raf-rows small{grid-column:1/-1;color:#8f9a8a;font-size:.6rem;line-height:1.35}
+.raf-ok{color:#8fe8b0;font-size:.68rem;line-height:1.4}
+.raf-bad{color:#f0b4ac;font-size:.68rem;line-height:1.4}
+.raf-code{color:#7f8f7a;font:700 .6rem ui-monospace;font-style:normal}
+.raf-jacks{display:grid;gap:.2rem}
+.raf-jacks li{display:grid;grid-template-columns:2rem 1fr auto;gap:.4rem;align-items:baseline;background:#131a12;border-radius:.3rem;padding:.28rem .45rem}
+.raf-jacks i{color:#8f9a8a;font:800 .6rem ui-monospace;font-style:normal}
+.raf-jacks b{color:#ffd27a;font:800 .72rem ui-monospace}
+.raf-jacks span{color:#8f9a8a;font-size:.62rem}
+.raf-source{color:#8f9a8a;font-size:.64rem;line-height:1.45}
+@media (max-width:760px){.rafter-studio{padding:.6rem}.raf-controls{grid-template-columns:1fr 1fr}}
+.raf-draw{display:grid;gap:.6rem}
+.raf-detail-wrap{background:#0e1310;border:1px solid #ffffff14;border-radius:.4rem;padding:.5rem;display:grid;gap:.3rem;justify-items:center}
+.raf-detail-wrap>b{color:#f0ac37;letter-spacing:.08em;font-size:.56rem;justify-self:start}
+.raf-detail{min-width:420px;max-width:520px}
+.raf-cut{stroke:#ff5f3c;stroke-width:2.6;stroke-linecap:round}
+.raf-dimtext{fill:#8fe8b0;font:700 10px ui-monospace}
+.raf-dimok{fill:#8fe8b0;font:800 10px ui-monospace}
+.raf-dimbad{fill:#f0b4ac;font:800 10px ui-monospace}
+.raf-lead{stroke:#59df8a;stroke-width:1;stroke-dasharray:3 3}
+.raf-detail{min-width:460px;max-width:560px}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -53925,6 +53973,112 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // RAFTERS — the "one number" method
+    // ---------------------------------------------------------------------
+    // Swanson's Speed Square book. One number, the inch rise per foot of run,
+    // drives every cut on the roof.
+    //
+    //   common rafter   sqrt(12² + rise²) of rafter per 12″ of run
+    //   hip / valley    sqrt(17² + rise²) — the hip runs 16.97″ horizontally
+    //                   for every 12″ the common runs, because it sits at 45°
+    //   jack rafters    the common difference is the spacing × the common
+    //                   rafter's length per foot of run
+    //
+    // Checked against the book's own tables: an 8-foot building at 6 rise
+    // gives a hip of exactly 6′-0″, and a 3-foot building at 1 rise gives a
+    // hip of 2′-1 1/2″. Both match the printed values.
+    // =====================================================================
+    function Fx_rafterCalc(spec) {
+        var pitch = spec.pitch,                       // inch rise per 12" run
+            R = Fx_LUMBER[spec.rafterSize],
+            depth = R.w, thk = R.t,
+            span = spec.span,
+            run = span / 2,                           // to the centre of the ridge
+            theta = Math.atan2(pitch, 12),
+            cos = Math.cos(theta), sin = Math.sin(theta), tan = pitch / 12,
+            unit = Math.sqrt(144 + pitch * pitch),    // rafter inches per foot of run
+            unitHip = Math.sqrt(288 + pitch * pitch), // hip inches per foot of COMMON run
+            line = run * unit / 12,
+            shorten = (spec.ridgeThk / 2) * unit / 12,
+            tail = spec.overhang * unit / 12,
+            plate = spec.plateWidth,
+            heel = plate * tan,                        // plumb leg of the birdsmouth
+            notch = plate * sin,                       // material removed, ⟂ to the rafter
+            plumbDepth = depth / cos,
+            hap = plumbDepth - heel;
+
+        return {
+            pitch: pitch, span: span, run: run,
+            angleDeg: theta * 180 / Math.PI,
+            unit: unit, unitHip: unitHip,
+            lineLength: line,
+            ridgeShorten: shorten,
+            toRidge: line - shorten,
+            tail: tail,
+            total: line - shorten + tail,
+            rise: run * tan,
+            seat: plate, heel: heel, notch: notch,
+            maxNotch: depth / 4,
+            notchOk: notch <= depth / 4 + 1e-9,
+            hap: hap,
+            plumbDepth: plumbDepth,
+            hipLine: run * unitHip / 12,
+            hipAngleDeg: Math.atan2(pitch, 16.97) * 180 / Math.PI,
+            jackDiff: spec.spacing * unit / 12,
+            depth: depth, thk: thk
+        };
+    }
+
+    // Every jack up the hip, shortest first, each one the common difference
+    // longer than the last.
+    function Fx_jackRafters(calc, spacing, count) {
+        var out = [], n = count || Math.max(1, Math.floor(calc.run / spacing));
+        for (var i = 1; i <= n; i++)
+            out.push({ n: i, length: calc.jackDiff * i,
+                       fromCorner: spacing * i });
+        return out;
+    }
+
+    var Fx_PITCHES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12];
+
+    // ---- the rafter's actual profile, for a cut diagram ------------------
+    // Origin at the outside face of the wall, on top of the plate. x runs
+    // horizontally toward the ridge, y is vertical. Every vertex is a real
+    // dimension, so the drawing and the cut sheet cannot disagree.
+    function Fx_rafterProfile(calc, spec) {
+        var tan = calc.pitch / 12,
+            plate = calc.seat,
+            heel = calc.heel,
+            pd = calc.plumbDepth,
+            x0 = -spec.overhang,                     // tail end
+            x1 = calc.run - spec.ridgeThk / 2,       // ridge plumb cut
+            bottomAt = function (x) { return (x - plate) * tan; };
+
+        return {
+            outline: [
+                [x0, bottomAt(x0)],                  // tail, bottom corner
+                [0, -heel],                          // bottom edge up to the heel
+                [0, 0],                              // heel cut, plumb
+                [plate, 0],                          // seat cut, level on the plate
+                [x1, bottomAt(x1)],                  // bottom edge on to the ridge
+                [x1, bottomAt(x1) + pd],             // ridge plumb cut
+                [x0, bottomAt(x0) + pd]              // top edge back to the tail
+            ],
+            cuts: [
+                { name: "Ridge plumb cut", from: [x1, bottomAt(x1)], to: [x1, bottomAt(x1) + pd],
+                  note: calc.pitch + " on the common scale · " + calc.angleDeg.toFixed(1) + "° from level" },
+                { name: "Seat cut", from: [0, 0], to: [plate, 0],
+                  note: "level, " + Fx_inFmt(plate) + " — the width of the plate it bears on" },
+                { name: "Heel cut", from: [0, -heel], to: [0, 0],
+                  note: "plumb, " + Fx_inFmt(heel) + " — against the outside face of the wall" },
+                { name: "Tail plumb cut", from: [x0, bottomAt(x0)], to: [x0, bottomAt(x0) + pd],
+                  note: "same angle as the ridge cut" }
+            ],
+            bounds: { x0: x0, x1: x1, y0: bottomAt(x0), y1: bottomAt(x1) + pd }
+        };
+    }
+
+    // =====================================================================
     // RENDERING -- turns generated members into meshes. One material per
     // mesh, all sharing the same shader program, so a few hundred sticks
     // stay cheap.
@@ -56827,6 +56981,273 @@ No matching component was found for:
         });
     }
 
+    // =====================================================================
+    // RAFTER STUDIO — the one-number method, drawn to scale
+    // =====================================================================
+    function Fx_RafterSvg(props) {
+        var calc = props.calc, prof = props.prof, b = prof.bounds,
+            padX = 26, padY = 34,
+            w = b.x1 - b.x0, h = b.y1 - b.y0,
+            scale = Math.min((props.width - padX * 2) / w, 210 / h),
+            X = function (x) { return padX + (x - b.x0) * scale; },
+            Y = function (y) { return padY + (b.y1 - y) * scale; },
+            pts = prof.outline.map(function (p) { return X(p[0]) + "," + Y(p[1]); }).join(" ");
+
+        function dim(x1, y1, x2, y2, label, above) {
+            var mx = (X(x1) + X(x2)) / 2, my = (Y(y1) + Y(y2)) / 2;
+            return Fx_Jx("g", { className: "raf-dim", children: [
+                Fx_J("line", { x1: X(x1), y1: Y(y1), x2: X(x2), y2: Y(y2) }),
+                Fx_J("text", { x: mx, y: my + (above ? -6 : 14), textAnchor: "middle", children: label })
+            ]});
+        }
+
+        return Fx_Jx("svg", {
+            className: "raf-svg",
+            viewBox: "0 0 " + props.width + " " + (padY * 2 + h * scale + 26),
+            children: [
+                // the stick
+                Fx_J("polygon", { className: "raf-body", points: pts }),
+                // the plate it lands on
+                Fx_J("rect", {
+                    className: "raf-plate",
+                    x: X(0), y: Y(0), width: calc.seat * scale, height: 1.5 * scale
+                }),
+                // the ridge it dies into
+                Fx_J("rect", {
+                    className: "raf-ridge",
+                    x: X(calc.run - props.ridgeThk / 2), y: Y(prof.bounds.y1),
+                    width: Math.max(2, (props.ridgeThk / 2) * scale),
+                    height: (prof.bounds.y1 - (prof.bounds.y1 - calc.plumbDepth - 2)) * scale
+                }),
+                // each cut, picked out
+                Fx_J("g", { className: "raf-cuts", children: prof.cuts.map(function (c, i) {
+                    return Fx_J("line", {
+                        x1: X(c.from[0]), y1: Y(c.from[1]), x2: X(c.to[0]), y2: Y(c.to[1])
+                    }, "c" + i);
+                })}),
+                // dimensions
+                dim(0, prof.bounds.y0 - 3, calc.run - props.ridgeThk / 2, prof.bounds.y0 - 3,
+                    "run " + Fx_ftIn(calc.run), false),
+                dim(prof.bounds.x0, prof.bounds.y1 + 3, 0, prof.bounds.y1 + 3,
+                    "tail " + Fx_inFmt(props.overhang), true),
+                Fx_J("text", {
+                    className: "raf-note", x: X((calc.run) / 2), y: Y(prof.bounds.y1) - 12,
+                    textAnchor: "middle",
+                    children: "rafter " + Fx_ftIn(calc.total) + " overall · " + calc.pitch + ":12 · " +
+                              calc.angleDeg.toFixed(1) + "°"
+                })
+            ]
+        });
+    }
+
+    // The birdsmouth at a scale you can actually cut from. The main drawing
+    // shows the whole stick; this shows the joint.
+    function Fx_BirdsmouthSvg(props) {
+        var calc = props.calc, tan = calc.pitch / 12,
+            plate = calc.seat, heel = calc.heel, pd = calc.plumbDepth,
+            padL = 128, padR = 96, padT = 22, padB = 54,
+            back = 3,                                  // a little of the tail side, for context
+            ahead = plate + 9,                         // and a little up-slope
+            spanX = back + ahead,
+            spanY = pd + heel + 2,
+            scale = Math.min((props.width - padL - padR) / spanX, 168 / spanY),
+            ox = padL + back * scale,                  // x = 0 is the outside face of the wall
+            oy = padT + (pd + 1) * scale,              // y = 0 is the top of the plate
+            X = function (x) { return ox + x * scale; },
+            Y = function (y) { return oy - y * scale; },
+            bottomAt = function (x) { return (x - plate) * tan; },
+            pts = [
+                [0, 0], [plate, 0], [ahead, bottomAt(ahead)],
+                [ahead, bottomAt(ahead) + pd], [-back, bottomAt(-back) + pd],
+                [-back, bottomAt(-back)], [0, -heel]
+            ].map(function (p) { return X(p[0]) + "," + Y(p[1]); }).join(" ");
+
+        return Fx_Jx("svg", {
+            className: "raf-svg raf-detail",
+            viewBox: "0 0 " + props.width + " " + Math.round(padT + padB + spanY * scale),
+            children: [
+                Fx_J("rect", { className: "raf-plate", x: X(0), y: Y(0),
+                               width: plate * scale, height: 1.5 * scale }),
+                Fx_J("polygon", { className: "raf-body", points: pts }),
+                // the two cuts that make the birdsmouth
+                Fx_J("line", { className: "raf-cut", x1: X(0), y1: Y(0), x2: X(plate), y2: Y(0) }),
+                Fx_J("line", { className: "raf-cut", x1: X(0), y1: Y(-heel), x2: X(0), y2: Y(0) }),
+                // leaders and labels, all clear of the drawing
+                Fx_J("line", { className: "raf-lead", x1: X(-back) - 8, y1: Y(0),
+                               x2: X(-back) - 8, y2: Y(pd) }),
+                Fx_J("text", { className: "raf-dimtext", x: X(-back) - 14, y: Y(pd / 2) + 3,
+                               textAnchor: "end", children: "plumb depth " + Fx_inFmt(pd) }),
+                Fx_J("line", { className: "raf-lead", x1: X(0) - 6, y1: Y(-heel), x2: X(0) - 6, y2: Y(0) }),
+                Fx_J("text", { className: "raf-dimtext", x: X(-back) - 14, y: Y(-heel / 2) + 3,
+                               textAnchor: "end", children: "heel " + Fx_inFmt(heel) }),
+                Fx_J("text", { className: "raf-dimtext", x: X(plate / 2), y: Y(0) + 1.5 * scale + 16,
+                               textAnchor: "middle", children: "seat " + Fx_inFmt(plate) }),
+                Fx_J("text", { className: "raf-dimtext", x: X(ahead) + 10, y: Y(bottomAt(ahead) + pd * 0.55),
+                               textAnchor: "start", children: "HAP " + Fx_inFmt(calc.hap) }),
+                Fx_J("text", { className: calc.notchOk ? "raf-dimok" : "raf-dimbad",
+                               x: X(plate / 2), y: Y(0) + 1.5 * scale + 34, textAnchor: "middle",
+                               children: "notch " + Fx_inFmt(calc.notch) + " · limit " +
+                                         Fx_inFmt(calc.maxNotch) + (calc.notchOk ? " ✓" : " ✕") })
+            ]
+        });
+    }
+
+    function Fx_RafterStudio(props) {
+        var spanS = Ts.useState(288), span = spanS[0], setSpan = spanS[1],
+            pS = Ts.useState(6), pitch = pS[0], setPitch = pS[1],
+            rS = Ts.useState("2x8"), rafterSize = rS[0], setRafterSize = rS[1],
+            plS = Ts.useState(3.5), plate = plS[0], setPlate = plS[1],
+            oS = Ts.useState(16), overhang = oS[0], setOverhang = oS[1],
+            spS = Ts.useState(16), spacing = spS[0], setSpacing = spS[1],
+            ridgeThk = 1.5;
+
+        var spec = { span: span, pitch: pitch, ridgeThk: ridgeThk, rafterSize: rafterSize,
+                     plateWidth: plate, overhang: overhang, spacing: spacing },
+            calc = Ts.useMemo(function () { return Fx_rafterCalc(spec); },
+                [span, pitch, rafterSize, plate, overhang, spacing]),
+            prof = Ts.useMemo(function () { return Fx_rafterProfile(calc, spec); }, [calc]),
+            jacks = Ts.useMemo(function () { return Fx_jackRafters(calc, spacing); }, [calc, spacing]);
+
+        function row(label, value, sub) {
+            return Fx_Jx("li", { children: [
+                Fx_J("b", { children: label }),
+                Fx_J("span", { children: value }),
+                sub ? Fx_J("small", { children: sub }) : null
+            ]});
+        }
+
+        return Fx_Jx("section", {
+            className: "rafter-studio",
+            children: [
+                Fx_Jx("header", {
+                    children: [
+                        Fx_J("button", { onClick: props.onBack, children: "← PRACTICE LIBRARY" }),
+                        Fx_Jx("div", { children: [
+                            Fx_J("p", { className: "eyebrow", children: "Follow along · roof framing" }),
+                            Fx_J("h1", { children: "Cut a rafter" })
+                        ]})
+                    ]
+                }),
+
+                Fx_Jx("div", {
+                    className: "raf-controls",
+                    children: [
+                        Fx_Jx("label", { children: [Fx_J("span", { children: "Span (outside to outside)" }),
+                            Fx_J("input", { type: "number", min: "48", step: "1", value: span / 12,
+                                onChange: function (e) { setSpan(Fx_num(e.target.value, 24) * 12); } }),
+                            Fx_J("i", { children: "ft" })]}),
+                        Fx_Jx("label", { children: [Fx_J("span", { children: "Pitch — inch rise per foot" }),
+                            Fx_J("select", { value: pitch,
+                                onChange: function (e) { setPitch(Fx_num(e.target.value, 6)); },
+                                children: Fx_PITCHES.map(function (p) {
+                                    return Fx_J("option", { value: p, children: p + " : 12" }, p);
+                                })})]}),
+                        Fx_Jx("label", { children: [Fx_J("span", { children: "Rafter" }),
+                            Fx_J("select", { value: rafterSize,
+                                onChange: function (e) { setRafterSize(e.target.value); },
+                                children: ["2x6", "2x8", "2x10", "2x12"].map(function (v) {
+                                    return Fx_J("option", { value: v, children: v }, v);
+                                })})]}),
+                        Fx_Jx("label", { children: [Fx_J("span", { children: "Bearing plate" }),
+                            Fx_J("select", { value: plate,
+                                onChange: function (e) { setPlate(Fx_num(e.target.value, 3.5)); },
+                                children: [{ v: 3.5, l: "2x4 wall" }, { v: 5.5, l: "2x6 wall" }].map(function (o) {
+                                    return Fx_J("option", { value: o.v, children: o.l }, o.v);
+                                })})]}),
+                        Fx_Jx("label", { children: [Fx_J("span", { children: "Tail / overhang" }),
+                            Fx_J("input", { type: "number", min: "0", step: "1", value: overhang,
+                                onChange: function (e) { setOverhang(Fx_num(e.target.value, 16)); } }),
+                            Fx_J("i", { children: "in" })]}),
+                        Fx_Jx("label", { children: [Fx_J("span", { children: "Spacing" }),
+                            Fx_J("select", { value: spacing,
+                                onChange: function (e) { setSpacing(Fx_num(e.target.value, 16)); },
+                                children: [12, 16, 19.2, 24].map(function (v) {
+                                    return Fx_J("option", { value: v, children: v + "″ o.c." }, v);
+                                })})]})
+                    ]
+                }),
+
+                Fx_Jx("div", { className: "raf-draw", children: [
+                    Fx_J(Fx_RafterSvg, { calc: calc, prof: prof, width: 900,
+                        ridgeThk: ridgeThk, overhang: overhang }),
+                    Fx_Jx("div", { className: "raf-detail-wrap", children: [
+                        Fx_J("b", { children: "BIRDSMOUTH — DETAIL" }),
+                        Fx_J(Fx_BirdsmouthSvg, { calc: calc, width: 420 })
+                    ]})
+                ]}),
+
+                Fx_Jx("div", {
+                    className: "raf-grid",
+                    children: [
+                        Fx_Jx("section", { className: "raf-card", children: [
+                            Fx_J("h2", { children: "Common rafter" }),
+                            Fx_Jx("ul", { className: "raf-rows", children: [
+                                row("Run", Fx_ftIn(calc.run), "half the span, to the centre of the ridge"),
+                                row("Rise", Fx_ftIn(calc.rise), calc.pitch + " in every 12″ of run"),
+                                row("Line length", Fx_ftIn(calc.lineLength), "outside of wall to centre of ridge"),
+                                row("Less half the ridge", "− " + Fx_inFmt(calc.ridgeShorten), "measured along the rafter, not across"),
+                                row("Cut to", Fx_ftIn(calc.toRidge), "plumb cut to plumb cut at the wall line"),
+                                row("Plus the tail", "+ " + Fx_inFmt(calc.tail), Fx_inFmt(overhang) + " of horizontal overhang"),
+                                row("Overall", Fx_ftIn(calc.total), "cut one, then use it as the pattern"),
+                                row("Plumb cut", calc.pitch + " on the common scale", calc.angleDeg.toFixed(2) + "° from level")
+                            ]})
+                        ]}),
+
+                        Fx_Jx("section", { className: "raf-card" + (calc.notchOk ? "" : " bad"), children: [
+                            Fx_J("h2", { children: "Birdsmouth" }),
+                            Fx_Jx("ul", { className: "raf-rows", children: [
+                                row("Seat cut", Fx_inFmt(calc.seat), "level — the full width of the plate"),
+                                row("Heel cut", Fx_inFmt(calc.heel), "plumb — against the outside face of the wall"),
+                                row("Height above plate", Fx_inFmt(calc.hap), "what is left of the rafter over the bearing"),
+                                row("Notch depth", Fx_inFmt(calc.notch), "measured square to the rafter"),
+                                row("Limit", Fx_inFmt(calc.maxNotch), "a notch at the end of a member: one quarter of its depth")
+                            ]}),
+                            Fx_J("p", { className: calc.notchOk ? "raf-ok" : "raf-bad", children: calc.notchOk
+                                ? "Within the limit — the seat takes " + Fx_inFmt(calc.notch) + " of a " +
+                                  Fx_inFmt(calc.depth) + " rafter."
+                                : "Too deep. A " + Fx_inFmt(plate) + " plate under a " + calc.pitch +
+                                  ":12 rafter cuts " + Fx_inFmt(calc.notch) + " out of a " + Fx_inFmt(calc.depth) +
+                                  " member. Use a deeper rafter, a narrower bearing, or carry the load on a ledger." }),
+                            Fx_J("em", { className: "raf-code", children: "IRC R802.7.1 — notching" })
+                        ]}),
+
+                        Fx_Jx("section", { className: "raf-card", children: [
+                            Fx_J("h2", { children: "Hip / valley" }),
+                            Fx_Jx("ul", { className: "raf-rows", children: [
+                                row("Unit run", "16.97″", "the hip travels 17″ for every 12″ the common travels"),
+                                row("Length per foot of run", Fx_inFmt(calc.unitHip), "√(17² + rise²)"),
+                                row("Line length", Fx_ftIn(calc.hipLine), "for this run"),
+                                row("Plumb cut", calc.pitch + " on the HIP-VAL scale", calc.hipAngleDeg.toFixed(2) + "° from level"),
+                                row("Side cut", "45°", "tilt the saw and cut along the plumb mark")
+                            ]}),
+                            Fx_J("p", { className: "raf-note", children:
+                                "Same number on the Hip-Val scale as you used on the common scale. The hip is longer only because it runs at 45° to the common." })
+                        ]}),
+
+                        Fx_Jx("section", { className: "raf-card", children: [
+                            Fx_J("h2", { children: "Jack rafters" }),
+                            Fx_J("p", { className: "raf-note", children:
+                                "Common difference " + Fx_ftIn(calc.jackDiff) + " at " + spacing +
+                                "″ o.c. Cut the shortest first; each one after it is that much longer. Measure to the LONG point of the 45° — that is what takes off half the hip." }),
+                            Fx_J("ol", { className: "raf-jacks", children: jacks.slice(0, 12).map(function (j) {
+                                return Fx_Jx("li", { children: [
+                                    Fx_J("i", { children: "#" + j.n }),
+                                    Fx_J("b", { children: Fx_ftIn(j.length) }),
+                                    Fx_J("span", { children: Fx_inFmt(j.fromCorner) + " from the corner" })
+                                ]}, j.n);
+                            })}),
+                            jacks.length > 12 ? Fx_J("p", { className: "raf-note",
+                                children: "+ " + (jacks.length - 12) + " more, each " + Fx_ftIn(calc.jackDiff) + " longer" }) : null
+                        ]})
+                    ]
+                }),
+
+                Fx_J("p", { className: "raf-source", children:
+                    "Lengths follow the one-number method in Swanson's Speed Square book and match its printed tables — an 8-foot building at 6 rise gives a hip of exactly 6′-0″. Span tables for rafter size are IRC Table R802.4.1; this works out the cuts, it does not size the member." })
+            ]
+        });
+    }
+
     function hP({
         stage: t,
         title: e,
@@ -58543,6 +58964,12 @@ No matching component was found for:
         kind: "guided",
         phases: ["Roof"]
     }, {
+        name: "Cut a rafter",
+        category: "Roofing",
+        description: "The one-number method. Span and pitch in; every cut out — ridge, birdsmouth, tail, hip and the jack common difference.",
+        kind: "rafter",
+        phases: ["Roof"]
+    }, {
         name: "Corner posts and wall intersections",
         category: "Wall framing",
         description: "Build a California corner, a conventional corner and a two-stud corner, and see which one traps a cavity insulation cannot reach.",
@@ -58571,6 +58998,9 @@ No matching component was found for:
                 onBack: () => o(null)
             });
             if (r.kind === "corner") return (0, k.jsx)(Fx_CornerStudio, {
+                onBack: () => o(null)
+            });
+            if (r.kind === "rafter") return (0, k.jsx)(Fx_RafterStudio, {
                 onBack: () => o(null)
             });
             let p = {
