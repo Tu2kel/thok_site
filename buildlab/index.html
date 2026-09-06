@@ -411,6 +411,40 @@
 .shell-note b{color:#f0ac37;font:900 .56rem ui-monospace;letter-spacing:.08em;white-space:nowrap}
 .shell-note span{color:#d8c9a4;font-size:.68rem;line-height:1.45}
 @media (max-width:760px){.shell-note{grid-template-columns:1fr;margin:.5rem .6rem 0}}
+/* --- extra paver swatches --- */
+.brick-blue{background:repeating-linear-gradient(0deg,#4a6478 0 13px,#3d5566 13px 15px),repeating-linear-gradient(90deg,#4a6478 0 22px,#3d5566 22px 24px)}
+.brick-flag{background:radial-gradient(circle at 30% 40%,#9a8f7d 0 30%,transparent 31%),radial-gradient(circle at 72% 66%,#8b8071 0 26%,transparent 27%),#7e7466}
+.brick-perm{background:repeating-linear-gradient(90deg,#8e8e88 0 16px,#2b2f2b 16px 20px),repeating-linear-gradient(0deg,#8e8e88 0 16px,#2b2f2b 16px 20px)}
+/* --- hardscape spec panel --- */
+.hard-panel{display:grid;gap:.55rem;background:#0e1310;border:1px solid #7fa86a55;border-radius:.5rem;padding:.7rem;margin-top:.7rem}
+.hard-panel>header{display:grid;gap:.1rem}
+.hard-panel>header b{color:#a8d68a;letter-spacing:.1em;font-size:.6rem}
+.hard-panel>header span{color:#8f9a8a;font-size:.66rem}
+.hard-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.45rem}
+.hard-inputs label{display:grid;grid-template-columns:1fr auto;gap:.15rem .3rem;align-items:center}
+.hard-inputs label>span{grid-column:1/-1;color:#8f9a8a;font-size:.55rem;letter-spacing:.05em;text-transform:uppercase}
+.hard-inputs input[type=number],.hard-inputs select{width:100%;color:#ffe0a6;background:#0b0f0b;border:1px solid #ffffff20;border-radius:.3rem;padding:.32rem .4rem;font:800 .74rem ui-monospace}
+.hard-inputs i{color:#8f9a8a;font:700 .58rem ui-monospace;font-style:normal}
+.hard-check{grid-template-columns:auto 1fr!important;align-items:center!important}
+.hard-check input{width:auto!important;accent-color:#e9a329}
+.hard-check>span{grid-column:auto!important;text-transform:none!important;font-size:.66rem!important;color:#c3ccbd!important;letter-spacing:0!important}
+.hard-warn{display:grid;gap:.15rem;background:#1c1210;border:1px solid #d2564a66;border-left:3px solid #e2695c;border-radius:.35rem;padding:.5rem .6rem}
+.hard-warn b{color:#f0b4ac;font:900 .58rem ui-monospace;letter-spacing:.07em}
+.hard-warn span{color:#d8bdb8;font-size:.68rem;line-height:1.4}
+.hard-cols{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
+@media (max-width:900px){.hard-cols{grid-template-columns:1fr}}
+.hard-cols strong{display:block;color:#f0ac37;letter-spacing:.08em;font-size:.56rem;margin-bottom:.3rem}
+.hard-spec{display:grid;gap:.3rem}
+.hard-spec li{display:grid;grid-template-columns:1fr auto;gap:.1rem .5rem;background:#131a12;border-radius:.3rem;padding:.35rem .5rem}
+.hard-spec b{color:#e9f0e4;font-size:.68rem;font-weight:700}
+.hard-spec>li>span{color:#ffd27a;font:800 .7rem ui-monospace;text-align:right}
+.hard-spec small{grid-column:1/-1;color:#8f9a8a;font-size:.6rem;line-height:1.35}
+.hard-pattern{display:grid;gap:.1rem;background:#12160f;border-radius:.3rem;padding:.4rem .5rem;margin-top:.35rem}
+.hard-pattern b{color:#ffd27a;font-size:.68rem}
+.hard-pattern span{color:#9aa694;font-size:.64rem;line-height:1.4}
+.hard-source{color:#8f9a8a;font-size:.62rem;line-height:1.45}
+.hard-panel{margin:.7rem 1rem 1rem}
+@media (max-width:760px){.hard-panel{margin:.6rem .6rem 1rem}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -57746,6 +57780,217 @@ No matching component was found for:
         "w-cap": "nail", "w-blocking": "nail"
     };
 
+    // =====================================================================
+    // HARDSCAPE — materials, pattern, and the spec underneath
+    // ---------------------------------------------------------------------
+    // The visualiser lets you try materials over a photo of your own yard.
+    // That is the fun half. This is the other half: what the assembly under
+    // the pretty surface has to be, from the ICPI Tech Specs, which govern
+    // segmental concrete pavement the way the IRC governs framing.
+    //
+    // Base thickness, bedding sand, edge restraint, compaction and slope are
+    // transcribed from those specs. The pattern guidance is ICPI's own point
+    // about interlock: herringbone is what resists the twisting a car does.
+    // =====================================================================
+    var Fx_PAVERS = [
+        { name: "Red clay brick", className: "brick-red", unit: [4, 8], thk: 2.25,
+          family: "Clay paver", vehicular: true,
+          note: "Fired clay. Colour goes all the way through, so chips do not show." },
+        { name: "Charcoal paver", className: "brick-charcoal", unit: [4, 8], thk: 2.375,
+          family: "Concrete paver", vehicular: true,
+          note: "60 mm. Go to 80 mm for anything a vehicle drives on." },
+        { name: "Tan limestone", className: "brick-tan", unit: [12, 12], thk: 2,
+          family: "Natural stone", vehicular: false,
+          note: "Natural stone varies in thickness — screed to the top face, not the bottom." },
+        { name: "Gray concrete", className: "brick-gray", unit: [6, 6], thk: 2.375,
+          family: "Concrete paver", vehicular: true,
+          note: "Small square units interlock well and cut cleanly at edges." },
+        { name: "Tumbled brown", className: "brick-brown", unit: [4, 8], thk: 2.375,
+          family: "Concrete paver", vehicular: true,
+          note: "Tumbled edges hide small setting differences — forgiving to lay." },
+        { name: "Bluestone slab", className: "brick-blue", unit: [18, 24], thk: 1.5,
+          family: "Natural stone", vehicular: false,
+          note: "Large format. Slabs this size need a very flat base and will crack under a wheel." },
+        { name: "Irregular flagstone", className: "brick-flag", unit: [14, 18], thk: 1.75,
+          family: "Natural stone", vehicular: false,
+          note: "No pattern to follow — lay it dry first, then set. Joints are wide and take stone dust or polymeric." },
+        { name: "Permeable paver", className: "brick-perm", unit: [4, 8], thk: 3.125,
+          family: "Permeable", vehicular: true,
+          note: "80 mm with open joints. The whole build-up is different — open-graded stone, no sand — see ICPI Tech Spec 18." }
+    ];
+
+    var Fx_PATTERNS = [
+        { name: "Herringbone 45°", interlock: "best", vehicular: true,
+          waste: 0.13,
+          note: "The strongest interlock there is, and the reason it is what ICPI points at for anything a vehicle uses. More cuts at the edges — allow the extra." },
+        { name: "Herringbone 90°", interlock: "best", vehicular: true,
+          waste: 0.10,
+          note: "Nearly the same interlock as 45° with fewer edge cuts. A good default for a driveway." },
+        { name: "Running bond", interlock: "good", vehicular: false,
+          waste: 0.06,
+          note: "Simple and the least wasteful. Fine for a patio or walk. Do not run the joints in the direction traffic travels." },
+        { name: "Basketweave", interlock: "fair", vehicular: false,
+          waste: 0.07,
+          note: "Decorative, pedestrian. Pairs of units at right angles — it reads well in brick and badly in large format." },
+        { name: "Stack bond", interlock: "weakest", vehicular: false,
+          waste: 0.05,
+          note: "Every joint lines up both ways, so there is almost no interlock. Looks sharp, moves easily. Pedestrian and decorative only." }
+    ];
+
+    var Fx_USES = [
+        { value: "patio", label: "Patio or walk (foot traffic)", base: 4, slope: 1.5 },
+        { value: "drive", label: "Residential driveway", base: 6, slope: 2 }
+    ];
+
+    // ICPI base build-up, from use, climate and what the ground is like.
+    function Fx_hardscapeSpec(use, cold, weakSoil, paver) {
+        var u = Fx_USES.filter(function (x) { return x.value === use; })[0] || Fx_USES[0],
+            base = u.base + (cold ? 2 : 0) + (weakSoil ? 2 : 0),
+            bedding = 1,
+            excav = base + bedding + (paver ? paver.thk : 2.375);
+        return {
+            use: u, base: base, bedding: bedding, excavation: excav,
+            slope: u.slope, cold: cold, weakSoil: weakSoil,
+            lines: [
+                { k: "Compacted base", v: Fx_inFmt(base) + " minimum",
+                  why: u.base + "″ for " + u.label.toLowerCase() + " over well-drained soil" +
+                       (cold ? ", plus 2″ for a freezing climate" : "") +
+                       (weakSoil ? ", plus 2″ for wet or weak soil" : "") },
+                { k: "Bedding", v: Fx_inFmt(bedding) + " screeded",
+                  why: "ASTM C33 concrete sand, 1″ to 1 1/2″ and never thicker. Do not use bedding sand to fill dips in the base — they telegraph through to the surface. Fill those with base material and compact." },
+                { k: "Subgrade", v: "98% standard Proctor",
+                  why: "ASTM D698, for pedestrian areas and residential driveways" },
+                { k: "Slope to drain", v: u.slope + "% minimum",
+                  why: "Water has to leave the surface. Roads want 1% along and 2% across." },
+                { k: "Edge restraint", v: "Required on every open edge",
+                  why: "The restraint is what holds the pavers and the bedding together. Without it the field creeps and the joints open — this is the single most common reason a patio fails." },
+                { k: "Set high", v: "1/8″ to 1/4″ proud",
+                  why: "Lay the surface slightly above final grade to allow for the settlement that compaction brings" },
+                { k: "Tolerance", v: "±1/2″ over 50 ft",
+                  why: "Bond lines must not wander more than that off the string line" },
+                { k: "Total excavation", v: Fx_inFmt(excav),
+                  why: "base + bedding + the thickness of the unit you chose" }
+            ]
+        };
+    }
+
+    function Fx_hardscapeTakeoff(areaSf, perimFt, spec, paver, pattern) {
+        var unitSf = paver ? (paver.unit[0] * paver.unit[1]) / 144 : 0.222,
+            waste = pattern ? pattern.waste : 0.08,
+            baseCy = areaSf * (spec.base / 12) / 27,
+            sandCy = areaSf * (spec.bedding / 12) / 27;
+        return [
+            { k: paver ? paver.name : "Pavers",
+              v: Math.ceil(areaSf / unitSf * (1 + waste)) + " units",
+              why: Math.round(areaSf) + " sf ÷ " + unitSf.toFixed(3) + " sf each, plus " +
+                   Math.round(waste * 100) + "% for cuts and breakage" },
+            { k: "Compacted base", v: (Math.ceil(baseCy * 10) / 10) + " cu yd  ≈ " +
+                   (Math.ceil(baseCy * 1.4 * 10) / 10) + " ton",
+              why: "at roughly 1.4 ton per cubic yard — confirm against your supplier's material" },
+            { k: "Bedding sand", v: (Math.ceil(sandCy * 10) / 10) + " cu yd  ≈ " +
+                   (Math.ceil(sandCy * 1.35 * 10) / 10) + " ton",
+              why: "ASTM C33 concrete sand at " + Fx_inFmt(spec.bedding) },
+            { k: "Edge restraint", v: Math.ceil(perimFt) + " lin ft",
+              why: "every open edge — none where the field runs into a wall or a kerb" }
+        ];
+    }
+
+    function Fx_HardscapePanel(props) {
+        var m = props.material || {},
+            paver = Fx_PAVERS.filter(function (p) { return p.name === m.name; })[0] || Fx_PAVERS[0],
+            uS = Ts.useState("patio"), use = uS[0], setUse = uS[1],
+            cS = Ts.useState(false), cold = cS[0], setCold = cS[1],
+            wS = Ts.useState(false), weak = wS[0], setWeak = wS[1],
+            pS = Ts.useState(Fx_PATTERNS[2].name), patName = pS[0], setPat = pS[1],
+            aS = Ts.useState(240), area = aS[0], setArea = aS[1],
+            perS = Ts.useState(64), perim = perS[0], setPerim = perS[1];
+
+        var pattern = Fx_PATTERNS.filter(function (p) { return p.name === patName; })[0],
+            spec = Fx_hardscapeSpec(use, cold, weak, paver),
+            take = Fx_hardscapeTakeoff(area, perim, spec, paver, pattern),
+            vehicular = use === "drive",
+            paverWarn = vehicular && !paver.vehicular,
+            patWarn = vehicular && !pattern.vehicular;
+
+        return Fx_Jx("section", {
+            className: "hard-panel",
+            children: [
+                Fx_Jx("header", { children: [
+                    Fx_J("b", { children: "WHAT GOES UNDER IT" }),
+                    Fx_J("span", { children: "ICPI Tech Specs — the assembly, not the surface" })
+                ]}),
+
+                Fx_Jx("div", { className: "hard-inputs", children: [
+                    Fx_Jx("label", { children: [Fx_J("span", { children: "Use" }),
+                        Fx_J("select", { value: use, onChange: function (e) { setUse(e.target.value); },
+                            children: Fx_USES.map(function (u) {
+                                return Fx_J("option", { value: u.value, children: u.label }, u.value);
+                            })})]}),
+                    Fx_Jx("label", { children: [Fx_J("span", { children: "Pattern" }),
+                        Fx_J("select", { value: patName, onChange: function (e) { setPat(e.target.value); },
+                            children: Fx_PATTERNS.map(function (p) {
+                                return Fx_J("option", { value: p.name, children: p.name }, p.name);
+                            })})]}),
+                    Fx_Jx("label", { children: [Fx_J("span", { children: "Area" }),
+                        Fx_J("input", { type: "number", min: "10", value: area,
+                            onChange: function (e) { setArea(Fx_num(e.target.value, area)); } }),
+                        Fx_J("i", { children: "sf" })]}),
+                    Fx_Jx("label", { children: [Fx_J("span", { children: "Open edge" }),
+                        Fx_J("input", { type: "number", min: "0", value: perim,
+                            onChange: function (e) { setPerim(Fx_num(e.target.value, perim)); } }),
+                        Fx_J("i", { children: "ft" })]}),
+                    Fx_Jx("label", { className: "hard-check", children: [
+                        Fx_J("input", { type: "checkbox", checked: cold,
+                            onChange: function (e) { setCold(e.target.checked); } }),
+                        Fx_J("span", { children: "Ground freezes here" })]}),
+                    Fx_Jx("label", { className: "hard-check", children: [
+                        Fx_J("input", { type: "checkbox", checked: weak,
+                            onChange: function (e) { setWeak(e.target.checked); } }),
+                        Fx_J("span", { children: "Wet, clay or soft soil" })]})
+                ]}),
+
+                paverWarn || patWarn ? Fx_Jx("div", { className: "hard-warn", children: [
+                    Fx_J("b", { children: "NOT FOR A DRIVEWAY" }),
+                    Fx_J("span", { children: [
+                        paverWarn ? paver.name + " is not a vehicular unit — " + paver.note + " " : "",
+                        patWarn ? pattern.name + " has " + pattern.interlock +
+                                  " interlock. Use a herringbone where a vehicle turns or brakes." : ""
+                    ].join("") })
+                ]}) : null,
+
+                Fx_Jx("div", { className: "hard-cols", children: [
+                    Fx_Jx("div", { children: [
+                        Fx_J("strong", { children: "THE ASSEMBLY" }),
+                        Fx_J("ul", { className: "hard-spec", children: spec.lines.map(function (l, i) {
+                            return Fx_Jx("li", { children: [
+                                Fx_J("b", { children: l.k }),
+                                Fx_J("span", { children: l.v }),
+                                Fx_J("small", { children: l.why })
+                            ]}, "s" + i);
+                        })})
+                    ]}),
+                    Fx_Jx("div", { children: [
+                        Fx_J("strong", { children: "ROUGH TAKE-OFF" }),
+                        Fx_J("ul", { className: "hard-spec", children: take.map(function (l, i) {
+                            return Fx_Jx("li", { children: [
+                                Fx_J("b", { children: l.k }),
+                                Fx_J("span", { children: l.v }),
+                                Fx_J("small", { children: l.why })
+                            ]}, "t" + i);
+                        })}),
+                        Fx_Jx("p", { className: "hard-pattern", children: [
+                            Fx_J("b", { children: pattern.name + " — " + pattern.interlock + " interlock" }),
+                            Fx_J("span", { children: pattern.note })
+                        ]})
+                    ]})
+                ]}),
+
+                Fx_J("p", { className: "hard-source", children:
+                    "Base, bedding, compaction, slope and tolerance are from the ICPI Tech Specs for segmental concrete pavement. They assume a competent, well-drained subgrade — anything vehicular, anything on fill, and anything holding back soil wants a real soils assessment first. Quantities here are for planning, not ordering." })
+            ]
+        });
+    }
+
     function hP({
         stage: t,
         title: e,
@@ -58135,22 +58380,7 @@ No matching component was found for:
     }
     var To = De(it(), 1);
     var kt = De(en(), 1),
-        Q8 = [{
-            name: "Red clay brick",
-            className: "brick-red"
-        }, {
-            name: "Charcoal paver",
-            className: "brick-charcoal"
-        }, {
-            name: "Tan limestone",
-            className: "brick-tan"
-        }, {
-            name: "Gray concrete",
-            className: "brick-gray"
-        }, {
-            name: "Tumbled brown",
-            className: "brick-brown"
-        }];
+        Q8 = Fx_PAVERS;
 
     function mP({
         onBack: t
@@ -58306,9 +58536,11 @@ No matching component was found for:
                         children: [(0, kt.jsx)(Fl, {}), " RESET OVERLAY"]
                     }), (0, kt.jsx)("p", {
                         className: "landscape-note",
-                        children: "Visual preview only. Confirm dimensions, drainage, base preparation, buried utilities, and property limits before installation."
+                        children: "The overlay is a visual preview. Confirm dimensions, drainage, buried utilities and property limits before anything is dug."
                     })]
                 })]
+            }), (0, kt.jsx)(Fx_HardscapePanel, {
+                material: a
             })]
         })
     }
