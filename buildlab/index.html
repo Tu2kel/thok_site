@@ -55485,6 +55485,109 @@ No matching component was found for:
         fasteners: [17]
     };
 
+    // ---- code for the roof sequence --------------------------------------
+    Fx_CODE_LIBRARY["r-calc"] = {
+        irc: [["R802.4", "Rafter spans — Table R802.4.1 sizes the member from span, spacing, species and load"],
+              ["R802.7.1", "Cutting and notching — a birdsmouth is a notch at the end, limited to a quarter of the depth"]],
+        ibc: [["2308.7", "Roof and ceiling framing"]], fasteners: []
+    };
+    Fx_CODE_LIBRARY["r-pattern"] = {
+        irc: [["R802.6", "Bearing — full bearing on the plate, and on the ridge where the pitch is 3:12 or steeper with a continuous tension tie"]],
+        ibc: [["2308.7.2", "Rafter framing details"]], fasteners: []
+    };
+    Fx_CODE_LIBRARY["r-layout"] = {
+        irc: [["R802.3", "Rafters framed opposite each other to the ridge, offset not more than 1 1/2 in"],
+              ["R802.4", "Rafter spacing"]],
+        ibc: [["2308.7.1", "Rafter spans and spacing"]], fasteners: []
+    };
+    Fx_CODE_LIBRARY["r-ridge"] = {
+        irc: [["R802.3", "The ridge board shall be not less in depth than the cut end of the rafter"]],
+        ibc: [["2308.7.2", "Ridge board"]], fasteners: []
+    };
+    Fx_CODE_LIBRARY["r-first"] = {
+        irc: [["R802.3", "Rafters opposite each other, offset not more than 1 1/2 in, connected with a collar tie or ridge strap"],
+              ["Table R602.3(1)", "Rafter to plate, and rafter to ridge — toe nail rows"]],
+        ibc: [["Table 2304.10.2", "Fastening schedule"]], fasteners: []
+    };
+    Fx_CODE_LIBRARY["r-commons"] = Fx_CODE_LIBRARY["r-first"];
+    Fx_CODE_LIBRARY["r-raftertie"] = {
+        irc: [["R802.5.2", "Rafter ties — 2x4 minimum, 24 in o.c. maximum, in the LOWER third of the attic space"],
+              ["Table R802.5.2(1)", "Rafter/ceiling joist heel joint connections — the nail count for your span, pitch and load"],
+              ["R802.6", "Bearing"]],
+        ibc: [["2308.7.3", "Ceiling joists and rafter ties"]], fasteners: []
+    };
+    Fx_CODE_LIBRARY["r-collartie"] = {
+        irc: [["R802.4.6", "Collar ties — 1x4 nominal minimum, 4 ft o.c. maximum, in the UPPER third of the attic space"],
+              ["R802.4.6", "Ridge straps as an alternative — 1 1/4 in x 20 gage, three 10d common per rafter, closest nail not less than 2 3/8 in from the end"]],
+        ibc: [["2308.7.3.1", "Collar ties"]], fasteners: []
+    };
+    Fx_CODE_LIBRARY["r-gable"] = {
+        irc: [["R802.3", "Framing details at the gable"], ["R602.3.1", "Stud size, height and spacing carries up the gable"]],
+        ibc: [["2308.7", "Roof and ceiling framing"]], fasteners: [17]
+    };
+    Fx_CODE_LIBRARY["r-sheathe"] = {
+        irc: [["R803.2", "Wood structural panel roof sheathing — thickness, span rating and support"],
+              ["Table R602.3(1)", "Sheathing fastening, items 31 to 33"],
+              ["R802.10.2", "Where trusses are used, sheathing and bracing follow the truss design"]],
+        ibc: [["2304.8", "Structural roof sheathing"]], fasteners: [31, 32]
+    };
+    Fx_CODE_LIBRARY["r-dryin"] = {
+        irc: [["R905.1", "Roof covering application — every covering to its own instructions"],
+              ["R905.2.8.5", "Drip edge — at the eave under the underlayment, at the rake over it"],
+              ["R905.1.1", "Underlayment — laps and fastening"],
+              ["R903.2", "Flashing at wall and roof intersections and at penetrations"]],
+        ibc: [["1507", "Requirements for roof coverings"], ["1503.2", "Flashing"]], fasteners: []
+    };
+
+    // ---- code for the foundation, deck, enclosure and finish sequences ----
+    Fx_CODE_LIBRARY["f-verify"] = { irc: [["R403.1", "Footings and foundations — dimensions and bearing"],
+        ["R401.3", "Drainage — grade away from the foundation"]], ibc: [["1809", "Shallow foundations"]], fasteners: [] };
+    Fx_CODE_LIBRARY["f-snap"] = { irc: [["R403.1.6", "Foundation anchorage — 1/2 in bolts minimum, 6 ft o.c. maximum, one within 12 in of each end of every plate section, 7 in minimum embedment"]],
+        ibc: [["2308.3.1", "Anchorage"]], fasteners: [] };
+    Fx_CODE_LIBRARY["f-capillary"] = { irc: [["R317.1", "Protection against decay — wood in contact with concrete"],
+        ["R406", "Foundation waterproofing and damp-proofing"]], ibc: [["2304.12.1.4", "Wood supported by exterior foundation walls"]], fasteners: [] };
+    Fx_CODE_LIBRARY["f-drill"] = { irc: [["R317.1", "Sill plates on concrete must be pressure-treated or naturally durable"]],
+        ibc: [["2304.12", "Protection against decay and termites"]], fasteners: [] };
+    Fx_CODE_LIBRARY["f-anchor"] = { irc: [["R403.1.6", "Anchor bolts and plate washers"]],
+        ibc: [["2308.3.1", "Anchorage"]], fasteners: [] };
+    Fx_CODE_LIBRARY["f-level"] = { irc: [["R403.1", "The foundation must provide continuous bearing for the sill"]],
+        ibc: [["1809.4", "Foundation depth and bearing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["f-inspect"] = { irc: [["R109.1.1", "Foundation inspection — before the work is covered"],
+        ["R106", "Construction documents on site"]], ibc: [["110.3.1", "Footing and foundation inspection"]], fasteners: [] };
+
+    Fx_CODE_LIBRARY["d-layout"] = { irc: [["R503.2.1", "Wood structural panel subfloor — grade, thickness and identification"],
+        ["Table R503.2.1.1(1)", "Allowable spans and loads"]], ibc: [["2304.8", "Structural floor sheathing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["d-glue"] = { irc: [["R503.2.4", "Panel installation — support, gapping and joints"]],
+        ibc: [["2304.8.2", "Panel installation"]], fasteners: [] };
+    Fx_CODE_LIBRARY["d-fasten"] = { irc: [["Table R602.3(1)", "Subfloor fastening — item 30 onward"],
+        ["R503.2.4", "Panel installation"]], ibc: [["Table 2304.10.2", "Fastening schedule"]], fasteners: [32] };
+    Fx_CODE_LIBRARY["d-check"] = { irc: [["R503.2.4", "Panel installation and support"]], ibc: [["2304.8.2", "Panel installation"]], fasteners: [32] };
+
+    Fx_CODE_LIBRARY["e-plumb"] = { irc: [["R602.10", "Wall bracing — braced wall lines and methods"],
+        ["Table R602.3(3)", "Wood structural panel wall sheathing to resist wind pressure"]], ibc: [["2308.6", "Wall bracing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["e-set"] = { irc: [["R602.10.4", "Bracing methods — continuous sheathing requirements"],
+        ["R602.3", "Design and construction — Figures R602.3(1) and (2)"]], ibc: [["2304.6", "Wall sheathing"]], fasteners: [31, 32] };
+    Fx_CODE_LIBRARY["e-nail"] = { irc: [["Table R602.3(1)", "Sheathing fastening, items 31 to 33"],
+        ["R602.10.3", "Required bracing length"]], ibc: [["Table 2304.10.2", "Fastening schedule"]], fasteners: [31, 32, 33] };
+    Fx_CODE_LIBRARY["e-cut"] = { irc: [["R602.10", "Openings within a braced wall panel"]], ibc: [["2308.6", "Wall bracing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["e-wrb"] = { irc: [["R703.2", "Water-resistive barrier"], ["R703.4", "Flashing — shingle-fashion at every opening and transition"]],
+        ibc: [["1402.2", "Weather protection"], ["1404.4", "Flashing"]], fasteners: [] };
+
+    Fx_CODE_LIBRARY["c-roof"] = { irc: [["R905", "Requirements for roof coverings — each covering to its own instructions"],
+        ["R903.2", "Flashing"]], ibc: [["1507", "Requirements for roof coverings"]], fasteners: [] };
+    Fx_CODE_LIBRARY["c-openings"] = { irc: [["R609.1", "Exterior windows and doors — listed and labeled"],
+        ["R609.3", "Installed to the manufacturer's written instructions"], ["R703.4", "Flashing"]],
+        ibc: [["1402.1", "Installation per the manufacturer's instructions"], ["1404.4", "Flashing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["c-siding"] = { irc: [["R703.1", "Weather-resistant exterior wall envelope"],
+        ["R703.3", "Nominal thickness and attachment"], ["R317.1", "Clearance to grade"]],
+        ibc: [["1402.2", "Weather protection"], ["1404", "Materials"]], fasteners: [] };
+    Fx_CODE_LIBRARY["c-trim"] = { irc: [["R703.4", "Flashing — sealant is not a substitute for it"]],
+        ibc: [["1404.4", "Flashing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["c-services"] = { irc: [["R109.1.2", "Plumbing, mechanical, gas and electrical rough-in inspection"],
+        ["N1102", "Building thermal envelope — insulation and air sealing"]], ibc: [["110.3", "Required inspections"]], fasteners: [] };
+    Fx_CODE_LIBRARY["c-final"] = { irc: [["R109.1.5", "Final inspection"], ["R110.1", "Certificate of occupancy"]],
+        ibc: [["110.3.10", "Final inspection"], ["111.1", "Certificate of occupancy"]], fasteners: [] };
+
     // =====================================================================
     // LIVE CAMERA
     // ---------------------------------------------------------------------
@@ -56948,6 +57051,136 @@ No matching component was found for:
             "Class notes · IRC R302.11")
     ];
 
+    // ---- checks on the roof sequence -------------------------------------
+    Fx_STATIC_QUIZ["r-ridge"] = [
+        Fx_q("rq-ridge", "How deep does the ridge board have to be?",
+            ["Not less than the cut end of the rafter",
+             "The same nominal size as the rafter",
+             "Half the rafter depth",
+             "Whatever the sheathing can span"],
+            0,
+            "The rafter is cut at the roof angle, so its end face is deeper than the stock it came from. The ridge has to bear on all of it.",
+            "IRC R802.3")
+    ];
+    Fx_STATIC_QUIZ["r-layout"] = [
+        Fx_q("rq-offset", "How far out of line may opposing rafters be at the ridge?",
+            ["1 1/2 in", "3 in", "Half a rafter thickness", "They must line up exactly"],
+            0,
+            "Not more than 1 1/2 in offset from each other. Beyond that the ridge is being twisted rather than loaded.",
+            "IRC R802.3")
+    ];
+    Fx_STATIC_QUIZ["r-raftertie"] = [
+        Fx_q("rq-tie-where", "A rafter tie goes where, and what is it for?",
+            ["Lower third of the attic — it stops the walls spreading",
+             "Upper third of the attic — it stops the ridge separating",
+             "Middle third — it stiffens the rafters",
+             "Anywhere, as long as it is nailed to both rafters"],
+            0,
+            "Lower third, and it is the tension tie that resists the outward thrust a pitched roof puts on the walls. Leave it out and the walls spread and the ridge drops.",
+            "IRC R802.5.2"),
+        Fx_q("rq-tie-nails", "Where does the nail count for the heel joint come from?",
+            ["Table R802.5.2(1), for your span, pitch and load",
+             "Table R602.3(1), the general fastening schedule",
+             "Three 16d, the same as any rafter connection",
+             "The rafter manufacturer"],
+            0,
+            "It is one of the few connections with its own table, because the number changes with span, pitch and snow load. This is a look-it-up, not a remember-it.",
+            "IRC Table R802.5.2(1)")
+    ];
+    Fx_STATIC_QUIZ["r-collartie"] = [
+        Fx_q("rq-collar", "What is the difference between a collar tie and a rafter tie?",
+            ["Collar tie: upper third, resists uplift separating the ridge. Rafter tie: lower third, resists the walls spreading",
+             "They are two names for the same member",
+             "Collar tie: lower third. Rafter tie: upper third",
+             "A collar tie is metal, a rafter tie is wood"],
+            0,
+            "Different member, different third of the attic, different job. One will not do the other's work, and a tie in the middle does neither properly.",
+            "IRC R802.4.6 and R802.5.2"),
+        Fx_q("rq-collar-size", "Minimum collar tie, and maximum spacing?",
+            ["1x4 nominal at 4 ft o.c.", "2x4 at 4 ft o.c.", "1x4 at 24 in o.c.", "2x6 at 8 ft o.c."],
+            0,
+            "1x4 nominal minimum, 4 ft o.c. maximum, in the upper third. A 1 1/4 in x 20 gage ridge strap can take its place — three 10d common per rafter.",
+            "IRC R802.4.6")
+    ];
+    Fx_STATIC_QUIZ["r-dryin"] = [
+        Fx_q("rq-drip", "Drip edge at the eave and at the rake — which way round?",
+            ["Eave: drip edge first, underlayment over it. Rake: underlayment first, drip edge over it",
+             "Underlayment first in both places",
+             "Drip edge first in both places",
+             "It makes no difference once it is nailed"],
+            0,
+            "Opposite orders, and for the same reason: water has to end up on the outside of the metal at the eave and on the outside of the metal at the rake.",
+            "IRC R905.2.8.5")
+    ];
+    Fx_STATIC_QUIZ["r-sheathe"] = [
+        Fx_q("rq-sheath", "Roof sheathing nailing, unless the plan says otherwise?",
+            ["8d common at 6 in on the edges, 12 in in the field",
+             "8d common at 12 in on the edges, 6 in in the field",
+             "6d common at 6 in everywhere",
+             "8d common at 4 in everywhere"],
+            0,
+            "6 on the edges, 12 in the field. Wind zone tightens it, especially near ridges, eaves and gable ends — and every panel edge still needs support under it.",
+            "IRC Table R602.3(1) items 31–33 · R803.2")
+    ];
+
+    Fx_STATIC_QUIZ["f-verify"] = [
+        Fx_q("fq-sq", "The foundation's diagonals differ by 3/4 in. What now?",
+            ["Fix it before you build on it — you cannot square the building later",
+             "Carry on; the walls will pull it square",
+             "Split the difference across the four walls",
+             "It is within tolerance for concrete"],
+            0,
+            "Every wall, every opening and every rafter comes off this. Push a wall later and you move one corner while breaking another.",
+            "IRC R403.1")
+    ];
+    Fx_STATIC_QUIZ["f-anchor"] = [
+        Fx_q("fq-wash", "A cut washer under the nut instead of a plate washer — acceptable?",
+            ["No. The plate washer spreads the load; a cut washer pulls through the plate",
+             "Yes, as long as the nut is tight",
+             "Yes, on anything under two storeys",
+             "Only in a garage"],
+            0,
+            "The washer is doing structural work in uplift. Undersized and it pulls straight through the sill.",
+            "IRC R403.1.6")
+    ];
+    Fx_STATIC_QUIZ["d-layout"] = [
+        Fx_q("dq-axis", "Which way does the strength axis of a subfloor panel run?",
+            ["Across the joists", "Along the joists", "Diagonally", "Either, if the edges are blocked"],
+            0,
+            "Across the supports. Laid the other way the panel spans on its weak axis and you will feel it underfoot.",
+            "IRC R503.2.1")
+    ];
+    Fx_STATIC_QUIZ["e-nail"] = [
+        Fx_q("eq-over", "Why does an overdriven sheathing nail matter?",
+            ["It breaks the panel face, so it is no longer holding what it was counted on to hold",
+             "It looks untidy but performs the same",
+             "It only matters on the roof",
+             "It matters for weather, not for structure"],
+            0,
+            "A braced wall panel works by the nails at its edges. A head sunk through the face has lost most of its grip, and enough of them means the wall is not braced to the schedule it was designed to.",
+            "IRC Table R602.3(1) · R602.10")
+    ];
+    Fx_STATIC_QUIZ["e-wrb"] = [
+        Fx_q("eq-lap", "Which way do WRB courses lap?",
+            ["Upper over lower, all the way up",
+             "Lower over upper, so water is thrown clear",
+             "Either, once the joints are taped",
+             "Upper over lower on walls, the reverse at openings"],
+            0,
+            "Water runs down. Every course sheds onto the face of the one below. One reverse lap turns the wall into a funnel no matter how much tape is on it.",
+            "IRC R703.2 · R703.4")
+    ];
+    Fx_STATIC_QUIZ["c-trim"] = [
+        Fx_q("cq-seal", "When is sealant the right answer at an opening?",
+            ["Only where the detail calls for it — it is never a substitute for flashing",
+             "Everywhere water might get in",
+             "Around the whole perimeter, inside and out",
+             "Only on the sill"],
+            0,
+            "Flashing sheds water; sealant closes a joint. Sealing a drainage path shut traps the water the flashing was meant to let out.",
+            "IRC R703.4")
+    ];
+
     // =====================================================================
     // CORNER STUDIO
     // ---------------------------------------------------------------------
@@ -57838,6 +58071,437 @@ No matching component was found for:
         "w-square": "nail", "w-brace": "nail", "w-raise": "anchor",
         "w-cap": "nail", "w-blocking": "nail"
     };
+
+    // =====================================================================
+    // FRAMING A ROOF, STEP BY STEP
+    // ---------------------------------------------------------------------
+    // The roof was one step for the whole roof. It has its own 23-page book
+    // in the reference folder and its own chapter in the code.
+    //
+    // Two things this sequence is careful to separate, because it is the
+    // single most common confusion on a roof: a RAFTER tie sits in the lower
+    // third and stops the walls spreading; a COLLAR tie sits in the upper
+    // third and stops the ridge separating. They are not the same member and
+    // one will not do the other's job.
+    // =====================================================================
+    var Fx_ROOF_SEQUENCE = [
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-calc",
+            title: "Work out the cuts before you touch a saw",
+            material: "The span, the pitch, and the ridge you intend to use",
+            orientation: "Run is half the span, measured to the CENTRE of the ridge",
+            spacing: "Rafters usually follow the stud layout — in-line framing stacks the load",
+            fastener: "No fastener yet",
+            action: "Take half the span for the run, then the length per foot of run from the pitch. Deduct half the ridge thickness measured ALONG the rafter, and add the tail. The Cut a rafter module does all of this and gives you the birdsmouth too.",
+            check: "You have one number for the ridge-to-wall length, one for the tail, and the birdsmouth notch is inside a quarter of the rafter depth.",
+            note: "Everything on a pitched roof comes off one number: the inch rise per foot of run."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-pattern",
+            title: "Cut the pattern rafter and try it",
+            material: "One rafter, crown up",
+            orientation: "Plumb cut at the ridge, birdsmouth at the plate, plumb cut at the tail",
+            spacing: "One rafter only, until it fits",
+            fastener: "No fastener yet",
+            action: "Cut one. Carry it up, hold it against the ridge height and down onto the plate, and look at both ends. Adjust before you cut thirty of them.",
+            check: "The plumb cut sits flat against the ridge, the seat sits flat on the plate, and the tail lands where the fascia wants it.",
+            note: "Once it fits, it is the pattern — mark every other rafter off it, not off the tape."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-layout",
+            title: "Mark the rafter layout on the plates",
+            material: "Both top plates, tape and pencil",
+            orientation: "Same reference end on both walls, so opposing rafters line up",
+            spacing: "Per the roof plan — do not assume it matches the stud spacing",
+            fastener: "No fastener yet",
+            action: "Pull one running dimension along each plate and mark both sides identically. Rafters have to land opposite one another at the ridge.",
+            check: "Marks on both walls agree end to end. Opposing rafters cannot be offset more than 1 1/2 in from each other.",
+            note: "Where the rafters stack over the studs, the load runs straight down through the wall instead of bending the plate."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-ridge",
+            title: "Set and brace the ridge board",
+            material: "Ridge board, at least as deep as the cut end of a rafter",
+            orientation: "On edge, level, at the height the pattern rafter gives you",
+            spacing: "Continuous, spliced over a rafter pair where it has to be",
+            fastener: "Held by temporary props until the first rafters are on",
+            action: "Prop the ridge to height and brace it both ways. Keep it straight — every rafter after this takes its line from the ridge, and a bow put in now stays in.",
+            check: "Ridge is level, straight, at the right height, and braced well enough to nail against.",
+            note: "The ridge has to be deeper than the lumber is wide, because the rafter is cut at an angle and its end face is deeper than the stock."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-first",
+            title: "Set the first pair of rafters",
+            material: "Two rafters cut from the pattern",
+            orientation: "Directly opposite each other, crowns up",
+            spacing: "On their marks at both ends",
+            fastener: "Toe-nail to the plate; face or toe-nail to the ridge per the schedule",
+            action: "Set both sides of one pair together so the ridge is not pushed off line. Seat each birdsmouth fully on the plate before you nail.",
+            check: "Both seat cuts are down tight, the plumb cuts are flat on the ridge, and the pair has not moved the ridge.",
+            note: "Rafters have to be opposite each other, offset no more than 1 1/2 in — otherwise the ridge takes a twist it was never meant to."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-commons",
+            title: "Fill in the common rafters",
+            material: "The rest of the commons, all cut from the pattern",
+            orientation: "Crown up, every one",
+            spacing: "On the layout marks",
+            fastener: "Per the schedule at the plate and at the ridge",
+            action: "Work in pairs out from the first, keeping the ridge straight as you go. Do not let the ridge bow while you nail against it.",
+            check: "Ridge is still straight, every rafter is seated, and nothing is crown-down.",
+            note: null
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-raftertie",
+            title: "Ceiling joists or rafter ties — the ones that stop the spread",
+            material: "Ceiling joists, or 2x4 minimum rafter ties",
+            orientation: "In the LOWER third of the attic space",
+            spacing: "24 in o.c. maximum",
+            fastener: "The heel joint connection — nail count comes from Table R802.5.2(1)",
+            action: "A pitched roof pushes the walls outward. This member is the tension tie that stops it. Fasten the heel joint to the schedule for your span and pitch — this is not a place to guess a nail count.",
+            check: "Ties are in the lower third, no more than 24 in apart, and every heel joint has its full nail count.",
+            note: "Leave this out and the walls spread and the ridge drops. It is the single most consequential connection on a conventional roof."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-collartie",
+            title: "Collar ties — the ones that hold the ridge together",
+            material: "1x4 nominal minimum, or a ridge strap",
+            orientation: "In the UPPER third of the attic space",
+            spacing: "4 ft o.c. maximum",
+            fastener: "Nailed to each rafter; a ridge strap takes three 10d common per rafter",
+            action: "Collar ties resist uplift trying to separate the rafters at the ridge. Upper third, not the middle, and not where a rafter tie goes.",
+            check: "In the upper third, no more than 4 ft apart, fastened to both rafters.",
+            note: "A collar tie is not a rafter tie. Upper third versus lower third, uplift versus spread. Putting one in the wrong place does neither job."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-gable",
+            title: "Frame the gable ends",
+            material: "Gable studs, cut to the rake",
+            orientation: "Plumb, following the slope of the end rafter",
+            spacing: "Continue the wall's stud layout",
+            fastener: "Per the plate-to-stud schedule",
+            action: "Cut each gable stud to the rake and notch or bevel the top to sit under the end rafter. They step by a constant amount — work it out once and repeat it.",
+            check: "Studs are plumb, on layout, and tight under the rafter without lifting it.",
+            note: "The step between gable studs is the spacing times the pitch — the same common difference the jack rafters use."
+        },
+        {
+            phase: "Roof", diagram: 11, codeKey: "r-sheathe",
+            title: "Sheathe the roof",
+            material: "Rated wood structural panels",
+            orientation: "Strength axis across the rafters, end joints staggered",
+            spacing: "Panel gaps as the panel calls for; support or clip every edge",
+            fastener: "8d common at 6 in on the edges and 12 in in the field, unless the plan tightens it",
+            action: "Start at the eave and work up, keeping courses straight. Every panel edge needs a rafter, a block or a clip under it.",
+            check: "No unsupported edge, joints staggered, and no overdriven heads breaking the face of the panel.",
+            note: "Higher wind zones tighten this spacing, especially near the ridge, the eaves and the gable ends."
+        },
+        {
+            phase: "Roof", diagram: 12, codeKey: "r-dryin",
+            title: "Dry it in",
+            material: "Drip edge, underlayment, valley and penetration flashing",
+            orientation: "Every layer laps over the one below, shingle fashion",
+            spacing: "Laps as the underlayment specifies",
+            fastener: "As the covering and underlayment manufacturers require",
+            action: "Drip edge at the eave first, then the underlayment over it; at the rake, underlayment first and the drip edge over. Valleys and penetrations get flashed as you go, not afterwards.",
+            check: "Water put anywhere on this roof would run off it. No reverse laps anywhere.",
+            note: "Eave and rake take the drip edge in opposite orders. That is not a detail to get backwards."
+        }
+    ];
+
+    function Fx_expandRoof(steps) {
+        var out = [], done = false;
+        steps.forEach(function (s) {
+            if (s.phase === "Roof") {
+                if (!done) { done = true; Fx_ROOF_SEQUENCE.forEach(function (r) { out.push(r); }); }
+                return;
+            }
+            out.push(s);
+        });
+        return out;
+    }
+
+    Fx_STEP_FASTENER["r-first"] = { primary: "16d common nail", substitute: "SDWS16212 structural screw",
+        note: "Rafter to plate is a toe-nail — the screw table lists (3) SDWS16212 against (3) 10d common. Rafter to a 2x ridge takes (4) SDWS16212 against (4) 16d box." };
+    Fx_STEP_FASTENER["r-commons"] = Fx_STEP_FASTENER["r-first"];
+    Fx_STEP_FASTENER["r-raftertie"] = { primary: "16d common nail", substitute: "No substitute by eye",
+        note: "The heel joint nail count comes from Table R802.5.2(1) for your span, pitch and snow load. It is the one connection on the roof you must look up rather than remember." };
+    Fx_STEP_FASTENER["r-collartie"] = { primary: "16d common nail", substitute: "Ridge strap",
+        note: "A 1 1/4 in x 20 gage ridge strap may replace a collar tie: three 10d common per rafter, closest nail not less than 2 3/8 in from the end." };
+    Fx_STEP_FASTENER["r-gable"] = { primary: "16d common nail", substitute: "SDWS16300 structural screw",
+        note: "Plate-to-stud, same as any other stud." };
+    Fx_STEP_FASTENER["r-sheathe"] = { primary: "8d common nail", substitute: "Listed sheathing screw",
+        note: "6 in edges, 12 in field. Wind zone and the braced-wall schedule can tighten both." };
+
+    Fx_STEP_TOOL["r-calc"] = "none";
+    Fx_STEP_TOOL["r-pattern"] = "none";
+    Fx_STEP_TOOL["r-layout"] = "none";
+    Fx_STEP_TOOL["r-ridge"] = "none";
+    Fx_STEP_TOOL["r-first"] = "nail";
+    Fx_STEP_TOOL["r-commons"] = "nail";
+    Fx_STEP_TOOL["r-raftertie"] = "nail";
+    Fx_STEP_TOOL["r-collartie"] = "connector";
+    Fx_STEP_TOOL["r-gable"] = "nail";
+    Fx_STEP_TOOL["r-sheathe"] = "nail";
+    Fx_STEP_TOOL["r-dryin"] = "none";
+
+    // =====================================================================
+    // THE REMAINING PHASES
+    // ---------------------------------------------------------------------
+    // Foundation, deck, sheathing and finish were one step each. A shed
+    // cannot be built to completion from a step that says "install the
+    // subfloor" and nothing else.
+    // =====================================================================
+    var Fx_FOUNDATION_SEQUENCE = [
+        { phase: "Foundation interface", diagram: 1, codeKey: "f-verify",
+          title: "Check the foundation before you build on it",
+          material: "The finished foundation, a long tape and a level",
+          orientation: "Measure both diagonals; check level at every corner",
+          spacing: "Diagonals must match — that is the only proof it is square",
+          fastener: "No fastener yet",
+          action: "Measure both diagonals corner to corner. Check level all the way round and note the high point. Every error here is one you carry the whole way up.",
+          check: "Diagonals match, dimensions match the plan, and you know where the high corner is.",
+          note: "You cannot square a building later by pushing walls. It is square here or it is never square." },
+        { phase: "Foundation interface", diagram: 1, codeKey: "f-snap",
+          title: "Snap the sill line and check the anchors",
+          material: "Chalk line, the foundation plan",
+          orientation: "Sill set back from the outside face as the plan details",
+          spacing: "Anchors: 6 ft o.c. maximum, one within 12 in of each end of every plate section",
+          fastener: "No fastener yet",
+          action: "Snap the line the sill will follow, then walk the anchors against it. Find any that are out of place now, while you can still do something about it.",
+          check: "Every anchor falls inside the sill footprint, and each plate section will get one within 12 in of both ends.",
+          note: "A short offcut of sill with no anchor near its end is a common miss and a real failure." },
+        { phase: "Foundation interface", diagram: 1, codeKey: "f-capillary",
+          title: "Lay the capillary break",
+          material: "Sill sealer or the barrier the plan specifies",
+          orientation: "Continuous under the full width of the sill",
+          spacing: "No gaps, lapped at joints",
+          fastener: "None",
+          action: "Roll the sealer out on the line. It stops moisture wicking out of the concrete into the sill and it fills the small irregularities in the top of the wall.",
+          check: "Continuous, full width, and not torn.",
+          note: "This is why the sill has to be treated as well — belt and braces, because concrete holds water." },
+        { phase: "Foundation interface", diagram: 1, codeKey: "f-drill",
+          title: "Lay out the sill and drill for the anchors",
+          material: "Pressure-treated sill plates",
+          orientation: "Crown irrelevant here — the sill lies flat and follows the concrete",
+          spacing: "Mark the anchors off the actual bolts, not off the plan",
+          fastener: "No fastener yet",
+          action: "Set each plate alongside its anchors, square across and transfer the real position of every bolt. Drill slightly oversize so the plate drops without fighting.",
+          check: "Every plate drops over its bolts without being forced, and the outside edge follows the line.",
+          note: "Transfer from the bolts you actually have. Concrete moves during a pour." },
+        { phase: "Foundation interface", diagram: 1, codeKey: "f-anchor",
+          title: "Set the sill and tighten the anchors",
+          material: "Sill plates, plate washers, nuts",
+          orientation: "Plate flat, outside edge on the line",
+          spacing: "Every anchor gets a washer and a nut",
+          fastener: "Plate washers — a cut washer is not a substitute",
+          action: "Drop the plates, fit a plate washer and nut on every bolt, and draw them down snug. Do not crush the sealer.",
+          check: "Every bolt has its washer, nothing is loose, and the plate is bearing on the wall rather than bridging a hollow.",
+          note: "The washer spreads the load. Undersized washers pull through the plate in an uplift event." },
+        { phase: "Foundation interface", diagram: 1, codeKey: "f-level",
+          title: "Straighten and level the sill",
+          material: "Shims or grout as the detail allows",
+          orientation: "Straight along its length and level around the building",
+          spacing: "Check at every anchor and midway between",
+          fastener: "Already anchored",
+          action: "Sight the sill for straightness and check level round the building from the high corner. Correct the low spots the way the detail allows — not by leaving the plate spanning a gap.",
+          check: "Sill is straight, level, fully bearing, and there is nothing to pack later.",
+          note: "Everything above this is built off the sill. Half an inch of dip here is half an inch of dip in the ridge." },
+        { phase: "Foundation interface", diagram: 1, codeKey: "f-inspect",
+          title: "Call the foundation inspection",
+          material: "Approved plans, the permit",
+          orientation: "Before anything covers the work",
+          spacing: "n/a",
+          fastener: "None",
+          action: "The foundation inspection happens before the floor goes on and hides it. Have the plans, the permit and the anchor layout ready.",
+          check: "Inspection passed and any corrections closed out before you frame the floor.",
+          note: "Cover it first and you may be taking it apart to show someone." }
+    ];
+
+    var Fx_DECK_SEQUENCE = [
+        { phase: "Floor deck", diagram: 6, codeKey: "d-layout",
+          title: "Dry-fit the first course",
+          material: "Rated tongue-and-groove structural panels",
+          orientation: "Strength axis ACROSS the joists; end joints staggered between courses",
+          spacing: "Panel edge gaps as the panel calls for",
+          fastener: "No fastener yet",
+          action: "Lay the first sheet without fastening it and check that every edge lands on framing or blocking. Start from a straight edge, not from a corner you have not checked.",
+          check: "Every edge is supported, the sheet is square to the joists, and the strength axis runs across them.",
+          note: "Laid the wrong way round the panel spans on its weak axis. It will feel wrong underfoot and it is." },
+        { phase: "Floor deck", diagram: 6, codeKey: "d-glue",
+          title: "Run the adhesive",
+          material: "Subfloor construction adhesive",
+          orientation: "A bead on every joist the sheet will cover",
+          spacing: "Only as far ahead as you can lay before it skins over",
+          fastener: "Adhesive, then fasteners",
+          action: "Bead each joist just before the sheet goes down. Adhesive is what stops the squeaks — nails alone will not.",
+          check: "No dry joists under a laid sheet, and no adhesive skinned over before the panel reached it.",
+          note: "Glue is not a code requirement everywhere, but it is the difference between a quiet floor and a noisy one." },
+        { phase: "Floor deck", diagram: 6, codeKey: "d-fasten",
+          title: "Lay and fasten",
+          material: "The panels, seated tongue into groove",
+          orientation: "Tight to the framing, joints staggered",
+          spacing: "6 in on supported edges, 12 in in the field",
+          fastener: "8d ring-shank, or the listed subfloor screw at its approved spacing",
+          action: "Drive the sheet home with a block, then fasten from one end so you push the panel flat rather than trapping a hump.",
+          check: "Fasteners flush and not breaking the face; no unsupported seams; nothing rocking.",
+          note: "Overdriven heads tear the panel and lose their hold. Set the tool and check the first few." },
+        { phase: "Floor deck", diagram: 6, codeKey: "d-check",
+          title: "Walk it and check it flat",
+          material: "The finished deck, a straightedge",
+          orientation: "Across joists and along them",
+          spacing: "Anywhere it feels wrong underfoot",
+          fastener: "Add fasteners where you find movement",
+          action: "Walk the whole deck and listen. Any movement or noise now is a squeak forever once the walls are on it.",
+          check: "Flat, quiet, fully fastened, and square — check the diagonals again before you snap a wall line on it.",
+          note: "This deck is the reference for every wall. Its diagonals are the building's diagonals." }
+    ];
+
+    var Fx_ENCLOSURE_SEQUENCE = [
+        { phase: "Enclosure", diagram: 10, codeKey: "e-plumb",
+          title: "Start from a plumb line, not a corner",
+          material: "Rated wall sheathing, chalk line, level",
+          orientation: "First panel edge plumb; courses run level from there",
+          spacing: "Panel layout set out so edges land on framing",
+          fastener: "No fastener yet",
+          action: "Find a plumb line near a corner and set the first panel to it. Corners are rarely as true as they look, and every panel after this inherits the first one's error.",
+          check: "First edge is plumb, and the layout puts panel edges on studs all the way along.",
+          note: "Sheathing squares the wall as it goes on — but only if it starts square." },
+        { phase: "Enclosure", diagram: 10, codeKey: "e-set",
+          title: "Set the panels",
+          material: "The panels",
+          orientation: "Down over the rim and the sill where the detail shows it, joints staggered",
+          spacing: "Maintain the panel gap; do not force panels tight",
+          fastener: "Tack to hold, then nail off",
+          action: "Run the panels down past the floor framing where the detail calls for it — that lap ties the wall to the floor. Leave the specified gap at the edges; panels move.",
+          check: "Every edge supported or blocked, gaps maintained, nothing forced.",
+          note: "Forcing panels tight is how a wall gets pushed out of square by its own sheathing." },
+        { phase: "Enclosure", diagram: 10, codeKey: "e-nail",
+          title: "Nail the edges and the field",
+          material: "The set panels",
+          orientation: "Work from one edge across, so the panel lies flat",
+          spacing: "6 in at panel edges, 12 in at intermediate supports — unless the braced-wall schedule is tighter",
+          fastener: "8d common, or 6d for 3/8 to 1/2 in panels",
+          action: "Nail the edges first, then the field. Keep the heads flush — an overdriven nail in the edge of a shear panel is a nail that is not working.",
+          check: "Correct spacing, no overdriven heads, no missed framing.",
+          note: "This is the connection that makes a braced wall panel a braced wall panel. It is not general-purpose nailing." },
+        { phase: "Enclosure", diagram: 10, codeKey: "e-cut",
+          title: "Cut the openings",
+          material: "The sheathed wall",
+          orientation: "Cut from the face, following the framing",
+          spacing: "Leave the framing edges clean and flat",
+          fastener: "Add fasteners around each opening as the schedule requires",
+          action: "Cut the openings after the panels are on and nailed, so the sheet is doing its job across the opening while you fasten it.",
+          check: "Clean edges, no torn panel, and a flat surface all round for the flashing to bond to.",
+          note: "A ragged opening edge is a flashing problem later." },
+        { phase: "Enclosure", diagram: 10, codeKey: "e-wrb",
+          title: "Water-resistive barrier and flashing",
+          material: "WRB and compatible flashing",
+          orientation: "Lapped shingle-fashion, upper over lower, all the way round",
+          spacing: "Laps as the WRB specifies",
+          fastener: "As the WRB manufacturer requires",
+          action: "Run the WRB from the bottom up so every course laps over the one below. Cut the openings ready for the sill pan and keep the head flap free.",
+          check: "No reverse laps anywhere, openings prepared, and the head flap still loose so it can come down over the head flashing later.",
+          note: "Water runs down. Every lap has to shed onto the face of the one below it, without exception." }
+    ];
+
+    var Fx_FINISH_SEQUENCE = [
+        { phase: "Completion", diagram: 12, codeKey: "c-roof",
+          title: "Roof covering",
+          material: "The covering the plan specifies, with its own instructions",
+          orientation: "Eave upward, every course lapping the one below",
+          spacing: "Exposure and fastening per the product",
+          fastener: "The covering manufacturer's fastener and pattern",
+          action: "Roofing goes on before the walls are closed in, so the building is protected while the rest of the work happens.",
+          check: "Correct exposure, correct fastener count per unit, flashings integrated as you went rather than added after.",
+          note: "Every roof covering has its own instructions and its own nail count. They are not interchangeable." },
+        { phase: "Completion", diagram: 12, codeKey: "c-openings",
+          title: "Windows and doors",
+          material: "The units, their instructions, and compatible flashing",
+          orientation: "Sill pan first, then jambs, then head",
+          spacing: "Shims only where the instructions allow",
+          fastener: "The unit's own fastener — there is no universal substitute",
+          action: "Pan the sill, set the unit, shim and fasten to the published pattern, then flash jambs and head over the flange. The Install and flash a window module walks this in detail.",
+          check: "Units operate freely, frames square, flashing shingle-lapped, weeps clear.",
+          note: "This is the most common source of water damage in a new building. It is worth the time." },
+        { phase: "Completion", diagram: 12, codeKey: "c-siding",
+          title: "Cladding",
+          material: "Siding and its trim, over the WRB",
+          orientation: "Bottom up, drainage plane maintained behind",
+          spacing: "Fastener spacing and clearance to grade per the product",
+          fastener: "As the cladding manufacturer requires",
+          action: "Keep the drainage plane behind the cladding continuous and keep the required clearance to grade and to the roof.",
+          check: "Nothing bridges the drainage plane, clearances held, laps and joints as specified.",
+          note: "Cladding is a rain screen, not a seal. It sheds most of the water; the WRB behind it handles the rest." },
+        { phase: "Completion", diagram: 12, codeKey: "c-trim",
+          title: "Trim and sealants",
+          material: "Exterior trim, backer rod and compatible sealant",
+          orientation: "Sealant where the detail calls for it — not everywhere",
+          spacing: "Joint width to suit the sealant's movement capability",
+          fastener: "Corrosion-resistant fasteners suited to the cladding",
+          action: "Trim the openings and transitions, then seal only the joints the detail says to seal. Sealing a drainage path shut causes the damage it was meant to prevent.",
+          check: "Nothing that should drain has been sealed. Joints are the right width and tooled.",
+          note: "The commonest sealant mistake is using it as a substitute for flashing." },
+        { phase: "Completion", diagram: 12, codeKey: "c-services",
+          title: "Services and interior, if the project has them",
+          material: "As designed and permitted",
+          orientation: "Rough-in before anything is covered",
+          spacing: "Per the approved design",
+          fastener: "As each trade requires",
+          action: "Electrical, plumbing and mechanical rough-in, their inspections, then insulation, air sealing and interior finishes. A shed or a shop may have none of this; a dwelling has all of it.",
+          check: "Every rough-in inspection passed before it was covered.",
+          note: "This app does not cover the trades. It covers the shell they are installed into." },
+        { phase: "Completion", diagram: 12, codeKey: "c-final",
+          title: "Final inspection",
+          material: "The finished building, the approved plans, the permit",
+          orientation: "Everything complete and every correction closed",
+          spacing: "n/a",
+          fastener: "None",
+          action: "Walk the building against the approved plans yourself first. Then call the final. Anything still open is a return visit.",
+          check: "Final passed, and the certificate issued where one is required before the building may be used.",
+          note: "The permit is not finished until the final is signed off." }
+    ];
+
+    function Fx_expandRest(steps) {
+        var map = {
+            "Foundation interface": Fx_FOUNDATION_SEQUENCE,
+            "Floor deck": Fx_DECK_SEQUENCE,
+            "Enclosure": Fx_ENCLOSURE_SEQUENCE,
+            "Completion": Fx_FINISH_SEQUENCE
+        }, out = [], done = {};
+        steps.forEach(function (s) {
+            var seq = map[s.phase];
+            if (!seq) { out.push(s); return; }
+            if (done[s.phase]) return;
+            done[s.phase] = true;
+            seq.forEach(function (x) { out.push(x); });
+        });
+        return out;
+    }
+
+    Fx_STEP_TOOL["f-verify"] = "none"; Fx_STEP_TOOL["f-snap"] = "none";
+    Fx_STEP_TOOL["f-capillary"] = "none"; Fx_STEP_TOOL["f-drill"] = "none";
+    Fx_STEP_TOOL["f-anchor"] = "anchor"; Fx_STEP_TOOL["f-level"] = "none";
+    Fx_STEP_TOOL["f-inspect"] = "none";
+    Fx_STEP_TOOL["d-layout"] = "none"; Fx_STEP_TOOL["d-glue"] = "none";
+    Fx_STEP_TOOL["d-fasten"] = "nail"; Fx_STEP_TOOL["d-check"] = "nail";
+    Fx_STEP_TOOL["e-plumb"] = "none"; Fx_STEP_TOOL["e-set"] = "nail";
+    Fx_STEP_TOOL["e-nail"] = "nail"; Fx_STEP_TOOL["e-cut"] = "none";
+    Fx_STEP_TOOL["e-wrb"] = "none";
+    Fx_STEP_TOOL["c-roof"] = "none"; Fx_STEP_TOOL["c-openings"] = "connector";
+    Fx_STEP_TOOL["c-siding"] = "none"; Fx_STEP_TOOL["c-trim"] = "none";
+    Fx_STEP_TOOL["c-services"] = "none"; Fx_STEP_TOOL["c-final"] = "none";
+
+    Fx_STEP_FASTENER["f-anchor"] = { primary: "Concrete anchor", substitute: "No generic substitute",
+        note: "Diameter, embedment, spacing and the plate washer all come from the approved foundation detail. A cut washer is not a plate washer." };
+    Fx_STEP_FASTENER["d-fasten"] = { primary: "8d ring-shank nail", substitute: "Listed subfloor screw",
+        note: "6 in on supported edges, 12 in in the field. A screw must be listed for structural subfloor attachment." };
+    Fx_STEP_FASTENER["d-check"] = Fx_STEP_FASTENER["d-fasten"];
+    Fx_STEP_FASTENER["e-set"] = { primary: "8d common nail", substitute: "Listed sheathing screw",
+        note: "Tack only until the panel is positioned; the braced-wall schedule governs the real pattern." };
+    Fx_STEP_FASTENER["e-nail"] = { primary: "8d common nail", substitute: "Listed sheathing screw",
+        note: "6 in edges, 12 in field unless the braced-wall schedule is tighter. Do not overdrive — a sunken head in a shear panel is not working." };
+    Fx_STEP_FASTENER["c-openings"] = { primary: "Window manufacturer fastener", substitute: "Manufacturer-listed alternate only",
+        note: "No universal swap. The unit's instructions control type, length, material, which holes and spacing." };
 
     // =====================================================================
     // HARDSCAPE — materials, pattern, and the spec underneath
@@ -59356,7 +60020,7 @@ No matching component was found for:
         }];
 
     function foe(t) {
-        return Fx_expandWall(/window opening|window replacement/i.test(t.name) ? coe : t.category === "Roofing" ? gP.filter(e => ["Roof", "Completion"].includes(e.phase)) : t.category === "Structural framing" ? gP.slice(1, 10) : gP)
+        return Fx_expandRest(Fx_expandRoof(Fx_expandWall(/window opening|window replacement/i.test(t.name) ? coe : t.category === "Roofing" ? gP.filter(e => ["Roof", "Completion"].includes(e.phase)) : t.category === "Structural framing" ? gP.slice(1, 10) : gP)))
     }
 
     function tG(t) {
