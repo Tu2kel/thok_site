@@ -55189,6 +55189,7 @@ No matching component was found for:
     };
 
     function Fx_codeFor(step) {
+        if (step.codeKey && Fx_CODE_LIBRARY[step.codeKey]) return Fx_CODE_LIBRARY[step.codeKey];
         var key = (step.phase && step.phase.indexOf("Window") === 0 ? "w" : "s") + step.diagram;
         return Fx_CODE_LIBRARY[key] || null;
     }
@@ -55327,6 +55328,78 @@ No matching component was found for:
             ]
         });
     }
+
+    // ---- code for the taught wall sequence -------------------------------
+    Fx_CODE_LIBRARY["w-snap"] = {
+        irc: [["R602.3", "Wall construction — the wall must be built to the plan line, not to whatever the slab happens to do"],
+              ["R403.1.6", "Bottom plate anchorage — the line you snap is where the anchors have to land"]],
+        ibc: [["2308.5", "Wall framing under conventional light-frame construction"]],
+        fasteners: []
+    };
+    Fx_CODE_LIBRARY["w-tack"] = {
+        irc: [["R602.3.1", "Stud size, height and spacing — the plates you cut set the length of everything on them"]],
+        ibc: [["2308.5.1", "Stud size, height and spacing"]],
+        fasteners: []
+    };
+    Fx_CODE_LIBRARY["w-layout"] = {
+        irc: [["R602.3.1", "Stud spacing — Table R602.3(5); 16 in o.c. pulled from the outside of the plates"],
+              ["R609.3", "Openings are set out from the unit's own instructions"]],
+        ibc: [["2308.5.1", "Stud size, height and spacing — Table 2308.5.1"]],
+        fasteners: []
+    };
+    Fx_CODE_LIBRARY["w-crown"] = {
+        irc: [["R502.1 / R802.1", "Lumber is graded and it is not straight — crowning is how you deal with that"]],
+        ibc: [["2303.1", "Lumber grading and identification"]],
+        fasteners: []
+    };
+    Fx_CODE_LIBRARY["w-ro"] = {
+        irc: [["R602.7", "Headers — Table R602.7(1) sizes it from the clear span, building width and load"],
+              ["R602.7.5", "Supports for headers — a jack each end, 1 1/2 in bearing minimum"],
+              ["R602.3.1", "Cripples continue the wall's layout through the opening"]],
+        ibc: [["2308.5.5.1", "Openings in exterior bearing walls"], ["Table 2304.10.2", "Built-up header nailing"]],
+        fasteners: [10, 12, 17]
+    };
+    Fx_CODE_LIBRARY["w-corners"] = {
+        irc: [["Figure R602.3(2)", "Framing details — corner and partition posts; the third stud may be omitted where clips, cleats or blocking back the finish"],
+              ["Table R602.3(1)", "Abutting studs at intersecting wall corners — 16d at 12 in o.c."]],
+        ibc: [["2308.5.2", "Framing details"], ["Table 2304.10.2", "Fastening schedule"]],
+        fasteners: [18]
+    };
+    Fx_CODE_LIBRARY["w-assemble"] = {
+        irc: [["Table R602.3(1)", "Fastening schedule — wall items 10 through 18"],
+              ["R602.3.1", "Stud size, height and spacing"]],
+        ibc: [["Table 2304.10.2", "Fastening schedule"]],
+        fasteners: [17, 10, 12]
+    };
+    Fx_CODE_LIBRARY["w-square"] = {
+        irc: [["R602.10", "Wall bracing — a wall that is not square cannot brace properly"]],
+        ibc: [["2308.6", "Wall bracing"]],
+        fasteners: [17]
+    };
+    Fx_CODE_LIBRARY["w-brace"] = {
+        irc: [["R602.10", "Wall bracing — braced wall lines and methods"],
+              ["R301.2.1", "Wind loads on the structure while it is going up as well as when it is finished"]],
+        ibc: [["2308.6", "Wall bracing"]],
+        fasteners: []
+    };
+    Fx_CODE_LIBRARY["w-raise"] = {
+        irc: [["R403.1.6", "Foundation anchorage — 1/2 in bolts, 6 ft o.c. max, within 12 in of each plate end"],
+              ["R602.10", "Bracing must be established before the wall is closed in"]],
+        ibc: [["2308.3.1", "Anchorage"], ["2308.6", "Wall bracing"]],
+        fasteners: [15, 16]
+    };
+    Fx_CODE_LIBRARY["w-cap"] = {
+        irc: [["R602.3.2", "Top plate — double top plate lapped at corners and intersections, end joints offset not less than 24 in"],
+              ["Table R602.3(1)", "Items 13, 14 and 18"]],
+        ibc: [["2308.5.3", "Top plates"], ["Table 2304.10.2", "Fastening schedule"]],
+        fasteners: [13, 14, 18]
+    };
+    Fx_CODE_LIBRARY["w-blocking"] = {
+        irc: [["R302.11", "Fireblocking — where it is required and what counts as it"],
+              ["R302.12", "Draftstopping"]],
+        ibc: [["718.2", "Fireblocking"], ["718.3", "Draftstopping"]],
+        fasteners: [17]
+    };
 
     // =====================================================================
     // LIVE CAMERA
@@ -56593,7 +56666,9 @@ No matching component was found for:
     }
 
     function Fx_quizFor(step, wall) {
-        var key = (step.phase && step.phase.indexOf("Window") === 0 ? "w" : "s") + step.diagram;
+        var key = step.codeKey && Fx_STATIC_QUIZ[step.codeKey]
+            ? step.codeKey
+            : (step.phase && step.phase.indexOf("Window") === 0 ? "w" : "s") + step.diagram;
         return (Fx_STATIC_QUIZ[key] || [])
             .concat(wall ? Fx_generatedQuiz(wall, key) : [])
             .map(Fx_shuffleQuestion);
@@ -56692,6 +56767,93 @@ No matching component was found for:
             ]
         });
     }
+
+    // ---- checks on the taught wall sequence ------------------------------
+    Fx_STATIC_QUIZ["w-snap"] = [
+        Fx_q("wq-snap", "You are snapping the line for a 2x6 wall. How far back from the edge of the deck?",
+            ["5 1/2 in — the actual width of the plate",
+             "6 in — the nominal width",
+             "3 1/2 in, the same as a 2x4 wall",
+             "Flush with the edge"],
+            0,
+            "Measure back the ACTUAL width: 5 1/2 in for a 2x6, 3 1/2 in for a 2x4. That is what lands the sheathing flush with the deck.",
+            "Class notes · IRC R602.3")
+    ];
+    Fx_STATIC_QUIZ["w-tack"] = [
+        Fx_q("wq-tack", "Why a duplex nail to tack the plates together?",
+            ["It has a second head, so it pulls straight back out",
+             "It is cheaper than a common nail",
+             "It holds better in soft wood",
+             "It is the only nail that will not split a plate"],
+            0,
+            "Two heads: drive to the first, and the second stands proud so a cat's paw can get under it. These fastenings are temporary by design.",
+            "Class notes"),
+        Fx_q("wq-cap-when", "When does the double top plate go on?",
+            ["After the walls are standing and adjusted",
+             "Before the wall is assembled, with the other plates",
+             "At the same time as the first top plate",
+             "After the sheathing"],
+            0,
+            "After. Put the cap on while the wall is flat and anything out of line gets locked in — and you lose the lap that ties the corners together.",
+            "Class notes · IRC R602.3.2")
+    ];
+    Fx_STATIC_QUIZ["w-crown"] = [
+        Fx_q("wq-crown", "Which way do the crowns face?",
+            ["Opposed while you build; out once the wall is standing",
+             "All the same way, always",
+             "Down, so the wall settles flat",
+             "It does not matter on a wall"],
+            0,
+            "Opposed as you assemble, and out when it is up — that is where the strength is. Crowning is how you deal with lumber that is not straight.",
+            "Class notes")
+    ];
+    Fx_STATIC_QUIZ["w-ro"] = [
+        Fx_q("wq-ro-order", "Why build the rough openings before the common studs go in?",
+            ["With the studs in, they are in the way of driving the nails",
+             "The header has to cure before the wall is assembled",
+             "It is not important, only faster",
+             "The opening will not be square otherwise"],
+            0,
+            "Straight from the notes: build the surrounds first, then place them. Fill the common studs in around them. Otherwise you cannot swing a hammer at the header connection.",
+            "Class notes")
+    ];
+    Fx_STATIC_QUIZ["w-corners"] = [
+        Fx_q("wq-shy", "An interior wall meets an exterior 2x6 wall. How far short of the outside face does it stop?",
+            ["5 1/2 in", "3 1/2 in", "1 1/2 in", "Flush with the outside face"],
+            0,
+            "The intersecting wall stops short by the width of the wall material it runs into: 5 1/2 in for a 2x6, 3 1/2 in for a 2x4.",
+            "Class notes")
+    ];
+    Fx_STATIC_QUIZ["w-square"] = [
+        Fx_q("wq-hinge", "What are the toe-nails along the bottom plate doing while you lift the wall?",
+            ["Acting as a hinge, and stopping the wall sliding off the line",
+             "Holding the wall square",
+             "Nothing — they are removed before lifting",
+             "Carrying the weight of the wall"],
+            0,
+            "They pin the bottom to the deck so the wall pivots up instead of skating off the line. Structural once it is down, a hinge on the way up.",
+            "Class notes")
+    ];
+    Fx_STATIC_QUIZ["w-brace"] = [
+        Fx_q("wq-brace", "What goes on first — the diagonal brace or the sheathing?",
+            ["The diagonal brace",
+             "The sheathing — it squares the wall better",
+             "Either, they do the same job",
+             "Neither, until the wall is standing"],
+            0,
+            "Brace first. Sheathing does square a wall and it is easier to lay on the ground than off a ladder, but wind gets at a bare wall and the brace is what holds the square you measured.",
+            "Class notes · IRC R602.10")
+    ];
+    Fx_STATIC_QUIZ["w-blocking"] = [
+        Fx_q("wq-block", "When do the fire blocks go in?",
+            ["After the roof line is up",
+             "Before the wall is raised",
+             "With the draft stops, at the same time",
+             "After the drywall"],
+            0,
+            "Blocking is the last thing in the walls, and fire blocking waits until the roof line is up. Drive carefully — blocking splits, and a split block is doing nothing.",
+            "Class notes · IRC R302.11")
+    ];
 
     // =====================================================================
     // CORNER STUDIO
@@ -57394,6 +57556,195 @@ No matching component was found for:
             ]
         });
     }
+
+    // =====================================================================
+    // FRAMING A WALL, THE WAY IT WAS TAUGHT
+    // ---------------------------------------------------------------------
+    // Straight out of Wall Assembly.pdf — the class notes from 5 June 2025.
+    // The app had three steps for a wall: lay out, assemble, raise. The
+    // instructor taught a dozen, and the order is the lesson: rough openings
+    // and corners get built as sub-assemblies BEFORE the common studs go in,
+    // "otherwise the other studs will get in the way of driving nails."
+    //
+    // diagram stays in the 7-9 range so the existing 3-D stages still drive;
+    // codeKey is what the code panel, the quiz and the fastener lookup use.
+    // =====================================================================
+    var Fx_WALL_SEQUENCE = [
+        {
+            phase: "Wall frame", diagram: 7, codeKey: "w-snap",
+            title: "Snap the wall line",
+            material: "Chalk line, tape, and the deck or slab you are building on",
+            orientation: "Measure back from the edge of the deck the width of the wall material",
+            spacing: "2x4 wall: 3 1/2 in back. 2x6 wall: 5 1/2 in back",
+            fastener: "No fastener yet",
+            action: "Hook the tape on the deck edge and measure back the width of your plate — 3 1/2 in for a 2x4 wall, 5 1/2 in for a 2x6. Mark both ends, then snap. Use blue or black chalk: red and green are close to permanent and will haunt the grain.",
+            check: "The line is straight end to end and the same distance off the edge at both ends. Sheathing has to land flush with the deck, so this line is what makes that happen.",
+            note: "A chalk line matters most where the slab is not perfectly straight — the line, not the concrete, is what the wall follows."
+        },
+        {
+            phase: "Wall frame", diagram: 7, codeKey: "w-tack",
+            title: "Cut the plates and tack them together",
+            material: "Bottom plate and top plate, cut to the same length",
+            orientation: "Stacked face to face, edges flush, marks reading the same way",
+            spacing: "Tack near each end and every few feet",
+            fastener: "#8 duplex nails — they pull back out",
+            action: "Cut the two plates together so they are identical. Stack them on the line and tack them with duplex nails so nothing shifts while you mark. The double top plate is not part of this — that goes on after the wall is standing.",
+            check: "Plates are the same length, edges flush, and they cannot slide while you mark them.",
+            note: "The instructor's aside: once you can handle material without bumping it, you stop tacking. That is the one step in the eight you get to drop."
+        },
+        {
+            phase: "Wall frame", diagram: 7, codeKey: "w-layout",
+            title: "Mark the layout across both plates at once",
+            material: "The tacked plate stack, tape, square and pencil",
+            orientation: "Pull one running dimension from the same reference end",
+            spacing: "First stud edge at 15 1/4 in, then 16 in o.c. — pulled from the outside of the plates",
+            fastener: "No fastener yet",
+            action: "Mark every common stud, both corner posts, every intersecting wall, and both edges of every rough opening — all across the stack, so the top and bottom can never disagree. Put an X on the side of the line the wood sits on.",
+            check: "Every mark reads across both plates. Openings are marked from the centreline out, not from the end.",
+            note: "Windows and doors are dimensioned to their centreline, and that centreline is measured from the centre of the wall. You cannot set a centreline and then jam the unit left or right of it."
+        },
+        {
+            phase: "Wall frame", diagram: 7, codeKey: "w-crown",
+            title: "Separate the plates and crown them",
+            material: "The two marked plates",
+            orientation: "Flip one plate so its marks face the other way; crowns oppose",
+            spacing: "n/a",
+            fastener: "Pull the duplex nails",
+            action: "Break the stack and flip one plate so the two sets of marks face each other. Sight both plates for crown. When you build, the crowns oppose; when the wall is stood, the crowns face out — that is where the strength is.",
+            check: "Marks face each other, crowns are marked, and you know which way each plate goes.",
+            note: null
+        },
+        {
+            phase: "Wall frame", diagram: 8, codeKey: "w-ro",
+            title: "Build the rough openings as sub-assemblies",
+            material: "Header, jacks, king studs, rough sill and cripples for each opening",
+            orientation: "Header on the jacks, kings full height either side",
+            spacing: "Cripples continue the wall's o.c. layout through the opening",
+            fastener: "16d common — the header, jack and king schedule",
+            action: "Build each opening complete, off to one side or in place, before anything else goes in the wall. Header to jacks, kings to header, sill on its cripples. If you leave this until the common studs are in, the studs are in the way of your hammer.",
+            check: "Each opening is square, the header bears its full width on the jacks, and the RO measures what the unit's instructions call for.",
+            note: "This is the order the class was taught and the reason for it: surrounds first, then place them."
+        },
+        {
+            phase: "Wall frame", diagram: 8, codeKey: "w-corners",
+            title: "Build the corner posts",
+            material: "Corner studs and backing — a California corner, or two studs with ladder blocking",
+            orientation: "Backing lands in the plane the returning finish has to nail to",
+            spacing: "Ladder blocking at 24 in o.c. where you use it",
+            fastener: "16d common at 12 in o.c. — abutting studs at an intersecting wall corner",
+            action: "Make up the four corner posts before the wall goes together. Nail them off at 12 in o.c. — this is the joint that ties two walls to each other.",
+            check: "No isolated cavity, and the returning drywall has something to land on. The Corner posts practice module builds all three and checks both.",
+            note: "Intersecting walls stop short of the outside face: 3 1/2 in shy for a 2x4 wall, 5 1/2 in for a 2x6."
+        },
+        {
+            phase: "Wall frame", diagram: 8, codeKey: "w-assemble",
+            title: "Set the openings, corners and common studs",
+            material: "The sub-assemblies plus the common studs",
+            orientation: "Every stud on its X, crowns the way you marked them",
+            spacing: "16 in o.c. unless the plan says otherwise",
+            fastener: "2 x 16d common end nails through the plate into each stud",
+            action: "Drop the openings and corner posts onto their marks first, then fill in the common studs. Keep each member square to the plate as you nail it.",
+            check: "Nothing is on the wrong side of its line, and the rough openings still measure what they did on the bench.",
+            note: null
+        },
+        {
+            phase: "Wall frame", diagram: 8, codeKey: "w-square",
+            title: "Square the wall and toe-nail it",
+            material: "Tape, the assembled wall",
+            orientation: "Push the wall square before anything locks it",
+            spacing: "Both diagonals",
+            fastener: "Toe-nails at the bottom — they become the hinge",
+            action: "Measure both diagonals and push the wall until they match. Then toe-nail from the side along the bottom plate. Those toe-nails stop the wall sliding off the line as it goes up, and they act as a hinge while you lift.",
+            check: "Diagonals match. It is a rectangle only if the diagonals say so.",
+            note: "Pythagoras is the whole trick — everything here is adding up lengths."
+        },
+        {
+            phase: "Wall frame", diagram: 8, codeKey: "w-brace",
+            title: "Put the temporary diagonal brace on",
+            material: "Brace stock, laid over the face of the wall",
+            orientation: "Diagonally across the studs, over the top and flat",
+            spacing: "More braces on a longer wall, and more again for higher wind",
+            fastener: "One 16d duplex nail each side",
+            action: "Brace before you sheathe. Wind gets at a bare wall, and the brace is what holds the square you just measured.",
+            check: "The wall stays square when you push on it.",
+            note: "Sheathing squares a wall too, and it is far easier to lay panels on the ground than off a ladder — but the diagonal brace goes on first."
+        },
+        {
+            phase: "Wall frame", diagram: 9, codeKey: "w-raise",
+            title: "Raise it, plumb it, brace it",
+            material: "The completed wall panel and temporary braces to the deck",
+            orientation: "Exterior face out, bottom plate on the snapped line, crowns out",
+            spacing: "Brace at the ends and along the run",
+            fastener: "Plan anchors at the bottom plate; a duplex nail on the temporary braces",
+            action: "An eight-foot wall is a two-person lift; onto a deck it is three or four. On a slab, slide it up over the J bolts. Land it on the line, fasten the base, plumb the ends, and brace to the deck.",
+            check: "Plumb, straight, on the line, and braced before anyone lets go.",
+            note: "Brace all four walls temporarily before you permanently fix any of them — you still need room to adjust everything into square."
+        },
+        {
+            phase: "Wall frame", diagram: 9, codeKey: "w-cap",
+            title: "Put the double top plate on",
+            material: "Cap plates, lapping at every corner and intersection",
+            orientation: "Laps run the opposite way to the plates below",
+            spacing: "End joints offset not less than 24 in from the joint below",
+            fastener: "16d common at 16 in o.c.; 8 x 16d each side of a lap splice",
+            action: "Now the walls are up and adjusted, run the cap. Lap it over every corner and every intersecting wall — that lap is what ties the building together.",
+            check: "Every corner and intersection is lapped, and no joint sits over the joint below it.",
+            note: "The cap goes on after the walls are standing. Put it on first and anything out of line is locked in."
+        },
+        {
+            phase: "Wall frame", diagram: 9, codeKey: "w-blocking",
+            title: "Draft stop and fire blocking",
+            material: "Blocking stock to suit the stud bay",
+            orientation: "Tight in the bay, full width",
+            spacing: "As the plan and code require; fire blocks after the roof line is up",
+            fastener: "End nail, or toe nail where you cannot get at the end",
+            action: "Blocking is the last thing that goes in the walls. Drill and drive at a sensible speed and keep back from the ends — blocking splits easily and a split block does nothing.",
+            check: "Blocks are tight, full width, and nothing is split.",
+            note: "Fire blocking waits until the roof line is up."
+        }
+    ];
+
+    // Splice the taught sequence in wherever the generic wall steps appear.
+    function Fx_expandWall(steps) {
+        var out = [], done = false;
+        steps.forEach(function (s) {
+            if (s.phase === "Wall frame") {
+                if (!done) { done = true; Fx_WALL_SEQUENCE.forEach(function (w) { out.push(w); }); }
+                return;
+            }
+            out.push(s);
+        });
+        return out;
+    }
+
+    // Fasteners for the taught steps, keyed off codeKey rather than diagram.
+    var Fx_STEP_FASTENER = {
+        "w-tack": { primary: "#8 duplex nail", substitute: "No substitute",
+            note: "A duplex nail has a second head so it pulls straight back out. That is the whole point — these are temporary." },
+        "w-ro": { primary: "16d common nail", substitute: "SDWS16300 structural screw",
+            note: "The header plies and the stud-to-header connection are NOT in the published screw table. Nail those." },
+        "w-corners": { primary: "16d common nail", substitute: "SDWS16300 structural screw",
+            note: "Abutting studs at an intersecting wall corner take 16d at 12 in o.c. — tighter than ordinary built-up studs." },
+        "w-assemble": { primary: "16d common nail", substitute: "SDWS16300 structural screw",
+            note: "2 x 16d common end nails per stud end. The screw is listed for this connection; check the current report." },
+        "w-square": { primary: "16d common nail", substitute: "No substitute here",
+            note: "These toe-nails are structural once the wall is down and a hinge while it goes up. Do not use a temporary fastener." },
+        "w-brace": { primary: "16d duplex nail", substitute: "No substitute",
+            note: "One each side, so the brace comes off cleanly when the sheathing takes over." },
+        "w-raise": { primary: "Foundation anchor", substitute: "No generic substitute",
+            note: "Anchor diameter, embedment and spacing come from the approved foundation detail." },
+        "w-cap": { primary: "16d common nail", substitute: "SDWS16300 structural screw",
+            note: "The lap splice is listed for a screw; the running 16 in o.c. face nailing is not." },
+        "w-blocking": { primary: "16d common nail", substitute: "SDWS16300 structural screw",
+            note: "Blocking splits. Keep back from the ends, or drill." }
+    };
+
+    var Fx_STEP_TOOL = {
+        "w-snap": "none", "w-layout": "none", "w-crown": "none",
+        "w-tack": "nail", "w-ro": "nail", "w-corners": "nail", "w-assemble": "nail",
+        "w-square": "nail", "w-brace": "nail", "w-raise": "anchor",
+        "w-cap": "nail", "w-blocking": "nail"
+    };
 
     function hP({
         stage: t,
@@ -58682,10 +59033,12 @@ No matching component was found for:
         }];
 
     function foe(t) {
-        return /window opening|window replacement/i.test(t.name) ? coe : t.category === "Roofing" ? gP.filter(e => ["Roof", "Completion"].includes(e.phase)) : t.category === "Structural framing" ? gP.slice(1, 10) : gP
+        return Fx_expandWall(/window opening|window replacement/i.test(t.name) ? coe : t.category === "Roofing" ? gP.filter(e => ["Roof", "Completion"].includes(e.phase)) : t.category === "Structural framing" ? gP.slice(1, 10) : gP)
     }
 
     function tG(t) {
+        if (t.codeKey && Fx_STEP_FASTENER[t.codeKey]) return Fx_STEP_FASTENER[t.codeKey];
+        if (t.codeKey) return null;
         return t.phase.startsWith("Window") ? [2, 3, 4].includes(t.diagram) ? {
             primary: "16d common nail",
             substitute: "SDWS16300 structural screw",
@@ -58722,6 +59075,7 @@ No matching component was found for:
     }
 
     function yP(t) {
+        if (t.codeKey) return Fx_STEP_TOOL[t.codeKey] || "none";
         return t.phase.startsWith("Window") ? [2, 3, 4, 6].includes(t.diagram) ? "nail" : t.diagram === 9 ? "connector" : "none" : t.diagram === 1 ? "anchor" : [2, 5, 6, 8, 10].includes(t.diagram) ? "nail" : t.diagram === 11 ? "connector" : "none"
     }
 
