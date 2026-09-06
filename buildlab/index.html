@@ -577,6 +577,63 @@
 .ground-foot path{fill:#ffb02e4d}
 .ground-warn{margin-top:.45rem;padding:.4rem .55rem;border:1px solid #ff6b6b4d;
   border-radius:.35rem;background:#2a12128c;color:#ffb3b3;font-size:.66rem;line-height:1.5}
+
+/* ---- paver field on the ground -------------------------------------- */
+.paver-field{pointer-events:auto;cursor:move}
+.paver-field path{stroke:#00000059;stroke-width:.4;vector-effect:non-scaling-stroke}
+.paver-field path.cut{stroke:#ffffff6b;stroke-width:.6}
+.paver-field.brick-red path{fill:#a8442f}
+.paver-field.brick-charcoal path{fill:#4a5157}
+.paver-field.brick-tan path{fill:#cbb287}
+.paver-field.brick-gray path{fill:#9aa0a4}
+.paver-field.brick-brown path{fill:#8a6247}
+.paver-field.brick-blue path{fill:#6f8493}
+.paver-field.brick-flag path{fill:#b0a696}
+.paver-field.brick-permeable path{fill:#8d9298}
+.ls-job{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.6rem}
+.ls-job label{display:flex;flex-direction:column;gap:.2rem;font:700 .55rem ui-monospace;
+  letter-spacing:.05em;color:#93a3ac}
+.ls-job label:first-child{grid-column:1/-1}
+.ls-job select,.ls-job input[type=number]{background:#141a1d;color:#e6eef2;
+  border:1px solid #ffffff24;border-radius:.28rem;padding:.3rem;font:700 .62rem ui-monospace}
+.ls-job .ls-check{flex-direction:row;align-items:center;gap:.35rem}
+.ls-suggest{display:grid;gap:.4rem;margin-bottom:.7rem}
+.ls-pick{display:grid;grid-template-columns:1fr auto;gap:.2rem .5rem;align-items:center;
+  padding:.45rem .55rem;border:1px solid #48e08a4d;border-radius:.35rem;background:#0e1a14}
+.ls-pick b{color:#8ff0b6;font-size:.72rem}
+.ls-pick span{grid-column:1;color:#8ba79a;font-size:.58rem;line-height:1.4}
+.ls-pick button{grid-column:2;grid-row:1/3;background:#14231b;color:#8ff0b6;border:1px solid #48e08a59;
+  border-radius:.3rem;padding:.3rem .5rem;font:900 .55rem ui-monospace;cursor:pointer}
+.ls-pick button:hover{background:#1b3327}
+.landscape-materials button.unfit{opacity:.45}
+.landscape-materials button.unfit:after{content:"✕";position:absolute;right:.35rem;top:.3rem;
+  color:#ff8a8a;font-size:.6rem}
+.landscape-materials button{position:relative}
+.landscape-materials span em{display:block;font-style:normal;color:#7e8c95;font-size:.52rem}
+.landscape-materials.bonds{grid-template-columns:1fr 1fr}
+.ls-warn{margin:.35rem 0 .6rem;padding:.35rem .5rem;border:1px solid #ff6b6b4d;
+  border-radius:.3rem;background:#2a12128c;color:#ffb3b3;font-size:.6rem;line-height:1.45}
+.ls-takeoff{list-style:none;padding:0;margin:.2rem 0 .5rem;display:grid;gap:.25rem}
+.ls-takeoff li{color:#b9c7ce;font-size:.64rem;line-height:1.45}
+.ls-takeoff b{color:#ffc65c;font-size:.74rem;margin-right:.15rem}
+
+/* The stage was a grid sized for a single photo; it now holds a control bar,
+   a calibration bar and the picture, so let it stack and give the picture
+   whatever is left. */
+.landscape-photo-stage{display:flex;flex-direction:column;gap:.5rem;
+  min-height:0;height:auto;background:transparent;border:0;overflow:visible}
+.landscape-photo-stage>.cam-bar{flex:0 0 auto}
+.landscape-photo-stage>.ground-bar{flex:0 0 auto;margin-bottom:0}
+.landscape-photo-stage>.landscape-photo,
+.landscape-photo-stage>.landscape-empty{flex:1 1 auto;height:auto;
+  min-height:420px;max-height:none;border:1px solid #30392e;background:#111511}
+.landscape-workspace{align-items:start}
+.landscape-controls label{display:flex;flex-direction:column;gap:.25rem;
+  font:700 .55rem ui-monospace;letter-spacing:.06em;color:#93a3ac;margin:.35rem 0}
+@media (max-width:640px){
+  .landscape-photo-stage>.landscape-photo,
+  .landscape-photo-stage>.landscape-empty{min-height:300px}
+}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -56671,6 +56728,520 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // PAVER FIELD
+    // ---------------------------------------------------------------------
+    // The visualiser used to paint a CSS background pattern inside a <div>
+    // that was sized as a percentage of the photo. So the "pavers" had no
+    // size -- drag the box bigger and the bricks grew with it -- and the
+    // pattern never changed no matter which bond was picked.
+    //
+    // Here the units are laid at their real size in feet, in the real bond,
+    // and each one is a separate quad. Once they go through the ground
+    // homography they foreshorten with distance the way a laid patio does,
+    // and the count that comes back is a count of actual pavers.
+    // =====================================================================
+
+    // Sutherland-Hodgman clip of a convex unit against the field rectangle,
+    // so a bond running at 45 degrees still stops in a straight line at the
+    // edge of the patio -- with the part that got trimmed counted as a cut.
+    function Fx_clipPoly(poly, w, d) {
+        var edges = [
+            function (p) { return p.x >= 0; },      function (a, b) { return Fx_cross(a, b, "x", 0); },
+            function (p) { return p.x <= w; },      function (a, b) { return Fx_cross(a, b, "x", w); },
+            function (p) { return p.y >= 0; },      function (a, b) { return Fx_cross(a, b, "y", 0); },
+            function (p) { return p.y <= d; },      function (a, b) { return Fx_cross(a, b, "y", d); }
+        ], out = poly;
+        for (var e = 0; e < 8 && out.length; e += 2) {
+            var inside = edges[e], cut = edges[e + 1], next = [];
+            for (var i = 0; i < out.length; i++) {
+                var A = out[i], B = out[(i + 1) % out.length],
+                    ai = inside(A), bi = inside(B);
+                if (ai) next.push(A);
+                if (ai !== bi) next.push(cut(A, B));
+            }
+            out = next;
+        }
+        return out.length >= 3 ? out : null;
+    }
+
+    function Fx_cross(a, b, axis, v) {
+        var o = axis === "x" ? "y" : "x",
+            t = (v - a[axis]) / (b[axis] - a[axis]), p = {};
+        p[axis] = v;
+        p[o] = a[o] + (b[o] - a[o]) * t;
+        return p;
+    }
+
+    function Fx_polyArea(p) {
+        var s = 0;
+        for (var i = 0; i < p.length; i++) {
+            var a = p[i], b = p[(i + 1) % p.length];
+            s += a.x * b.y - b.x * a.y;
+        }
+        return Math.abs(s) / 2;
+    }
+
+    function Fx_rectPoly(x, y, w, h, c, s) {
+        return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].map(function (p) {
+            return c === undefined ? { x: p[0], y: p[1] }
+                                   : { x: p[0] * c - p[1] * s, y: p[0] * s + p[1] * c };
+        });
+    }
+
+    // Lay the bond over a rectangle w x d feet. Unit is [across, along] in
+    // inches; joint is the sand gap between units, also inches.
+    function Fx_paverField(bond, unit, joint, w, d) {
+        var J = (joint || 0) / 12,
+            S = unit[0] / 12, L = unit[1] / 12,     // short, long, in feet
+            P = S + J, Q = L + J,                   // pitch including the joint
+            out = [], note = null, sub = null, i, j, x,
+            full = S * L, cap = 4000;
+
+        function put(poly) {
+            if (out.length >= cap) return;
+            var c = Fx_clipPoly(poly, w, d);
+            if (!c) return;
+            out.push({ p: c, cut: Fx_polyArea(c) < full - 1e-4 });
+        }
+
+        if (bond === "Stack bond" || bond === "Running bond") {
+            var rows = Math.ceil(d / P) + 1;
+            for (j = 0; j < rows && out.length < cap; j++) {
+                var off = bond === "Running bond" && j % 2 ? -Q / 2 : 0;
+                for (x = off; x < w && out.length < cap; x += Q)
+                    put(Fx_rectPoly(x, j * P, L, S));
+            }
+        } else if (bond === "Basketweave") {
+            // pairs of units turned at right angles, alternating like a
+            // checkerboard
+            var B = Q, cols = Math.ceil(w / B) + 1, rws = Math.ceil(d / B) + 1;
+            for (j = 0; j < rws && out.length < cap; j++)
+                for (i = 0; i < cols && out.length < cap; i++) {
+                    var bx = i * B, by = j * B;
+                    if ((i + j) % 2 === 0) {
+                        put(Fx_rectPoly(bx, by, L, S));
+                        put(Fx_rectPoly(bx, by + P, L, S));
+                    } else {
+                        put(Fx_rectPoly(bx, by, S, L));
+                        put(Fx_rectPoly(bx + P, by, S, L));
+                    }
+                }
+        } else if (bond.indexOf("Herringbone") === 0) {
+            // Herringbone only closes up if the unit is twice as long as it
+            // is wide. Say so rather than drawing a different bond in silence.
+            if (Math.abs(unit[1] - unit[0] * 2) > 0.26) {
+                var fb = Fx_paverField("Running bond", unit, joint, w, d);
+                fb.note = "Herringbone only closes up with a unit twice as long as it is wide. "
+                        + "This one is " + unit[0] + "\u2033 \u00d7 " + unit[1] + "\u2033, so what is "
+                        + "drawn is running bond \u2014 choose a 4 \u00d7 8 unit for herringbone.";
+                fb.substituted = "Running bond";
+                return fb;
+            }
+            // The repeating piece is one unit laid across with one laid up
+            // the side of it: an L of two bricks. That L tiles the plane on
+            // the lattice (1,1),(3,-1) counted in short-side steps, which is
+            // what makes the zigzag. At 45 the whole bond turns, units and
+            // all, and the clipper trims it back to the edge of the patio.
+            var deg = bond.indexOf("45") >= 0 ? 45 : 0,
+                r = deg * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r),
+                reach = Math.ceil((w + d) / P) + 6;
+            for (var a = -reach; a <= reach && out.length < cap; a++)
+                for (var b = -reach; b <= reach && out.length < cap; b++) {
+                    var ox = (a + b * 3) * P, oy = (a - b) * P;
+                    put(deg ? Fx_rectPoly(ox, oy + P, L, S, c, sn)
+                            : Fx_rectPoly(ox, oy + P, L, S));
+                    put(deg ? Fx_rectPoly(ox + 2 * P, oy, S, L, c, sn)
+                            : Fx_rectPoly(ox + 2 * P, oy, S, L));
+                }
+        } else {
+            return Fx_paverField("Running bond", unit, joint, w, d);
+        }
+
+        var cuts = out.filter(function (u) { return u.cut; }).length;
+        return { units: out, cuts: cuts, whole: out.length - cuts, note: note,
+                 substituted: sub, area: w * d, bond: bond };
+    }
+
+    // field-local polygons -> ground, with the field's own placement
+    function Fx_fieldQuads(field, cx, cy, w, d, deg) {
+        var a = (deg || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a),
+            hw = w / 2, hd = d / 2;
+        return field.units.map(function (u) {
+            return u.p.map(function (p) {
+                var lx = p.x - hw, ly = p.y - hd;
+                return { x: cx + lx * c - ly * s, y: cy + lx * s + ly * c };
+            });
+        });
+    }
+
+    // =====================================================================
+    // LANDSCAPE VISUALISER
+    // ---------------------------------------------------------------------
+    // What was here: a <div> with a CSS background pattern, sized as a
+    // percentage of the photo. The "pavers" had no size -- drag the box
+    // wider and the bricks grew with it -- the bond never changed whichever
+    // one was picked, and the whole thing sat flat on the screen. And it made
+    // no suggestions at all: it was a swatch picker.
+    //
+    // Now the area is entered in feet, laid in the real bond at the real unit
+    // size, and projected onto the ground you calibrated. The count that
+    // comes back is a count of actual pavers, and the app says which material
+    // and which bond suit the job before you pick one.
+    // =====================================================================
+
+    // ---- suggestions, from ICPI's own rules ------------------------------
+    // Everything here is decided by the two things that actually govern the
+    // choice: whether a vehicle drives on it, and how big the field is
+    // relative to the unit.
+    function Fx_suggestHardscape(use, w, d, cold, weakSoil) {
+        var drive = use === "drive", area = w * d, out = [];
+
+        Fx_PAVERS.forEach(function (p) {
+            var score = 0, why = [], warn = null;
+
+            if (drive) {
+                if (!p.vehicular) {
+                    warn = "Not for a driveway — " + p.family.toLowerCase()
+                         + " this thick will crack under a wheel.";
+                    score -= 100;
+                } else if (p.thk >= 2.375) {
+                    score += 30;
+                    why.push(Fx_inFmt(p.thk) + " thick, which is what a drive needs");
+                }
+                if (p.unit[0] * p.unit[1] <= 48) {
+                    score += 20;
+                    why.push("small units interlock, so the field carries the load as one piece");
+                }
+            } else {
+                score += 10;
+                if (p.unit[0] * p.unit[1] >= 200) {
+                    score += Math.min(20, area / 20);
+                    why.push("large format reads well on an area this size and lays fast");
+                }
+            }
+            // A big unit in a small space is nearly all cuts.
+            if (area > 0 && p.unit[0] * p.unit[1] / 144 > area / 25) {
+                score -= 18;
+                why.push("big unit in a " + Math.round(area) + " sq ft space means a lot of cutting");
+            }
+            if (cold && p.family === "Natural stone") {
+                score -= 8;
+                why.push("natural stone varies in thickness — harder to keep flat through a freeze");
+            }
+            if (weakSoil && p.thk < 2) {
+                score -= 10;
+                why.push("thin units are less forgiving over soft ground");
+            }
+            out.push({ paver: p, score: score, why: why, warn: warn });
+        });
+
+        out.sort(function (a, b) { return b.score - a.score; });
+
+        // The bond is a separate decision and ICPI is blunt about it.
+        var bonds = Fx_PATTERNS.map(function (b) {
+            var s = 0, note = null;
+            if (drive) {
+                if (!b.vehicular) { s -= 100; note = "Not for a driveway — " + b.interlock + " interlock."; }
+                else if (b.interlock === "best") { s += 40; note = "What ICPI points at for anything a vehicle uses."; }
+            } else {
+                s += b.interlock === "best" ? 12 : b.interlock === "good" ? 14 : 8;
+                note = "Fine for foot traffic. " + Math.round(b.waste * 100) + "% waste allowance.";
+            }
+            return { bond: b, score: s, note: note };
+        }).sort(function (a, b) { return b.score - a.score; });
+
+        return { materials: out, bonds: bonds, drive: drive, area: area };
+    }
+
+    function Fx_LandscapePro(props) {
+        var cam = Fx_useCamera(),
+            gS = Ts.useState(null), fit = gS[0], setFit = gS[1],
+            tapsS = Ts.useState([]), taps = tapsS[0], setTaps = tapsS[1],
+            refS = Ts.useState("ply"), refId = refS[0], setRefId = refS[1],
+            rwS = Ts.useState(4), refW = rwS[0], setRefW = rwS[1],
+            rdS = Ts.useState(8), refD = rdS[0], setRefD = rdS[1],
+            matS = Ts.useState(0), mat = matS[0], setMat = matS[1],
+            bondS = Ts.useState(2), bond = bondS[0], setBond = bondS[1],
+            wS = Ts.useState(12), areaW = wS[0], setAreaW = wS[1],
+            dS = Ts.useState(10), areaD = dS[0], setAreaD = dS[1],
+            rotS = Ts.useState(0), rot = rotS[0], setRot = rotS[1],
+            opS = Ts.useState(92), op = opS[0], setOp = opS[1],
+            useS = Ts.useState("patio"), use = useS[0], setUse = useS[1],
+            coldS = Ts.useState(false), cold = coldS[0], setCold = coldS[1],
+            soilS = Ts.useState(false), weak = soilS[0], setWeak = soilS[1],
+            posS = Ts.useState(null), pos = posS[0], setPos = posS[1],
+            sizeS = Ts.useState({ w: 0, h: 0 }), size = sizeS[0], setSize = sizeS[1],
+            stageRef = Ts.useRef(null), dragRef = Ts.useRef(false);
+
+        Ts.useEffect(function () {
+            var el = stageRef.current;
+            if (!el) return;
+            function read() { var r = el.getBoundingClientRect(); setSize({ w: r.width, h: r.height }); }
+            read();
+            if (typeof ResizeObserver === "function") {
+                var ro = new ResizeObserver(read); ro.observe(el);
+                return function () { ro.disconnect(); };
+            }
+            window.addEventListener("resize", read);
+            return function () { window.removeEventListener("resize", read); };
+        }, [cam.mode]);
+
+        Ts.useEffect(function () {
+            if (cam.mode === "live" && taps.length) { setTaps([]); setPos(null); }
+        }, [cam.mode]);
+
+        var G = Ts.useMemo(function () {
+            return taps.length === 4 ? Fx_groundFit(taps, refW, refD) : null;
+        }, [taps, refW, refD]);
+
+        var paver = Fx_PAVERS[mat], bondName = Fx_PATTERNS[bond].name;
+
+        var field = Ts.useMemo(function () {
+            return Fx_paverField(bondName, paver.unit, 0.125, areaW, areaD);
+        }, [bondName, paver, areaW, areaD]);
+
+        var quads = Ts.useMemo(function () {
+            if (!G) return null;
+            var centre = pos || { x: refW / 2, y: refD + areaD / 2 },
+                gq = Fx_fieldQuads(field, centre.x, centre.y, areaW, areaD, rot),
+                out = [];
+            for (var i = 0; i < gq.length; i++) {
+                var pr = Fx_projectPoly(G, gq[i]);
+                if (pr) out.push({ p: pr, cut: field.units[i].cut });
+            }
+            return out;
+        }, [G, field, pos, areaW, areaD, rot, refW, refD]);
+
+        var sugg = Ts.useMemo(function () {
+            return Fx_suggestHardscape(use, areaW, areaD, cold, weak);
+        }, [use, areaW, areaD, cold, weak]);
+
+        var spec = Fx_hardscapeSpec(use, cold, weak, paver),
+            step = Fx_TAP_ORDER[taps.length],
+            picked = sugg.materials.filter(function (m) { return m.paver.name === paver.name; })[0],
+            bondPick = sugg.bonds.filter(function (b) { return b.bond.name === bondName; })[0];
+
+        function onTap(e) {
+            if (dragRef.current || taps.length >= 4) return;
+            if (cam.mode === "live") { cam.freeze(); return; }
+            if (!cam.ready) return;
+            var r = e.currentTarget.getBoundingClientRect();
+            setTaps(taps.concat([{ x: e.clientX - r.left, y: e.clientY - r.top }]));
+        }
+        function onMove(e) {
+            if (!dragRef.current || !G) return;
+            var r = stageRef.current.getBoundingClientRect(),
+                g = G.toGround(e.clientX - r.left, e.clientY - r.top);
+            if (g && isFinite(g.x) && isFinite(g.y)) setPos({ x: g.x, y: g.y });
+        }
+        function pickRef(id) {
+            setRefId(id);
+            var r = Fx_GROUND_REFS.filter(function (x) { return x.id === id; })[0];
+            if (r && id !== "custom") { setRefW(r.w); setRefD(r.d); }
+            setTaps([]); setPos(null);
+        }
+
+        return Fx_Jx("div", {
+            className: "landscape-workspace",
+            children: [
+                Fx_Jx("main", {
+                    className: "landscape-photo-stage",
+                    children: [
+                        Fx_J(Fx_CameraBar, { cam: cam }),
+                        Fx_Jx("div", {
+                            className: "ground-bar" + (G ? " fitted" : ""),
+                            children: [
+                                Fx_J("b", {
+                                    children: !cam.ready ? "Start the camera or choose a photo of the area"
+                                        : cam.mode === "live" ? "TAP TO HOLD THE FRAME — pavers cannot be laid on a moving picture"
+                                        : taps.length === 4 && !G ? "Those taps cross over. RESET and go round the edge in order."
+                                        : G ? "GROUND LOCKED — " + field.units.length + " pavers laid at real size"
+                                        : "Tap the " + step.hint + " of the reference  (" + step.n + " of 4)"
+                                }),
+                                Fx_Jx("label", { children: ["Reference",
+                                    Fx_J("select", { value: refId,
+                                        onChange: function (e) { pickRef(e.target.value); },
+                                        children: Fx_GROUND_REFS.map(function (r) {
+                                            return Fx_J("option", { value: r.id, children: r.label }, r.id);
+                                        }) })] }),
+                                taps.length ? Fx_J("button", {
+                                    onClick: function () { setTaps([]); setPos(null); },
+                                    children: "RESET MARKS"
+                                }) : null
+                            ]
+                        }),
+                        cam.ready ? Fx_Jx("div", {
+                            className: "photo-fit-stage landscape-photo",
+                            ref: stageRef,
+                            onPointerDown: onTap,
+                            onPointerMove: onMove,
+                            onPointerUp: function () { dragRef.current = false; },
+                            children: [
+                                Fx_J(Fx_CameraSurface, { cam: cam, alt: "Current landscaping area" }),
+                                size.w > 0 ? Fx_Jx("svg", {
+                                    className: "ground-svg",
+                                    viewBox: "0 0 " + size.w + " " + size.h,
+                                    preserveAspectRatio: "none",
+                                    children: [
+                                        quads ? Fx_J("g", {
+                                            className: "paver-field " + paver.className,
+                                            style: { opacity: op / 100 },
+                                            onPointerDown: function (e) {
+                                                e.stopPropagation(); dragRef.current = true;
+                                                e.currentTarget.setPointerCapture &&
+                                                    e.currentTarget.setPointerCapture(e.pointerId);
+                                            },
+                                            children: quads.map(function (q, i) {
+                                                return Fx_J("path", {
+                                                    d: Fx_polyPath(q.p),
+                                                    className: q.cut ? "cut" : ""
+                                                }, "p" + i);
+                                            })
+                                        }) : null,
+                                        Fx_J("g", { className: "ground-taps",
+                                            children: taps.map(function (t, i) {
+                                                return Fx_Jx("g", { children: [
+                                                    Fx_J("circle", { cx: t.x, cy: t.y, r: 11 }),
+                                                    Fx_J("text", { x: t.x, y: t.y + 4, children: i + 1 })
+                                                ] }, "t" + i);
+                                            }) })
+                                    ]
+                                }) : null,
+                                !cam.ready ? null : cam.mode === "live"
+                                    ? Fx_J("div", { className: "ground-hold", children: "TAP TO HOLD THE FRAME" })
+                                    : taps.length < 4
+                                        ? Fx_J("div", { className: "ground-hold steady",
+                                            children: "TAP " + step.n + " · " + step.hint.toUpperCase() })
+                                        : Fx_J("div", { className: "ground-hold steady",
+                                            children: "DRAG THE FIELD ONTO THE AREA" })
+                            ]
+                        }) : Fx_J("div", {
+                            className: "landscape-empty",
+                            children: Fx_J(Fx_CameraEmpty, {
+                                cam: cam,
+                                title: "Point the camera at the area you want to change",
+                                hint: "Put something you know the size of flat on the ground in shot — a sheet of ply does it. Hold the frame, tap its four corners, and the pavers will lie on the ground at their real size."
+                            })
+                        })
+                    ]
+                }),
+
+                // ---- what the app thinks you should use -------------------
+                Fx_Jx("aside", {
+                    className: "landscape-controls",
+                    children: [
+                        Fx_J("p", { className: "eyebrow", children: "The job" }),
+                        Fx_Jx("div", { className: "ls-job", children: [
+                            Fx_Jx("label", { children: ["What is it for",
+                                Fx_Jx("select", { value: use,
+                                    onChange: function (e) { setUse(e.target.value); },
+                                    children: Fx_USES.map(function (u) {
+                                        return Fx_J("option", { value: u.value, children: u.label }, u.value);
+                                    }) })] }),
+                            Fx_Jx("label", { children: ["Across (ft)",
+                                Fx_J("input", { type: "number", min: "1", step: "0.5", value: areaW,
+                                    onChange: function (e) { setAreaW(Math.max(1, Number(e.target.value) || 1)); } })] }),
+                            Fx_Jx("label", { children: ["Away (ft)",
+                                Fx_J("input", { type: "number", min: "1", step: "0.5", value: areaD,
+                                    onChange: function (e) { setAreaD(Math.max(1, Number(e.target.value) || 1)); } })] }),
+                            Fx_Jx("label", { className: "ls-check", children: [
+                                Fx_J("input", { type: "checkbox", checked: cold,
+                                    onChange: function (e) { setCold(e.target.checked); } }), "Ground freezes here"] }),
+                            Fx_Jx("label", { className: "ls-check", children: [
+                                Fx_J("input", { type: "checkbox", checked: weak,
+                                    onChange: function (e) { setWeak(e.target.checked); } }), "Wet or soft soil"] })
+                        ] }),
+
+                        Fx_J("p", { className: "eyebrow", children: "Suggested for this job" }),
+                        Fx_Jx("div", { className: "ls-suggest", children: [
+                            Fx_Jx("div", { className: "ls-pick", children: [
+                                Fx_J("b", { children: sugg.materials[0].paver.name }),
+                                Fx_J("span", { children: sugg.materials[0].why[0] ||
+                                    (sugg.materials[0].paver.family + ", " + Fx_inFmt(sugg.materials[0].paver.thk) + " thick") }),
+                                Fx_J("button", {
+                                    onClick: function () {
+                                        setMat(Fx_PAVERS.map(function (p) { return p.name; })
+                                            .indexOf(sugg.materials[0].paver.name));
+                                    },
+                                    children: "USE IT"
+                                })
+                            ] }),
+                            Fx_Jx("div", { className: "ls-pick", children: [
+                                Fx_J("b", { children: sugg.bonds[0].bond.name }),
+                                Fx_J("span", { children: sugg.bonds[0].note }),
+                                Fx_J("button", {
+                                    onClick: function () {
+                                        setBond(Fx_PATTERNS.map(function (p) { return p.name; })
+                                            .indexOf(sugg.bonds[0].bond.name));
+                                    },
+                                    children: "USE IT"
+                                })
+                            ] })
+                        ] }),
+
+                        Fx_J("p", { className: "eyebrow", children: "Material" }),
+                        Fx_J("div", { className: "landscape-materials",
+                            children: Fx_PAVERS.map(function (p, i) {
+                                var s = sugg.materials.filter(function (m) { return m.paver.name === p.name; })[0];
+                                return Fx_Jx("button", {
+                                    className: (i === mat ? "active " : "") + (s && s.warn ? "unfit" : ""),
+                                    onClick: function () { setMat(i); },
+                                    title: s && s.warn ? s.warn : p.note,
+                                    children: [
+                                        Fx_J("i", { className: p.className }),
+                                        Fx_Jx("span", { children: [p.name,
+                                            Fx_J("em", { children: p.unit[0] + "″ × " + p.unit[1] + "″" })] })
+                                    ]
+                                }, p.name);
+                            }) }),
+                        picked && picked.warn ? Fx_J("p", { className: "ls-warn", children: picked.warn }) : null,
+
+                        Fx_J("p", { className: "eyebrow", children: "Bond" }),
+                        Fx_J("div", { className: "landscape-materials bonds",
+                            children: Fx_PATTERNS.map(function (b, i) {
+                                var s = sugg.bonds.filter(function (x) { return x.bond.name === b.name; })[0];
+                                return Fx_J("button", {
+                                    className: (i === bond ? "active " : "") + (s && s.score < 0 ? "unfit" : ""),
+                                    onClick: function () { setBond(i); },
+                                    title: b.note,
+                                    children: Fx_J("span", { children: b.name })
+                                }, b.name);
+                            }) }),
+                        bondPick && bondPick.score < 0
+                            ? Fx_J("p", { className: "ls-warn", children: bondPick.note }) : null,
+                        field.note ? Fx_J("p", { className: "ls-warn", children: field.note }) : null,
+
+                        Fx_Jx("label", { children: ["Turn the field",
+                            Fx_J("input", { type: "range", min: "-90", max: "90", value: rot,
+                                onChange: function (e) { setRot(Number(e.target.value)); } })] }),
+                        Fx_Jx("label", { children: ["Blend with photo",
+                            Fx_J("input", { type: "range", min: "25", max: "100", value: op,
+                                onChange: function (e) { setOp(Number(e.target.value)); } })] }),
+
+                        Fx_J("p", { className: "eyebrow", children: "What it takes" }),
+                        Fx_Jx("ul", { className: "ls-takeoff", children: [
+                            Fx_Jx("li", { children: [Fx_J("b", { children: field.units.length }),
+                                " pavers — ", field.whole, " whole, ", field.cuts, " cut"] }),
+                            Fx_Jx("li", { children: [Fx_J("b", { children: Math.round(areaW * areaD) }),
+                                " sq ft at ", areaW, "′ × ", areaD, "′"] }),
+                            Fx_Jx("li", { children: [Fx_J("b", { children: Fx_inFmt(spec.base) }),
+                                " compacted base, ", Fx_inFmt(spec.bedding), " bedding sand"] }),
+                            Fx_Jx("li", { children: [Fx_J("b", { children: Fx_inFmt(spec.excavation) }),
+                                " total excavation"] }),
+                            Fx_Jx("li", { children: [Fx_J("b", { children: spec.slope + "%" }),
+                                " minimum fall so it drains"] })
+                        ] }),
+                        Fx_J("p", { className: "landscape-note",
+                            children: "Counts come from laying the bond you picked at the real unit size, "
+                                + "including the cut pieces at the edges. Base and excavation follow ICPI for a "
+                                + spec.use.label.toLowerCase() + ". Edge restraint is required on every open edge." })
+                    ]
+                })
+            ]
+        });
+    }
+
+    // =====================================================================
     // PLATE LAYOUT PANEL
     // ---------------------------------------------------------------------
     // Enter the wall you are actually standing in front of. Everything below
@@ -59616,9 +60187,6 @@ No matching component was found for:
                 }), (0, W.jsxs)("em", {
                     children: ["\u2192 BOW / BEND:", " ", l.bow ? "POSITION CHECKED \u2713" : "CHECK BEFORE PLACING"]
                 })]
-            }), (0, W.jsx)(Fx_FastenerTally, {
-                stage: t,
-                sceneType: r
             }), (0, W.jsxs)("div", {
                 className: "model-pan-controls",
                 "aria-label": "Model camera controls",
@@ -59837,12 +60405,13 @@ No matching component was found for:
             x: 50,
             y: 68
         }), [l, c] = (0, To.useState)(70), [f, h] = (0, To.useState)(18), [p, m] = (0, To.useState)(0), [g, x] = (0, To.useState)(88), _ = (0, To.useRef)(null);
-        let cam = Fx_useCamera();
-        e = cam.src;
+        (0, To.useEffect)(() => () => {
+            e && URL.revokeObjectURL(e)
+        }, [e]);
 
         function b(C) {
             let w = C.target.files?.[0];
-            cam.useFile(w)
+            w && (e && URL.revokeObjectURL(e), n(URL.createObjectURL(w)))
         }
 
         function v(C) {
@@ -59876,120 +60445,10 @@ No matching component was found for:
                     }), (0, kt.jsx)("h1", {
                         children: "Try edging and pavers on your yard"
                     }), (0, kt.jsx)("p", {
-                        children: "Use your current photo, then move and reshape the material overlay until it follows the area you want to change."
-                    })]
-                }), (0, kt.jsx)(Fx_CameraBar, {
-                    cam: cam
-                })]
-            }), (0, kt.jsxs)("div", {
-                className: "landscape-workspace",
-                children: [(0, kt.jsx)("main", {
-                    className: "landscape-photo-stage",
-                    children: cam.ready ? (0, kt.jsxs)("div", {
-                        className: "landscape-photo",
-                        children: [(0, kt.jsx)(Fx_CameraSurface, {
-                            cam: cam,
-                            alt: "Current landscaping area"
-                        }), (0, kt.jsxs)("div", {
-                            className: `landscape-brick-overlay ${a.className}`,
-                            style: {
-                                left: `${r.x}%`,
-                                top: `${r.y}%`,
-                                width: `${l}%`,
-                                height: `${f}%`,
-                                opacity: g / 100,
-                                transform: `translate(-50%, -50%) rotate(${p}deg)`
-                            },
-                            onPointerDown: v,
-                            onPointerMove: S,
-                            onPointerUp: () => {
-                                _.current = null
-                            },
-                            children: [(0, kt.jsx)(If, {}), (0, kt.jsx)("span", {
-                                children: "DRAG MATERIAL"
-                            })]
-                        })]
-                    }) : (0, kt.jsx)("div", {
-                        className: "landscape-empty",
-                        children: (0, kt.jsx)(Fx_CameraEmpty, {
-                            cam: cam,
-                            title: "Point the camera at the area you want to change",
-                            hint: "Keep the bed edge, walkway or border in shot. Freeze the frame when you want the material overlay to hold still."
-                        })
-                    })
-                }), (0, kt.jsxs)("aside", {
-                    className: "landscape-controls",
-                    children: [(0, kt.jsx)("p", {
-                        className: "eyebrow",
-                        children: "Material"
-                    }), (0, kt.jsx)("div", {
-                        className: "landscape-materials",
-                        children: Q8.map(C => (0, kt.jsxs)("button", {
-                            className: a.name === C.name ? "active" : "",
-                            onClick: () => i(C),
-                            children: [(0, kt.jsx)("i", {
-                                className: C.className
-                            }), (0, kt.jsx)("span", {
-                                children: C.name
-                            })]
-                        }, C.name))
-                    }), (0, kt.jsxs)("label", {
-                        children: ["Border length / width", (0, kt.jsx)("input", {
-                            type: "range",
-                            min: "20",
-                            max: "95",
-                            value: l,
-                            onChange: C => c(Number(C.target.value))
-                        }), (0, kt.jsxs)("b", {
-                            children: [l, "%"]
-                        })]
-                    }), (0, kt.jsxs)("label", {
-                        children: ["Rows / bed depth", (0, kt.jsx)("input", {
-                            type: "range",
-                            min: "7",
-                            max: "45",
-                            value: f,
-                            onChange: C => h(Number(C.target.value))
-                        }), (0, kt.jsxs)("b", {
-                            children: [f, "%"]
-                        })]
-                    }), (0, kt.jsxs)("label", {
-                        children: ["Angle", (0, kt.jsx)("input", {
-                            type: "range",
-                            min: "-45",
-                            max: "45",
-                            value: p,
-                            onChange: C => m(Number(C.target.value))
-                        }), (0, kt.jsxs)("b", {
-                            children: [p, "\xB0"]
-                        })]
-                    }), (0, kt.jsxs)("label", {
-                        children: ["Blend with photo", (0, kt.jsx)("input", {
-                            type: "range",
-                            min: "45",
-                            max: "100",
-                            value: g,
-                            onChange: C => x(Number(C.target.value))
-                        }), (0, kt.jsxs)("b", {
-                            children: [g, "%"]
-                        })]
-                    }), (0, kt.jsxs)("button", {
-                        className: "landscape-reset",
-                        onClick: () => {
-                            o({
-                                x: 50,
-                                y: 68
-                            }), c(70), h(18), m(0), x(88)
-                        },
-                        children: [(0, kt.jsx)(Fl, {}), " RESET OVERLAY"]
-                    }), (0, kt.jsx)("p", {
-                        className: "landscape-note",
-                        children: "The overlay is a visual preview. Confirm dimensions, drainage, buried utilities and property limits before anything is dug."
+                        children: "Put something you know the size of flat on the ground — a sheet of ply does it — hold the frame, then tap its four corners. The pavers are then laid at their real size, in the bond you pick, lying on your ground."
                     })]
                 })]
-            }), (0, kt.jsx)(Fx_HardscapePanel, {
-                material: a
-            })]
+            }), (0, kt.jsx)(Fx_LandscapePro, {})]
         })
     }
     var k = De(en(), 1);
