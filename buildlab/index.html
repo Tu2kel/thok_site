@@ -271,6 +271,21 @@
   .quiz-choice{grid-template-columns:1.1rem 1fr auto}
   .quiz-ask span{font-size:.75rem}
 }
+/* --- screw substitutions --- */
+.lay-sub{display:grid;grid-template-columns:auto 1fr;align-items:baseline;gap:.3rem .45rem;border-radius:.25rem;padding:.3rem .4rem;margin-top:.15rem}
+.lay-sub.ok{background:#0f1c14;border:1px solid #59df8a44}
+.lay-sub.no{background:#1a1509;border:1px solid #e9a32944}
+.lay-sub b{font:900 .54rem ui-monospace;letter-spacing:.08em;white-space:nowrap}
+.lay-sub.ok b{color:#8fe8b0}
+.lay-sub.no b{color:#f0ac37}
+.lay-sub>span{font-size:.66rem;line-height:1.35}
+.lay-sub.ok>span{color:#c9f0d8;font-family:ui-monospace;font-weight:800}
+.lay-sub.no>span{color:#d8c9a4}
+.lay-sub i{grid-column:1/-1;color:#7f8f7a;font-style:normal;font-size:.6rem;line-height:1.35}
+.lay-sub-note{background:#12160f;border:1px solid #ffffff14;border-radius:.35rem;padding:.55rem;display:grid;gap:.35rem;margin-top:.4rem}
+.lay-sub-note b{color:#f0ac37;letter-spacing:.08em;font-size:.56rem}
+.lay-sub-note p{color:#a9b3a5;font-size:.64rem;line-height:1.45}
+.lay-sub-never{color:#f0b4ac!important;border-left:2px solid #d2564a;padding-left:.45rem}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -53445,7 +53460,7 @@ No matching component was found for:
                 ctx.over = !!f.over;
                 ctx.under = !!f.under;
             }
-            return Object.assign({}, m, { joints: Fx_jointsFor(m.kind, ctx) });
+            return Object.assign({}, m, { joints: Fx_withSubs(Fx_jointsFor(m.kind, ctx), m.kind) });
         });
     }
 
@@ -53457,7 +53472,9 @@ No matching component was found for:
             var key = m.kind + "|" + (m.name || "");
             if (seen[key]) return;
             seen[key] = true;
-            var joints = Fx_jointsFor(m.kind, { topPlies: w.topPlies, name: m.name, over: m.over, under: !m.over });
+            var joints = Fx_withSubs(
+                Fx_jointsFor(m.kind, { topPlies: w.topPlies, name: m.name, over: m.over, under: !m.over }),
+                m.kind);
             if (!joints.length) return;
             out.push({
                 kind: m.kind,
@@ -53472,6 +53489,100 @@ No matching component was found for:
         });
         var order = ["plate", "cap", "stud", "king", "jack", "header", "spacer", "sill", "cripple"];
         return out.sort(function (a, b) { return order.indexOf(a.kind) - order.indexOf(b.kind); });
+    }
+
+    // =====================================================================
+    // SCREW SUBSTITUTIONS
+    // ---------------------------------------------------------------------
+    // Table R602.3(1) is a NAIL schedule. A screw is not a drop-in: it is an
+    // alternative material, and it is only legal where a current evaluation
+    // report covers that exact connection and the building official accepts it
+    // (IRC R104.11 / IBC 104.11).
+    //
+    // The one product below with a published connection-by-connection table is
+    // the Simpson Strong-Drive SDWS FRAMING screw (0.160" shank, 2 1/2"–4"),
+    // code-listed under IAPMO UES ER-192. Its own literature states the
+    // SDWS16300 is a 1-for-1 replacement for 16d common nails.
+    //
+    // Everything here is transcribed from that table -- nothing is inferred.
+    // Where a connection is NOT in it, this says so and tells you to nail it,
+    // which is the honest answer and the one that matters: the built-up
+    // header and the wall sheathing are both in that category.
+    // =====================================================================
+    var Fx_SUB_SOURCE = "Simpson Strong-Drive SDWS FRAMING screw · IAPMO UES ER-192";
+    var Fx_SUB_CAVEAT =
+        "The published table this comes from is written against the 2015 and 2018 IRC/IBC and the flier " +
+        "carries an expiry date. Before you buy a box, pull the CURRENT evaluation report for the screw " +
+        "you actually have and check it still lists your connection — and confirm your building official " +
+        "accepts it. A screw with no report covering the connection is not an approved substitute, " +
+        "however strong it looks.";
+
+    function Fx_sub(model, count, spacing, note) {
+        return { model: model, count: count || null, spacing: spacing || null, note: note || null };
+    }
+    var Fx_NO_SUB = { model: null, why: "" };
+
+    function Fx_subText(sub) {
+        if (!sub || !sub.model) return null;
+        return (sub.count ? sub.count + " × " : "") + sub.model +
+               (sub.spacing ? " at " + sub.spacing : "");
+    }
+
+    // Keyed to the joint's table row, matching the Simpson table exactly.
+    var Fx_SUBS = {
+        "17-end": Fx_sub("SDWS16300", 2, null,
+            "The table lists (2) SDWS16212 against (2) 16d BOX. Against the 16d COMMON used here, " +
+            "the SDWS16300 is the stated 1-for-1 replacement."),
+        "17-toe": Fx_sub("SDWS16212", 4, null,
+            "Toe-screwed, matching the (4) 8d box / (3) 8d common toe-nail row."),
+        "14": Fx_sub("SDWS16300", 8, null,
+            "Double top plate laps: (8) against 16d common, (8) SDWS16212 against 16d box."),
+        "18": Fx_sub("SDWS16212", 2, null,
+            "Double top plate at corners and intersections."),
+        "double-stud": Fx_sub("SDWS16300", null, "24″ o.c.",
+            "Double studs, face screwed — SDWS16212 at 24″ o.c. where the nail row is 10d box."),
+        "joist-band": Fx_sub("SDWS16300", 3, null, "Joist to band joist, end screwed."),
+        "joist-sill": Fx_sub("SDWS16212", 3, null, "Joist to sill or girder, toe screwed."),
+        "rafter-plate": Fx_sub("SDWS16212", 3, null, "Roof rafter to plate, toe screwed."),
+        "rafter-ridge": Fx_sub("SDWS16212", 4, null, "Rafter to a 2x ridge board, toe screwed."),
+        "girder": Fx_sub("SDWS16212", null, "32″ o.c.", "Built-up 2x girders and beams, each ply.")
+    };
+
+    var Fx_NOT_LISTED = {
+        "10": "Built-up headers are not in the screw table. Nail the plies — 16d common at 16″ o.c. " +
+              "along each edge. This is the connection that holds the header together over the opening; " +
+              "do not improvise it.",
+        "12": "Stud-to-end-of-header is not in the screw table. Nail it.",
+        "13": "Top-plate-to-top-plate face nailing at 16″ o.c. is not in the screw table — only the " +
+              "LAP splice and the corners are. Nail the running face nailing.",
+        "15": "Bottom plate down into the joist or rim is not in the screw table. Nail it, and at a " +
+              "braced wall panel follow item 16.",
+        "sheathing": "Wall and roof sheathing is not a drop-in either. Panel fastening is what makes a " +
+              "braced wall panel work, and it is governed by the braced-wall schedule — use the nail it " +
+              "calls for, or a fastener specifically listed for that assembly at its own approved spacing.",
+        "anchor": "There is no screw substitute for a foundation anchor bolt.",
+        "connector": "Hangers, ties and straps take the fastener the CONNECTOR manufacturer specifies — " +
+              "usually a purpose-made connector screw, never a framing screw and never a deck screw. " +
+              "Filling a hanger with the wrong fastener voids its rating."
+    };
+
+    // Attach the substitution to each joint as it is built.
+    function Fx_withSubs(joints, kindHint) {
+        return joints.map(function (j) {
+            var sub = null, notListed = null;
+            if (j.item === 17) sub = /toe/.test(j.primary.method) ? Fx_SUBS["17-toe"] : Fx_SUBS["17-end"];
+            else if (j.item === 14) sub = Fx_SUBS["14"];
+            else if (j.item === 18) sub = Fx_SUBS["18"];
+            else if (j.row === "Double studs, face nail") sub = Fx_SUBS["double-stud"];
+            else if (j.item === 10) notListed = Fx_NOT_LISTED["10"];
+            else if (j.item === 12) notListed = Fx_NOT_LISTED["12"];
+            else if (j.item === 13) notListed = Fx_NOT_LISTED["13"];
+            else if (j.item === 15) notListed = Fx_NOT_LISTED["15"];
+            else if (kindHint === "sheathing") notListed = Fx_NOT_LISTED["sheathing"];
+            else notListed = "Not in the published screw table for this connection — nail it, or get an " +
+                             "evaluation report that covers it in writing.";
+            return Object.assign({}, j, { sub: sub, notListed: sub ? null : notListed });
+        });
     }
 
     // =====================================================================
@@ -55200,6 +55311,18 @@ No matching component was found for:
                             ? Fx_J("span", { className: "lay-drive-alt",
                                 children: "or " + j.alt.map(Fx_driveText).join("  ·  ") })
                             : null,
+                        j.sub
+                            ? Fx_Jx("span", { className: "lay-sub ok", children: [
+                                Fx_J("b", { children: "SCREW INSTEAD" }),
+                                Fx_J("span", { children: Fx_subText(j.sub) }),
+                                j.sub.note ? Fx_J("i", { children: j.sub.note }) : null
+                            ]})
+                            : (j.notListed
+                                ? Fx_Jx("span", { className: "lay-sub no", children: [
+                                    Fx_J("b", { children: "NAIL THIS ONE" }),
+                                    Fx_J("span", { children: j.notListed })
+                                ]})
+                                : null),
                         j.note ? Fx_J("em", { children: j.note }) : null
                     ]
                 })
@@ -55423,9 +55546,23 @@ No matching component was found for:
                                 }, r.kind + r.name);
                             })
                         }),
+                        Fx_Jx("div", {
+                            className: "lay-sub-note",
+                            children: [
+                                Fx_J("b", { children: "ABOUT THE SCREW COLUMN" }),
+                                Fx_J("p", {
+                                    children: "Table R602.3(1) is a nail schedule. A screw is an alternative material under IRC R104.11 — legal where a current evaluation report covers that exact connection and your building official accepts it. The substitutions listed here are transcribed from one published table: " + Fx_SUB_SOURCE + ". Nothing is inferred; where a connection is not in that table this says NAIL THIS ONE rather than guess."
+                                }),
+                                Fx_J("p", { children: Fx_SUB_CAVEAT }),
+                                Fx_J("p", {
+                                    className: "lay-sub-never",
+                                    children: "Never structural, whatever the box says: drywall screws, deck screws, and general-purpose construction screws with no evaluation report. Hangers and straps take the connector manufacturer's own fastener — a framing screw in a hanger voids its rating."
+                                })
+                            ]
+                        }),
                         Fx_J("p", {
                             className: "lay-legend",
-                            children: "Counts and spacings are the IRC Table R602.3(1) / IBC Table 2304.10.2 rows for each connection. Where the table has no row of its own — the rough sill, the cripples — the plate-to-stud row governs and the line says so. A screw is only a substitute where its evaluation report covers that exact connection."
+                            children: "Counts and spacings are the IRC Table R602.3(1) / IBC Table 2304.10.2 rows for each connection. Where the table has no row of its own — the rough sill, the cripples — the plate-to-stud row governs and the line says so."
                         })
                     ]
                 }),
