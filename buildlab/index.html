@@ -53199,12 +53199,12 @@ No matching component was found for:
             }
         });
 
-        // Openings that Fx_overlap each other's framing.
+        // Openings that overlap each other's framing.
         for (var a = 0; a < w.openings.length; a++)
             for (var b = a + 1; b < w.openings.length; b++) {
                 var A = w.openings[a], B = w.openings[b];
                 if (Math.min(A.kingR1, B.kingR1) - Math.max(A.kingL0, B.kingL0) > -0.01)
-                    say("error", "Two openings Fx_overlap. Their king studs collide — separate them or " +
+                    say("error", "Two openings overlap. Their king studs collide — separate them or " +
                         "frame one wider opening.");
             }
 
@@ -54418,6 +54418,53 @@ No matching component was found for:
                 Fx_J(Dw, { position: [0, -(b.spec.stem.h + 0.4) * Fx_IN, 0], opacity: 0.6, scale: gridSize * 0.85, blur: 2.4, far: 18 })
             ]
         });
+    }
+
+    // ---- carry the planner's dimensions into the build ------------------
+    // You type 8 x 10 on the prep page and the guided build was handing you a
+    // 16 x 12 model, with a cut list and mark positions for a wall you never
+    // asked for. Nothing downstream was wrong -- it was just answering a
+    // different question than the one you asked.
+    function Fx_refitOpenings(openings, wallLength, studT) {
+        var out = [];
+        openings.forEach(function (o) {
+            var jack = studT * (o.jacks || 1),
+                king = studT * (o.kings || 1),
+                halfSpan = o.roWidth / 2 + jack + king,
+                lo = halfSpan + studT,                 // leave room for an end stud
+                hi = wallLength - halfSpan - studT;
+            if (hi < lo) return;                       // this opening cannot fit at all
+            var fitted = Object.assign({}, o, { center: Math.min(hi, Math.max(lo, o.center)) });
+            // Clamping can push two openings on top of each other on a short
+            // wall. Drop the later one rather than hand the user a collision
+            // error on a screen they have not touched yet.
+            var clash = out.some(function (p) {
+                var ph = p.roWidth / 2 + studT * ((p.jacks || 1) + (p.kings || 1)),
+                    fh = fitted.roWidth / 2 + studT * ((fitted.jacks || 1) + (fitted.kings || 1));
+                return Math.abs(p.center - fitted.center) < ph + fh + studT;
+            });
+            if (!clash) out.push(fitted);
+        });
+        return out;
+    }
+
+    function Fx_ProjectDims(props) {
+        var w = props.width, l = props.length;
+        Ts.useEffect(function () {
+            var fw = parseFloat(w), fl = parseFloat(l);
+            if (!isFinite(fw) || !isFinite(fl) || fw <= 0 || fl <= 0) return;
+            var cur = Fx_store.get("structure"),
+                studT = Fx_LUMBER[cur.studSize].t,
+                width = Math.max(48, Math.round(fw * 12)),
+                depth = Math.max(48, Math.round(fl * 12));
+            if (cur.wallLength === width && cur.depth === depth) return;
+            Fx_store.set("structure", Object.assign({}, cur, {
+                wallLength: width,
+                depth: depth,
+                openings: Fx_refitOpenings(cur.openings, width, studT)
+            }));
+        }, [w, l]);
+        return null;
     }
 
     // =====================================================================
@@ -57464,6 +57511,8 @@ No matching component was found for:
     function nG({
         project: t,
         location: e,
+        projectWidth: Fx_pw,
+        projectLength: Fx_pl,
         completed: n,
         setCompleted: a,
         onBack: i,
@@ -57583,7 +57632,10 @@ No matching component was found for:
                             marked: H,
                             bow: G
                         }
-                    }), C.phase === "Wall frame" || C.phase === "Window framing" ? (0, k.jsx)(Fx_LayoutPanel, {
+                    }), (0, k.jsx)(Fx_ProjectDims, {
+                    width: Fx_pw,
+                    length: Fx_pl
+                }), C.phase === "Wall frame" || C.phase === "Window framing" ? (0, k.jsx)(Fx_LayoutPanel, {
                         sceneType: A ? "window" : "structure"
                     }) : null, (0, k.jsx)(Fx_SpecPanel, {
                         step: C
@@ -58480,6 +58532,8 @@ No matching component was found for:
         return A ? (0, k.jsx)(nG, {
             project: V,
             location: p,
+            projectWidth: l,
+            projectLength: f,
             completed: I,
             setCompleted: E,
             onBack: () => L(!1)
