@@ -286,6 +286,11 @@
 .lay-sub-note b{color:#f0ac37;letter-spacing:.08em;font-size:.56rem}
 .lay-sub-note p{color:#a9b3a5;font-size:.64rem;line-height:1.45}
 .lay-sub-never{color:#f0b4ac!important;border-left:2px solid #d2564a;padding-left:.45rem}
+.lay-derive{display:grid;gap:.25rem;background:#0d120c;border:1px solid #ffffff10;border-radius:.3rem;padding:.45rem .5rem}
+.lay-derive p{display:grid;grid-template-columns:6.2rem 1fr;gap:.45rem;align-items:baseline}
+.lay-derive b{color:#f0ac37;font:900 .55rem ui-monospace;letter-spacing:.07em}
+.lay-derive span{color:#c9f0d8;font:700 .68rem ui-monospace;line-height:1.4}
+@media (max-width:760px){.lay-derive p{grid-template-columns:1fr;gap:.1rem}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -53586,6 +53591,57 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // FROM THE UNIT ON THE PACKAGING TO THE OPENING
+    // ---------------------------------------------------------------------
+    // The way it is actually taught, and the way the numbers arrive on site:
+    // you have a window that says 48 x 36 on the box. Width first, always.
+    // From that one number set everything else follows.
+    //
+    //   RO width   = unit width  + a gap each side
+    //   RO height  = unit height + the gap at the head
+    //   header len = RO width    + a trimmer each side
+    //
+    // Industry standard gap is 1/2" a side; as the work gets tighter you go
+    // to 1/4". So a 48" unit at 1/2" needs a 52" header (48 + 1/2 + 1/2 +
+    // 1 1/2 + 1 1/2), and at 1/4" it needs 51 1/2". The shortcut the trade
+    // uses: add 4" at 1/2" gap, add 3" at 1/4" gap.
+    // =====================================================================
+    var Fx_GAPS = [
+        { value: 0.5, label: "1/2″ — industry standard" },
+        { value: 0.375, label: "3/8″" },
+        { value: 0.25, label: "1/4″ — tighter, as skill improves" }
+    ];
+
+    function Fx_openingFromUnit(unitW, unitH, gap, jacks, studT) {
+        var jack = studT * (jacks || 1),
+            roWidth = unitW + 2 * gap,
+            roHeight = unitH + gap;          // gap at the head; the unit sits on the sill
+        return {
+            roWidth: roWidth,
+            roHeight: roHeight,
+            headerLength: roWidth + 2 * jack,
+            shortcut: 2 * gap + 2 * jack,     // "add 4 inches" / "add 3 inches"
+            gap: gap
+        };
+    }
+
+    // Stud lengths, both conventions in use. 92 5/8" is the precut you buy;
+    // 92 1/2" is what gets cut on site for the same 8-foot ceiling.
+    var Fx_STUD_LENGTHS = [
+        { value: 92.625, label: "8′-0″ ceiling — 92 5/8″ precut" },
+        { value: 92.5, label: "8′-0″ ceiling — 92 1/2″ cut on site" },
+        { value: 104.25, label: "9′-0″ ceiling — 104 1/4″" },
+        { value: 116.625, label: "10′-0″ ceiling — 116 5/8″" }
+    ];
+
+    function Fx_wallHeightNote(studH, studT, topPlies) {
+        var total = studT + studH + topPlies * studT;
+        return Fx_inFmt(studH) + " stud + " + Fx_inFmt(studT) + " bottom plate + " +
+               Fx_inFmt(topPlies * studT) + " top plate" + (topPlies > 1 ? "s" : "") +
+               " = " + Fx_ftIn(total) + " of wall";
+    }
+
+    // =====================================================================
     // RENDERING -- turns generated members into meshes. One material per
     // mesh, all sharing the same shader program, so a few hundred sticks
     // stay cheap.
@@ -53720,11 +53776,13 @@ No matching component was found for:
     // outside React so both trees see one source of truth.
     // =====================================================================
     var Fx_DEFAULT_WINDOW = {
-        type: "window", center: 72, roWidth: 36, roHeight: 36, headHeight: 72,
+        type: "window", center: 72, unitWidth: 35, unitHeight: 35.5, gap: 0.5,
+        roWidth: 36, roHeight: 36, headHeight: 72,
         headerSize: "2x8", headerPlies: 2, spacer: 0.5, jacks: 1, kings: 1
     };
     var Fx_DEFAULT_DOOR = {
-        type: "door", center: 60, roWidth: 38, roHeight: 82.5, tightToPlate: true,
+        type: "door", center: 60, unitWidth: 36, unitHeight: 80, gap: 1,
+        roWidth: 38, roHeight: 82.5, tightToPlate: true,
         headerSize: "2x12", headerPlies: 2, spacer: 0.5, jacks: 1, kings: 1
     };
 
@@ -53733,11 +53791,11 @@ No matching component was found for:
     var Fx_store = {
         specs: {
             window: {
-                studSize: "2x4", wallLength: 144, spacing: 16,
+                studSize: "2x4", wallLength: 144, spacing: 16, studHeight: Fx_PRECUT_STUD,
                 openings: [Fx_clone(Fx_DEFAULT_WINDOW)]
             },
             structure: {
-                studSize: "2x4", wallLength: 192, depth: 144, spacing: 16,
+                studSize: "2x4", wallLength: 192, depth: 144, spacing: 16, studHeight: Fx_PRECUT_STUD,
                 openings: [Fx_clone(Fx_DEFAULT_DOOR),
                            Object.assign(Fx_clone(Fx_DEFAULT_WINDOW), { center: 144 })]
             }
@@ -54144,7 +54202,8 @@ No matching component was found for:
                     width: spec.wallLength,
                     depth: spec.depth,
                     wall: Object.assign({}, Fx_BUILD_SPEC.wall, {
-                        studSize: spec.studSize, spacing: spec.spacing
+                        studSize: spec.studSize, spacing: spec.spacing,
+                        studHeight: spec.studHeight || Fx_PRECUT_STUD
                     }),
                     frontOpenings: spec.openings
                 }));
@@ -54766,7 +54825,8 @@ No matching component was found for:
                 var b = Fx_buildBuilding(Object.assign({}, Fx_BUILD_SPEC, {
                     width: spec.wallLength, depth: spec.depth,
                     wall: Object.assign({}, Fx_BUILD_SPEC.wall, {
-                        studSize: spec.studSize, spacing: spec.spacing
+                        studSize: spec.studSize, spacing: spec.spacing,
+                        studHeight: spec.studHeight || Fx_PRECUT_STUD
                     }),
                     frontOpenings: spec.openings
                 }));
@@ -55227,10 +55287,24 @@ No matching component was found for:
     // ---- one opening's controls ------------------------------------------
     function Fx_OpeningRow(props) {
         var o = props.opening, i = props.index, wallLength = props.wallLength,
-            fromMode = props.fromMode,
-            shown = fromMode === "edge" ? o.center - o.roWidth / 2 : o.center;
+            fromMode = props.fromMode, studT = props.studT,
+            gap = o.gap == null ? 0.5 : o.gap,
+            unitW = o.unitWidth == null ? o.roWidth - 2 * gap : o.unitWidth,
+            unitH = o.unitHeight == null ? o.roHeight - gap : o.unitHeight,
+            derived = Fx_openingFromUnit(unitW, unitH, gap, o.jacks || 1, studT),
+            shown = fromMode === "edge" ? o.center - o.roWidth / 2
+                  : fromMode === "wallcl" ? o.center - wallLength / 2
+                  : o.center;
 
         function patch(changes) { props.onChange(Object.assign({}, o, changes)); }
+
+        // Change the unit or the gap and the rough opening follows, the way it
+        // does on site: the box tells you the unit, the gap is your call, and
+        // everything else is arithmetic.
+        function fromUnit(w, h, g) {
+            var d = Fx_openingFromUnit(w, h, g, o.jacks || 1, studT);
+            patch({ unitWidth: w, unitHeight: h, gap: g, roWidth: d.roWidth, roHeight: d.roHeight });
+        }
 
         return Fx_Jx("div", {
             className: "lay-opening",
@@ -55256,17 +55330,25 @@ No matching component was found for:
                     className: "lay-grid",
                     children: [
                         Fx_J(Fx_Field, {
-                            label: "RO width", unit: "in",
+                            label: (o.type === "door" ? "Door" : "Window") + " width — off the box", unit: "in",
                             children: Fx_J(Fx_NumberInput, {
-                                value: o.roWidth, min: 6,
-                                onChange: function (v) { patch({ roWidth: Fx_num(v, o.roWidth) }); }
+                                value: unitW, min: 6,
+                                onChange: function (v) { fromUnit(Fx_num(v, unitW), unitH, gap); }
                             })
                         }),
                         Fx_J(Fx_Field, {
-                            label: "RO height", unit: "in",
+                            label: "height — off the box", unit: "in",
                             children: Fx_J(Fx_NumberInput, {
-                                value: o.roHeight, min: 6,
-                                onChange: function (v) { patch({ roHeight: Fx_num(v, o.roHeight) }); }
+                                value: unitH, min: 6,
+                                onChange: function (v) { fromUnit(unitW, Fx_num(v, unitH), gap); }
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
+                            label: "Gap each side", unit: "",
+                            children: Fx_J(Fx_Select, {
+                                value: gap,
+                                onChange: function (v) { fromUnit(unitW, unitH, Fx_num(v, gap)); },
+                                options: Fx_GAPS.map(function (g) { return { value: g.value, label: g.label }; })
                             })
                         }),
                         o.type === "door"
@@ -55311,23 +55393,57 @@ No matching component was found for:
                         }),
                         Fx_J(Fx_Field, {
                             wide: true,
-                            label: "From the left end to the " + (fromMode === "edge" ? "RO edge" : "centreline"),
+                            label: fromMode === "wallcl"
+                                ? "Wall centreline to unit centreline (− left, + right)"
+                                : "From the left end to the " + (fromMode === "edge" ? "RO edge" : "centreline"),
                             unit: "in",
                             children: Fx_J(Fx_NumberInput, {
-                                value: Math.round(shown * 1000) / 1000, min: 0,
+                                value: Math.round(shown * 1000) / 1000,
+                                min: fromMode === "wallcl" ? undefined : 0,
                                 onChange: function (v) {
                                     var n = Fx_num(v, shown);
-                                    patch({ center: fromMode === "edge" ? n + o.roWidth / 2 : n });
+                                    patch({
+                                        center: fromMode === "edge" ? n + o.roWidth / 2
+                                              : fromMode === "wallcl" ? n + wallLength / 2
+                                              : n
+                                    });
                                 }
                             })
                         })
                     ]
                 }),
-                Fx_J("p", {
-                    className: "lay-opening-read",
-                    children: "CL at " + Fx_inFmt(o.center) + " · RO " + Fx_inFmt(o.center - o.roWidth / 2) +
-                              " to " + Fx_inFmt(o.center + o.roWidth / 2) +
-                              " · " + Fx_inFmt(wallLength - (o.center + o.roWidth / 2)) + " left to the far end"
+                Fx_Jx("div", {
+                    className: "lay-derive",
+                    children: [
+                        Fx_Jx("p", { children: [
+                            Fx_J("b", { children: "ROUGH OPENING" }),
+                            Fx_J("span", {
+                                children: Fx_inFmt(unitW) + " unit + " + Fx_inFmt(gap) + " each side = " +
+                                          Fx_inFmt(derived.roWidth) + " wide · " +
+                                          Fx_inFmt(unitH) + " + " + Fx_inFmt(gap) + " at the head = " +
+                                          Fx_inFmt(derived.roHeight) + " high"
+                            })
+                        ]}),
+                        Fx_Jx("p", { children: [
+                            Fx_J("b", { children: "HEADER" }),
+                            Fx_J("span", {
+                                children: Fx_inFmt(derived.roWidth) + " + " + Fx_inFmt(studT) +
+                                          " trimmer each side = " + Fx_inFmt(derived.headerLength) +
+                                          " long — the shortcut is add " + Fx_inFmt(derived.shortcut) +
+                                          " to the unit width"
+                            })
+                        ]}),
+                        Fx_Jx("p", { children: [
+                            Fx_J("b", { children: "ON THE WALL" }),
+                            Fx_J("span", {
+                                children: "CL at " + Fx_inFmt(o.center) + " from the left end · " +
+                                          Fx_inFmt(Math.abs(o.center - wallLength / 2)) +
+                                          (o.center < wallLength / 2 ? " left of" : o.center > wallLength / 2 ? " right of" : " —") +
+                                          " the wall centreline · RO " + Fx_inFmt(o.center - o.roWidth / 2) +
+                                          " to " + Fx_inFmt(o.center + o.roWidth / 2)
+                            })
+                        ]})
+                    ]
                 })
             ]
         });
@@ -55419,6 +55535,11 @@ No matching component was found for:
                                 className: fromMode === "edge" ? "on" : "",
                                 onClick: function () { setFromMode("edge"); },
                                 children: "RO EDGE"
+                            }),
+                            Fx_J("button", {
+                                className: fromMode === "wallcl" ? "on" : "",
+                                onClick: function () { setFromMode("wallcl"); },
+                                children: "WALL CL → UNIT CL"
                             })
                         ]})
                     ]
@@ -55457,6 +55578,15 @@ No matching component was found for:
                             })
                         }),
                         Fx_J(Fx_Field, {
+                            wide: true,
+                            label: "Ceiling height / stud length", unit: "",
+                            children: Fx_J(Fx_Select, {
+                                value: spec.studHeight == null ? Fx_PRECUT_STUD : spec.studHeight,
+                                onChange: function (v) { patch({ studHeight: Fx_num(v, Fx_PRECUT_STUD) }); },
+                                options: Fx_STUD_LENGTHS.map(function (h) { return { value: h.value, label: h.label }; })
+                            })
+                        }),
+                        Fx_J(Fx_Field, {
                             label: "Spacing", unit: "o.c.",
                             children: Fx_J(Fx_Select, {
                                 value: spec.spacing,
@@ -55488,6 +55618,7 @@ No matching component was found for:
                                 children: spec.openings.map(function (o, i) {
                                     return Fx_J(Fx_OpeningRow, {
                                         opening: o, index: i, wallLength: spec.wallLength, fromMode: fromMode,
+                                        studT: Fx_LUMBER[spec.studSize].t,
                                         onChange: function (next) { patchOpening(i, next); },
                                         onRemove: spec.openings.length > 1 ? function () {
                                             patch({ openings: spec.openings.filter(function (_, j) { return j !== i; }) });
