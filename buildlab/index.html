@@ -495,6 +495,25 @@
 .lay-marks-head button{color:#cbd4c4;background:#141a12;border:1px solid #ffffff20;border-radius:.3rem;padding:.3rem .5rem;font:900 .55rem ui-monospace;cursor:pointer}
 .lay-marks-head button.on{color:#171006;background:#e9a329;border-color:#e9a329}
 .lay-marks:not(.with-drives) .lay-drives{display:none}
+
+/* fastener tally — the count the schedule calls for, computed not typed */
+.model-fastener-tally{position:absolute;left:.85rem;bottom:4.2rem;z-index:6;
+  background:rgba(9,13,16,.93);border:1px solid #35505f;border-radius:.4rem;
+  padding:.5rem .65rem;max-width:19rem;pointer-events:none}
+.model-fastener-tally b{display:block;font-size:.6rem;letter-spacing:.09em;
+  text-transform:uppercase;color:#8fb6cc;margin-bottom:.3rem}
+.model-fastener-tally div{display:flex;gap:.45rem;align-items:baseline;
+  font-size:.68rem;line-height:1.35;color:#dbe6ec}
+.model-fastener-tally i{font-style:normal;font-weight:700;color:#ffd166;
+  min-width:2.1rem;text-align:right}
+.model-fastener-tally s{text-decoration:none;color:#9fb3bf;font-size:.62rem}
+.model-fastener-tally u{display:block;text-decoration:none;margin-top:.35rem;
+  font-size:.56rem;color:#7f929e;letter-spacing:.03em}
+@media (max-width:640px){
+  .model-fastener-tally{left:.5rem;right:.5rem;bottom:3.4rem;max-width:none;padding:.4rem .5rem}
+  .model-fastener-tally div{font-size:.6rem}
+  .model-fastener-tally b{font-size:.54rem}
+}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -54182,6 +54201,108 @@ No matching component was found for:
         };
     }
 
+    // ---- floor fasteners, from the schedule rather than one per joint -----
+    // The model drew a single nail at each joist end. Table R602.3(1) calls
+    // for three there, and a whole run along the rim that was not drawn at
+    // all. Counts and spacings come from the table; positions are generated
+    // from them, so the picture cannot drift from the schedule again.
+    //
+    //   rim joist to joist, end nail ....... 3-16d common (or 3-16d box)
+    //   rim or blocking to sill, toe nail .. 8d box at 6" o.c.
+    //
+    // Each one is returned with the head sitting proud of the outside face of
+    // the rim, because that is the face you are looking at while you drive it.
+    function Fx_floorFasteners(b) {
+        var out = [], hd = b.depth / 2, JS = b.JS, RM = b.RM,
+            y0 = b.sillTop, dep = b.joistTop - y0;
+
+        function drive(o) {
+            var len = o.len, a = o.toe || 0,
+                // head proud of the rim face, shank running in and down
+                zc = o.s * (hd - Math.cos(a) * len / 2 + 0.18);
+            out.push({
+                key: o.key, nail: o.nail, role: o.role,
+                x: o.x, y: o.y + Math.sin(a) * len / 2, z: zc,
+                rot: Math.PI / 2 - o.s * a,
+                len: len, head: o.s * (hd + 0.18)
+            });
+        }
+
+        // three 16d through the rim into the end of every joist, spread over
+        // the depth of the joist and offset side to side so they do not line
+        // up on one grain line and split the end
+        b.joistCentres.forEach(function (c, i) {
+            [1, -1].forEach(function (s) {
+                [0.24, 0.5, 0.76].forEach(function (f, k) {
+                    drive({
+                        key: "je" + i + s + k, s: s, nail: "16dc", len: 3.5,
+                        x: c + (k === 1 ? JS.t * 0.24 : -JS.t * 0.2),
+                        y: y0 + dep * f,
+                        role: "Joist end \u2014 3 per end through the rim"
+                    });
+                });
+            });
+        });
+
+        // 8d toe nails holding the rim down to the sill, 6 in o.c. both sides
+        var half = b.width / 2, step = 6;
+        for (var x = -half + 3; x <= half - 3 + 0.01; x += step) {
+            [1, -1].forEach(function (s) {
+                drive({
+                    key: "rs" + Math.round(x * 16) + s, s: s, nail: "8db",
+                    len: 2.5, toe: 0.62, x: x, y: y0 + 2.6,
+                    role: "Rim to sill \u2014 toe nail 6 in o.c."
+                });
+            });
+        }
+        return out;
+    }
+
+    // what to print next to the model, computed from the same list
+    function Fx_floorFastenerTally(b) {
+        var by = {};
+        Fx_floorFasteners(b).forEach(function (n) {
+            (by[n.role] = by[n.role] || { n: 0, nail: n.nail }).n++;
+        });
+        return Object.keys(by).map(function (k) {
+            return { role: k, count: by[k].n, nail: by[k].nail,
+                     label: Fx_NAIL[by[k].nail].label };
+        });
+    }
+
+    // ---- window nailing-flange fasteners ---------------------------------
+    // The model used to draw six, whatever size the window was, which quietly
+    // contradicted the code panel's "there is no generic substitute". The
+    // pattern below is the one every flange instruction shares -- a fastener
+    // close to each corner, then an even run between -- generated from the
+    // opening actually entered. The spacing is a stated default, not a code
+    // number, and the model says so on screen.
+    var Fx_FLANGE_DEFAULT_OC = 8, Fx_FLANGE_CORNER = 3;
+
+    function Fx_flangeFasteners(roW, roH, oc) {
+        oc = oc || Fx_FLANGE_DEFAULT_OC;
+        var out = [], hw = roW / 2, hh = roH / 2, off = 1.1,
+            e = Fx_FLANGE_CORNER;
+
+        function run(a, b) {                       // even fill, never over oc
+            var n = Math.max(2, Math.ceil((b - a) / oc) + 1);
+            return { n: n, gap: (b - a) / (n - 1) };
+        }
+        var jr = run(-hh + e, hh - e), hr = run(-hw + e, hw - e);
+
+        [-1, 1].forEach(function (sx) {
+            for (var i = 0; i < jr.n; i++)
+                out.push({ key: "j" + sx + i, x: sx * (hw + off),
+                           y: -hh + e + i * jr.gap, side: "Jamb flange" });
+        });
+        for (var i = 0; i < hr.n; i++)
+            out.push({ key: "h" + i, x: -hw + e + i * hr.gap,
+                       y: hh + off, side: "Head flange" });
+
+        return { list: out, jambOC: jr.gap, headOC: hr.gap,
+                 corner: e, requested: oc };
+    }
+
     // =====================================================================
     // RENDERING -- turns generated members into meshes. One material per
     // mesh, all sharing the same shader program, so a few hundred sticks
@@ -54635,19 +54756,20 @@ No matching component was found for:
                     });
                 })() : null,
 
-                // step 9 -- flange fasteners at the published spacing
+                // step 9 -- flange fasteners, generated from this opening
                 stage >= 9 ? Fx_J(W.Fragment, {
-                    children: [-1, 1].map(function (sx) {
-                        return [-1, 0, 1].map(function (sy) {
-                            return Fx_Jx("mesh", {
-                                position: [roCx + sx * (roW / 2 + 1.1 * Fx_IN), roCy + sy * (roH / 2 - 2 * Fx_IN), (face + sheath + 0.9) * Fx_IN],
-                                rotation: [Math.PI / 2, 0, 0],
-                                children: [
-                                    Fx_J("cylinderGeometry", { args: [0.22 * Fx_IN, 0.22 * Fx_IN, 2.5 * Fx_IN, 12] }),
-                                    Fx_J("meshStandardMaterial", { color: Fx_TONE.steel, metalness: 0.9, roughness: 0.2 })
-                                ]
-                            }, "fx" + sx + sy);
-                        });
+                    children: Fx_flangeFasteners(roW / Fx_IN, roH / Fx_IN).list.map(function (f) {
+                        return Fx_Jx("mesh", {
+                            position: [roCx + f.x * Fx_IN, roCy + f.y * Fx_IN, (face + sheath + 0.9) * Fx_IN],
+                            rotation: [Math.PI / 2, 0, 0],
+                            children: [
+                                Fx_J("cylinderGeometry", { args: [0.16 * Fx_IN, 0.16 * Fx_IN, 2.5 * Fx_IN, 8] }),
+                                Fx_J("meshStandardMaterial", {
+                                    color: Fx_TONE.steel, metalness: 0.9, roughness: 0.2,
+                                    emissive: Fx_TONE.steel, emissiveIntensity: 0.35
+                                })
+                            ]
+                        }, "fx" + f.key);
                     })
                 }) : null,
 
@@ -54880,17 +55002,37 @@ No matching component was found for:
 
                 // step 5 -- both ends of every joist
                 stage === 5 ? Fx_J(W.Fragment, {
-                    children: b.joistCentres.map(function (c, i) {
-                        return [1, -1].map(function (s) {
-                            return Fx_Jx("mesh", {
-                                position: [c * Fx_IN, (b.sillTop + b.JS.w * 0.6) * Fx_IN, s * (hd - b.RM.t / 2) * Fx_IN],
-                                rotation: [Math.PI / 2, 0, 0],
-                                children: [
-                                    Fx_J("cylinderGeometry", { args: [0.03, 0.03, b.RM.t * Fx_IN * 1.4, 10] }),
-                                    Fx_J("meshStandardMaterial", { color: "#2f3538", metalness: 0.85, roughness: 0.3 })
-                                ]
-                            }, "n" + i + s);
-                        });
+                    children: Fx_floorFasteners(b).map(function (n) {
+                        var spec = Fx_NAIL[n.nail],
+                            // shank stays true size; the head is drawn as a
+                            // symbol scaled to the model so it reads at any
+                            // building size, the way a detail drawing does
+                            r = spec.dia * 0.75 * Fx_IN,
+                            hr = Math.max(spec.dia * 1.4, b.width * 0.0075) * Fx_IN,
+                            mat = Fx_J("meshStandardMaterial", {
+                                color: spec.tone, metalness: 0.85, roughness: 0.2,
+                                emissive: spec.tone, emissiveIntensity: 0.45
+                            });
+                        return Fx_Jx(W.Fragment, {
+                            children: [
+                                Fx_Jx("mesh", {   // shank
+                                    position: [n.x * Fx_IN, n.y * Fx_IN, n.z * Fx_IN],
+                                    rotation: [n.rot, 0, 0],
+                                    children: [
+                                        Fx_J("cylinderGeometry", { args: [r, r, n.len * Fx_IN, 6] }),
+                                        mat
+                                    ]
+                                }, "s"),
+                                Fx_Jx("mesh", {   // head, on the face you drive from
+                                    position: [n.x * Fx_IN, (n.y + Math.sin(Math.PI / 2 - n.rot) * n.len / 2) * Fx_IN, n.head * Fx_IN],
+                                    rotation: [n.rot, 0, 0],
+                                    children: [
+                                        Fx_J("cylinderGeometry", { args: [hr, hr, 0.09 * Fx_IN, 10] }),
+                                        mat
+                                    ]
+                                }, "h")
+                            ]
+                        }, n.key);
                     })
                 }) : null,
 
@@ -55065,6 +55207,72 @@ No matching component was found for:
             }));
         }, [w, l]);
         return null;
+    }
+
+    // Count card for the fastening steps. Reads the same generated list the
+    // model draws, so what you count on screen and what you read here can
+    // never disagree.
+    function Fx_FastenerTally(props) {
+        var spec = Fx_useSpec(props.sceneType === "window" ? "window" : "structure");
+        if (props.sceneType === "window") return Fx_flangeTally(spec, props.stage);
+        if (props.sceneType !== "structure" || props.stage !== 5) return null;
+        var b = Fx_buildBuilding(Object.assign({}, Fx_BUILD_SPEC, {
+                width: spec.wallLength, depth: spec.buildingDepth
+            })),
+            rows = Fx_floorFastenerTally(b),
+            total = rows.reduce(function (n, r) { return n + r.count; }, 0);
+        return Fx_Jx("div", {
+            className: "model-fastener-tally",
+            children: [
+                Fx_J("b", { children: "Fasteners in this step — " + total }),
+                rows.map(function (r) {
+                    return Fx_Jx("div", {
+                        children: [
+                            Fx_J("i", { children: r.count }),
+                            Fx_Jx("span", { children: [
+                                Fx_J("span", { children: r.label }),
+                                Fx_J("s", { children: " · " + r.role })
+                            ] })
+                        ]
+                    }, r.role);
+                }),
+                Fx_J("u", { children: "2024 IRC Table R602.3(1) · heads shown oversize so they read at this zoom" })
+            ]
+        });
+    }
+
+    // window flange count, same list the model draws
+    function Fx_flangeTally(spec, stage) {
+        if (stage !== 9) return null;
+        var wall = Fx_buildWall(spec), op = wall.openings[0];
+        if (!op) return null;
+        var f = Fx_flangeFasteners(op.roR - op.roL, op.hdrY0 - op.sillY1),
+            jamb = f.list.filter(function (x) { return x.side === "Jamb flange"; }).length,
+            head = f.list.length - jamb;
+        return Fx_Jx("div", {
+            className: "model-fastener-tally",
+            children: [
+                Fx_J("b", { children: "Fasteners in this step \u2014 " + f.list.length }),
+                Fx_Jx("div", { children: [
+                    Fx_J("i", { children: jamb }),
+                    Fx_Jx("span", { children: [
+                        Fx_J("span", { children: "Jamb flange" }),
+                        Fx_J("s", { children: " \u00b7 both sides at " + Fx_inFmt(f.jambOC) + " o.c." })
+                    ] })
+                ] }),
+                Fx_Jx("div", { children: [
+                    Fx_J("i", { children: head }),
+                    Fx_Jx("span", { children: [
+                        Fx_J("span", { children: "Head flange" }),
+                        Fx_J("s", { children: " \u00b7 " + Fx_inFmt(f.headOC) + " o.c." })
+                    ] })
+                ] }),
+                Fx_J("u", { children: "Pattern only \u2014 one within " + f.corner
+                    + " in of each corner, then an even run. Your window\u2019s instructions set the "
+                    + "fastener, the length and the real spacing (IRC R609.3). Sill flange: some "
+                    + "makers fasten it, some forbid it \u2014 check yours." })
+            ]
+        });
     }
 
     // =====================================================================
@@ -58827,6 +59035,9 @@ No matching component was found for:
                 }), (0, W.jsxs)("em", {
                     children: ["\u2192 BOW / BEND:", " ", l.bow ? "POSITION CHECKED \u2713" : "CHECK BEFORE PLACING"]
                 })]
+            }), (0, W.jsx)(Fx_FastenerTally, {
+                stage: t,
+                sceneType: r
             }), (0, W.jsxs)("div", {
                 className: "model-pan-controls",
                 "aria-label": "Model camera controls",
