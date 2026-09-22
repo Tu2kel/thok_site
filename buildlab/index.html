@@ -634,6 +634,55 @@
   .landscape-photo-stage>.landscape-photo,
   .landscape-photo-stage>.landscape-empty{min-height:300px}
 }
+
+/* ---- permit switch + groundworks ------------------------------------ */
+.permit-switch{margin:.5rem 0 .7rem;padding:.55rem .6rem;border:1px solid #ffffff1f;
+  border-radius:.45rem;background:#0e1316}
+.permit-switch>b{display:block;font:800 .58rem ui-monospace;letter-spacing:.09em;
+  text-transform:uppercase;color:#8fb6cc;margin-bottom:.4rem}
+.permit-opts{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.permit-opts button{text-align:left;background:#141a1d;border:1px solid #ffffff24;
+  border-radius:.35rem;padding:.45rem .5rem;cursor:pointer;color:#c9d6dd}
+.permit-opts button.active{border-color:#e9a329;background:#241a09}
+.permit-opts button i{display:block;font-style:normal;font:900 .62rem ui-monospace;
+  letter-spacing:.06em;color:#ffc65c}
+.permit-opts button span{display:block;font-size:.58rem;line-height:1.35;color:#93a3ac;margin-top:.15rem}
+.ground-advice{margin:.6rem 0;padding:.6rem .65rem;border:1px solid #ffffff1c;
+  border-radius:.45rem;background:#0e1316}
+.ground-soil{display:flex;flex-direction:column;gap:.25rem;font:700 .55rem ui-monospace;
+  letter-spacing:.06em;color:#93a3ac;margin-bottom:.5rem}
+.ground-soil select{background:#141a1d;color:#e6eef2;border:1px solid #ffffff24;
+  border-radius:.3rem;padding:.3rem;font:700 .62rem ui-monospace}
+.ground-sum{display:grid;gap:.3rem;padding:.5rem .55rem;border-radius:.35rem;
+  border:1px solid #48e08a4d;background:#0e1a14}
+.ground-sum.bad{border-color:#ff6b6b5c;background:#241212}
+.ground-sum>div{display:flex;gap:.5rem;align-items:baseline;flex-wrap:wrap}
+.ground-sum b{color:#ffc65c;font:800 .8rem ui-monospace;min-width:7rem}
+.ground-sum span{color:#9fb3bf;font-size:.62rem;line-height:1.4}
+.ground-sum em{font-style:normal;color:#8ff0b6;font-size:.62rem;line-height:1.45;margin-top:.2rem}
+.ground-sum.bad em{color:#ffb3b3}
+.ground-warns p{margin:.45rem 0 0;padding:.4rem .5rem;border:1px solid #ff6b6b4d;
+  border-radius:.3rem;background:#2a12128c;color:#ffb3b3;font-size:.64rem;line-height:1.5}
+.ground-why p{margin:.45rem 0 0;color:#93a3ac;font-size:.64rem;line-height:1.5}
+.ground-sink{margin-top:.55rem}
+.ground-sink summary{cursor:pointer;color:#ffc65c;font:800 .6rem ui-monospace;
+  letter-spacing:.05em;padding:.3rem 0}
+.ground-sink dl{margin:.3rem 0 0}
+.ground-sink dt{color:#e9f1f5;font:800 .64rem ui-monospace;margin-top:.45rem}
+.ground-sink dd{margin:.15rem 0 0;color:#93a3ac;font-size:.63rem;line-height:1.5}
+@media (max-width:640px){.permit-opts{grid-template-columns:1fr}.ground-sum b{min-width:0}}
+
+/* The panel lives inside the instruction column now, so it just flows. */
+.current-instruction>.ground-advice{margin:.5rem 0 .7rem}
+
+/* The tab bar is a grid item in a row sized by the taller instruction
+   column, so it was stretching into 700px of empty button. */
+.guided-stage>.step-tabs{align-self:start}
+
+/* The model number alone is useless at the store: say how long, how thick,
+   and which bit it takes. */
+.lay-sub s{display:block;text-decoration:none;color:#a9e2ff;font-size:.6rem;
+  line-height:1.4;margin-top:.15rem}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -53870,6 +53919,20 @@ No matching component was found for:
     }
     var Fx_NO_SUB = { model: null, why: "" };
 
+    // What the model number actually is in your hand. "2 × SDWS16300" tells a
+    // carpenter nothing about what to pull off the shelf or what bit to chuck.
+    var Fx_SCREW_SPEC = {
+        SDWS16300: { len: 3, dia: 0.160, drive: "T25 six-lobe (star)", head: "washer head" },
+        SDWS16212: { len: 2.5, dia: 0.160, drive: "T25 six-lobe (star)", head: "washer head" }
+    };
+
+    function Fx_screwSize(model) {
+        var k = Fx_SCREW_SPEC[model];
+        if (!k) return null;
+        return Fx_inFmt(k.len) + " × " + k.dia.toFixed(3) + "″ " + k.head
+             + ", " + k.drive + " bit";
+    }
+
     function Fx_subText(sub) {
         if (!sub || !sub.model) return null;
         return (sub.count ? sub.count + " × " : "") + sub.model +
@@ -55582,6 +55645,103 @@ No matching component was found for:
             irc: [["R609.3", "Install to the manufacturer's written instructions — shim locations, perimeter gap and squareness"],
                   ["R609.1", "Listed and labeled units"]],
             ibc: [["1402.1", "Installation per the manufacturer's instructions"]],
+            fasteners: []
+        },
+        "g-check": {
+            irc: [["R105.2", "Work exempt from permit — one-story detached accessory structures not over 200 sq ft of floor area. Amended locally more often than any other line in the code; confirm the number your city uses"],
+                  ["R301.2", "Climatic and geographic design criteria are set by your jurisdiction, not by a book"]],
+            ibc: [["105.2", "Work exempt from permit"]],
+            fasteners: []
+        },
+        "g-strip": {
+            irc: [["R401.2", "Foundations shall be built on undisturbed soil, compacted fill or controlled low-strength material"],
+                  ["R401.4", "Soil tests / evaluation of bearing where the load-bearing value is in question"]],
+            ibc: [["1804.1", "Excavation — organic material removed from beneath the structure"]],
+            fasteners: []
+        },
+        "g-square": {
+            irc: [["R401.3", "Drainage — surface water graded away from the building"],
+                  ["R405.1", "Foundation drainage principles"]],
+            ibc: [["1804.4", "Site grading away from the structure"]],
+            fasteners: []
+        },
+        "g-stone": {
+            irc: [["R401.2", "Compacted fill as a bearing surface"],
+                  ["R506.2.2", "Base course — clean graded material, the same principle as the pad under a slab"]],
+            ibc: [["1804.6", "Compacted fill material placed in lifts and compacted"]],
+            fasteners: []
+        },
+        "g-screed": {
+            irc: [["R401.3", "Water has to leave the building, not pool under it"]],
+            ibc: [["1804.4", "Grading"]],
+            fasteners: []
+        },
+        "g-skids": {
+            irc: [["R317.1", "Protection against decay — wood in contact with the ground must be preservative-treated and rated for GROUND CONTACT. Most treated stock on the rack is above-ground rated and will not last lying on a pad"],
+                  ["R317.1.2", "Wood in contact with the ground, or with concrete exposed to the weather"],
+                  ["R403.1.4.1", "Exception 3 — a freestanding accessory structure 600 sq ft or less, light-frame, eave 10 ft or less, need not be frost protected"]],
+            ibc: [["2304.12", "Protection against decay and termites"]],
+            fasteners: []
+        },
+        "g-prove": {
+            irc: [["R401.4.1", "Table R401.4.1 presumptive load-bearing values — 3000 psf sandy gravel, 2000 psf sand, 1500 psf clay"]],
+            ibc: [["1806.2", "Table 1806.2 presumptive load-bearing values"]],
+            fasteners: []
+        },
+        "g-floor": {
+            irc: [["R602.3(1)", "The fastening schedule covers the framing above — floor-frame-to-skid is not a row in it, so there is no nail count to copy"],
+                  ["R301.2.1", "Wind loads — an empty shed on a floating pad is a sail and has to be held down"],
+                  ["R317.1", "Anything bearing on the treated runners still has to be separated or treated itself"]],
+            ibc: [["1609", "Wind loads"]],
+            fasteners: []
+        },
+        "g-closeout": {
+            irc: [["R105.2", "An exempt shed gets no inspection — the last check is the builder's"],
+                  ["R401.3", "Drainage — the thing to re-check after the first heavy rain"]],
+            ibc: [],
+            fasteners: []
+        },
+        "g-permit": {
+            irc: [["R105", "Permits"],
+                  ["R301.2", "Frost depth is a local number — get it from your building department in writing"]],
+            ibc: [["105", "Permits"]],
+            fasteners: []
+        },
+        "g-layout": {
+            irc: [["R403.1", "Footings shall be as required by the approved construction documents"]],
+            ibc: [["1809.1", "Shallow foundations"]],
+            fasteners: []
+        },
+        "g-dig": {
+            irc: [["R403.1.4", "Minimum depth — footings below the frost line as established by the jurisdiction"],
+                  ["R401.2", "Undisturbed soil, not fill and not spoil"]],
+            ibc: [["1809.5", "Frost protection"],
+                  ["1804.1", "Excavation"]],
+            fasteners: []
+        },
+        "g-foot": {
+            irc: [["R403.1", "Footings sized to spread the load into soil that can carry it"],
+                  ["R401.4.1", "Table R401.4.1 presumptive load-bearing values"],
+                  ["R403.1.3", "Reinforcement where required"]],
+            ibc: [["1809.7", "Prescriptive footings"],
+                  ["1806.2", "Presumptive load-bearing values"]],
+            fasteners: []
+        },
+        "g-pour": {
+            irc: [["R403.1.6", "Foundation anchorage — 1/2 in minimum bolt, 7 in minimum embedment, 6 ft o.c. maximum, one within 12 in of each end of every plate section, minimum two bolts per piece"],
+                  ["R403.1.6.1", "Anchorage in Seismic Design Categories D0, D1 and D2"]],
+            ibc: [["2308.3.1", "Anchorage of sill plates"]],
+            fasteners: [["Anchor bolt", "1/2 in diameter minimum, 7 in embedment, set in wet concrete — there is no screw substitute"]]
+        },
+        "g-cure": {
+            irc: [["R402.2", "Concrete — strength and curing"],
+                  ["R404.1.3", "Concrete foundation walls, placement and curing"]],
+            ibc: [["1905", "Concrete, modifications to ACI 318"]],
+            fasteners: []
+        },
+        "g-inspect": {
+            irc: [["R109.1.1", "Foundation inspection — made after excavation and forms are in place and BEFORE the work is covered"]],
+            ibc: [["110.3.1", "Footing and foundation inspection"]],
             fasteners: []
         },
         "w9": {
@@ -57561,6 +57721,9 @@ No matching component was found for:
                             ? Fx_Jx("span", { className: "lay-sub ok", children: [
                                 Fx_J("b", { children: "SCREW INSTEAD" }),
                                 Fx_J("span", { children: Fx_subText(j.sub) }),
+                                Fx_screwSize(j.sub.model)
+                                    ? Fx_J("s", { children: Fx_screwSize(j.sub.model) })
+                                    : null,
                                 j.sub.note ? Fx_J("i", { children: j.sub.note }) : null
                             ]})
                             : (j.notListed
@@ -59844,6 +60007,22 @@ No matching component was found for:
         return out;
     }
 
+    ["g-check","g-strip","g-square","g-stone","g-screed","g-skids","g-prove",
+     "g-permit","g-layout","g-dig","g-foot","g-cure","g-inspect"].forEach(function (k) {
+        Fx_STEP_TOOL[k] = "none";
+    });
+    Fx_STEP_TOOL["g-pour"] = "anchor";
+    Fx_STEP_TOOL["g-floor"] = "none"; Fx_STEP_TOOL["g-closeout"] = "none";
+    Fx_STEP_FASTENER["g-floor"] = { primary: "Not in the nailing schedule",
+        substitute: "Structural screw or a listed tie, per its evaluation report",
+        note: "IRC Table R602.3(1) covers the framing above, not a building sitting loose on runners. Anchor against uplift to the anchor manufacturer's instructions." };
+    Fx_STEP_FASTENER["g-pour"] = { primary: "1/2 in anchor bolt, 7 in embedment",
+        substitute: "No substitute",
+        note: "Set in wet concrete. A bolt drilled in afterwards is a different fastener with a different rating." };
+    Fx_STEP_FASTENER["g-skids"] = { primary: "No fastener — the runners are bedded, not fixed",
+        substitute: "None",
+        note: "Runners must be GROUND CONTACT rated (UC4A or better), not the above-ground treated stock most stores stack by default. IRC R317.1." };
+
     Fx_STEP_TOOL["f-verify"] = "none"; Fx_STEP_TOOL["f-snap"] = "none";
     Fx_STEP_TOOL["f-capillary"] = "none"; Fx_STEP_TOOL["f-drill"] = "none";
     Fx_STEP_TOOL["f-anchor"] = "anchor"; Fx_STEP_TOOL["f-level"] = "none";
@@ -60081,6 +60260,511 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // GROUNDWORKS — the part that was missing
+    // ---------------------------------------------------------------------
+    // Every sequence in this app began at "Check the foundation before you
+    // build on it". That is the foundation INTERFACE: it assumes finished
+    // concrete with anchor bolts already in it, and it ends by calling an
+    // inspection. For a backyard shed that nobody is pulling a permit for,
+    // none of that applies and none of it answers the only question that
+    // matters — what do I put under it so it does not sink.
+    //
+    // So there are two ground-up paths here. Which one you want is decided
+    // by whether the thing needs a permit, which is decided by its size.
+    // =====================================================================
+
+    // 2024 IRC R105.2, Work exempt from permit, item 1: one-story detached
+    // accessory structures used as tool and storage sheds, playhouses and
+    // similar uses, provided the FLOOR AREA does not exceed 200 sq ft.
+    //
+    // This number is amended locally more often than almost anything else in
+    // the code -- plenty of jurisdictions still sit at 120 sq ft, some at
+    // 100, and zoning setbacks apply to an exempt shed anyway. The app says
+    // the number and says to confirm it; it never tells anyone they are
+    // clear to skip a permit.
+    var Fx_PERMIT_EXEMPT_SF = 200;
+
+    // 2024 IRC R403.1.4.1, exception 3: freestanding accessory structures
+    // of 600 sq ft or less, of light-frame construction, with an eave height
+    // of 10 ft or less, are not required to be protected from frost. This is
+    // the code basis for floating a shed on a gravel pad instead of digging
+    // piers to frost depth.
+    var Fx_FROST_EXEMPT_SF = 600, Fx_FROST_EXEMPT_EAVE = 10;
+
+    // 2024 IRC Table R401.4.1, presumptive load-bearing values, psf.
+    var Fx_SOILS = [
+        { id: "gravel", label: "Sandy gravel or gravel (GW, GP)", psf: 3000 },
+        { id: "sand", label: "Sand, silty sand, clayey sand, silty or clayey gravel", psf: 2000 },
+        { id: "clay", label: "Clay, sandy clay, silty clay, clayey silt", psf: 1500 },
+        { id: "unknown", label: "I do not know", psf: 1500 }
+    ];
+
+    // Light-frame shed, dead load plus a roof live/snow allowance. Kept
+    // deliberately generous -- it is the number that decides whether the
+    // thing sinks, so it should not be optimistic.
+    var Fx_SHED_DEAD_PSF = 15, Fx_SHED_LIVE_PSF = 30;
+
+    // ---- will it sink? ---------------------------------------------------
+    // Bearing pressure under the runners against what the soil can carry.
+    // Computed, not asserted: a shed sinks when the pressure under whatever
+    // it stands on beats what the ground under it will hold.
+    function Fx_bearingCheck(w, d, opts) {
+        opts = opts || {};
+        var soil = opts.soilPsf || 1500,
+            live = opts.livePsf == null ? Fx_SHED_LIVE_PSF : opts.livePsf,
+            total = (Fx_SHED_DEAD_PSF + live) * w * d,       // lb on the ground
+            mode = opts.mode || "skid";
+
+        var contactSf, desc;
+        if (mode === "skid") {
+            var n = opts.skidCount || Math.max(2, Math.round(w / 4) + 1),
+                sw = (opts.skidWidthIn || 3.5) / 12;          // 4x4 laid flat
+            contactSf = n * sw * d;
+            desc = n + " runners " + Fx_inFmt(opts.skidWidthIn || 3.5) + " wide × " + d + " ft";
+        } else {                                              // blocks or piers
+            var bn = opts.blockCount || Math.max(6, Math.ceil(w / 4) * Math.ceil(d / 4)),
+                bs = (opts.blockSizeIn || 16) / 12;
+            contactSf = bn * bs * bs;
+            desc = bn + " pads " + (opts.blockSizeIn || 16) + "″ square";
+        }
+
+        var psf = total / contactSf,
+            ratio = psf / soil;
+        return {
+            totalLb: Math.round(total), contactSf: contactSf, psf: Math.round(psf),
+            soilPsf: soil, ratio: ratio, ok: ratio <= 1, desc: desc,
+            margin: Math.round((1 - ratio) * 100)
+        };
+    }
+
+    // ---- which foundation ------------------------------------------------
+    function Fx_foundationAdvice(w, d, opts) {
+        opts = opts || {};
+        var sf = w * d,
+            exemptSize = sf <= Fx_PERMIT_EXEMPT_SF,
+            frostExempt = sf <= Fx_FROST_EXEMPT_SF &&
+                          (opts.eaveH || 8) <= Fx_FROST_EXEMPT_EAVE,
+            permit = opts.permit,
+            soil = opts.soilPsf || 1500,
+            bear = Fx_bearingCheck(w, d, { soilPsf: soil, mode: "skid" });
+
+        var pick = permit ? "pier" : "ongrade", why = [], warn = [];
+
+        if (permit) {
+            why.push("You told the app this one is permitted, so it is being built to be inspected: "
+                   + "footings down to your frost depth, on undisturbed bearing soil, with anchor "
+                   + "bolts set in the pour.");
+        } else {
+            why.push("A gravel pad with ground-contact runners on it. Nothing is cast in, nothing "
+                   + "is below frost, and the whole thing rises and falls as one piece instead of "
+                   + "being held down at some points and lifted at others.");
+            if (frostExempt)
+                why.push("IRC R403.1.4.1 exception 3 is what allows that: a freestanding accessory "
+                       + "structure of " + Fx_FROST_EXEMPT_SF + " sq ft or less, light frame, eave "
+                       + Fx_FROST_EXEMPT_EAVE + " ft or less, does not have to be frost protected.");
+            else
+                warn.push("At " + Math.round(sf) + " sq ft this is past the " + Fx_FROST_EXEMPT_SF
+                        + " sq ft frost-protection exception, so a floating pad is no longer the "
+                        + "code answer. Build it on footings to frost depth.");
+        }
+
+        if (!exemptSize && !permit)
+            warn.push("At " + Math.round(sf) + " sq ft this is over the " + Fx_PERMIT_EXEMPT_SF
+                    + " sq ft the IRC exempts from a permit, so the no-permit path is the wrong "
+                    + "one for it. Switch to the permitted build.");
+
+        if (!bear.ok)
+            warn.push("The runners as laid out put " + bear.psf + " psf into soil rated for "
+                    + bear.soilPsf + " psf. Widen the runners, add one, or spread the load — "
+                    + "as drawn it will press itself into the ground.");
+
+        return {
+            pick: pick, sf: sf, exemptSize: exemptSize, frostExempt: frostExempt,
+            bearing: bear, why: why, warn: warn, soilPsf: soil
+        };
+    }
+
+    // ---- the five reasons a backyard shed sinks --------------------------
+    // Not decoration: every one of these is a step below, and this is the
+    // list the step screens are checked against.
+    var Fx_SINK_CAUSES = [
+        { k: "Topsoil left in",
+          v: "Organic soil compresses and then rots away underneath. It is the single most "
+           + "common reason a shed drops a corner in its first two winters. Dig it out until "
+           + "you are on firm mineral subsoil, however deep that turns out to be." },
+        { k: "Stone dumped, not compacted",
+          v: "A loose pile of stone settles for years. Compact it in lifts no deeper than 4″ "
+           + "with a plate compactor — not by driving over it, not by treading it." },
+        { k: "Round stone instead of angular",
+          v: "Pea gravel and river rock roll past each other and never lock up. Use angular "
+           + "crushed stone (¾″ clean or crusher run); the sharp faces key together." },
+        { k: "Pad level with the ground, or below it",
+          v: "Then it is a bathtub. Finish the pad proud of the surrounding grade and slope "
+           + "the ground away from it so water leaves instead of sitting under the floor." },
+        { k: "Point loads with nothing spread under them",
+          v: "Blocks under a beam concentrate the whole load into a few square inches. Runners "
+           + "spread it down their whole length; blocks need a bearing pad under each one." }
+    ];
+
+    // ---- no permit: gravel pad and runners --------------------------------
+    var Fx_ONGRADE_SEQUENCE = [
+        { phase: "Groundworks", diagram: 1, codeKey: "g-check",
+          title: "Check it is really exempt, then call 811",
+          material: "A tape, your plot plan, and the phone",
+          orientation: "Measure the footprint you actually intend to build",
+          spacing: "Setbacks are measured from the property line, not the fence",
+          fastener: "None",
+          action: "Measure the footprint and compare it with what your city exempts. The IRC exempts a "
+                + "one-story detached shed at " + Fx_PERMIT_EXEMPT_SF + " sq ft or less, but plenty of "
+                + "places still cut it off at 120, and a shed that needs no building permit still has to "
+                + "sit inside your zoning setbacks and off your easements. Then call 811 and let them "
+                + "mark the utilities before a shovel goes in.",
+          check: "You have the number from YOUR city, the shed fits the setbacks, and the locates are marked.",
+          note: "Exempt from a building permit is not exempt from zoning, from an HOA, or from the gas line "
+              + "running across the yard." },
+
+        { phase: "Groundworks", diagram: 2, codeKey: "g-strip",
+          title: "Strip the topsoil out — all of it",
+          material: "Spade, mattock, wheelbarrow",
+          orientation: "Pad footprint plus 12 in beyond on every side",
+          spacing: "Down to firm mineral subsoil, however deep that is",
+          fastener: "None",
+          action: "Take off every bit of dark organic soil, sod and root. Keep going until the spade is "
+                + "biting into firm, light-coloured mineral subsoil that does not give under your heel. "
+                + "Go 12 in wider than the shed all round so the edge of the pad has ground to sit on.",
+          check: "No dark soil, no roots, no soft spots anywhere in the hole. Heel test everywhere.",
+          note: "This is the step people skip and it is the one that sinks sheds. Topsoil squashes, then "
+              + "the organics in it rot and leave a void. Nothing you build on top fixes it." },
+
+        { phase: "Groundworks", diagram: 3, codeKey: "g-square",
+          title: "Square the excavation and set your height",
+          material: "Batter boards or stakes, string, long tape, line level",
+          orientation: "Diagonals equal; pad top ABOVE the surrounding ground",
+          spacing: "Pad 12 in wider than the shed on all four sides",
+          fastener: "None",
+          action: "String the outline and pull both diagonals — they have to match. Set the string to the "
+                + "finished top of the pad, and set that at least 2 in above the highest ground around it "
+                + "so water runs away from the shed rather than into it.",
+          check: "Diagonals match within 1/4 in, and the pad top line is above grade all the way round.",
+          note: "A pad that finishes flush with the lawn becomes a pond. Height here is drainage." },
+
+        { phase: "Groundworks", diagram: 4, codeKey: "g-stone",
+          title: "Fabric, then stone in 4 in lifts, compacted",
+          material: "Non-woven geotextile, 3/4 in clean angular crushed stone or crusher run",
+          orientation: "Fabric lapped 12 in at seams and run up the sides of the hole",
+          spacing: "Lifts no deeper than 4 in — compact every single one",
+          fastener: "None",
+          action: "Lay the geotextile first so the stone and the subsoil never mix — without it the stone "
+                + "slowly disappears down into the ground. Then fill in lifts no deeper than 4 in, running "
+                + "a plate compactor over each lift before the next goes in. Angular stone only: it locks "
+                + "together, round gravel never does.",
+          check: "Every lift compacted. You can walk the finished pad without leaving a print.",
+          note: "Four inches at a time. A single deep pour of stone cannot be compacted through and it will "
+              + "carry on settling under the shed for years." },
+
+        { phase: "Groundworks", diagram: 5, codeKey: "g-screed",
+          title: "Screed it flat and prove it",
+          material: "Straightedge or screed board, 4 ft level, plate compactor",
+          orientation: "Flat, not sloped — the pad is level, the ground around it drains away",
+          spacing: "±1/4 in across the whole pad",
+          fastener: "None",
+          action: "Screed the top off flat with a straight board, give it a final pass with the compactor, "
+                + "then walk a level over it in both directions and across both diagonals. Fill and "
+                + "re-compact any low spot; do not bridge one with bedding stone later.",
+          check: "±1/4 in everywhere, and the level reads the same on both diagonals.",
+          note: "Every bit of twist you leave in the pad turns into a door that will not latch." },
+
+        { phase: "Groundworks", diagram: 6, codeKey: "g-skids",
+          title: "Set the runners — ground contact rated",
+          material: "Pressure-treated 4x6 or 4x4 runners, UC4A GROUND CONTACT",
+          orientation: "Run the runners the short way; floor joists span across them",
+          spacing: "Runner spacing from the floor-joist span — typically 4 ft o.c. or less",
+          fastener: "None yet — the floor frame fastens down to these",
+          action: "Lay the runners on the pad, level them to each other, and pull the diagonals square "
+                + "again. Bed each one into the stone rather than shimming it up on anything. They carry "
+                + "the whole building and they spread its weight down their full length.",
+          check: "Every runner level, level to each other, diagonals equal, all bearing fully on stone "
+               + "with no gaps you could slide a pencil under.",
+          note: "Check the tag. Most treated lumber on the rack is ABOVE GROUND rated (UC3B) and will rot "
+              + "out lying on a wet pad. You need GROUND CONTACT — UC4A or better. IRC R317.1." },
+
+        { phase: "Groundworks", diagram: 7, codeKey: "g-prove",
+          title: "Prove the base before the floor goes on",
+          material: "Level, tape, and the bearing numbers from the panel",
+          orientation: "Nothing rocks, nothing is proud, nothing is low",
+          spacing: "Diagonals equal within 1/4 in",
+          fastener: "None",
+          action: "Stand on each corner and each runner in turn. Nothing should move, rock or sound "
+                + "hollow. Re-check the diagonals and the level one last time. This is the last moment "
+                + "it is easy to fix.",
+          check: "Square, level, dead solid underfoot, and the bearing check in the panel passes.",
+          note: "From here the building only gets heavier and harder to lift. Everything above this is "
+              + "built on what you just did." },
+
+        { phase: "Groundworks", diagram: 8, codeKey: "g-floor",
+          title: "Land the floor frame on the runners and hold it down",
+          material: "The floor frame, structural screws or ties, ground anchors",
+          orientation: "Joists run across the runners, rim flush with the runner ends",
+          spacing: "Fix the frame to every runner it crosses; anchors at the corners at least",
+          fastener: "See the note — this connection is not in the nailing schedule",
+          action: "Set the built floor frame down on the runners, square it, then fix it to every "
+                + "runner it crosses. Then hold the whole building DOWN: a shed on a floating pad is "
+                + "not bolted to anything, and an empty one is a sail. Auger-type ground anchors with "
+                + "cable or strap over the frame, at the corners at minimum.",
+          check: "Frame square, bearing on every runner, fixed at each crossing, and anchored against uplift.",
+          note: "Floor-frame-to-skid is not a row in IRC Table R602.3(1) — that table covers the "
+              + "framing above, not a building sitting loose on runners. Use a structural screw or a "
+              + "listed tie, and follow the anchor manufacturer for the hold-down. Do not guess a "
+              + "nail count for it." }
+    ];
+
+    // ---- permitted: concrete to frost depth -------------------------------
+    var Fx_PIER_SEQUENCE = [
+        { phase: "Groundworks", diagram: 1, codeKey: "g-permit",
+          title: "Permit, plans and locates",
+          material: "Approved plans, the permit, 811",
+          orientation: "Build to the approved drawing, not to the app",
+          spacing: "Your frost depth comes from your building department",
+          fastener: "None",
+          action: "Have the permit issued and the approved plans on site. Get your local frost depth in "
+                + "writing — it is a local number and nothing else can tell you what it is. Call 811.",
+          check: "Permit in hand, frost depth known, utilities marked.",
+          note: "On a permitted job the inspection schedule drives the build. Know which inspections you "
+              + "need before you start digging." },
+
+        { phase: "Groundworks", diagram: 2, codeKey: "g-layout",
+          title: "Batter boards and a square layout",
+          material: "Batter boards, mason's line, long tape",
+          orientation: "Lines outside the dig so they survive the excavation",
+          spacing: "Diagonals equal — 3-4-5 the corners as well",
+          fastener: "None",
+          action: "Set batter boards back from every corner and string the building line so the lines can "
+                + "stay up while you dig. Square it with equal diagonals and check each corner 3-4-5.",
+          check: "Diagonals match, corners square, lines clear of the excavation.",
+          note: "Corner stakes get dug out. Batter boards hold the line through the whole groundwork." },
+
+        { phase: "Groundworks", diagram: 3, codeKey: "g-dig",
+          title: "Dig to frost depth and undisturbed bearing",
+          material: "Post-hole digger, digging bar, shovel",
+          orientation: "Bottom flat and level, sides clean",
+          spacing: "Piers under every bearing point the plan shows",
+          fastener: "None",
+          action: "Dig every hole to your local frost depth and keep going until you are on undisturbed "
+                + "soil — never on fill, never on the spoil you just dropped back in. Flatten the bottom. "
+                + "IRC R403.1.4 puts footings below the frost line for a reason: water in the soil above "
+                + "it expands when it freezes and lifts whatever is sitting in it.",
+          check: "Every hole to depth, flat bottomed, on undisturbed soil.",
+          note: "Half a foundation below frost and half above is worse than neither — the two halves move "
+              + "apart and tear the building." },
+
+        { phase: "Groundworks", diagram: 4, codeKey: "g-foot",
+          title: "Footings — spread the load",
+          material: "Concrete, rebar as detailed",
+          orientation: "Footing centred under the pier",
+          spacing: "Size from the plan and the bearing value of your soil",
+          fastener: "None",
+          action: "Pour the footing pads first, sized so the load spreads into soil that can carry it. "
+                + "The footing is what stops a pier punching down into the ground.",
+          check: "Footings to size, level, rebar placed and covered as detailed.",
+          note: "IRC Table R401.4.1 gives presumptive bearing: 3000 psf in sandy gravel down to 1500 psf "
+              + "in clay. A footing sized for gravel will sink in clay." },
+
+        { phase: "Groundworks", diagram: 5, codeKey: "g-pour",
+          title: "Form and pour the piers, set the anchors wet",
+          material: "Forms, concrete, 1/2 in anchor bolts",
+          orientation: "Tops level to one another and to the string",
+          spacing: "Anchors 6 ft o.c. max, one within 12 in of each end of every plate, 2 per piece min",
+          fastener: "1/2 in anchor bolt, 7 in minimum embedment",
+          action: "Pour the piers and set the anchor bolts into wet concrete to the spacing the plate "
+                + "layout needs. IRC R403.1.6: 1/2 in minimum diameter, 7 in minimum embedment into the "
+                + "concrete, 6 ft o.c. maximum, one within 12 in of each end of every plate section and "
+                + "never fewer than two bolts per piece.",
+          check: "Pier tops level, anchors plumb, spacing walked against the sill layout before it sets.",
+          note: "Bolts dropped into set concrete afterwards are a different fastener with a different "
+              + "rating, and an inspector will know." },
+
+        { phase: "Groundworks", diagram: 6, codeKey: "g-cure",
+          title: "Cure, strip and re-check",
+          material: "Water or curing compound, cover",
+          orientation: "Keep it damp — concrete cures, it does not dry",
+          spacing: "Do not load it early",
+          fastener: "None",
+          action: "Keep the concrete damp while it cures and keep it covered in hard sun or a freeze. "
+                + "Strip the forms, then re-check level across every pier top and pull the diagonals again.",
+          check: "Tops level to one another, diagonals square, anchors where the plate layout wants them.",
+          note: "Concrete gains strength by hydrating. Letting it dry out fast is how you get a weak, "
+              + "dusty top." },
+
+        { phase: "Groundworks", diagram: 7, codeKey: "g-inspect",
+          title: "Call the foundation inspection",
+          material: "Plans, permit, the exposed work",
+          orientation: "Nothing covered until it is signed",
+          spacing: "Book it before you need it",
+          fastener: "None",
+          action: "Call for the inspection while everything is still visible. Do not backfill and do not "
+                + "set a sill on it until it is signed off.",
+          check: "Inspection passed and recorded.",
+          note: "Covering work before it is inspected is how you end up taking it apart again." }
+    ];
+
+    // Groundworks feeds straight into the existing sill sequence, so the
+    // concrete path ends exactly where "Check the foundation before you build
+    // on it" begins.
+    function Fx_groundSequence(permit) {
+        return permit ? Fx_PIER_SEQUENCE : Fx_ONGRADE_SEQUENCE;
+    }
+
+    // On a gravel pad there is no sill plate, no capillary break and no
+    // anchor bolt, so the whole "Foundation interface" phase is the wrong
+    // sequence to hand someone -- it would have them snapping a sill line on
+    // a pile of stone. It belongs to the concrete path only. Same for the
+    // permit inspections: nobody is coming to look at an exempt shed.
+    // `asked` is the phase filter the view was opened with. Somebody who
+    // picked the "Foundation and sill plates" practice asked for that phase
+    // on purpose -- stripping it there would hand them an empty screen.
+    function Fx_shapeForPermit(steps, permit, asked) {
+        if (permit) return steps;
+        if (asked && asked.length && asked.indexOf("Foundation interface") >= 0) return steps;
+        var out = steps.filter(function (s) {
+            if (s.phase === "Foundation interface") return false;
+            if (s.codeKey === "c-final") return false;
+            return true;
+        });
+        // never hand back nothing
+        return out.length ? out.concat([Fx_NO_PERMIT_CLOSEOUT]) : steps;
+    }
+
+    var Fx_NO_PERMIT_CLOSEOUT = {
+        phase: "Completion", diagram: 6, codeKey: "g-closeout",
+        title: "Close it out yourself — nobody else is coming",
+        material: "Level, tape, and the checks from the earlier steps",
+        orientation: "Doors and windows are the tell-tale",
+        spacing: "Re-check the pad after the first heavy rain and the first freeze",
+        fastener: "None",
+        action: "There is no inspector on an exempt shed, so the last look is yours. Walk the doors "
+              + "through their full swing, check they still latch, re-pull the diagonals, and put a "
+              + "level back on the runners. Then go back and look again after the first real rain and "
+              + "again after the first freeze — that is when a bad pad shows itself.",
+        check: "Doors latch, diagonals still match, runners still level, water running away from the pad.",
+        note: "A door that has started to bind is the first thing a settling shed does. Catch it in the "
+            + "first season and you can still jack a corner and pack stone under a runner."
+    };
+
+    // ---- the permit switch -----------------------------------------------
+    // One choice changes what gets built under the shed, so it lives outside
+    // any one panel and the sequence itself reads it.
+    var Fx_permit = (function () {
+        var v = false, subs = [];
+        return {
+            get: function () { return v; },
+            set: function (x) { v = !!x; subs.forEach(function (f) { f(); }); },
+            subscribe: function (f) {
+                subs.push(f);
+                return function () { subs = subs.filter(function (g) { return g !== f; }); };
+            }
+        };
+    })();
+
+    function Fx_usePermit() {
+        var s = Ts.useState(0), bump = s[1];
+        Ts.useEffect(function () {
+            return Fx_permit.subscribe(function () { bump(function (n) { return n + 1; }); });
+        }, []);
+        return Fx_permit.get();
+    }
+
+    function Fx_PermitSwitch(props) {
+        var on = Fx_usePermit();
+        return Fx_Jx("div", {
+            className: "permit-switch",
+            children: [
+                Fx_J("b", { children: "What is going under it" }),
+                Fx_Jx("div", { className: "permit-opts", children: [
+                    Fx_Jx("button", {
+                        className: on ? "" : "active",
+                        onClick: function () { Fx_permit.set(false); },
+                        children: [
+                            Fx_J("i", { children: "NO PERMIT" }),
+                            Fx_J("span", { children: "Gravel pad + ground-contact runners" })
+                        ]
+                    }),
+                    Fx_Jx("button", {
+                        className: on ? "active" : "",
+                        onClick: function () { Fx_permit.set(true); },
+                        children: [
+                            Fx_J("i", { children: "PERMITTED" }),
+                            Fx_J("span", { children: "Concrete to frost depth, anchor bolts, inspected" })
+                        ]
+                    })
+                ] })
+            ]
+        });
+    }
+
+    // ---- what the groundworks steps show you -----------------------------
+    function Fx_GroundAdvice(props) {
+        // Dimensions come from the same store the planner writes and the 3D
+        // reads, so the bearing check is against the shed actually being
+        // built rather than a default.
+        var on = Fx_usePermit(),
+            spec = Fx_useSpec("structure"),
+            soilS = Ts.useState("unknown"), soilId = soilS[0], setSoil = soilS[1],
+            w = Math.max(4, Math.round(spec.wallLength / 12 * 10) / 10),
+            d = Math.max(4, Math.round(spec.depth / 12 * 10) / 10),
+            soil = Fx_SOILS.filter(function (s) { return s.id === soilId; })[0],
+            a = Fx_foundationAdvice(w, d, { permit: on, soilPsf: soil.psf }),
+            b = a.bearing;
+
+        return Fx_Jx("section", {
+            className: "ground-advice",
+            children: [
+                Fx_J("p", { className: "eyebrow", children: "Will it sink?" }),
+                Fx_Jx("label", { className: "ground-soil", children: ["Ground it sits on",
+                    Fx_J("select", {
+                        value: soilId,
+                        onChange: function (e) { setSoil(e.target.value); },
+                        children: Fx_SOILS.map(function (s) {
+                            return Fx_J("option", { value: s.id, children: s.label }, s.id);
+                        })
+                    })] }),
+                Fx_Jx("div", { className: "ground-sum" + (b.ok ? "" : " bad"), children: [
+                    Fx_Jx("div", { children: [
+                        Fx_J("b", { children: b.totalLb.toLocaleString() + " lb" }),
+                        Fx_J("span", { children: "the whole shed, dead + roof live" })] }),
+                    Fx_Jx("div", { children: [
+                        Fx_J("b", { children: b.desc }),
+                        Fx_J("span", { children: b.contactSf.toFixed(1) + " sq ft actually touching the ground" })] }),
+                    Fx_Jx("div", { children: [
+                        Fx_J("b", { children: b.psf + " psf" }),
+                        Fx_J("span", { children: "against " + b.soilPsf + " psf this ground will carry" })] }),
+                    Fx_J("em", {
+                        children: b.ok
+                            ? "Holds, with " + b.margin + "% to spare — IRC Table R401.4.1 presumptive bearing."
+                            : "This will press into the ground. Widen or add runners."
+                    })
+                ] }),
+                a.warn.length ? Fx_J("div", { className: "ground-warns",
+                    children: a.warn.map(function (t, i) {
+                        return Fx_J("p", { children: t }, "w" + i);
+                    }) }) : null,
+                Fx_J("div", { className: "ground-why",
+                    children: a.why.map(function (t, i) {
+                        return Fx_J("p", { children: t }, "y" + i);
+                    }) }),
+                on ? null : Fx_Jx("details", { className: "ground-sink", children: [
+                    Fx_J("summary", { children: "The five reasons a backyard shed sinks" }),
+                    Fx_J("dl", { children: Fx_SINK_CAUSES.map(function (c, i) {
+                        return Fx_Jx(W.Fragment, { children: [
+                            Fx_J("dt", { children: c.k }),
+                            Fx_J("dd", { children: c.v })
+                        ] }, "s" + i);
+                    }) })
+                ] })
+            ]
+        });
+    }
+
+    // =====================================================================
     // ONE STEP, ONE SCREEN
     // ---------------------------------------------------------------------
     // Measured before this went in: a single step was 4,746 words and 12
@@ -60291,7 +60975,7 @@ No matching component was found for:
                     }), (0, nt.jsx)("h2", {
                         children: "Photo-to-scale preview"
                     }), (0, nt.jsx)("span", {
-                        children: "Photograph the build area, mark one known distance, then position the scaled project."
+                        children: "Hold the frame, tap the four corners of something you know the size of that is lying on the ground, then drag the building around on it."
                     })]
                 }), (0, nt.jsx)(Fx_CameraBar, {
                     cam: cam
@@ -60396,7 +61080,7 @@ No matching component was found for:
                 children: (0, nt.jsx)(Fx_CameraEmpty, {
                     cam: cam,
                     title: "Point the camera at the build area",
-                    hint: "Face the area squarely and keep something you can measure in shot — a door, a sheet of ply, a tape on the ground. Freeze the frame before you mark the two calibration points."
+                    hint: "Put something you already know the size of flat on the ground in shot — a sheet of ply does it. Hold the frame, then tap its four corners and the building will sit on your ground at its real size."
                 })
             }), (0, nt.jsx)("footer", {
                 children: "Setback values vary by address, zoning, easements and project type. The red overlay is a planning warning until the property-specific values are verified."
@@ -61181,7 +61865,15 @@ No matching component was found for:
         }];
 
     function foe(t) {
-        return Fx_expandRest(Fx_expandRoof(Fx_expandWall(/window opening|window replacement/i.test(t.name) ? coe : t.category === "Roofing" ? gP.filter(e => ["Roof", "Completion"].includes(e.phase)) : t.category === "Structural framing" ? gP.slice(1, 10) : gP)))
+        return Fx_withGround(t, Fx_expandRest(Fx_expandRoof(Fx_expandWall(/window opening|window replacement/i.test(t.name) ? coe : t.category === "Roofing" ? gP.filter(e => ["Roof", "Completion"].includes(e.phase)) : t.category === "Structural framing" ? gP.slice(1, 10) : gP))))
+    }
+
+    // Anything that sits on the ground gets groundworks in front of the sill
+    // steps. A window opening or a roof-only job does not -- it is already
+    // standing on something.
+    function Fx_withGround(t, steps) {
+        if (!steps.some(function (s) { return s.phase === "Foundation interface"; })) return steps;
+        return Fx_groundSequence(Fx_permit.get()).concat(steps);
     }
 
     function tG(t) {
@@ -61311,8 +62003,9 @@ No matching component was found for:
         phaseFilter: r,
         practiceMode: o = !1
     }) {
-        let l = foe(t),
-            c = r?.length ? l.filter(Q => r.includes(Q.phase)) : l,
+        let _permitTick = Fx_usePermit(),
+            l = Fx_shapeForPermit(foe(t), _permitTick, r),
+            c = (Q0 => Q0.length ? Q0 : l)(r?.length ? l.filter(Q => r.includes(Q.phase)) : l),
             f = t.name + ":guided:",
             h = c.findIndex((Q, ee) => !n.has(f + ee)),
             [p, m] = (0, Fn.useState)(h < 0 ? c.length - 1 : h),
@@ -61320,7 +62013,7 @@ No matching component was found for:
             [_, b] = (0, Fn.useState)("primary"),
             [v, S] = (0, Fn.useState)(new Set),
             [Fx_tab, Fx_setTab] = (0, Fn.useState)("do"),
-            C = c[p],
+            C = c[Math.min(p, c.length - 1)] || c[0],
             w = tG(C),
             A = C.phase.startsWith("Window"),
             L = w ? `DRIVE ${(_==="primary"?w.primary:w.substitute).toUpperCase()}` : void 0,
@@ -61399,9 +62092,9 @@ No matching component was found for:
                 level: Fx_cov.level
             }), (0, k.jsxs)("div", {
                 className: "guided-layout",
-                children: [(0, k.jsx)("aside", {
+                children: [(0, k.jsxs)("aside", {
                     className: "guided-step-list",
-                    children: c.map((Q, ee) => (0, k.jsxs)("button", {
+                    children: [c.some(Z => Z.phase === "Groundworks") ? (0, k.jsx)(Fx_PermitSwitch, {}) : null, c.map((Q, ee) => (0, k.jsxs)("button", {
                         className: p === ee ? "current" : "",
                         onClick: () => {
                             m(ee), x(yP(Q) === "none" ? "action" : "fastener"), b("primary"), Fx_setTab("do")
@@ -61415,7 +62108,7 @@ No matching component was found for:
                                 children: Q.phase
                             })]
                         })]
-                    }, Q.title))
+                    }, Q.title))]
                 }), (0, k.jsxs)("main", {
                     className: "guided-stage tab-" + Fx_tab,
                     children: [(0, k.jsx)(hP, {
@@ -61449,7 +62142,7 @@ No matching component was found for:
                             children: ["Do this now \u2022 step ", p + 1]
                         }), (0, k.jsx)("h2", {
                             children: C.title
-                        }), R && (0, k.jsxs)("section", {
+                        }), C.phase === "Groundworks" ? (0, k.jsx)(Fx_GroundAdvice, {}) : null, R && (0, k.jsxs)("section", {
                             className: `lumber-check ${V?"ready":""}`,
                             children: [(0, k.jsxs)("header", {
                                 children: [(0, k.jsx)("b", {
@@ -61593,6 +62286,18 @@ No matching component was found for:
         description: "Measure 16 in. O.C., mark both rims, check crown and bow, seat joists, and fasten both ends.",
         kind: "joist",
         phases: ["Floor frame"]
+    }, {
+        name: "Build a shed — start to finish",
+        category: "Foundations",
+        description: "The whole thing in order, ground to dry-in: pad or piers, sill, floor, walls, sheathing, roof. Switch between the no-permit and the permitted build at the top.",
+        kind: "guided",
+        phases: []
+    }, {
+        name: "Shed base — pad, runners or piers",
+        category: "Foundations",
+        description: "Strip the organics, build and compact a stone pad, set ground-contact runners — or dig and pour to frost depth if it is permitted.",
+        kind: "guided",
+        phases: ["Groundworks"]
     }, {
         name: "Foundation and sill plates",
         category: "Foundations",
