@@ -59450,8 +59450,21 @@ No matching component was found for:
         "Room addition": "shell", "Enclosed porch": "shell",
         "Second-story addition": "shell",
         "Complete roof": "shell", "Gable roof framing": "shell",
-        "Hip roof framing": "shell", "Roof repair": "shell"
+        "Hip roof framing": "shell", "Roof repair": "shell",
+
+        // --- foundation-only jobs ---
+        // These got built this session as the groundworks paths. They are a
+        // foundation and nothing above it, so they take the ground sequence
+        // on its own rather than the whole shell.
+        "Concrete slab": "ground", "Pier-and-beam foundation": "ground"
         // everything else falls through to "none"
+    };
+
+    // A foundation-only project forces the matching ground path and stops
+    // there -- no walls, no roof, no cladding.
+    var Fx_GROUND_ONLY = {
+        "Concrete slab": "slab",
+        "Pier-and-beam foundation": "pier"
     };
 
     // What to point someone at instead.
@@ -59467,14 +59480,16 @@ No matching component was found for:
 
     function Fx_coverage(project) {
         var name = project && project.name, cat = (project && project.category) || "";
-        var level = Fx_COVERAGE[name] || "none";
+        var level = Fx_COVERAGE[name] || "none",
+            groundOnly = Fx_GROUND_ONLY[name] || null;
         var why = /Fenc/i.test(cat) ? "fence"
                 : /Landscap/i.test(cat) ? "landscape"
                 : /Concrete|foundation/i.test(cat) ? "concrete"
                 : /Interior/i.test(cat) ? "interior"
                 : /Exterior projects/i.test(cat) ? "exterior"
                 : /envelope/i.test(cat) ? "envelope" : "other";
-        return { level: level, built: level !== "none", why: Fx_INSTEAD[why] };
+        return { level: level, built: level !== "none", groundOnly: groundOnly,
+                 why: Fx_INSTEAD[why] };
     }
 
     var Fx_BUILT_LIST = [
@@ -60810,15 +60825,23 @@ No matching component was found for:
     // from an effect matters: child effects run before the parent subscribes,
     // so a correction fired from inside the switch notified nobody and the
     // sequence stayed on the path the switch was no longer showing.
-    function Fx_effectiveChoice(dwelling) {
+    function Fx_pick(id) {
+        return Fx_FOUNDATION_CHOICES.filter(function (x) { return x.id === id; })[0];
+    }
+
+    // `force` is for a foundation-only project, where the job IS the
+    // foundation and the switch does not get a say. It is passed in rather
+    // than written to the store -- setting state from inside a render is how
+    // you get an update loop.
+    function Fx_effectiveChoice(dwelling, force) {
+        if (force) return Fx_pick(force) || Fx_permit.choice();
         var c = Fx_permit.choice();
-        if (dwelling && !c.permit)
-            return Fx_FOUNDATION_CHOICES.filter(function (x) { return x.id === "pier"; })[0];
+        if (dwelling && !c.permit) return Fx_pick("pier");
         return c;
     }
 
-    function Fx_groundSequence(dwelling) {
-        var seq = Fx_effectiveChoice(dwelling).seq;
+    function Fx_groundSequence(dwelling, force) {
+        var seq = Fx_effectiveChoice(dwelling, force).seq;
         return seq === "SLAB" ? Fx_SLAB_SEQUENCE
              : seq === "PIER" ? Fx_PIER_SEQUENCE
              : Fx_ONGRADE_SEQUENCE;
@@ -60832,7 +60855,11 @@ No matching component was found for:
     // `asked` is the phase filter the view was opened with. Somebody who
     // picked the "Foundation and sill plates" practice asked for that phase
     // on purpose -- stripping it there would hand them an empty screen.
-    function Fx_shapeForPermit(steps, permit, asked, dwelling) {
+    function Fx_shapeForPermit(steps, permit, asked, dwelling, groundOnly) {
+        // A foundation-only job is already exactly its own sequence -- no
+        // phases to drop, and no self-close-out, because a poured foundation
+        // gets inspected like any other permitted work.
+        if (groundOnly) return steps;
         var eff = Fx_effectiveChoice(dwelling),
             id = eff.id, explicit = asked && asked.length;
         permit = eff.permit;
@@ -62925,6 +62952,9 @@ No matching component was found for:
     // standing on something.
     function Fx_withGround(t, steps) {
         if (!steps.some(function (s) { return s.phase === "Foundation interface"; })) return steps;
+        // A foundation-only job is the ground sequence and nothing above it.
+        var only = Fx_coverage(t).groundOnly;
+        if (only) return Fx_groundSequence(false, only);
         return Fx_groundSequence(Fx_scopeOf(t, 0).dwelling).concat(Fx_expandFinish(steps));
     }
 
@@ -63056,7 +63086,7 @@ No matching component was found for:
         practiceMode: o = !1
     }) {
         let _permitTick = Fx_usePermit(),
-            l = Fx_shapeForPermit(foe(t), _permitTick, r, Fx_scopeOf(t, 0).dwelling),
+            l = Fx_shapeForPermit(foe(t), _permitTick, r, Fx_scopeOf(t, 0).dwelling, Fx_coverage(t).groundOnly),
             c = (Q0 => Q0.length ? Q0 : l)(r?.length ? l.filter(Q => r.includes(Q.phase)) : l),
             f = t.name + ":guided:",
             h = c.findIndex((Q, ee) => !n.has(f + ee)),
