@@ -703,6 +703,31 @@
 .permit-opts button.off{opacity:.45;cursor:not-allowed;border-style:dashed}
 .permit-opts button.off i{color:#8c9aa3}
 .permit-opts button.off span{color:#ff9f9f}
+
+/* ---- deck design panel ---------------------------------------------- */
+.deck-spec{margin:.6rem 0;padding:.65rem .75rem;border:1px solid #ffffff1c;
+  border-radius:.45rem;background:#0e1316}
+.dk-inputs{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin-bottom:.6rem}
+.dk-inputs label{display:flex;flex-direction:column;gap:.2rem;
+  font:700 .54rem ui-monospace;letter-spacing:.06em;color:#93a3ac}
+.dk-inputs label:first-child{grid-column:1/-1}
+.dk-inputs select,.dk-inputs input{background:#141a1d;color:#e6eef2;
+  border:1px solid #ffffff24;border-radius:.28rem;padding:.3rem;font:700 .62rem ui-monospace}
+.dk-out{margin:0;display:grid;gap:.45rem}
+.dk-row{display:grid;grid-template-columns:8.5rem 1fr;gap:.2rem .7rem;
+  padding-bottom:.4rem;border-bottom:1px solid #ffffff12}
+.dk-row:last-child{border-bottom:0;padding-bottom:0}
+.dk-row dt{font:700 .58rem ui-monospace;letter-spacing:.06em;color:#8fb6cc;
+  text-transform:uppercase;padding-top:.1rem}
+.dk-row dd{margin:0;color:#ffc65c;font:800 .8rem ui-monospace}
+.dk-row s{grid-column:2;text-decoration:none;color:#93a3ac;font-size:.62rem;line-height:1.45}
+.dk-fail{padding:.55rem .6rem;border:1px solid #ff6b6b5c;border-radius:.35rem;background:#241212}
+.dk-fail b{display:block;color:#ff9f9f;font:900 .64rem ui-monospace;letter-spacing:.08em;margin-bottom:.2rem}
+.dk-fail span{color:#ffb3b3;font-size:.68rem;line-height:1.5}
+.dk-notes p{margin:.45rem 0 0;color:#ded0b4;font-size:.65rem;line-height:1.5;
+  padding:.35rem .45rem;border-left:2px solid #e9a329;background:#221a08}
+.dk-src{margin:.55rem 0 0;color:#7e897c;font-size:.6rem;line-height:1.5}
+@media (max-width:640px){.dk-inputs{grid-template-columns:1fr}.dk-row{grid-template-columns:1fr}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -56327,6 +56352,11 @@ No matching component was found for:
               ["R301.5", "Live loads — a deck is designed for 40 psf plus the guard load"]],
         ibc: [], fasteners: [] };
 
+    Fx_CODE_LIBRARY["fn-cl-layout"] = {
+        irc: [["CLFMI", "Chain Link Fence Manufacturers Institute installation guide — line posts 10 ft maximum, posts set about 4 in inside the property line so the footing does not encroach"],
+              ["ASTM F1908", "Around a swimming pool this is a barrier, not a fence, and the pool rules govern"]],
+        ibc: [], fasteners: [] };
+
     // =====================================================================
     // LIVE CAMERA
     // ---------------------------------------------------------------------
@@ -61567,9 +61597,11 @@ No matching component was found for:
           spacing: "Top rail near the top, bottom rail 6 to 10 in off the ground, third in the middle",
           fastener: "Structural screws or 16d; every joint lands on a post",
           action: "Run the rails bay by bay. Anything 6 ft or over gets three — two lets the pickets "
-                + "bow in the middle within a season. Keep the bottom rail well clear of the dirt so "
-                + "it is not wicking. Every rail joint has to land on a post; a joint floating in the "
-                + "middle of a bay is a hinge.",
+                + "bow in the middle within a season. Every rail joint has to land on a post; a joint "
+                + "floating in the middle of a bay is a hinge. You can toe-screw the rails or hang "
+                + "them in fence brackets (Simpson FB24Z for 2x4, FB26Z for 2x6) — brackets are "
+                + "faster, hold the rail centred on the post, and take the bracket maker's own "
+                + "connector screws.",
           check: "Rails level or following your chosen line, joints on posts, bottom rail clear of "
                + "grade, nothing bowed.",
           note: "Galvanised or stainless fasteners only. Modern treated lumber eats plain steel, and "
@@ -61582,8 +61614,9 @@ No matching component was found for:
           spacing: "Privacy: butted tight. Picket style: a consistent gap off a spacer",
           fastener: "2 fasteners per rail crossing, galvanised or stainless",
           action: "Cut a spacer block and use it for every board — eyeballing drifts, and the drift is "
-                + "cumulative and obvious. Hold the bottoms 1 to 2 in off the ground so they are not "
-                + "sitting in wet soil. Check plumb every few boards rather than every board, and "
+                + "cumulative and obvious. Hold the bottoms 2 in clear of the ground so they are not "
+                + "wicking out of wet soil. On a board-on-board or shadowbox fence the overlap is "
+                + "about 1 in each side. Check plumb every few boards rather than every board, and "
                 + "adjust the gap slightly rather than forcing the last one.",
           check: "Spacing even the whole run, bottoms clear of grade, boards plumb, two fasteners at "
                + "every rail.",
@@ -61647,6 +61680,24 @@ No matching component was found for:
           check: "Locates complete, no post inside a marked corridor.",
           note: "Hand-dig inside the tolerance zone of any mark." },
 
+        { phase: "Fence", diagram: 3, codeKey: "fn-cl-layout",
+          title: "Chain link — line posts at 10 ft, and the gate opening is not the gate width",
+          material: "Terminal and line posts, tape, string",
+          orientation: "All posts about 4 in INSIDE the property line",
+          spacing: "Line posts 10 ft maximum. Gate opening = gate width + 3 3/4 in for a walk gate, 5 1/2 in for a double drive",
+          fastener: "None yet",
+          action: "Skip this step for vinyl or ornamental panels. Set the terminal posts first — ends, "
+                + "corners and gates — then divide between them at 10 ft maximum for line posts. Set "
+                + "every post about 4 in inside your property line so the concrete footing does not "
+                + "encroach on the neighbour. And size the gate opening properly: a 3 ft walk gate "
+                + "frame actually measures about 32 1/4 in, and you add 3 3/4 in for hinges and latch, "
+                + "so the posts go 36 in apart inside face to inside face.",
+          check: "Terminals located, line posts no more than 10 ft apart, everything 4 in inside the "
+               + "line, gate opening measured from the hardware allowance rather than the nominal size.",
+          note: "Chain link is not a panel system — the fabric is continuous and stretched, so the "
+              + "line post spacing is yours to set within the 10 ft limit. Vinyl and ornamental "
+              + "fences are the opposite: the panel fixes it and you have no say." },
+
         { phase: "Fence", diagram: 3, codeKey: "fn-panel-layout",
           title: "Lay out to the PANEL, not to a round number",
           material: "The panels themselves, mason's line, tape",
@@ -61691,20 +61742,23 @@ No matching component was found for:
               + "gap the maker specifies — pinned tight, it buckles in July." },
 
         { phase: "Fence", diagram: 6, codeKey: "fn-tension",
-          title: "Chain link only — top rail, then stretch the fabric",
-          material: "Top rail, tension bars and bands, fabric, come-along",
-          orientation: "Fabric on the outside face of the posts",
-          spacing: "Tension bar woven full height at every terminal post",
+          title: "Chain link only — bands, top rail, then stretch the fabric",
+          material: "Top rail, tension bars and bands, fabric, come-along, tie wire",
+          orientation: "Fabric on the OUTSIDE face of every post; band bolt heads outside, threads inside",
+          spacing: "Tension bands 10 to 12 in apart — roughly one per foot of fence height. Ties about one per foot",
           fastener: "Tension bands at terminals, tie wire on line posts and top rail",
-          action: "Skip this step for vinyl or ornamental panels. For chain link: run the top rail "
-                + "first, then weave a tension bar the full height into the fabric end and band it to "
-                + "the terminal post. Stretch the fabric with a come-along until the diamonds just "
-                + "start to deform, then tie it off. A fence that is not stretched sags and bellies "
-                + "within a year.",
-          check: "Fabric taut with no belly, ties at roughly 12 in on line posts and 24 in on the top "
-               + "rail, bottom consistent to grade.",
-          note: "Stretch it in one pull over as long a run as you can manage. Stretching bay by bay "
-              + "leaves visible steps in the tension." },
+          action: "Skip this for vinyl or ornamental panels. Terminal posts get set 2 in HIGHER than "
+                + "the fabric width and line posts 2 in LOWER — that difference is what lets the top "
+                + "rail run through the loop caps and still leave the fabric proud at the ends. Band "
+                + "the terminals with tension bands 10 to 12 in apart, bolt heads on the outside. Run "
+                + "the top rail, weave a tension bar the full height into the fabric end, bolt it to "
+                + "the terminal, then stretch with a come-along until the diamonds just begin to "
+                + "deform and tie off.",
+          check: "Fabric taut with no belly, on the outside face of every post, ties about one per "
+               + "foot, bottom consistent to grade, bolt threads pointing in.",
+          note: "Stretch in one pull over as long a run as you can manage — bay by bay leaves visible "
+              + "steps in the tension. Around a pool this is a different job: follow ASTM F1908 and "
+              + "your local pool-barrier rules, which are stricter than anything here." },
 
         { phase: "Fence", diagram: 7, codeKey: "fn-gate",
           title: "Gate and final walk",
@@ -61712,8 +61766,10 @@ No matching component was found for:
           orientation: "Even gap all round",
           spacing: "Per the system",
           fastener: "Through-bolted hardware",
-          action: "Hang the gate on posts that were set for it. Check the gap top to bottom, swing it "
-                + "through its full travel, and latch it without lifting. Then walk the whole line and "
+          action: "Hang the gate on posts that were set for it. On chain link, fit the TOP hinge "
+                + "upside down — a gate hung with both hinges the same way lifts straight off its "
+                + "pins, and inverting the top one stops that. Check the gap top to bottom, swing it "
+                + "through its full travel, and latch it without lifting. Then walk the line and "
                 + "sight down it.",
           check: "Gate swings and latches freely, line straight from both ends, tops consistent, no "
                + "panel under stress.",
@@ -61723,7 +61779,7 @@ No matching component was found for:
 
     ["fn-rules","fn-locate","fn-layout","fn-dig","fn-set","fn-cut","fn-rails",
      "fn-pickets","fn-gate","fn-finish","fn-panel-layout","fn-panel-set",
-     "fn-tension"].forEach(function (k) { Fx_STEP_TOOL[k] = "none"; });
+     "fn-tension","fn-cl-layout"].forEach(function (k) { Fx_STEP_TOOL[k] = "none"; });
     Fx_STEP_TOOL["fn-rails"] = "nail";
     Fx_STEP_TOOL["fn-pickets"] = "nail";
 
@@ -61988,6 +62044,278 @@ No matching component was found for:
         primary: "Post cap connector, manufacturer's fasteners",
         substitute: "None",
         note: "The beam bears on the post through the cap. Side-bolting puts the whole deck load into fasteners in shear. IRC R507.7." };
+
+    // =====================================================================
+    // DECK ENGINE — AWC DCA 6 (2015) TABLES
+    // ---------------------------------------------------------------------
+    // The deck steps used to say "look it up in Table R507.6" because the
+    // numbers were not in the app. They are now, transcribed from the AWC
+    // Prescriptive Residential Wood Deck Construction Guide, which is the
+    // document the IRC deck provisions are drawn from.
+    //
+    // Every table below carries the same assumptions DCA 6 states: 40 psf
+    // live load, 10 psf dead load, No. 2 grade, wet service, L/360. A deck
+    // outside those assumptions is not a prescriptive deck and needs
+    // designing — the app says so rather than extrapolating.
+    //
+    // Spans are stored in INCHES so nothing is compared as a string.
+    // =====================================================================
+    function Fx_ftin(s) {                       // "13' - 1\"" -> 157
+        var m = /(\d+)\s*'\s*-?\s*(\d+)?/.exec(s);
+        return m ? parseInt(m[1], 10) * 12 + (m[2] ? parseInt(m[2], 10) : 0) : 0;
+    }
+
+    var Fx_DECK_SPECIES = [
+        { id: "sp",  label: "Southern Pine" },
+        { id: "df",  label: "Douglas Fir-Larch, Hem-Fir, Spruce-Pine-Fir" },
+        { id: "rc",  label: "Redwood, Western Cedars, Ponderosa/Red Pine" }
+    ];
+
+    // DCA 6 Table 2 — maximum joist span (LJ) and overhang (LO), by spacing
+    var Fx_DECK_JOIST = {
+        sp: { "2x6":  [["9'11","9'0","7'7"],   ["1'0","1'1","1'3"]],
+              "2x8":  [["13'1","11'10","9'8"], ["1'10","2'0","2'4"]],
+              "2x10": [["16'2","14'0","11'5"], ["3'1","3'5","2'10"]],
+              "2x12": [["18'0","16'6","13'6"], ["4'6","4'2","3'4"]] },
+        df: { "2x6":  [["9'6","8'4","6'10"],   ["0'11","1'0","1'2"]],
+              "2x8":  [["12'6","11'1","9'1"],  ["1'8","1'10","2'2"]],
+              "2x10": [["15'8","13'7","11'1"], ["2'10","3'2","2'9"]],
+              "2x12": [["18'0","15'9","12'10"],["4'4","3'11","3'3"]] },
+        rc: { "2x6":  [["8'10","8'0","6'10"],  ["0'9","0'10","0'11"]],
+              "2x8":  [["11'8","10'7","8'8"],  ["1'5","1'7","1'9"]],
+              "2x10": [["14'11","13'0","10'7"],["2'5","2'7","2'8"]],
+              "2x12": [["17'5","15'1","12'4"], ["3'7","3'9","3'1"]] }
+    };
+    var Fx_DECK_SPACINGS = [12, 16, 24];
+    var Fx_DECK_JOIST_SIZES = ["2x6", "2x8", "2x10", "2x12"];
+
+    // DCA 6 Table 3A — beam span (LB) by the joist span it carries
+    var Fx_DECK_BEAM_COLS = [6, 8, 10, 12, 14, 16, 18];   // joist span, ft
+    var Fx_DECK_BEAM = {
+        sp: { "2-2x6": ["6'8","5'8","5'1","4'7","4'3","4'0","3'9"],
+              "2-2x8": ["8'6","7'4","6'6","5'11","5'6","5'1","4'9"],
+              "2-2x10":["10'1","8'9","7'9","7'1","6'6","6'1","5'9"],
+              "2-2x12":["11'11","10'4","9'2","8'4","7'9","7'3","6'9"],
+              "3-2x6": ["7'11","7'2","6'5","5'10","5'5","5'0","4'9"],
+              "3-2x8": ["10'7","9'3","8'3","7'6","6'11","6'5","6'1"],
+              "3-2x10":["12'9","11'0","9'9","8'9","8'3","7'8","7'3"],
+              "3-2x12":["15'0","13'0","11'7","10'6","9'9","9'1","8'7"] },
+        df: { "2-2x6": ["5'2","4'5","3'11","3'7","3'3","2'10","2'6"],
+              "2-2x8": ["6'7","5'8","5'1","4'7","4'3","3'10","3'5"],
+              "2-2x10":["8'1","7'0","6'3","5'8","5'3","4'10","4'5"],
+              "2-2x12":["9'5","8'2","7'3","6'7","6'1","5'8","5'4"],
+              "3-2x6": ["7'1","6'5","5'9","5'3","4'10","4'6","4'3"],
+              "3-2x8": ["9'5","8'3","7'4","6'8","6'2","5'9","5'5"],
+              "3-2x10":["11'9","10'2","9'1","8'3","7'7","7'1","6'8"],
+              "3-2x12":["13'8","11'10","10'6","9'7","8'10","8'3","7'10"] }
+    };
+    Fx_DECK_BEAM.rc = Fx_DECK_BEAM.df;          // DCA 6 groups these together
+    var Fx_DECK_BEAM_SIZES = ["2-2x6","2-2x8","2-2x10","2-2x12",
+                              "3-2x6","3-2x8","3-2x10","3-2x12"];
+
+    // DCA 6 Table 4 — footing size by beam span and joist span.
+    // [round dia in, square in, thickness in]
+    var Fx_DECK_FOOTING = {
+        6:  { 10: [18,16,7],  14: [21,18,8],  18: [24,21,10] },
+        8:  { 10: [20,18,8],  14: [24,21,10], 18: [27,24,11] },
+        10: { 10: [23,20,9],  14: [27,24,11], 18: [31,27,13] },
+        12: { 10: [25,22,10], 14: [30,26,13], 18: [34,30,15] },
+        14: { 10: [27,24,11], 14: [32,29,14], 18: [37,33,16] },
+        16: { 10: [29,26,12], 14: [35,31,15], 18: [40,35,18] },
+        18: { 10: [31,27,13], 14: [37,33,16], 18: [42,37,19] }
+    };
+
+    // DCA 6 Table 5 — ledger fastener spacing into a 1-1/2 in solid-sawn
+    // band joist, by joist span band.
+    var Fx_LEDGER_BANDS = [72, 96, 120, 144, 168, 192, 216];   // upper bound, in
+    var Fx_LEDGER_SPACING = {
+        lag:        [30, 23, 18, 15, 13, 11, 10],
+        bolt:       [36, 36, 34, 29, 24, 21, 19],
+        boltWasher: [36, 36, 29, 24, 21, 18, 16]
+    };
+
+    function Fx_ledgerSpacing(joistSpanIn, kind) {
+        var row = Fx_LEDGER_SPACING[kind || "lag"];
+        for (var i = 0; i < Fx_LEDGER_BANDS.length; i++)
+            if (joistSpanIn <= Fx_LEDGER_BANDS[i]) return row[i];
+        return null;                            // past 18 ft — off the table
+    }
+
+    // ---- pick the whole frame from two dimensions ------------------------
+    // projection = house to the outer beam. width = along the house.
+    function Fx_deckDesign(widthFt, projectionFt, opts) {
+        opts = opts || {};
+        var sp = opts.species || "sp",
+            spacing = opts.spacing || 16,
+            si = Fx_DECK_SPACINGS.indexOf(spacing),
+            joistSpan = projectionFt * 12,
+            out = { species: sp, spacing: spacing, widthFt: widthFt,
+                    projectionFt: projectionFt, notes: [], fail: null };
+
+        if (si < 0) { out.fail = "Joist spacing must be 12, 16 or 24 in o.c."; return out; }
+        if (projectionFt > 18) {
+            out.fail = "DCA 6 stops at an 18 ft joist span. A deck projecting "
+                     + projectionFt + " ft is past the prescriptive tables and has to be designed.";
+            return out;
+        }
+
+        // smallest joist that spans it
+        var tbl = Fx_DECK_JOIST[sp];
+        for (var i = 0; i < Fx_DECK_JOIST_SIZES.length; i++) {
+            var size = Fx_DECK_JOIST_SIZES[i],
+                allow = Fx_ftin(tbl[size][0][si]);
+            if (allow >= joistSpan) {
+                out.joist = size;
+                out.joistAllow = allow;
+                out.joistOverhang = Fx_ftin(tbl[size][1][si]);
+                break;
+            }
+        }
+        if (!out.joist) {
+            out.fail = "No joist in the table spans " + projectionFt + " ft at " + spacing
+                     + " in o.c. in " + sp.toUpperCase() + ". Close the spacing, change species, "
+                     + "or add a beam and split the span.";
+            return out;
+        }
+        // the overhang the table allows, capped at a quarter of the span
+        out.maxOverhang = Math.min(out.joistOverhang, joistSpan / 4);
+
+        // smallest beam that spans between posts, trying the widest post
+        // spacing the beam table offers for this joist span
+        var col = 0;
+        for (var c = 0; c < Fx_DECK_BEAM_COLS.length; c++)
+            if (projectionFt <= Fx_DECK_BEAM_COLS[c]) { col = c; break; }
+        out.beamCol = Fx_DECK_BEAM_COLS[col];
+
+        var best = null;
+        Fx_DECK_BEAM_SIZES.forEach(function (bs) {
+            var row = Fx_DECK_BEAM[sp][bs];
+            if (!row) return;
+            var span = Fx_ftin(row[col]);
+            if (!best || span > best.span) best = { size: bs, span: span };
+        });
+        out.beamOptions = Fx_DECK_BEAM_SIZES.map(function (bs) {
+            var row = Fx_DECK_BEAM[sp][bs];
+            return row ? { size: bs, span: Fx_ftin(row[col]) } : null;
+        }).filter(Boolean);
+
+        // choose the smallest beam that keeps posts at 8 ft or less, else the
+        // biggest available
+        var want = 96, pick = null;
+        out.beamOptions.forEach(function (o) {
+            if (o.span >= want && (!pick || o.span < pick.span)) pick = o;
+        });
+        if (!pick) pick = best;
+        out.beam = pick.size;
+        out.beamSpan = pick.span;
+        out.posts = Math.max(2, Math.ceil((widthFt * 12) / pick.span) + 1);
+        out.postSpacing = (widthFt * 12) / (out.posts - 1);
+
+        // footing from the beam span actually used and the joist span
+        var bKey = Fx_DECK_BEAM_COLS.filter(function (b) {
+                return b * 12 >= out.postSpacing; })[0] || 18,
+            jKey = projectionFt <= 10 ? 10 : projectionFt <= 14 ? 14 : 18,
+            f = (Fx_DECK_FOOTING[bKey] || Fx_DECK_FOOTING[18])[jKey];
+        out.footing = { beamKey: bKey, joistKey: jKey,
+                        round: f[0], square: f[1], thickness: f[2] };
+
+        // ledger
+        out.ledger = {
+            minSize: "2x8",
+            lag: Fx_ledgerSpacing(joistSpan, "lag"),
+            bolt: Fx_ledgerSpacing(joistSpan, "bolt"),
+            boltWasher: Fx_ledgerSpacing(joistSpan, "boltWasher")
+        };
+        if (out.joist === "2x6") out.notes.push(
+            "DCA 6 requires the ledger to be 2x8 minimum even where 2x6 joists span it, "
+            + "and any joist or rim carrying a guard post must also be 2x8.");
+
+        out.guards = Fx_deckGuards(opts.heightIn == null ? 36 : opts.heightIn);
+        return out;
+    }
+
+    // ---- the panel that rides the deck steps ------------------------------
+    function Fx_DeckSpec(props) {
+        var spec = Fx_useSpec("structure"),
+            spS = Ts.useState("sp"), species = spS[0], setSpecies = spS[1],
+            ocS = Ts.useState(16), oc = ocS[0], setOc = ocS[1],
+            hS = Ts.useState(36), high = hS[0], setHigh = hS[1],
+            w = Math.max(4, Math.round(spec.wallLength / 12 * 10) / 10),
+            d = Math.max(4, Math.round(spec.depth / 12 * 10) / 10),
+            D = Fx_deckDesign(w, d, { species: species, spacing: oc, heightIn: high });
+
+        function row(k, v, why) {
+            return Fx_Jx("div", { className: "dk-row", children: [
+                Fx_J("dt", { children: k }),
+                Fx_J("dd", { children: v }),
+                why ? Fx_J("s", { children: why }) : null
+            ] }, k);
+        }
+
+        return Fx_Jx("section", {
+            className: "deck-spec",
+            children: [
+                Fx_J("p", { className: "eyebrow", children: "This deck, from the DCA 6 tables" }),
+                Fx_Jx("div", { className: "dk-inputs", children: [
+                    Fx_Jx("label", { children: ["Lumber",
+                        Fx_J("select", { value: species,
+                            onChange: function (e) { setSpecies(e.target.value); },
+                            children: Fx_DECK_SPECIES.map(function (s) {
+                                return Fx_J("option", { value: s.id, children: s.label }, s.id);
+                            }) })] }),
+                    Fx_Jx("label", { children: ["Joists at",
+                        Fx_J("select", { value: oc,
+                            onChange: function (e) { setOc(Number(e.target.value)); },
+                            children: Fx_DECK_SPACINGS.map(function (n) {
+                                return Fx_J("option", { value: n, children: n + "″ o.c." }, n);
+                            }) })] }),
+                    Fx_Jx("label", { children: ["Height above grade",
+                        Fx_J("input", { type: "number", min: "0", step: "1", value: high,
+                            onChange: function (e) { setHigh(Number(e.target.value) || 0); } }),
+                        Fx_J("span", { children: "in" })] })
+                ] }),
+
+                D.fail
+                    ? Fx_Jx("div", { className: "dk-fail", children: [
+                        Fx_J("b", { children: "OFF THE TABLE" }),
+                        Fx_J("span", { children: D.fail })
+                    ] })
+                    : Fx_Jx("dl", { className: "dk-out", children: [
+                        row("Joists", D.joist + " at " + oc + "″ o.c.",
+                            "spans " + Fx_ftIn(D.joistAllow) + " max; you need " + d + " ft"),
+                        row("Overhang past the beam", "up to " + Fx_ftIn(D.maxOverhang),
+                            "lesser of the table value and a quarter of the span"),
+                        row("Beam", D.beam,
+                            "posts " + D.posts + " at " + Fx_ftIn(D.postSpacing) + " — beam spans "
+                            + Fx_ftIn(D.beamSpan) + " carrying a " + D.beamCol + " ft joist span"),
+                        row("Footings", D.footing.round + "″ round, or "
+                            + D.footing.square + "″ square, " + D.footing.thickness + "″ thick",
+                            "assumes 1,500 psf soil; corner footings may be 0.9×"),
+                        row("Ledger", D.ledger.minSize + " minimum, ½″ lag at "
+                            + D.ledger.lag + "″ o.c.",
+                            "or ½″ bolts at " + D.ledger.bolt + "″, or bolts with stacked washers at "
+                            + D.ledger.boltWasher + "″ — staggered, into a 1½″ band joist"),
+                        row("Guards", D.guards.required
+                            ? "required, " + D.guards.minGuard + "″ high"
+                            : "not required at " + high + "″",
+                            D.guards.required
+                                ? "no opening may pass a 4″ sphere; posts 4x4 min on a 2x8 min joist or rim"
+                                : "more than 30″ above grade triggers them")
+                    ] }),
+
+                D.notes.length ? Fx_J("div", { className: "dk-notes",
+                    children: D.notes.map(function (n, i) {
+                        return Fx_J("p", { children: n }, "n" + i);
+                    }) }) : null,
+
+                Fx_J("p", { className: "dk-src",
+                    children: "AWC Prescriptive Residential Wood Deck Construction Guide (DCA 6-2015), "
+                        + "Tables 2, 3A, 4 and 5. All of it assumes 40 psf live, 10 psf dead, No. 2 "
+                        + "grade and wet service. A deck outside those assumptions is not a "
+                        + "prescriptive deck and has to be designed." })
+            ]
+        });
+    }
 
     // =====================================================================
     // THE LAST MILE
@@ -64058,7 +64386,7 @@ No matching component was found for:
                             children: ["Do this now \u2022 step ", p + 1]
                         }), (0, k.jsx)("h2", {
                             children: C.title
-                        }), C.phase === "Groundworks" ? (0, k.jsx)(Fx_GroundAdvice, {}) : null, R && (0, k.jsxs)("section", {
+                        }), C.phase === "Groundworks" ? (0, k.jsx)(Fx_GroundAdvice, {}) : null, C.phase === "Deck" ? (0, k.jsx)(Fx_DeckSpec, {}) : null, R && (0, k.jsxs)("section", {
                             className: `lumber-check ${V?"ready":""}`,
                             children: [(0, k.jsxs)("header", {
                                 children: [(0, k.jsx)("b", {
