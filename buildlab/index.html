@@ -683,6 +683,26 @@
    and which bit it takes. */
 .lay-sub s{display:block;text-decoration:none;color:#a9e2ff;font-size:.6rem;
   line-height:1.4;margin-top:.15rem}
+
+/* the handoff from the plan into the actual build */
+.plan-build-it{display:block;width:100%;text-align:left;margin:.7rem 0 0;
+  padding:.7rem .8rem;border:1px solid #e9a329;border-radius:.45rem;
+  background:linear-gradient(180deg,#2a1f08,#1a1406);cursor:pointer}
+.plan-build-it:hover{background:linear-gradient(180deg,#3a2b0b,#241b08)}
+.plan-build-it b{display:block;color:#ffc65c;font:900 .8rem ui-monospace;letter-spacing:.06em}
+.plan-build-it span{display:block;margin-top:.2rem;color:#b9a985;font-size:.65rem;line-height:1.45}
+
+/* the honest gate on dwellings and on anything past the prescriptive path */
+.scope-note{margin:.6rem 0;padding:.65rem .75rem;border:1px solid #ff9f43;
+  border-left-width:4px;border-radius:.4rem;background:#2a1d08}
+.scope-note b{display:block;color:#ffc65c;font:900 .7rem ui-monospace;
+  letter-spacing:.06em;margin-bottom:.3rem}
+.scope-note span{display:block;color:#ded0b4;font-size:.7rem;line-height:1.55}
+.scope-note em{display:block;margin-top:.4rem;font-style:normal;color:#a89574;
+  font-size:.62rem;line-height:1.5}
+.permit-opts button.off{opacity:.45;cursor:not-allowed;border-style:dashed}
+.permit-opts button.off i{color:#8c9aa3}
+.permit-opts button.off span{color:#ff9f9f}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -54495,6 +54515,9 @@ No matching component was found for:
     // Where the orbit target should sit for each stage, in feet, so the part
     // of the assembly being worked on is actually in the middle of the view.
     function Fx_camTarget(sceneType, stage) {
+        // Groundworks happens at and below grade, so the eye looks down at
+        // the hole rather than up at a building that is not there yet.
+        if (sceneType === "ground") return -0.2;
         if (sceneType === "window") return stage <= 1 ? 0.55 : 4.2;
         if (stage <= 1) return 0.4;
         if (stage <= 6) return 1.1;
@@ -54512,6 +54535,7 @@ No matching component was found for:
                 : Math.max(spec.wallLength, spec.depth || 0) / 12)
             : 14;
         var d = Math.max(9, ft * 1.28);
+        if (sceneType === "ground") return [d * 0.66, d * 0.62, d * 0.86];
         if (sceneType === "window")
             return stage <= 1
                 ? [d * 0.34, d * 0.40, d * 0.56]   // low and close: the marks are the subject
@@ -55040,6 +55064,11 @@ No matching component was found for:
 
     function ioe(props) {
         if (props.sceneType === "window") return Fx_J(aoe, props);
+        // Groundworks steps were being drawn by the framing scene, so a step
+        // about stripping topsoil showed a finished floor deck hanging over
+        // ground nobody had dug yet.
+        if (props.sceneType === "ground")
+            return Fx_J(Fx_GroundScene, { codeKey: props.codeKey });
 
         var stage = props.stage,
             focus = props.focus,
@@ -55655,6 +55684,7 @@ No matching component was found for:
         },
         "g-strip": {
             irc: [["R401.2", "Foundations shall be built on undisturbed soil, compacted fill or controlled low-strength material"],
+                  ["R506.2", "Site preparation for a slab — all vegetation, top soil and foreign material removed from within the foundation walls"],
                   ["R401.4", "Soil tests / evaluation of bearing where the load-bearing value is in question"]],
             ibc: [["1804.1", "Excavation — organic material removed from beneath the structure"]],
             fasteners: []
@@ -56081,6 +56111,109 @@ No matching component was found for:
         ["N1102", "Building thermal envelope — insulation and air sealing"]], ibc: [["110.3", "Required inspections"]], fasteners: [] };
     Fx_CODE_LIBRARY["c-final"] = { irc: [["R109.1.5", "Final inspection"], ["R110.1", "Certificate of occupancy"]],
         ibc: [["110.3.10", "Final inspection"], ["111.1", "Certificate of occupancy"]], fasteners: [] };
+
+    // ---- roof covering, cladding and doors --------------------------------
+    Fx_CODE_LIBRARY["rc-slope"] = {
+        irc: [["R905.2.2", "Asphalt shingles shall be used only on roof slopes of 2:12 or greater"],
+              ["R905.2.7", "Slopes from 2:12 to less than 4:12 require double underlayment"]],
+        ibc: [["1507.2.2", "Asphalt shingle slope limitation"]], fasteners: [] };
+    Fx_CODE_LIBRARY["rc-drip"] = {
+        irc: [["R905.2.8.5", "Drip edge at eaves and rakes; segments lapped not less than 2 in; extends not less than 1/4 in below the sheathing and not less than 2 in back onto the roof; fastened not more than 12 in o.c. Underlayment goes OVER the drip edge along eaves"]],
+        ibc: [["1507.2.9.3", "Drip edge"]], fasteners: [] };
+    Fx_CODE_LIBRARY["rc-ice"] = {
+        irc: [["R905.1.2", "Ice barrier where there has been a history of ice forming along the eaves — from the lowest edge of the roof to a point not less than 24 in inside the exterior wall line"]],
+        ibc: [["1507.1.2", "Ice barriers"]], fasteners: [] };
+    Fx_CODE_LIBRARY["rc-under"] = {
+        irc: [["R905.2.7", "Underlayment application by slope"],
+              ["Table R905.1.1(1)", "Underlayment types and application"]],
+        ibc: [["1507.2.3", "Underlayment"]], fasteners: [] };
+    Fx_CODE_LIBRARY["rc-rake"] = Fx_CODE_LIBRARY["rc-drip"];
+    Fx_CODE_LIBRARY["rc-flash"] = {
+        irc: [["R905.2.8.3", "Sidewall flashing — step flashing not less than 4 in high and 4 in wide, one piece per shingle course"],
+              ["R903.2.1", "Kickout flashing where a roof edge meets a wall"],
+              ["R905.2.8.2", "Valleys"]],
+        ibc: [["1503.2", "Flashing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["rc-starter"] = {
+        irc: [["R905.2.6", "Attachment — shingles installed per the manufacturer's instructions"]],
+        ibc: [["1507.2.7", "Attachment"]], fasteners: [] };
+    Fx_CODE_LIBRARY["rc-field"] = {
+        irc: [["R905.2.5", "Fasteners — galvanized, stainless, aluminum or copper roofing nails, not less than 12 gauge shank with a head not less than 3/8 in, long enough to go through the roofing and not less than 3/4 in into the sheathing, or through sheathing thinner than that"],
+              ["R905.2.6", "Not less than four fasteners per strip shingle, or two per individual shingle"],
+              ["R905.2.6.1", "Six fasteners per strip in the higher wind regions"]],
+        ibc: [["1507.2.6", "Fasteners"], ["1507.2.7", "Attachment"]],
+        fasteners: [["Roofing nail", "12 gauge minimum shank, 3/8 in minimum head, 3/4 in minimum penetration into the sheathing. No screw substitute."]] };
+    Fx_CODE_LIBRARY["rc-ridge"] = {
+        irc: [["R806.1", "Ventilation of enclosed attics and rafter spaces"],
+              ["R806.2", "Minimum vent area — 1/150, or 1/300 where the split between upper and lower vents qualifies"]],
+        ibc: [["1202.2", "Attic ventilation"]], fasteners: [] };
+    Fx_CODE_LIBRARY["rc-check"] = {
+        irc: [["R905.2.1", "Sheathing requirements"], ["R905.2.6", "Attachment"]],
+        ibc: [["1507.2", "Asphalt shingles"]], fasteners: [] };
+
+    Fx_CODE_LIBRARY["cl-plane"] = {
+        irc: [["R703.1", "A weather-resistant exterior wall envelope"],
+              ["R703.2", "Water-resistive barrier"],
+              ["R703.4", "Flashing at exterior openings and at wall/roof intersections"]],
+        ibc: [["1402.2", "Weather protection"]], fasteners: [] };
+    Fx_CODE_LIBRARY["cl-clear"] = {
+        irc: [["R317.1", "Protection against decay — item 5 covers siding, sheathing and wall framing less than 6 in from the ground or less than 2 in above concrete or paving exposed to the weather"]],
+        ibc: [["2304.12", "Protection against decay and termites"]], fasteners: [] };
+    Fx_CODE_LIBRARY["cl-start"] = {
+        irc: [["R703.3", "Nominal thickness and attachment"]],
+        ibc: [["1404", "Installation of wall coverings"]], fasteners: [] };
+    Fx_CODE_LIBRARY["cl-field"] = {
+        irc: [["R703.3", "Table R703.3(1) — minimum thickness and fastening for each cladding type"],
+              ["R703.11.1", "Vinyl siding installed per the manufacturer; fasteners penetrate not less than 1 1/4 in into framing; nailed in the centre of the slot and not driven tight"]],
+        ibc: [["1404.2", "Weather-resistive barriers"], ["1405", "Combustible materials on exterior walls"]],
+        fasteners: [["Siding fastener", "Corrosion-resistant, 1 1/4 in minimum penetration into framing. Sheathing alone does not hold cladding."]] };
+    Fx_CODE_LIBRARY["cl-openings"] = {
+        irc: [["R703.4", "Flashing at exterior openings"],
+              ["R903.2.1", "Kickout flashing"]],
+        ibc: [["1404.4", "Flashing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["cl-trim"] = {
+        irc: [["R703.4", "Flashing — sealant is not a substitute for it"],
+              ["R703.1", "The envelope has to drain, so do not seal a drainage path shut"]],
+        ibc: [["1404.4", "Flashing"]], fasteners: [] };
+
+    Fx_CODE_LIBRARY["dr-pan"] = {
+        irc: [["R703.4", "Flashing at exterior door openings"],
+              ["R317.1", "Framing and subfloor under a door sill is where undetected water does its damage"]],
+        ibc: [["1404.4", "Flashing"]], fasteners: [] };
+    Fx_CODE_LIBRARY["dr-set"] = {
+        irc: [["R609.1", "Exterior windows and doors — installed per the manufacturer's instructions"]],
+        ibc: [["1402.1", "Fenestration installation"]], fasteners: [] };
+    Fx_CODE_LIBRARY["dr-shim"] = Fx_CODE_LIBRARY["dr-set"];
+    Fx_CODE_LIBRARY["dr-fasten"] = {
+        irc: [["R609.1", "Fastener type, length and pattern come from the door's own instructions"],
+              ["R609.3", "Anchorage — the unit's published pattern governs, not a generic nail count"]],
+        ibc: [["1402.1", "Fenestration installation"]],
+        fasteners: [["Door anchorage", "Through the shim stacks into framing, plus one long screw at the top hinge into the king stud. The unit's instructions control the rest."]] };
+    Fx_CODE_LIBRARY["dr-swing"] = Fx_CODE_LIBRARY["dr-set"];
+    Fx_CODE_LIBRARY["dr-seal"] = {
+        irc: [["N1102.4.1", "Air leakage — the gap around a door is a required air-barrier location"],
+              ["R609.1", "Do not distort the frame"]],
+        ibc: [["1402.5", "Air barrier continuity"]], fasteners: [] };
+    Fx_CODE_LIBRARY["dr-flash"] = {
+        irc: [["R703.4", "Sill first, jambs second, head last, shingle-lapped so every layer drains outward"],
+              ["R703.2", "WRB head flap returned over the head flashing"]],
+        ibc: [["1404.4", "Flashing at exterior openings"]], fasteners: [] };
+
+    Fx_CODE_LIBRARY["g-fill"] = {
+        irc: [["R506.2.1", "Fill free of vegetation and foreign material, compacted for uniform support; not over 24 in for clean sand or gravel, 8 in for earth"]],
+        ibc: [["1804.6", "Compacted fill material"]], fasteners: [] };
+    Fx_CODE_LIBRARY["g-base"] = {
+        irc: [["R506.2.2", "4 in base course of clean graded sand, gravel, crushed stone, crushed concrete or slag passing a 2 in sieve — excepted on well-drained Group I soils"]],
+        ibc: [["1805.4.1", "Base course"]], fasteners: [] };
+    Fx_CODE_LIBRARY["g-vapor"] = {
+        irc: [["R506.2.3", "A 10 mil vapor retarder with joints lapped not less than 6 in, placed between the slab and the base course"]],
+        ibc: [["1907.1", "Concrete floor slab vapor retarder"]], fasteners: [] };
+    Fx_CODE_LIBRARY["g-form"] = {
+        irc: [["R506.1", "Slab-on-ground floors not less than 3 1/2 in thick"],
+              ["R403.1.4.1", "Thickened edge to frost depth where the slab carries the walls"]],
+        ibc: [["1907", "Minimum slab thickness"]], fasteners: [] };
+    Fx_CODE_LIBRARY["g-joint"] = {
+        irc: [["R402.2", "Concrete strength and curing"]],
+        ibc: [["1905", "Concrete — modifications to ACI 318"]], fasteners: [] };
 
     // =====================================================================
     // LIVE CAMERA
@@ -59404,10 +59537,71 @@ No matching component was found for:
         return Fx_Jx("div", {
             className: "shell-note",
             children: [
-                Fx_J("b", { children: "STRUCTURAL SHELL ONLY" }),
+                Fx_J("b", { children: "GROUND TO WEATHERTIGHT \u2014 NOT THE INSIDE" }),
                 Fx_J("span", {
-                    children: "These steps take you from the foundation to a framed, sheathed and dried-in shell. Interior fit-out, services and finishes are not covered — and the roof step is one step for the whole roof, so use Cut a rafter for the actual cuts."
+                    children: "These steps take you from the ground up: base, frame, sheathing, roof covering, "
+                        + "cladding and doors. What is NOT here is the inside — electrical, plumbing, "
+                        + "mechanical, insulation and interior finishes are their own trades and their own "
+                        + "inspections. For a shed or a shop that is usually the whole job. For anything "
+                        + "somebody sleeps in, it is about half of it."
                 })
+            ]
+        });
+    }
+
+    // ---- accessory building, or somewhere people live? --------------------
+    // "shell" was doing too much work. A shed and a house get the same twelve
+    // wall-framing steps because the STEPS really are the same -- but the
+    // SIZES are not, and the app's own numbers come from prescriptive tables
+    // written for small, simple, conventionally framed buildings. Handing
+    // someone a header size for a house the same way it hands them one for an
+    // 8x10 shed is the kind of confidently-wrong this app is supposed to
+    // refuse to do.
+    var Fx_DWELLING = {
+        "Accessory dwelling unit (ADU)": 1, "Single-family house": 1,
+        "Second-story addition": 1, "Room addition": 1,
+        "Indoor sauna conversion": 1, "Enclosed porch": 1
+    };
+
+    // Conventional light-frame construction is a prescriptive path with
+    // limits. Past them the building needs designing, not looking up.
+    var Fx_PRESCRIPTIVE_SF = 1000;
+
+    function Fx_scopeOf(project, sf) {
+        var name = project && project.name;
+        return {
+            dwelling: !!Fx_DWELLING[name],
+            big: sf > Fx_PRESCRIPTIVE_SF,
+            sf: sf || 0
+        };
+    }
+
+    function Fx_ScopeNote(props) {
+        var sc = props.scope;
+        if (!sc || (!sc.dwelling && !sc.big)) return null;
+        return Fx_Jx("div", {
+            className: "scope-note",
+            children: [
+                Fx_J("b", { children: sc.dwelling
+                    ? "SOMEBODY LIVES IN THIS ONE — TAKE THE SIZES OFF THE PLANS"
+                    : "BIGGER THAN THE PRESCRIPTIVE PATH COVERS" }),
+                Fx_J("span", { children: sc.dwelling
+                    ? "The steps below are the right steps and the order is the right order. The "
+                    + "NUMBERS are not yours to take from here. Spans, header sizes, beams, posts, "
+                    + "bracing and hold-downs for a dwelling come off your approved drawings and your "
+                    + "building department. Everything this app sizes on its own comes from "
+                    + "prescriptive tables written around small, simple, conventionally framed "
+                    + "buildings, and those tables run out long before a house does."
+                    : "At " + Math.round(sc.sf) + " sq ft this is past the size where conventional "
+                    + "prescriptive framing carries the whole job on its own. Build the sequence, but "
+                    + "take every member size and every bracing detail from the approved drawings." }),
+                Fx_J("em", { children: sc.dwelling
+                    ? "IRC R301.1 — buildings shall be constructed to safely support all loads. "
+                    + "Table R602.7(1) headers and Section R602.10 bracing are both bounded by "
+                    + "building width, storey count and ground snow load. Check you are inside them "
+                    + "before you copy a number out of this app."
+                    : "IRC R301.1 and Section R602.10. The prescriptive tables have stated limits; "
+                    + "outside them the framing has to be designed." })
             ]
         });
     }
@@ -60008,7 +60202,8 @@ No matching component was found for:
     }
 
     ["g-check","g-strip","g-square","g-stone","g-screed","g-skids","g-prove",
-     "g-permit","g-layout","g-dig","g-foot","g-cure","g-inspect"].forEach(function (k) {
+     "g-permit","g-layout","g-dig","g-foot","g-cure","g-inspect",
+     "g-fill","g-base","g-vapor","g-form","g-joint"].forEach(function (k) {
         Fx_STEP_TOOL[k] = "none";
     });
     Fx_STEP_TOOL["g-pour"] = "anchor";
@@ -60610,8 +60805,23 @@ No matching component was found for:
     // Groundworks feeds straight into the existing sill sequence, so the
     // concrete path ends exactly where "Check the foundation before you build
     // on it" begins.
-    function Fx_groundSequence(permit) {
-        return permit ? Fx_PIER_SEQUENCE : Fx_ONGRADE_SEQUENCE;
+    // A dwelling is never permit-exempt, so the on-grade path simply is not
+    // one of its options. Deciding that here rather than correcting the store
+    // from an effect matters: child effects run before the parent subscribes,
+    // so a correction fired from inside the switch notified nobody and the
+    // sequence stayed on the path the switch was no longer showing.
+    function Fx_effectiveChoice(dwelling) {
+        var c = Fx_permit.choice();
+        if (dwelling && !c.permit)
+            return Fx_FOUNDATION_CHOICES.filter(function (x) { return x.id === "pier"; })[0];
+        return c;
+    }
+
+    function Fx_groundSequence(dwelling) {
+        var seq = Fx_effectiveChoice(dwelling).seq;
+        return seq === "SLAB" ? Fx_SLAB_SEQUENCE
+             : seq === "PIER" ? Fx_PIER_SEQUENCE
+             : Fx_ONGRADE_SEQUENCE;
     }
 
     // On a gravel pad there is no sill plate, no capillary break and no
@@ -60622,9 +60832,22 @@ No matching component was found for:
     // `asked` is the phase filter the view was opened with. Somebody who
     // picked the "Foundation and sill plates" practice asked for that phase
     // on purpose -- stripping it there would hand them an empty screen.
-    function Fx_shapeForPermit(steps, permit, asked) {
+    function Fx_shapeForPermit(steps, permit, asked, dwelling) {
+        var eff = Fx_effectiveChoice(dwelling),
+            id = eff.id, explicit = asked && asked.length;
+        permit = eff.permit;
+
+        // A slab IS the floor. Framing a joisted deck on top of one is not a
+        // thing anybody does, so those phases come out -- unless the user
+        // picked the floor-framing practice on purpose.
+        if (id === "slab") {
+            if (explicit) return steps;
+            return steps.filter(function (s) {
+                return s.phase !== "Floor frame" && s.phase !== "Floor deck";
+            });
+        }
         if (permit) return steps;
-        if (asked && asked.length && asked.indexOf("Foundation interface") >= 0) return steps;
+        if (explicit && asked.indexOf("Foundation interface") >= 0) return steps;
         var out = steps.filter(function (s) {
             if (s.phase === "Foundation interface") return false;
             if (s.codeKey === "c-final") return false;
@@ -60654,10 +60877,19 @@ No matching component was found for:
     // One choice changes what gets built under the shed, so it lives outside
     // any one panel and the sequence itself reads it.
     var Fx_permit = (function () {
-        var v = false, subs = [];
+        var id = "pad", subs = [];
+        function cur() {
+            return Fx_FOUNDATION_CHOICES.filter(function (c) { return c.id === id; })[0]
+                || Fx_FOUNDATION_CHOICES[0];
+        }
         return {
-            get: function () { return v; },
-            set: function (x) { v = !!x; subs.forEach(function (f) { f(); }); },
+            id: function () { return id; },
+            choice: cur,
+            get: function () { return cur().permit; },     // still a boolean to callers
+            set: function (x) {
+                id = typeof x === "string" ? x : (x ? "pier" : "pad");
+                subs.forEach(function (f) { f(); });
+            },
             subscribe: function (f) {
                 subs.push(f);
                 return function () { subs = subs.filter(function (g) { return g !== f; }); };
@@ -60674,29 +60906,29 @@ No matching component was found for:
     }
 
     function Fx_PermitSwitch(props) {
-        var on = Fx_usePermit();
+        var dwelling = !!props.dwelling;
+        Fx_usePermit();
+        var id = Fx_effectiveChoice(dwelling).id;
         return Fx_Jx("div", {
             className: "permit-switch",
             children: [
                 Fx_J("b", { children: "What is going under it" }),
-                Fx_Jx("div", { className: "permit-opts", children: [
-                    Fx_Jx("button", {
-                        className: on ? "" : "active",
-                        onClick: function () { Fx_permit.set(false); },
-                        children: [
-                            Fx_J("i", { children: "NO PERMIT" }),
-                            Fx_J("span", { children: "Gravel pad + ground-contact runners" })
-                        ]
-                    }),
-                    Fx_Jx("button", {
-                        className: on ? "active" : "",
-                        onClick: function () { Fx_permit.set(true); },
-                        children: [
-                            Fx_J("i", { children: "PERMITTED" }),
-                            Fx_J("span", { children: "Concrete to frost depth, anchor bolts, inspected" })
-                        ]
-                    })
-                ] })
+                Fx_J("div", { className: "permit-opts",
+                    children: Fx_FOUNDATION_CHOICES.map(function (c) {
+                        var off = dwelling && !c.permit;
+                        return Fx_Jx("button", {
+                            className: (id === c.id ? "active" : "") + (off ? " off" : ""),
+                            disabled: off,
+                            title: off ? "A building somebody lives in is not permit-exempt" : "",
+                            onClick: function () { if (!off) Fx_permit.set(c.id); },
+                            children: [
+                                Fx_J("i", { children: c.label }),
+                                Fx_J("span", { children: off
+                                    ? "Not available — a dwelling is never permit-exempt"
+                                    : c.sub })
+                            ]
+                        }, c.id);
+                    }) })
             ]
         });
     }
@@ -60764,6 +60996,824 @@ No matching component was found for:
         });
     }
 
+    // ---- permitted, poured flat: slab on ground, IRC R506 ------------------
+    var Fx_SLAB_SEQUENCE = [
+        { phase: "Groundworks", diagram: 1, codeKey: "g-permit",
+          title: "Permit, plans and locates",
+          material: "Approved plans, the permit, 811",
+          orientation: "Build to the approved drawing",
+          spacing: "Frost depth and slab detail come from your building department",
+          fastener: "None",
+          action: "Permit issued, approved plans on site, frost depth in writing, utilities marked. "
+                + "A slab is poured once — everything under it has to be right before the truck comes.",
+          check: "Permit in hand, frost depth known, locates marked, inspection schedule understood.",
+          note: "Find out now which inspections happen before the pour. Usually the reinforcement and "
+              + "the vapor retarder are looked at with the forms still open." },
+
+        { phase: "Groundworks", diagram: 2, codeKey: "g-strip",
+          title: "Strip the vegetation and topsoil out of the whole footprint",
+          material: "Excavator or spade, wheelbarrow",
+          orientation: "Everything inside the foundation lines, and past them",
+          spacing: "Down to firm mineral subgrade",
+          fastener: "None",
+          action: "R506.2 is blunt about it: all vegetation, top soil and foreign material comes out of "
+                + "the area within the foundation walls. Not scraped — removed. Anything organic left "
+                + "under a slab rots and leaves a void, and the slab cracks down into it.",
+          check: "No dark soil, no roots, no buried debris anywhere inside the lines.",
+          note: "A slab is a thin plate. It has almost no ability to bridge a soft spot." },
+
+        { phase: "Groundworks", diagram: 3, codeKey: "g-fill",
+          title: "Fill and compact — in lifts, to the limits",
+          material: "Clean sand or gravel; compactor",
+          orientation: "Uniform support everywhere, not just at the edges",
+          spacing: "Max 24 in total for clean sand or gravel, 8 in for earth",
+          fastener: "None",
+          action: "Where you have to bring the level up, use clean fill free of vegetation and foreign "
+                + "material, and compact it so the support under the slab is uniform. The code caps "
+                + "unengineered fill at 24 in for clean sand or gravel and 8 in for earth — past that "
+                + "it needs to be engineered.",
+          check: "Fill compacted in lifts, depth inside the limits, no soft corner.",
+          note: "R506.2.1. Uniform is the word that matters. A slab on half-firm, half-soft ground "
+              + "cracks along the line between them." },
+
+        { phase: "Groundworks", diagram: 4, codeKey: "g-base",
+          title: "4 in base course of clean graded stone",
+          material: "Clean graded sand, gravel or crushed stone passing a 2 in sieve",
+          orientation: "Level, compacted, over the whole footprint",
+          spacing: "4 in minimum thickness",
+          fastener: "None",
+          action: "Place and compact a 4 in base course over the prepared subgrade. It breaks the "
+                + "capillary path up out of the ground and gives the slab something uniform to sit on. "
+                + "Well-drained Group I sand-gravel soils are the one exception where it is not "
+                + "required — but it is cheap and it is never wrong.",
+          check: "4 in everywhere, compacted, screeded flat.",
+          note: "R506.2.2. Clean stone, not crusher dust with fines in it — the point is that water "
+              + "cannot wick up through it." },
+
+        { phase: "Groundworks", diagram: 5, codeKey: "g-vapor",
+          title: "Vapor retarder — 10 mil, lapped 6 in, and do not puncture it",
+          material: "10 mil polyethylene or approved vapor retarder, tape",
+          orientation: "Directly under the slab, over the base course",
+          spacing: "Joints lapped not less than 6 in and taped",
+          fastener: "None — every fastener through it is a hole",
+          action: "Roll it out over the base with joints lapped 6 in and taped, and run it up the edges. "
+                + "Then stay off it with anything sharp, and set the reinforcement on chairs rather than "
+                + "walking it into place. Every hole is a path for ground moisture into the slab and "
+                + "into whatever you later put on top of it.",
+          check: "Continuous, 6 in laps taped, turned up at the perimeter, no tears.",
+          note: "R506.2.3 — 10 mil in the current code, and it goes BETWEEN the slab and the base. "
+              + "Unheated detached garages and utility buildings are excepted, but a shed you plan to "
+              + "store anything dry in wants it anyway." },
+
+        { phase: "Groundworks", diagram: 6, codeKey: "g-form",
+          title: "Form the edge, thicken it, and set the steel",
+          material: "Forms, rebar or mesh, chairs",
+          orientation: "Thickened edge down to frost depth where the slab is the foundation",
+          spacing: "Slab 3 1/2 in minimum; edge per the approved detail",
+          fastener: "Form stakes outside the pour",
+          action: "Form the perimeter and square it by diagonals. Where the slab carries the walls, the "
+                + "edge thickens into a footing that has to reach your frost depth. Set reinforcement on "
+                + "chairs so it ends up in the middle of the slab, not lying on the poly where it does "
+                + "nothing.",
+          check: "Diagonals equal, forms level and braced, edge thickening to the approved depth, steel "
+               + "up on chairs.",
+          note: "R506.1 sets 3 1/2 in minimum thickness. Mesh dragged up as you pour is a myth — it ends "
+              + "up on the bottom. Use chairs." },
+
+        { phase: "Groundworks", diagram: 7, codeKey: "g-pour",
+          title: "Pour, screed, and set the anchor bolts wet",
+          material: "Concrete, screed, float, 1/2 in anchor bolts",
+          orientation: "Anchors plumb, on the plate line",
+          spacing: "6 ft o.c. max, one within 12 in of each end of every plate, 2 per piece minimum",
+          fastener: "1/2 in anchor bolt, 7 in minimum embedment",
+          action: "Pour, screed to the forms, then bull float. Set the anchor bolts into the wet "
+                + "concrete on the sill line while it is still plastic — 1/2 in minimum, 7 in embedment, "
+                + "6 ft o.c. maximum, one within 12 in of both ends of every plate section and never "
+                + "fewer than two per piece. Walk your plate layout against them before it sets.",
+          check: "Flat to the screed, anchors plumb and on the line, spacing checked against the plate "
+               + "layout while you can still move them.",
+          note: "R403.1.6. Do not over-float and do not work bleed water back into the surface — that is "
+              + "what makes a slab dust and scale later." },
+
+        { phase: "Groundworks", diagram: 8, codeKey: "g-joint",
+          title: "Cut the control joints early, then cure it",
+          material: "Saw or jointer, curing compound or water and cover",
+          orientation: "Joints in a grid, roughly square panels",
+          spacing: "Panels about 24 to 30 times the slab thickness — call it 8 to 10 ft for a 4 in slab",
+          fastener: "None",
+          action: "Concrete is going to crack; joints decide where. Cut or tool them about a quarter of "
+                + "the slab depth, in roughly square panels, and do it EARLY — within the first day, "
+                + "before shrinkage beats you to it. Then keep it damp and covered while it cures.",
+          check: "Joints cut to depth, panels roughly square, slab kept damp for the cure.",
+          note: "Concrete cures by hydrating, not by drying. Letting it dry out fast gives you a weak, "
+              + "dusty, scaling surface that never gets better." }
+    ];
+
+    // Three ways to stand a building up, and the switch picks one.
+    var Fx_FOUNDATION_CHOICES = [
+        { id: "pad", permit: false, label: "NO PERMIT",
+          sub: "Gravel pad + ground-contact runners", seq: "ONGRADE" },
+        { id: "pier", permit: true, label: "PERMITTED · PIERS",
+          sub: "Footings to frost depth, anchor bolts, inspected", seq: "PIER" },
+        { id: "slab", permit: true, label: "PERMITTED · SLAB",
+          sub: "Base, vapor retarder, poured slab, anchor bolts", seq: "SLAB" }
+    ];
+
+    // =====================================================================
+    // PLAN -> BUILD
+    // ---------------------------------------------------------------------
+    // There WAS already a way through: "BEGIN PROJECT" at the bottom of the
+    // roadmap, behind a confirmation dialog. It opens the guided build with
+    // the real project and the entered dimensions. The problem was purely
+    // that nobody finds it -- it sits under a takeoff table and a 17-row
+    // roadmap, and it reads like a commitment rather than an instruction.
+    //
+    // So this is the same route, put on the brief where the project is, and
+    // labelled as what it does.
+    // =====================================================================
+    function Fx_BuildItButton(props) {
+        Fx_usePermit();
+        var c = Fx_effectiveChoice(props.dwelling);
+        return Fx_Jx("button", {
+            className: "plan-build-it",
+            onClick: props.onGo,
+            children: [
+                Fx_J("b", { children: "BUILD IT STEP BY STEP \u2192" }),
+                Fx_J("span", { children: "Every step in order for THIS project, ground to finished \u2014 "
+                    + "foundation currently set to " + c.label.toLowerCase() + ", " + c.sub.toLowerCase() })
+            ]
+        });
+    }
+
+    // =====================================================================
+    // THE LAST MILE
+    // ---------------------------------------------------------------------
+    // Roof covering, cladding, trim and doors were one step each. "Roofing
+    // goes on before the walls are closed in" is true and useless: it does
+    // not tell anyone where the drip edge goes, how far up the ice barrier
+    // runs, how many nails a shingle takes or where they land. A shed that
+    // is framed and dried-in but has no roof on it is not a finished shed.
+    // =====================================================================
+
+    // ---- asphalt shingles, IRC R905.2 -------------------------------------
+    var Fx_ROOFING_SEQUENCE = [
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-slope",
+          title: "Check the slope before you buy shingles",
+          material: "The roof you framed, a level and a tape",
+          orientation: "Measure rise over 12 in of run",
+          spacing: "2:12 is the floor for asphalt shingles",
+          fastener: "None",
+          action: "Asphalt shingles are not allowed below 2:12 — nothing you do to the nailing makes "
+                + "them work down there. Between 2:12 and 4:12 they are allowed but the underlayment "
+                + "has to be DOUBLED. At 4:12 and above, single underlayment.",
+          check: "You know your pitch, and you know which underlayment rule you are under.",
+          note: "R905.2.2 sets the 2:12 floor; R905.2.7 doubles the underlayment from 2:12 to under 4:12. "
+              + "Below 2:12 you need a different covering entirely." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-drip",
+          title: "Drip edge at the eaves — before the underlayment",
+          material: "Metal drip edge, roofing nails",
+          orientation: "Eaves only at this stage. Rakes come after the underlayment",
+          spacing: "Laps 2 in minimum, fastened 12 in o.c. maximum",
+          fastener: "Roofing nail, same as the shingles",
+          action: "Run the drip edge along the eaves first, lapping segments 2 in and nailing at 12 in "
+                + "o.c. It has to drop at least 1/4 in below the sheathing and come back up onto the "
+                + "deck at least 2 in. The underlayment goes OVER it here, so water on the underlayment "
+                + "drains onto the metal and off the roof.",
+          check: "Eave drip edge on, laps 2 in, nails no further apart than 12 in, 1/4 in below the deck.",
+          note: "R905.2.8.5. Eave and rake are opposite: over the drip edge at the eaves, under it at "
+              + "the rakes. Get them the wrong way round and water runs behind the metal." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-ice",
+          title: "Ice barrier, if your area has a history of ice damming",
+          material: "Self-adhering polymer-modified bitumen membrane",
+          orientation: "From the lowest roof edge up",
+          spacing: "To a point 24 in INSIDE the exterior wall line",
+          fastener: "Self-adhered — no fasteners through it",
+          action: "Where ice forms along the eaves, the barrier runs from the lowest edge of the roof up "
+                + "to a line 24 in inside the exterior wall — measured from the wall, not from the "
+                + "fascia, so a deep overhang needs a wider strip or two courses. Your building "
+                + "department says whether you need it.",
+          check: "Membrane reaches 24 in past the inside face of the exterior wall, laps rolled down.",
+          note: "R905.1.2. On a low-slope roof the ice barrier is what stops backed-up meltwater getting "
+              + "under the shingles. It is not the same product as underlayment." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-under",
+          title: "Underlayment, eave to ridge",
+          material: "The underlayment your slope calls for",
+          orientation: "Start at the eave and work up so every sheet laps the one below",
+          spacing: "4 in side laps and 2 in end laps single-layer; 19 in laps where doubled",
+          fastener: "As the underlayment specifies — cap nails on synthetics",
+          action: "Roll it out from the eave up so each course laps over the one below, never under. "
+                + "At 4:12 and up that is one layer with 2 in head laps and 4 in side laps. Between "
+                + "2:12 and 4:12 you double it: start with a 19 in strip at the eave, then full 36 in "
+                + "courses each lapping 19 in, so there are two layers everywhere.",
+          check: "Every lap sheds downhill. No fish-mouths, no wrinkles, nothing lapped uphill.",
+          note: "R905.2.7 and Table R905.1.1(1). One course lapped the wrong way is a leak that no "
+              + "amount of shingle above it will fix." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-rake",
+          title: "Rake drip edge — over the underlayment this time",
+          material: "Metal drip edge",
+          orientation: "Up the rakes, lapping uphill over downhill",
+          spacing: "2 in laps, 12 in o.c. fastening",
+          fastener: "Roofing nail",
+          action: "Now run the drip edge up the rakes, on TOP of the underlayment. Lap each piece over "
+                + "the one below it as you go up so water runs across the joint, not into it.",
+          check: "Rake metal over the underlayment, laps shedding downhill, 12 in o.c. fastening.",
+          note: "R905.2.8.5 again. This is the half people get backwards — at the rake the metal is on "
+              + "top, because water running down the rake has to stay on the outside of it." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-flash",
+          title: "Step flashing and pipe flashing as you go up",
+          material: "Step flashing, pipe boots, kickout flashing",
+          orientation: "One piece of step flashing per shingle course, woven in as you climb",
+          spacing: "Step flashing not less than 4 in by 4 in",
+          fastener: "One nail high on the flange, into the deck",
+          action: "Where the roof meets a wall, step flashing goes in with the shingles, one piece per "
+                + "course, each lapping the one below. It cannot be added afterwards and it cannot be a "
+                + "continuous strip. Put a kickout at the bottom of the run to throw water out onto the "
+                + "cladding instead of behind it.",
+          check: "One step per course, 4 in each way minimum, kickout at the bottom, boots sitting over "
+               + "the course below and under the course above.",
+          note: "R905.2.8.3 and R903.2.1. A missing kickout is the single most reliable way to rot the "
+              + "wall below a roof-wall intersection." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-starter",
+          title: "Starter course at the eave",
+          material: "Starter strip, or shingles with the tabs cut off",
+          orientation: "Adhesive strip at the EAVE edge, not up the roof",
+          spacing: "Overhang the drip edge 1/4 in to 3/4 in",
+          fastener: "4 nails, high enough to be covered by the first course",
+          action: "The starter runs the other way up to a field shingle: its sealant strip has to sit "
+                + "at the bottom edge, where it grabs the first course. Hang it 1/4 to 3/4 in past the "
+                + "drip edge so water throws clear, and offset its joints from the first course.",
+          check: "Sealant at the eave edge, overhang 1/4 to 3/4 in, joints offset from the course above.",
+          note: "A starter laid upside down leaves the first course unsealed, and the first hard wind "
+              + "takes it off." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-field",
+          title: "Field courses — exposure, offset, and four nails",
+          material: "Shingles, roofing nails",
+          orientation: "Up from the eave, each course lapping the one below",
+          spacing: "Exposure off the wrapper — commonly 5 5/8 in. Offset per the manufacturer",
+          fastener: "4 nails per strip minimum, 12 gauge, 3/8 in head, 3/4 in into the sheathing",
+          action: "Chalk your courses — do not eyeball the exposure, it shows from the street. Nails go "
+                + "in the nail zone the wrapper prints, just below the sealant strip, never through it "
+                + "and never in the tab slot. Four per strip is the code minimum; six where the wind "
+                + "speed calls for it, and six is cheap insurance anyway.",
+          check: "Exposure consistent to your chalk lines, 4 (or 6) nails per strip, all in the nail "
+               + "zone, all driven flush — not sunk through the mat, not standing proud.",
+          note: "R905.2.5 for the nail, R905.2.6 for the count. An overdriven nail tears the mat and the "
+              + "shingle is already failed; a proud nail lifts the course above it." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-ridge",
+          title: "Ridge vent and cap",
+          material: "Ridge vent, cap shingles",
+          orientation: "Caps lapped away from the prevailing weather",
+          spacing: "Exposure per the cap product",
+          fastener: "Long enough to reach through the vent and the ridge into the deck",
+          action: "If the roof is vented at the ridge, the deck gets slotted before the vent goes on. "
+                + "Then cap it, working from the end away from the prevailing wind so every lap faces "
+                + "downwind. The last cap gets face-nailed and those heads get sealed.",
+          check: "Slot cut back from the ends as the vent requires, caps lapped downwind, exposed nails "
+               + "sealed.",
+          note: "R806 sets the ventilation. A ridge vent with no intake at the soffit does almost "
+              + "nothing — air has to get in at the bottom to leave at the top." },
+
+        { phase: "Roof covering", diagram: 12, codeKey: "rc-check",
+          title: "Walk it and look up at it",
+          material: "Your eyes, from the ground and from the roof",
+          orientation: "Sight along the courses",
+          spacing: "n/a",
+          fastener: "None",
+          action: "Sight along every course from the rake — wandering exposure shows up instantly from "
+                + "an angle. Check every penetration, the kickout, the valley, and that no nail head is "
+                + "exposed anywhere it was not meant to be.",
+          check: "Courses straight, nothing exposed, every penetration flashed over the course below "
+               + "and under the course above.",
+          note: "Shingles seal themselves in the sun over the first warm days. In cold weather they will "
+              + "not, and a wind before they do can strip a roof — hand-seal in cold weather." }
+    ];
+
+    // ---- cladding, IRC R703 ------------------------------------------------
+    var Fx_SIDING_SEQUENCE = [
+        { phase: "Cladding", diagram: 12, codeKey: "cl-plane",
+          title: "Check the drainage plane before you cover it",
+          material: "The WRB already on the wall, flashing tape",
+          orientation: "Every lap sheds downward and outward",
+          spacing: "n/a",
+          fastener: "None",
+          action: "Walk the whole wall. Every WRB lap has to shed down and out, every opening has to be "
+                + "flashed with the head flap lapped OVER the head flashing, and every penetration has "
+                + "to be sealed. Once the cladding is on you cannot see any of this again.",
+          check: "No reverse laps, head flaps down over the flashing, penetrations sealed.",
+          note: "R703.2 and R703.4. Cladding sheds most of the water. The plane behind it handles the "
+              + "rest, and that is the layer that actually keeps the wall dry." },
+
+        { phase: "Cladding", diagram: 12, codeKey: "cl-clear",
+          title: "Set the clearances — grade, roof and horizontal surfaces",
+          material: "Tape, a level, chalk line",
+          orientation: "Bottom edge line snapped level round the building",
+          spacing: "6 in to earth, 2 in to concrete or paving, 1 to 2 in above roofing",
+          fastener: "None",
+          action: "Snap the bottom line before anything goes on. Untreated cladding and framing keep 6 in "
+                + "to the ground and 2 in above concrete steps, slabs and paving. At a roof, hold the "
+                + "cladding up off the shingles so water is not wicked back into the wall.",
+          check: "Bottom line level all round and every clearance held at the lowest point of grade.",
+          note: "R317.1 item 5. Siding run down into the dirt wicks, rots, and gives termites a covered "
+              + "road straight into the framing." },
+
+        { phase: "Cladding", diagram: 12, codeKey: "cl-start",
+          title: "Starter strip and the corners",
+          material: "Starter strip, corner posts or corner boards",
+          orientation: "Starter dead level — the whole wall follows it",
+          spacing: "Per the cladding system",
+          fastener: "Into framing, not into sheathing alone",
+          action: "Level the starter off your chalk line, not off the foundation, which is never as "
+                + "level as it looks. Set the corners plumb before the field goes on. Everything above "
+                + "copies whatever error you leave here, and it gets more obvious every course.",
+          check: "Starter level within 1/8 in over its length, corners plumb both ways.",
+          note: "One course of error at the bottom of a wall is eight courses of visible error by the "
+              + "time you reach the top." },
+
+        { phase: "Cladding", diagram: 12, codeKey: "cl-field",
+          title: "Run the field — lap it, and do not nail it tight",
+          material: "Siding, corrosion-resistant fasteners",
+          orientation: "Bottom up, each course lapping the one below",
+          spacing: "Lap siding: 1 in minimum overlap. Fasteners into framing at the product's spacing",
+          fastener: "Penetrate not less than 1 1/4 in into framing; vinyl nails centred in the slot",
+          action: "Work up the wall. Lap siding overlaps at least 1 in. Fasteners have to reach 1 1/4 in "
+                + "into actual framing — sheathing alone does not hold cladding. On vinyl, nail through "
+                + "the CENTRE of the slot and leave about 1/32 in under the head so the panel can move; "
+                + "nailed tight it buckles the first hot day.",
+          check: "Overlaps held, fasteners in framing, vinyl hanging loose enough to slide by hand.",
+          note: "R703.3 and Table R703.3(1) for thickness and fastening; R703.11.1 for vinyl. The "
+              + "commonest vinyl failure is nailing it tight and the commonest wood failure is missing "
+              + "the stud." },
+
+        { phase: "Cladding", diagram: 12, codeKey: "cl-openings",
+          title: "Around the openings, and the kickout",
+          material: "Trim, J-channel, kickout flashing, sealant",
+          orientation: "Cladding laps over flashing, never the other way",
+          spacing: "Leave the gap the product asks for at trim",
+          fastener: "Corrosion-resistant, matched to the cladding",
+          action: "Cut in around windows and doors so the cladding laps over the flashing already there. "
+                + "Where a roof runs into a wall, the kickout at the bottom throws water out onto the "
+                + "cladding face; without it the whole run drains into the wall behind.",
+          check: "Every piece laps over what is below it, kickout in place, nothing forced tight.",
+          note: "If you find yourself reaching for sealant to make a lap work, the lap is wrong." },
+
+        { phase: "Cladding", diagram: 12, codeKey: "cl-trim",
+          title: "Trim, then seal only what should be sealed",
+          material: "Exterior trim, backer rod, compatible sealant",
+          orientation: "Joints sized for the sealant's movement range",
+          spacing: "Joint roughly twice as wide as it is deep",
+          fastener: "Corrosion-resistant",
+          action: "Trim the openings and the transitions. Then seal the joints the detail says to seal "
+                + "and leave the rest alone. Backer rod first so the sealant grips two sides and can "
+                + "stretch, not three sides where it tears itself.",
+          check: "Drainage paths still open at the bottom of every opening and behind every trim piece. "
+               + "Joints tooled, not smeared.",
+          note: "The commonest sealant mistake is using it instead of flashing. The second commonest is "
+              + "sealing the bottom of a window trim shut and trapping the water that was meant to "
+              + "drain out there." }
+    ];
+
+    // ---- hanging an exterior door -----------------------------------------
+    var Fx_DOOR_SEQUENCE = [
+        { phase: "Door", diagram: 12, codeKey: "dr-pan",
+          title: "Pan the sill before the door goes anywhere near it",
+          material: "Sill pan or flashing, sealant",
+          orientation: "Back dam at the inside, ends turned up",
+          spacing: "Pan runs past the opening each side",
+          fastener: "None through the pan floor",
+          action: "The sill pan catches anything that gets past the door and sends it back out. It needs "
+                + "an upstand at the back and turned-up ends, and it must drain OUT — so no continuous "
+                + "bead of sealant across the front lip.",
+          check: "Pan continuous, back dam up, ends up, front edge open to drain.",
+          note: "R703.4. A door with no sill pan rots the subfloor and the bottom plate under it, and "
+              + "you will not see it happening." },
+
+        { phase: "Door", diagram: 12, codeKey: "dr-set",
+          title: "Set the unit and plumb the HINGE jamb first",
+          material: "The door unit, shims, a long level",
+          orientation: "Hinge jamb plumb in both directions before anything is fixed",
+          spacing: "Shims at each hinge and at the strike",
+          fastener: "Two casing nails to hold it while you work",
+          action: "Stand the unit in the opening on the pan. Plumb the hinge side first and tack it — "
+                + "everything else is adjusted to the hinge jamb. Check plumb across the thickness of "
+                + "the jamb too, not just along the face, or the door will swing open or closed on its "
+                + "own.",
+          check: "Hinge jamb plumb both ways, unit sitting flat on the pan, not racked.",
+          note: "Set the latch side first and you will chase the reveal round the door for an hour and "
+              + "never catch it." },
+
+        { phase: "Door", diagram: 12, codeKey: "dr-shim",
+          title: "Shim at the hinges and set the reveal",
+          material: "Shim pairs, tape measure",
+          orientation: "Shim pairs opposed so they bear flat, not on a point",
+          spacing: "Behind every hinge, behind the strike, and at the head",
+          fastener: "None yet",
+          action: "Shim behind each hinge so the jamb is supported where the weight actually is, using "
+                + "opposed pairs so the jamb is not twisted. Then set the gap round the door — even top "
+                + "to bottom and side to side, usually about a nickel's thickness. Adjust until the gap "
+                + "is the same everywhere.",
+          check: "Even reveal all round, jamb straight along its length, no bow when you sight it.",
+          note: "An uneven reveal is the door telling you the frame is racked. Fix it now; no amount of "
+              + "hinge adjustment later will fix a twisted jamb." },
+
+        { phase: "Door", diagram: 12, codeKey: "dr-fasten",
+          title: "Fasten through the shims, and one long screw into the framing",
+          material: "Casing nails or screws, one 3 in screw per hinge",
+          orientation: "Fasteners through the shim stacks so nothing crushes",
+          spacing: "At every shim point",
+          fastener: "Trim fastener at the shims; 3 in screw through the top hinge into the king stud",
+          action: "Fix through the shim stacks so the jamb keeps its position. Then swap one screw in "
+                + "the TOP hinge for a 3 in screw that reaches past the jamb and the shim into the "
+                + "framing behind. That screw is what stops a heavy door dragging the top corner down "
+                + "over the next few years.",
+          check: "Every shim point fastened, long screw in the top hinge, reveal unchanged after "
+               + "fastening.",
+          note: "Check the reveal again AFTER you fasten. Driving fasteners is what moves a jamb." },
+
+        { phase: "Door", diagram: 12, codeKey: "dr-swing",
+          title: "Swing it, latch it, and check it stays put",
+          material: "The door, the strike plate",
+          orientation: "Open at several positions and let go",
+          spacing: "n/a",
+          fastener: "3 in screws into the strike where the hardware allows",
+          action: "Swing it through its full travel. Left half-open it should stay where you put it — if "
+                + "it creeps open or closed the jamb is out of plumb through its thickness. Then latch "
+                + "it: it should catch without lifting, pushing or slamming.",
+          check: "Stays put anywhere in its swing, latches with a light push, no rub at any corner.",
+          note: "Long screws in the strike plate as well as the hinge turn a kick-in from a two-second "
+              + "job into a real one." },
+
+        { phase: "Door", diagram: 12, codeKey: "dr-seal",
+          title: "Weatherstrip, sweep and threshold",
+          material: "Weatherstrip, door sweep, adjustable threshold",
+          orientation: "Sweep just kissing the threshold",
+          spacing: "Even contact all round",
+          fastener: "As supplied",
+          action: "Adjust the threshold up until the sweep just touches — you should feel light drag, "
+                + "not have to lean on the door. Close it on a strip of paper at several points round "
+                + "the frame: the paper should pull with the same resistance everywhere.",
+          check: "Even drag on the paper test top, middle and bottom on both sides. No daylight at any "
+               + "corner with the door shut.",
+          note: "Cranked too tight the seal deforms and stops sealing within a season, and the latch "
+              + "wears. Light and even beats tight." },
+
+        { phase: "Door", diagram: 12, codeKey: "dr-flash",
+          title: "Flash the jambs and head over the door",
+          material: "Flashing tape, head flashing, WRB head flap",
+          orientation: "Sill first, jambs second, head last — each lapping over the one below",
+          spacing: "Tape laps 2 in minimum",
+          fastener: "None through the head flashing face",
+          action: "Same order as a window and for the same reason: sill, then jambs over the sill, then "
+                + "the head over the jambs, then the WRB head flap comes back down OVER the head "
+                + "flashing. Every layer laps the one below so water is always handed outward.",
+          check: "Head flap down over the flashing, no reverse lap anywhere, nothing taped across the "
+               + "sill that would dam the pan.",
+          note: "R703.4. This is the same shingle logic as the roof, turned on its side." }
+    ];
+
+    // The Completion phase kept one step each for roof covering, cladding,
+    // trim and doors. Those four expand into the sequences above; services
+    // and the close-out stay as they were.
+    function Fx_expandFinish(steps) {
+        var out = [];
+        steps.forEach(function (st) {
+            if (st.codeKey === "c-roof") { Fx_ROOFING_SEQUENCE.forEach(function (x) { out.push(x); }); return; }
+            if (st.codeKey === "c-siding") { Fx_SIDING_SEQUENCE.forEach(function (x) { out.push(x); }); return; }
+            if (st.codeKey === "c-trim") return;          // folded into cladding
+            if (st.codeKey === "c-openings") {
+                out.push(st);                              // keep the pointer to the window module
+                Fx_DOOR_SEQUENCE.forEach(function (x) { out.push(x); });
+                return;
+            }
+            out.push(st);
+        });
+        return out;
+    }
+
+    ["rc-slope","rc-drip","rc-ice","rc-under","rc-rake","rc-flash","rc-starter",
+     "rc-ridge","rc-check","cl-plane","cl-clear","cl-start","cl-openings","cl-trim",
+     "dr-pan","dr-set","dr-shim","dr-swing","dr-seal","dr-flash"].forEach(function (k) {
+        Fx_STEP_TOOL[k] = "none";
+    });
+    Fx_STEP_TOOL["rc-field"] = "nail";
+    Fx_STEP_TOOL["cl-field"] = "nail";
+    Fx_STEP_TOOL["dr-fasten"] = "nail";
+
+    Fx_STEP_FASTENER["rc-field"] = {
+        primary: "Roofing nail \u2014 12 gauge, 3/8 in head",
+        substitute: "No screw substitute",
+        note: "Length to go through the roofing and not less than 3/4 in into the sheathing, or right through where the sheathing is thinner than that. 4 per strip minimum, 6 in high wind. IRC R905.2.5 / R905.2.6." };
+    Fx_STEP_FASTENER["cl-field"] = {
+        primary: "Corrosion-resistant siding fastener",
+        substitute: "As the cladding manufacturer lists",
+        note: "Must penetrate not less than 1 1/4 in into framing \u2014 sheathing alone does not hold cladding. Vinyl is nailed in the centre of the slot and left loose. IRC R703.3 / R703.11.1." };
+    Fx_STEP_FASTENER["dr-fasten"] = {
+        primary: "Trim fastener through the shim stacks",
+        substitute: "One 3 in screw through the top hinge into the king stud",
+        note: "The long screw at the top hinge is what stops a heavy door dragging its top corner down over time. Re-check the reveal after fastening." };
+
+    // =====================================================================
+    // GROUNDWORKS 3D
+    // ---------------------------------------------------------------------
+    // The groundworks steps were showing the framing scene -- a floor deck
+    // hanging in the air above ground that has not been dug yet. This builds
+    // what the step is actually talking about: the hole, the fabric, the
+    // stone going in in lifts, the runners, or the forms and the pour.
+    // Everything is generated from the entered dimensions in inches, same as
+    // the framing engine, so the pad really is 12 in wider than the building
+    // on every side and the runners really are at their spacing.
+    // =====================================================================
+    var Fx_GROUND_TONE = {
+        soil:   "#4a3d2e",
+        sub:    "#8a7a5c",   // firm mineral subsoil, lighter than the topsoil
+        fabric: "#2f3f4a",
+        stone:  "#8d9298",
+        stone2: "#a4a9ae",
+        runner: "#6b8f4e",
+        conc:   "#9aa0a4",
+        form:   "#b5762c",
+        poly:   "#4f7fa8",
+        rebar:  "#7d5a3c"
+    };
+
+    function Fx_groundModel(spec) {
+        var w = Math.max(48, spec.wallLength), d = Math.max(48, spec.depth),
+            over = 12,                                   // pad past the building
+            padW = w + over * 2, padD = d + over * 2,
+            dig = 8,                                     // excavation depth
+            stone = 6,
+            runnerW = 3.5, runnerH = 5.5,
+            n = Math.max(2, Math.round(w / 48) + 1),
+            centres = [];
+        for (var i = 0; i < n; i++)
+            centres.push(-w / 2 + (w / (n - 1)) * i);
+        return { w: w, d: d, padW: padW, padD: padD, dig: dig, stone: stone,
+                 over: over, runnerW: runnerW, runnerH: runnerH,
+                 runners: centres, lifts: Math.max(1, Math.round(stone / 4)) };
+    }
+
+    // one slab of ground, drawn as a box in inches
+    function Fx_Ground(props) {
+        var b = props.box;
+        return Fx_Jx("mesh", {
+            position: [(b.x0 + b.x1) / 2 * Fx_IN, (b.y0 + b.y1) / 2 * Fx_IN,
+                       (b.z0 + b.z1) / 2 * Fx_IN],
+            children: [
+                Fx_J("boxGeometry", { args: [(b.x1 - b.x0) * Fx_IN,
+                                             (b.y1 - b.y0) * Fx_IN,
+                                             (b.z1 - b.z0) * Fx_IN] }),
+                Fx_J("meshStandardMaterial", {
+                    color: props.tone,
+                    roughness: props.roughness == null ? 0.95 : props.roughness,
+                    transparent: !!props.opacity,
+                    opacity: props.opacity == null ? 1 : props.opacity,
+                    emissive: props.active ? "#3a2f10" : "#000000",
+                    emissiveIntensity: props.active ? 0.5 : 0
+                })
+            ]
+        });
+    }
+
+    function Fx_GroundScene(props) {
+        var spec = Fx_useSpec("structure"),
+            g = Fx_groundModel(spec),
+            key = props.codeKey || "",
+            id = Fx_permit.id(),
+            // how far through the groundworks we are, by step
+            order = id === "pad"
+                ? ["g-check","g-strip","g-square","g-stone","g-screed","g-skids","g-prove","g-floor"]
+                : id === "slab"
+                ? ["g-permit","g-strip","g-fill","g-base","g-vapor","g-form","g-pour","g-joint"]
+                : ["g-permit","g-layout","g-dig","g-foot","g-pour","g-cure","g-inspect"],
+            at = Math.max(0, order.indexOf(key)),
+            hw = g.padW / 2, hd = g.padD / 2;
+
+        var parts = [];
+
+        // Undisturbed ground, drawn as a frame around the excavation rather
+        // than a solid block -- otherwise the hole is not a hole and
+        // everything built in it is buried inside the earth.
+        var out = 30;
+        if (at >= 1) {
+            [[-hw - out, -hw, -hd - out, hd + out],
+             [hw, hw + out, -hd - out, hd + out],
+             [-hw, hw, -hd - out, -hd],
+             [-hw, hw, hd, hd + out]].forEach(function (r, k) {
+                parts.push(Fx_J(Fx_Ground, {
+                    box: { x0: r[0], x1: r[1], z0: r[2], z1: r[3],
+                           y0: -g.dig - 16, y1: 0 },
+                    tone: Fx_GROUND_TONE.soil
+                }, "e" + k));
+            });
+            // the floor of the hole: firm mineral subsoil
+            parts.push(Fx_J(Fx_Ground, {
+                box: { x0: -hw, x1: hw, z0: -hd, z1: hd,
+                       y0: -g.dig - 16, y1: -g.dig },
+                tone: Fx_GROUND_TONE.sub, active: at === 1
+            }, "sub"));
+        } else {
+            // before the strip it is all still turf
+            parts.push(Fx_J(Fx_Ground, {
+                box: { x0: -hw - out, x1: hw + out, z0: -hd - out, z1: hd + out,
+                       y0: -g.dig - 16, y1: 0 },
+                tone: Fx_GROUND_TONE.soil
+            }, "earth"));
+        }
+
+        // string line round the excavation once it is squared
+        if (at >= 2 && at <= 3)
+            parts.push(Fx_Jx("group", { children: [[-1, 1], [1, -1]].map(function (s, k) {
+                return Fx_J(Fx_Ground, {
+                    box: { x0: -hw, x1: hw, z0: s[0] * hd - 0.4, z1: s[0] * hd + 0.4,
+                           y0: 1.5, y1: 1.9 },
+                    tone: "#ffd166", roughness: 0.4, active: at === 2
+                }, "s" + k);
+            }) }, "string"));
+
+        if (id === "pad") {
+            if (at >= 3)
+                parts.push(Fx_J(Fx_Ground, {
+                    box: { x0: -hw, x1: hw, z0: -hd, z1: hd,
+                           y0: -g.dig, y1: -g.dig + 0.4 },
+                    tone: Fx_GROUND_TONE.fabric, roughness: 0.8, active: at === 3
+                }, "fabric"));
+
+            // the stone goes in in lifts, and you can see them
+            if (at >= 3) {
+                var shown = at === 3 ? g.lifts : g.lifts, lift = g.stone / g.lifts;
+                for (var L = 0; L < shown; L++)
+                    parts.push(Fx_J(Fx_Ground, {
+                        box: { x0: -hw, x1: hw, z0: -hd, z1: hd,
+                               y0: -g.dig + 0.4 + L * lift,
+                               y1: -g.dig + 0.4 + (L + 1) * lift - 0.15 },
+                        tone: L % 2 ? Fx_GROUND_TONE.stone2 : Fx_GROUND_TONE.stone,
+                        roughness: 1, active: at === 4
+                    }, "lift" + L));
+            }
+
+            if (at >= 5)
+                parts.push(Fx_Jx("group", { children: g.runners.map(function (c, i) {
+                    return Fx_J(Fx_Ground, {
+                        box: { x0: c - g.runnerW / 2, x1: c + g.runnerW / 2,
+                               z0: -g.d / 2, z1: g.d / 2,
+                               y0: -g.dig + 0.4 + g.stone - 0.15,
+                               y1: -g.dig + 0.4 + g.stone - 0.15 + g.runnerH },
+                        tone: Fx_GROUND_TONE.runner, roughness: 0.75, active: at === 5
+                    }, "r" + i);
+                }) }, "runners"));
+
+            if (at >= 7)
+                parts.push(Fx_J(Fx_Ground, {
+                    box: { x0: -g.w / 2, x1: g.w / 2, z0: -g.d / 2, z1: g.d / 2,
+                           y0: -g.dig + 0.4 + g.stone - 0.15 + g.runnerH,
+                           y1: -g.dig + 0.4 + g.stone - 0.15 + g.runnerH + 9.25 },
+                    tone: Fx_TONE.joist, roughness: 0.7, opacity: 0.85, active: true
+                }, "floor"));
+
+        } else if (id === "slab") {
+            if (at >= 3)
+                parts.push(Fx_J(Fx_Ground, {
+                    box: { x0: -hw, x1: hw, z0: -hd, z1: hd,
+                           y0: -g.dig, y1: -g.dig + 4 },
+                    tone: Fx_GROUND_TONE.stone, roughness: 1, active: at === 3
+                }, "base"));
+            if (at >= 4)
+                parts.push(Fx_J(Fx_Ground, {
+                    box: { x0: -hw, x1: hw, z0: -hd, z1: hd,
+                           y0: -g.dig + 4, y1: -g.dig + 4.3 },
+                    tone: Fx_GROUND_TONE.poly, roughness: 0.25,
+                    opacity: 0.7, active: at === 4
+                }, "poly"));
+            if (at >= 5)   // forms round the edge
+                parts.push(Fx_Jx("group", { children: [
+                    [-1, 0], [1, 0], [0, -1], [0, 1]
+                ].map(function (s, k) {
+                    var ex = s[0] !== 0;
+                    return Fx_J(Fx_Ground, {
+                        box: ex
+                            ? { x0: s[0] * g.w / 2 - 0.75, x1: s[0] * g.w / 2 + 0.75,
+                                z0: -g.d / 2, z1: g.d / 2,
+                                y0: -g.dig + 4.3, y1: -g.dig + 4.3 + 7 }
+                            : { x0: -g.w / 2, x1: g.w / 2,
+                                z0: s[1] * g.d / 2 - 0.75, z1: s[1] * g.d / 2 + 0.75,
+                                y0: -g.dig + 4.3, y1: -g.dig + 4.3 + 7 },
+                        tone: Fx_GROUND_TONE.form, roughness: 0.6, active: at === 5
+                    }, "f" + k);
+                }) }, "forms"));
+            if (at >= 6)
+                parts.push(Fx_J(Fx_Ground, {
+                    box: { x0: -g.w / 2, x1: g.w / 2, z0: -g.d / 2, z1: g.d / 2,
+                           y0: -g.dig + 4.3, y1: -g.dig + 4.3 + 4 },
+                    tone: Fx_GROUND_TONE.conc, roughness: 0.85, active: at === 6
+                }, "slab"));
+            if (at >= 6)   // anchor bolts on the sill line
+                parts.push(Fx_Jx("group", { children: (function () {
+                    var out = [], step = 60;
+                    for (var x = -g.w / 2 + 8; x <= g.w / 2 - 8; x += step)
+                        [-1, 1].forEach(function (s) {
+                            out.push(Fx_J(Fx_Ground, {
+                                box: { x0: x - 0.3, x1: x + 0.3,
+                                       z0: s * (g.d / 2 - 2.75) - 0.3,
+                                       z1: s * (g.d / 2 - 2.75) + 0.3,
+                                       y0: -g.dig + 4.3 + 4, y1: -g.dig + 4.3 + 4 + 3 },
+                                tone: "#c9ced0", roughness: 0.3, active: at === 6
+                            }, "ab" + Math.round(x) + s));
+                        });
+                    return out;
+                })() }, "bolts"));
+            if (at >= 7)   // control joints scored across it
+                parts.push(Fx_Jx("group", { children: (function () {
+                    var out = [], panel = 96;
+                    for (var x = -g.w / 2 + panel; x < g.w / 2 - 1; x += panel)
+                        out.push(Fx_J(Fx_Ground, {
+                            box: { x0: x - 0.2, x1: x + 0.2, z0: -g.d / 2, z1: g.d / 2,
+                                   y0: -g.dig + 4.3 + 4 - 1, y1: -g.dig + 4.3 + 4 + 0.05 },
+                            tone: "#5d6468", roughness: 0.9, active: true
+                        }, "j" + Math.round(x)));
+                    return out;
+                })() }, "joints"));
+
+        } else {   // piers
+            var pw = 16, pd = 48;
+            // The holes have to read as holes: a dark void punched down
+            // through the subsoil, or the footings at the bottom of them are
+            // just buried and invisible.
+            if (at >= 2)
+                parts.push(Fx_Jx("group", { children: g.runners.map(function (c, i) {
+                    return Fx_Jx(W.Fragment, { children: [-1, 1].map(function (s) {
+                        return Fx_J(Fx_Ground, {
+                            box: { x0: c - pw / 2, x1: c + pw / 2,
+                                   z0: s * (g.d / 2) - pw / 2, z1: s * (g.d / 2) + pw / 2,
+                                   y0: -pd, y1: 0.2 },
+                            tone: "#161310", roughness: 1, active: at === 2
+                        }, "h" + i + s);
+                    }) }, "hh" + i);
+                }) }, "holes"));
+
+            // footing pads in the bottom of them
+            if (at >= 3)
+                parts.push(Fx_Jx("group", { children: g.runners.map(function (c, i) {
+                    return Fx_Jx(W.Fragment, { children: [-1, 1].map(function (s) {
+                        return Fx_J(Fx_Ground, {
+                            box: { x0: c - pw / 2 + 0.5, x1: c + pw / 2 - 0.5,
+                                   z0: s * (g.d / 2) - pw / 2 + 0.5,
+                                   z1: s * (g.d / 2) + pw / 2 - 0.5,
+                                   y0: -pd + 0.5, y1: -pd + 9 },
+                            tone: Fx_GROUND_TONE.conc, roughness: 0.85, active: at === 3
+                        }, "p" + i + s);
+                    }) }, "pp" + i);
+                }) }, "footings"));
+            if (at >= 4)
+                parts.push(Fx_Jx("group", { children: g.runners.map(function (c, i) {
+                    return Fx_Jx(W.Fragment, { children: [-1, 1].map(function (s) {
+                        return Fx_J(Fx_Ground, {
+                            box: { x0: c - 5, x1: c + 5,
+                                   z0: s * (g.d / 2) - 5, z1: s * (g.d / 2) + 5,
+                                   y0: -pd + 9, y1: 2 },
+                            tone: Fx_GROUND_TONE.conc, roughness: 0.85, active: at === 4
+                        }, "c" + i + s);
+                    }) }, "cc" + i);
+                }) }, "piers"));
+            if (at >= 4)
+                parts.push(Fx_Jx("group", { children: g.runners.map(function (c, i) {
+                    return Fx_Jx(W.Fragment, { children: [-1, 1].map(function (s) {
+                        return Fx_J(Fx_Ground, {
+                            box: { x0: c - 0.3, x1: c + 0.3,
+                                   z0: s * (g.d / 2) - 0.3, z1: s * (g.d / 2) + 0.3,
+                                   y0: 2, y1: 5 },
+                            tone: "#c9ced0", roughness: 0.3, active: at === 4
+                        }, "b" + i + s);
+                    }) }, "bb" + i);
+                }) }, "pbolts"));
+        }
+
+        var spanFt = Math.max(g.padW, g.padD) / 12;
+        return Fx_Jx(W.Fragment, {
+            children: [
+                Fx_J("color", { attach: "background", args: ["#0a0d0a"] }),
+                Fx_J("fog", { attach: "fog", args: ["#0a0d0a",
+                    Math.max(12, spanFt * 1.2), Math.max(30, spanFt * 3.6)] }),
+                Fx_J("ambientLight", { intensity: 0.55 }),
+                Fx_J("hemisphereLight", { args: ["#dbeaff", "#3a2e1d", 1.15] }),
+                Fx_J("directionalLight", { position: [spanFt * 0.7, spanFt * 1.4, spanFt * 0.6],
+                    intensity: 1.5 }),
+                Fx_J("directionalLight", { position: [-spanFt * 0.6, spanFt * 0.9, -spanFt * 0.5],
+                    intensity: 0.5 }),
+                Fx_J("gridHelper", { args: [Math.max(24, Math.round(spanFt * 2.4)),
+                    Math.max(24, Math.round(spanFt * 2.4)), "#415044", "#263027"],
+                    position: [0, -(g.dig + 16) * Fx_IN - 0.02, 0] }),
+                Fx_J(W.Fragment, { children: parts })
+            ]
+        });
+    }
+
     // =====================================================================
     // ONE STEP, ONE SCREEN
     // ---------------------------------------------------------------------
@@ -60804,6 +61854,7 @@ No matching component was found for:
         fastenerKind: i,
         sceneType: r = "structure",
         fastenerLabel: o,
+        codeKey: ck,
         lumberCheck: l
     }) {
         let [c, f] = (0, Ts.useState)(Fx_camTarget(r, t)), [h, p] = (0, Ts.useState)(0);
@@ -60853,6 +61904,7 @@ No matching component was found for:
                         fastenerMode: a,
                         fastenerKind: i,
                         sceneType: r,
+                        codeKey: ck,
                         fastenerLabel: o
                     })
                 }), (0, W.jsx)(dP, {
@@ -61873,7 +62925,7 @@ No matching component was found for:
     // standing on something.
     function Fx_withGround(t, steps) {
         if (!steps.some(function (s) { return s.phase === "Foundation interface"; })) return steps;
-        return Fx_groundSequence(Fx_permit.get()).concat(steps);
+        return Fx_groundSequence(Fx_scopeOf(t, 0).dwelling).concat(Fx_expandFinish(steps));
     }
 
     function tG(t) {
@@ -62004,7 +63056,7 @@ No matching component was found for:
         practiceMode: o = !1
     }) {
         let _permitTick = Fx_usePermit(),
-            l = Fx_shapeForPermit(foe(t), _permitTick, r),
+            l = Fx_shapeForPermit(foe(t), _permitTick, r, Fx_scopeOf(t, 0).dwelling),
             c = (Q0 => Q0.length ? Q0 : l)(r?.length ? l.filter(Q => r.includes(Q.phase)) : l),
             f = t.name + ":guided:",
             h = c.findIndex((Q, ee) => !n.has(f + ee)),
@@ -62090,11 +63142,15 @@ No matching component was found for:
                 })]
             }), (0, k.jsx)(Fx_ShellNote, {
                 level: Fx_cov.level
+            }), (0, k.jsx)(Fx_ScopeNote, {
+                scope: Fx_scopeOf(t, (Number(Fx_pw) || 0) * (Number(Fx_pl) || 0))
             }), (0, k.jsxs)("div", {
                 className: "guided-layout",
                 children: [(0, k.jsxs)("aside", {
                     className: "guided-step-list",
-                    children: [c.some(Z => Z.phase === "Groundworks") ? (0, k.jsx)(Fx_PermitSwitch, {}) : null, c.map((Q, ee) => (0, k.jsxs)("button", {
+                    children: [c.some(Z => Z.phase === "Groundworks") ? (0, k.jsx)(Fx_PermitSwitch, {
+                        dwelling: Fx_scopeOf(t, 0).dwelling
+                    }) : null, c.map((Q, ee) => (0, k.jsxs)("button", {
                         className: p === ee ? "current" : "",
                         onClick: () => {
                             m(ee), x(yP(Q) === "none" ? "action" : "fastener"), b("primary"), Fx_setTab("do")
@@ -62117,7 +63173,8 @@ No matching component was found for:
                         focus: g,
                         fastenerMode: _,
                         fastenerKind: yP(C),
-                        sceneType: A ? "window" : "structure",
+                        sceneType: C.phase === "Groundworks" ? "ground" : A ? "window" : "structure",
+                        codeKey: C.codeKey,
                         fastenerLabel: L,
                         lumberCheck: {
                             required: R,
@@ -63245,6 +64302,9 @@ No matching component was found for:
                                     children: "Preliminary takeoff"
                                 }), "Quantities scale now; purchasing stays blocked until loads, openings, assemblies, code, heater and manufacturer schedules are confirmed."]
                             })]
+                        }), (0, k.jsx)(Fx_BuildItButton, {
+                            onGo: Ee,
+                            dwelling: Fx_scopeOf(V, 0).dwelling
                         }), (0, k.jsxs)("button", {
                             className: "sim-launch",
                             onClick: t,
