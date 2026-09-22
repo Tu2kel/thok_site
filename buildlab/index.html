@@ -59622,6 +59622,93 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // WHAT SHIPS
+    // ---------------------------------------------------------------------
+    // The catalogue offered 61 projects. 37 of them had no steps at all, and
+    // several of the ones that DID have steps were being handed the wrong
+    // sequence. Listing a job you cannot finish costs more than not listing
+    // it: the first thing a buyer does is pick the job they actually have.
+    //
+    // So this is the shipping list. Nothing is deleted -- every parked
+    // project keeps its entry, its category and its reason, so bringing one
+    // back is a matter of building its sequence and moving one line.
+    //
+    // Flip Fx_SHOW_PARKED to true to see the whole catalogue again.
+    // =====================================================================
+    var Fx_SHOW_PARKED = false;
+
+    // Ships: the sequence matches the job and takes it to completion.
+    var Fx_SHIPPING = {
+        // --- accessory buildings, ground to weathertight ---
+        "Storage shed": 1,
+        "Workshop": 1,
+        "Detached garage": 1,
+        "Attached garage": 1,
+        "Outdoor sauna": 1,
+
+        // --- foundations on their own ---
+        "Concrete slab": 1,
+        "Pier-and-beam foundation": 1,
+
+        // --- roofs (gable) ---
+        "Complete roof": 1,
+        "Gable roof framing": 1,
+
+        // --- single assemblies, start to finish ---
+        "Wall framing": 1,
+        "Floor framing": 1,
+        "Window opening": 1
+    };
+
+    // Parked, with the reason. This doubles as the build order.
+    var Fx_PARKED = {
+        "Hip roof framing":
+            "The roof sequence is gable: ridge board, commons, gable ends. Hip and valley rafters and the jack layout are not in it, so this would hand you the wrong roof.",
+        "Roof repair":
+            "There is no repair sequence — this would hand you the steps for a new roof, which is not the job.",
+        "Load-bearing wall opening":
+            "Cutting a bearing wall needs temporary shoring and a sized beam, and neither is in the app. Shipping this one could get somebody hurt.",
+        "Window replacement":
+            "The window steps are for new construction over a flanged unit. A replacement starts with removing the old one and working into an existing WRB, which is a different sequence.",
+        "Door opening":
+            "Door framing IS covered, but inside the wall sequence — picking this by name gives you 26 steps that open on \u201cset the first rim board\u201d, not on the door. Window opening has its own tight 12-step route; this needs the same before it earns its own card.",
+        "Interior partition wall":
+            "The wall sequence includes sheathing and bracing that a non-bearing partition does not get, and leaves out the fire blocking and the non-bearing top-plate connection that it does.",
+        "Indoor sauna conversion":
+            "This is a conversion inside an existing building. The shell sequence starts by pouring a foundation, which is not the job.",
+        "Accessory dwelling unit (ADU)":
+            "Somebody lives in it, so spans, headers, bracing and hold-downs have to be designed, not looked up. The steps are right; the app cannot size it.",
+        "Single-family house": "Same as the ADU — the app can teach the sequence but cannot size a house.",
+        "Second-story addition":
+            "Adds load to a building that already exists. Existing structure has to be verified and usually reinforced, and none of that is in the app.",
+        "Room addition":
+            "Tying into an existing building — foundation match, load path, flashing into existing cladding — is the hard part and is not covered.",
+        "Enclosed porch":
+            "Usually a conversion of an existing structure, with the same tie-in problem as a room addition."
+    };
+
+    // Everything else is parked simply because it has no steps yet.
+    var Fx_PARKED_DEFAULT = "No step sequence has been built for this one yet.";
+
+    function Fx_ships(p) {
+        return !!Fx_SHIPPING[p && p.name];
+    }
+
+    function Fx_shipList(list) {
+        if (Fx_SHOW_PARKED) return list;
+        var out = (list || []).filter(Fx_ships);
+        return out.length ? out : list;          // never hand back nothing
+    }
+
+    function Fx_parkReason(name) {
+        return Fx_PARKED[name] || Fx_PARKED_DEFAULT;
+    }
+
+    // The practice cards are all genuinely complete skills, so they all ship.
+    // The two that are studios rather than sequences are fine as they are.
+    function Fx_shipPractices(list) { return list; }
+
+    // =====================================================================
     // FRAMING A WALL, THE WAY IT WAS TAUGHT
     // ---------------------------------------------------------------------
     // Straight out of Wall Assembly.pdf — the class notes from 5 June 2025.
@@ -62951,11 +63038,19 @@ No matching component was found for:
     // steps. A window opening or a roof-only job does not -- it is already
     // standing on something.
     function Fx_withGround(t, steps) {
-        if (!steps.some(function (s) { return s.phase === "Foundation interface"; })) return steps;
         // A foundation-only job is the ground sequence and nothing above it.
         var only = Fx_coverage(t).groundOnly;
         if (only) return Fx_groundSequence(false, only);
-        return Fx_groundSequence(Fx_scopeOf(t, 0).dwelling).concat(Fx_expandFinish(steps));
+
+        // The finish expansion has to run for EVERY project, not only ones
+        // that start at a foundation -- a roofing job was bailing out above
+        // this line and still being handed the old one-line "Roof covering"
+        // step instead of the ten-step sequence.
+        var out = Fx_expandFinish(steps);
+
+        // Groundworks only go in front of something that starts at the ground.
+        if (!out.some(function (s) { return s.phase === "Foundation interface"; })) return out;
+        return Fx_groundSequence(Fx_scopeOf(t, 0).dwelling).concat(out);
     }
 
     function tG(t) {
@@ -63520,7 +63615,7 @@ No matching component was found for:
     function vP({
         openSim: t
     }) {
-        let [e, n] = (0, Fn.useState)(""), [a, i] = (0, Fn.useState)("All categories"), [r, o] = (0, Fn.useState)(Km[0].name), [l, c] = (0, Fn.useState)(8), [f, h] = (0, Fn.useState)(10), [p, m] = (0, Fn.useState)("Killeen, Texas"), [g, x] = (0, Fn.useState)(!1), [_, b] = (0, Fn.useState)(0), [v, S] = (0, Fn.useState)(new Set), [C, w] = (0, Fn.useState)(!1), [A, L] = (0, Fn.useState)(!1), [I, E] = (0, Fn.useState)(new Set), [R, D] = (0, Fn.useState)(1), [O, H] = (0, Fn.useState)(null), G = (0, Fn.useMemo)(() => Km.filter(Z => (a === "All categories" || Z.category === a) && (!e.trim() || [Z.name, ...Z.keywords].join(" ").toLowerCase().includes(e.toLowerCase()))), [a, e]), V = Km.find(Z => Z.name === r) ?? Km[0], F = V.category.startsWith("Fencing"), Y = (0, Fn.useMemo)(() => {
+        let [e, n] = (0, Fn.useState)(""), [a, i] = (0, Fn.useState)("All categories"), [r, o] = (0, Fn.useState)(Fx_shipList(Km)[0].name), [l, c] = (0, Fn.useState)(8), [f, h] = (0, Fn.useState)(10), [p, m] = (0, Fn.useState)("Killeen, Texas"), [g, x] = (0, Fn.useState)(!1), [_, b] = (0, Fn.useState)(0), [v, S] = (0, Fn.useState)(new Set), [C, w] = (0, Fn.useState)(!1), [A, L] = (0, Fn.useState)(!1), [I, E] = (0, Fn.useState)(new Set), [R, D] = (0, Fn.useState)(1), [O, H] = (0, Fn.useState)(null), G = (0, Fn.useMemo)(() => Fx_shipList(Km).filter(Z => (a === "All categories" || Z.category === a) && (!e.trim() || [Z.name, ...Z.keywords].join(" ").toLowerCase().includes(e.toLowerCase()))), [a, e]), V = Fx_shipList(Km).find(Z => Z.name === r) ?? Fx_shipList(Km)[0], F = V.category.startsWith("Fencing"), Y = (0, Fn.useMemo)(() => {
             let Z = Math.max(1, l || 1),
                 be = Math.max(1, f || 1),
                 se = Math.round(Z * be),
@@ -64056,7 +64151,7 @@ No matching component was found for:
 
         function Q() {
             let Z = e.toLowerCase(),
-                be = Km.find(Oe => [Oe.name, ...Oe.keywords].some(ze => Z.includes(ze.toLowerCase()))) ?? G[0];
+                be = Fx_shipList(Km).find(Oe => [Oe.name, ...Oe.keywords].some(ze => Z.includes(ze.toLowerCase()))) ?? G[0];
             be && (o(be.name), i(be.category));
             let se = Z.match(/\d+(?:\.\d+)?/g);
             se?.[0] && c(Number(se[0])), se?.[1] && h(Number(se[1])), x(!0)
@@ -64538,7 +64633,7 @@ No matching component was found for:
                         className: "eyebrow",
                         children: "Browse projects"
                     }), (0, k.jsx)("div", {
-                        children: G.slice(0, 12).map(Z => (0, k.jsxs)("button", {
+                        children: G.map(Z => (0, k.jsxs)("button", {
                             onClick: () => {
                                 o(Z.name), i(Z.category), x(!0), L(!1)
                             },
