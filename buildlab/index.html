@@ -56215,6 +56215,118 @@ No matching component was found for:
         irc: [["R402.2", "Concrete strength and curing"]],
         ibc: [["1905", "Concrete — modifications to ACI 318"]], fasteners: [] };
 
+    // ---- fencing ----------------------------------------------------------
+    // Honest note: fences have almost no code behind them. What applies is the
+    // permit exemption, ground-contact treatment, frost depth and fastener
+    // corrosion. Everything else is zoning (local) or good practice.
+    Fx_CODE_LIBRARY["fn-rules"] = {
+        irc: [["R105.2", "Work exempt from permit — fences not over 7 ft high. That is the whole of what the building code says about a fence"],
+              ["ZONING", "Height, setback and corner sight-triangle limits are set by your city, not by the IRC. They vary street to street and the app cannot know yours"]],
+        ibc: [["105.2", "Work exempt from permit — fences not over 7 ft"]], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-locate"] = {
+        irc: [["—", "Utility locating is state law, not building code. 811 is free and required before you dig in every US state"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-layout"] = {
+        irc: [["GOOD PRACTICE", "6 ft o.c. for solid privacy, 8 ft maximum for open styles. Not a code number — it is the span at which 2x4 rails stop sagging"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-dig"] = {
+        irc: [["R403.1.4", "Footings below the frost line — the same reason a fence post has to go below it, or it is jacked up every winter"],
+              ["GOOD PRACTICE", "Embedment of a third of the fence height, 24 in minimum, whichever is deeper"]],
+        ibc: [["1809.5", "Frost protection"]], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-set"] = {
+        irc: [["R317.1", "Preservative-treated wood in contact with the ground must be rated for GROUND CONTACT — UC4A or better. Most treated stock on the rack is above-ground rated"],
+              ["R317.1.2", "Wood in contact with the ground or with concrete exposed to the weather"]],
+        ibc: [["2304.12", "Protection against decay and termites"]], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-cut"] = {
+        irc: [["R317.1.1", "Field-cut ends of treated lumber lose their treatment and have to be re-treated"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-rails"] = {
+        irc: [["R317.3", "Fasteners in contact with preservative-treated wood must be hot-dip galvanised, stainless, or otherwise corrosion-resistant as listed"]],
+        ibc: [["2304.10.5", "Fasteners in preservative-treated wood"]],
+        fasteners: [["Rail fastener", "Hot-dip galvanised or stainless. Plain steel corrodes in modern treated lumber and streaks the boards long before it fails."]] };
+    Fx_CODE_LIBRARY["fn-pickets"] = Fx_CODE_LIBRARY["fn-rails"];
+    Fx_CODE_LIBRARY["fn-gate"] = {
+        irc: [["GOOD PRACTICE", "Diagonal brace runs from the BOTTOM of the hinge side up to the TOP of the latch side, putting it in compression. The other direction sags"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-finish"] = {
+        irc: [["R317.1.1", "Cut ends and end grain are where water enters treated lumber"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-panel-layout"] = {
+        irc: [["MANUFACTURER", "Post spacing on a panel system is fixed by the panel, not chosen. Measure a real panel before marking the run"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-panel-set"] = {
+        irc: [["MANUFACTURER", "Vinyl moves with temperature — leave the expansion gap the system specifies"],
+              ["R317.1", "Any wood component in ground contact still needs UC4A rating"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["fn-tension"] = {
+        irc: [["MANUFACTURER", "Chain link fabric is stretched, not hung. Ties roughly 12 in on line posts, 24 in on the top rail"]],
+        ibc: [], fasteners: [] };
+
+    // ---- decks ------------------------------------------------------------
+    Fx_CODE_LIBRARY["dk-permit"] = {
+        irc: [["R105", "Permits — an attached deck is structure and is almost never exempt"],
+              ["R507.1", "Exterior decks — scope"],
+              ["R301.2", "Frost depth is a local number from your building department"]],
+        ibc: [["105", "Permits"]], fasteners: [] };
+    Fx_CODE_LIBRARY["dk-layout"] = {
+        irc: [["R507.1", "Decks shall be designed and constructed in accordance with Section R507"],
+              ["R311.3", "Floor elevation at exterior doors — the deck surface sits below the threshold"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["dk-ledger"] = {
+        irc: [["R507.9", "Deck ledger connection to band joist"],
+              ["Table R507.9.1.3(1)", "Fastener spacing for a deck ledger — 1/2 in lag screws or bolts, spacing by joist span"],
+              ["R507.9.1.3", "Fasteners staggered, minimum 2 in from top and bottom edges of the ledger and 5 in from the ends"],
+              ["R507.2.4", "Flashing at the ledger"],
+              ["R507.9.1.1", "Ledger shall not be attached to masonry veneer or to a cantilevered floor"]],
+        ibc: [["2304.10", "Connections"]],
+        fasteners: [["Ledger", "1/2 in lag screws or through-bolts at Table R507.9.1.3(1) spacing. Nails and deck screws are not permitted for this connection."]] };
+    Fx_CODE_LIBRARY["dk-footing"] = {
+        irc: [["R507.3", "Deck footings"],
+              ["Table R507.3.1", "Minimum footing size by tributary area and soil bearing"],
+              ["R403.1.4", "Footings below the frost line"],
+              ["R401.2", "Bearing on undisturbed soil, not fill"]],
+        ibc: [["1809.5", "Frost protection"], ["1806.2", "Presumptive load-bearing values"]], fasteners: [] };
+    Fx_CODE_LIBRARY["dk-posts"] = {
+        irc: [["R507.4", "Deck posts — minimum 4x4, connected to the footing"],
+              ["R507.4.1", "Deck post to footing connection"],
+              ["R317.1", "Ground contact rating where the post bears near grade"]],
+        ibc: [], fasteners: [["Post base", "Galvanised standoff base with the manufacturer's own fasteners. A framing screw in a connector voids its rating."]] };
+    Fx_CODE_LIBRARY["dk-beam"] = {
+        irc: [["R507.5", "Deck beams"],
+              ["Table R507.5", "Deck beam spans by species, size and joist span carried"],
+              ["R507.7", "Deck joist and beam bearing — the beam bears on the post"]],
+        ibc: [], fasteners: [["Post cap", "Manufacturer's connector and fasteners. Side-bolting a beam puts the deck load into fasteners in shear."]] };
+    Fx_CODE_LIBRARY["dk-joists"] = {
+        irc: [["R507.6", "Deck joists"],
+              ["Table R507.6", "Deck joist spans by species, size and spacing"],
+              ["R507.7", "Joist bearing and hanger requirements"]],
+        ibc: [["2304.10", "Connections"]],
+        fasteners: [["Joist hanger", "Every hole filled with the hanger manufacturer's specified connector nail. Deck screws and roofing nails are not connector fasteners."]] };
+    Fx_CODE_LIBRARY["dk-blocking"] = {
+        irc: [["R507.7.1", "Joist blocking at bearing"],
+              ["R507.9.2", "Lateral load connection"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["dk-decking"] = {
+        irc: [["R507.8", "Decking — installed per the manufacturer where it is a proprietary product"],
+              ["R317.1", "Decking in exterior exposure must be treated or naturally durable"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["dk-guards"] = {
+        irc: [["R312.1.1", "Guards required where the walking surface is more than 30 in above grade"],
+              ["R312.1.2", "Guard height — 36 in minimum for a dwelling"],
+              ["R312.1.3", "Openings — a 4 in sphere must not pass; 4 3/8 in at the stair triangle"],
+              ["R301.5", "Guards designed for a 200 lb concentrated load applied in any direction at the top"]],
+        ibc: [["1015", "Guards"]], fasteners: [["Guard post", "Through-bolted, or a guard-post connector tested for the load. A lag screw into the outside of a rim pulls out."]] };
+    Fx_CODE_LIBRARY["dk-stairs"] = {
+        irc: [["R311.7.5.1", "Riser height — 7 3/4 in maximum, and the greatest may not exceed the smallest by more than 3/8 in"],
+              ["R311.7.5.2", "Tread depth — 10 in minimum, same 3/8 in tolerance"],
+              ["R311.7.6", "Landings"],
+              ["R311.7.8", "Handrails — required with four or more risers, graspable, 34 to 38 in"]],
+        ibc: [["1011", "Stairways"]], fasteners: [] };
+    Fx_CODE_LIBRARY["dk-final"] = {
+        irc: [["R109.1", "Required inspections"],
+              ["R301.5", "Live loads — a deck is designed for 40 psf plus the guard load"]],
+        ibc: [], fasteners: [] };
+
     // =====================================================================
     // LIVE CAMERA
     // ---------------------------------------------------------------------
@@ -59456,7 +59568,16 @@ No matching component was found for:
         // These got built this session as the groundworks paths. They are a
         // foundation and nothing above it, so they take the ground sequence
         // on its own rather than the whole shell.
-        "Concrete slab": "ground", "Pier-and-beam foundation": "ground"
+        "Concrete slab": "ground", "Pier-and-beam foundation": "ground",
+
+        // --- standalone outdoor work, each its own sequence ---
+        "Wood privacy fence": "solo", "Wood shadowbox fence": "solo",
+        "Horizontal wood fence": "solo", "Composite fence": "solo",
+        "Post-and-rail fence": "solo", "Fence gate only": "solo",
+        "Vinyl privacy fence": "solo", "Vinyl picket fence": "solo",
+        "Ornamental metal fence": "solo", "Chain-link fence": "solo",
+        "Welded-wire garden fence": "solo",
+        "Deck": "solo"
         // everything else falls through to "none"
     };
 
@@ -59466,6 +59587,25 @@ No matching component was found for:
         "Concrete slab": "slab",
         "Pier-and-beam foundation": "pier"
     };
+
+    // Projects that are their own whole sequence — no foundation phase in
+    // front, no shell behind. A fence is a fence; a deck is a deck.
+    var Fx_SOLO = {
+        "Wood privacy fence": "FENCE_WOOD", "Wood shadowbox fence": "FENCE_WOOD",
+        "Horizontal wood fence": "FENCE_WOOD", "Composite fence": "FENCE_WOOD",
+        "Post-and-rail fence": "FENCE_WOOD", "Fence gate only": "FENCE_WOOD",
+        "Vinyl privacy fence": "FENCE_PANEL", "Vinyl picket fence": "FENCE_PANEL",
+        "Ornamental metal fence": "FENCE_PANEL", "Chain-link fence": "FENCE_PANEL",
+        "Welded-wire garden fence": "FENCE_PANEL",
+        "Deck": "DECK"
+    };
+
+    function Fx_soloSequence(name) {
+        var k = Fx_SOLO[name];
+        return k === "FENCE_WOOD" ? Fx_FENCE_WOOD_SEQUENCE
+             : k === "FENCE_PANEL" ? Fx_FENCE_PANEL_SEQUENCE
+             : k === "DECK" ? Fx_OUTDOOR_DECK_SEQUENCE : null;
+    }
 
     // What to point someone at instead.
     var Fx_INSTEAD = {
@@ -59489,7 +59629,7 @@ No matching component was found for:
                 : /Exterior projects/i.test(cat) ? "exterior"
                 : /envelope/i.test(cat) ? "envelope" : "other";
         return { level: level, built: level !== "none", groundOnly: groundOnly,
-                 why: Fx_INSTEAD[why] };
+                 solo: Fx_SOLO[name] || null, why: Fx_INSTEAD[why] };
     }
 
     var Fx_BUILT_LIST = [
@@ -59657,7 +59797,23 @@ No matching component was found for:
         // --- single assemblies, start to finish ---
         "Wall framing": 1,
         "Floor framing": 1,
-        "Window opening": 1
+        "Window opening": 1,
+
+        // --- fencing (built from IRC permit/decay/frost + good practice) ---
+        "Wood privacy fence": 1,
+        "Wood shadowbox fence": 1,
+        "Horizontal wood fence": 1,
+        "Composite fence": 1,
+        "Post-and-rail fence": 1,
+        "Fence gate only": 1,
+        "Vinyl privacy fence": 1,
+        "Vinyl picket fence": 1,
+        "Ornamental metal fence": 1,
+        "Chain-link fence": 1,
+        "Welded-wire garden fence": 1,
+
+        // --- decks (IRC R507) ---
+        "Deck": 1
     };
 
     // Parked, with the reason. This doubles as the build order.
@@ -60942,11 +61098,12 @@ No matching component was found for:
     // `asked` is the phase filter the view was opened with. Somebody who
     // picked the "Foundation and sill plates" practice asked for that phase
     // on purpose -- stripping it there would hand them an empty screen.
-    function Fx_shapeForPermit(steps, permit, asked, dwelling, groundOnly) {
-        // A foundation-only job is already exactly its own sequence -- no
-        // phases to drop, and no self-close-out, because a poured foundation
-        // gets inspected like any other permitted work.
-        if (groundOnly) return steps;
+    function Fx_shapeForPermit(steps, permit, asked, dwelling, standalone) {
+        // A job that IS its own sequence -- a foundation, a fence, a deck --
+        // is already complete. Nothing to drop, and no shed close-out bolted
+        // on the end: a poured foundation and a deck both get inspected, and
+        // a fence ends when the gate swings.
+        if (standalone) return steps;
         var eff = Fx_effectiveChoice(dwelling),
             id = eff.id, explicit = asked && asked.length;
         permit = eff.permit;
@@ -61258,6 +61415,579 @@ No matching component was found for:
             ]
         });
     }
+
+    // =====================================================================
+    // FENCING
+    // ---------------------------------------------------------------------
+    // Eleven fence projects sat in the catalogue with no steps behind them,
+    // because the reference set this app was built from is wood-frame
+    // BUILDING construction and says nothing about fences.
+    //
+    // Fencing also breaks the app's usual promise. Framing has a fastening
+    // schedule and a span table behind every number; a fence has almost
+    // nothing. The IRC exempts fences under 7 ft from a permit and then goes
+    // quiet. Height, setback and corner sight-triangle rules are ZONING, and
+    // they change from city to city and sometimes from street to street.
+    //
+    // So these steps cite what genuinely applies -- permit exemption, ground
+    // contact treatment, frost depth for the posts -- and label the rest as
+    // good practice, which is what it is. Dressing convention up as code
+    // would be the one thing this app is built not to do.
+    // =====================================================================
+
+    // Post embedment: the working rule is a third of the post's total length,
+    // or 2 ft, whichever is deeper -- and below the frost line wherever the
+    // ground freezes, or the post is a lever waiting for winter.
+    function Fx_postDepth(heightFt, frostIn) {
+        var above = heightFt * 12,
+            third = Math.ceil((above / 3) / 6) * 6,       // a third of the height above ground
+            floor = 24,
+            frost = frostIn || 0,
+            deep = Math.max(floor, third, frost),
+            governs = deep === frost && frost > Math.max(floor, third) ? "your frost line"
+                    : deep === third && third > floor ? "a third of the fence height"
+                    : "the 24 in minimum";
+        return { embed: deep, total: above + deep, above: above,
+                 postFt: Math.ceil((above + deep) / 12), governs: governs };
+    }
+
+    // Posts carry the rail span. Past 8 ft the rails sag no matter what the
+    // pickets do, and a solid privacy fence catches enough wind that 6 ft is
+    // the sane maximum.
+    function Fx_postSpacing(style) {
+        return style === "privacy" ? 72 : style === "panel" ? null : 96;
+    }
+
+    function Fx_fenceTakeoff(runFt, heightFt, style, gateCount) {
+        var oc = Fx_postSpacing(style) || 72,
+            run = runFt * 12,
+            bays = Math.max(1, Math.ceil(run / oc)),
+            posts = bays + 1 + (gateCount || 0),          // a gate needs its own pair
+            rails = bays * (heightFt >= 6 ? 3 : 2),
+            picketW = 5.5, gap = style === "privacy" ? 0 : 1.75,
+            pickets = Math.ceil(run / (picketW + gap));
+        return { bays: bays, posts: posts, rails: rails, pickets: pickets,
+                 oc: oc, concreteBags: Math.ceil(posts * 2.5) };
+    }
+
+    // ---- framed fence: wood, composite, post-and-rail ---------------------
+    var Fx_FENCE_WOOD_SEQUENCE = [
+        { phase: "Fence", diagram: 1, codeKey: "fn-rules",
+          title: "Find your height limit and your property line — before anything else",
+          material: "Your plat or survey, the city's zoning page, the phone",
+          orientation: "Fence sits inside your line, not on it",
+          spacing: "Most cities cap a back-yard fence at 6 ft and a front-yard one at 3 to 4 ft",
+          fastener: "None",
+          action: "Two separate questions and people mix them up. The BUILDING code exempts a fence "
+                + "not over 7 ft from a permit — that is all it says. Everything that actually "
+                + "constrains you is ZONING: how tall, how close to the line, what you may not block "
+                + "at a corner. Call your city and get your numbers. Then find the real property line "
+                + "from a survey, not from where the old fence was.",
+          check: "You have your height limit, your setback, and the property line located from a "
+               + "document rather than from memory.",
+          note: "A fence built over the line is the neighbour's problem to raise and your problem to "
+              + "move. Build a few inches inside it on purpose." },
+
+        { phase: "Fence", diagram: 2, codeKey: "fn-locate",
+          title: "Call 811 and wait for the marks",
+          material: "The phone, marking paint",
+          orientation: "Every hole gets checked against the marks",
+          spacing: "Typically 2 to 3 business days, free",
+          fastener: "None",
+          action: "You are about to dig two dozen holes three feet deep along a property line, which "
+                + "is exactly where gas, power and communications runs tend to be. Call 811, wait for "
+                + "the locates, and keep the marks visible while you dig.",
+          check: "Locates complete and marked, and no post falls inside a marked corridor.",
+          note: "Hand-dig within the tolerance zone of any mark. A auger through a gas line is a very "
+              + "bad day." },
+
+        { phase: "Fence", diagram: 3, codeKey: "fn-layout",
+          title: "String the line and set the post spacing",
+          material: "Mason's line, stakes, tape, marking paint",
+          orientation: "Line pulled tight between the two end posts first",
+          spacing: "6 ft o.c. for a solid privacy fence, 8 ft maximum for open styles",
+          fastener: "None",
+          action: "Set the two ends, pull a line between them, and mark every post along it. Solid "
+                + "privacy fence goes 6 ft on centre — the rails sag past that and the panel catches "
+                + "real wind. Open styles can run 8 ft. Divide the run evenly rather than leaving a "
+                + "stub bay at the end, and set gate posts where the gate actually goes.",
+          check: "All posts marked on one straight line, spacing even, no bay over the maximum, gate "
+               + "posts located.",
+          note: "Measure the run and divide. A 37 ft run at 6 ft spacing is seven bays of 5 ft 4 in, "
+              + "not six bays and a scrap." },
+
+        { phase: "Fence", diagram: 4, codeKey: "fn-dig",
+          title: "Dig the holes — a third of the post, and below frost",
+          material: "Auger or post-hole digger, digging bar",
+          orientation: "Hole three times the post width, straight sided",
+          spacing: "Embedment is the deeper of a third of the post or 24 in — and below your frost line",
+          fastener: "None",
+          action: "A fence post is a lever with the wind on the long end, so depth is what holds it. "
+                + "Go a third of the post's total length or 24 in, whichever is deeper — and deeper "
+                + "still if your frost line is below that, because a post that ends above frost gets "
+                + "jacked up a little every winter until the fence leans. Hole about three times the "
+                + "post width so there is concrete all round it.",
+          check: "Every hole to depth, sides straight, bottom clean, width consistent.",
+          note: "For a 6 ft fence that is an 8 ft post with 24 to 30 in in the ground. Buy the long "
+              + "posts; you cannot fix shallow holes later." },
+
+        { phase: "Fence", diagram: 5, codeKey: "fn-set",
+          title: "Set the posts plumb and braced, and let them cure",
+          material: "Ground-contact posts (UC4A minimum), concrete or compacted gravel, braces",
+          orientation: "Crown away from the fence line; plumb in both directions",
+          spacing: "Concrete collar stops short of the surface and is crowned to shed water",
+          fastener: "Temporary bracing only",
+          action: "Put 4 to 6 in of gravel in the bottom so the post end drains instead of standing in "
+                + "water. Set the post, plumb it BOTH ways, brace it, then pour. Crown the concrete "
+                + "above grade so water runs off rather than collecting against the post. Then leave "
+                + "it alone — do not hang rails on green concrete.",
+          check: "Every post plumb both ways, braced, tops roughly to line, concrete crowned.",
+          note: "The post must be GROUND CONTACT rated — UC4A or better. Most treated stock on the "
+              + "rack is above-ground rated and will rot off at the soil line in a few years. IRC "
+              + "R317.1 is the same rule that governs a sill plate." },
+
+        { phase: "Fence", diagram: 6, codeKey: "fn-cut",
+          title: "Cut the posts to a line, not to a tape",
+          material: "Mason's line, level, circular saw",
+          orientation: "Follow the ground, or hold level and step it — pick one and commit",
+          spacing: "Consistent reveal above the pickets",
+          fastener: "None",
+          action: "Pull a line across the tops and cut them all to it. On sloping ground you either "
+                + "rake the fence with the grade or step it in even drops — decide now, because the "
+                + "rails and pickets follow that decision. Measuring each post off the ground "
+                + "individually gives you a wandering top line that shows from the street.",
+          check: "Tops follow one deliberate line, and that line is the one you chose.",
+          note: "Cap or bevel the cut ends and treat them. A flat sawn top soaks up water and rots "
+              + "first, and the cut face has no treatment left on it." },
+
+        { phase: "Fence", diagram: 7, codeKey: "fn-rails",
+          title: "Rails — two for a low fence, three from 6 ft up",
+          material: "2x4 rails, ground-contact or above-ground rated as their position requires",
+          orientation: "Crown up; joints land on a post, never mid-bay",
+          spacing: "Top rail near the top, bottom rail 6 to 10 in off the ground, third in the middle",
+          fastener: "Structural screws or 16d; every joint lands on a post",
+          action: "Run the rails bay by bay. Anything 6 ft or over gets three — two lets the pickets "
+                + "bow in the middle within a season. Keep the bottom rail well clear of the dirt so "
+                + "it is not wicking. Every rail joint has to land on a post; a joint floating in the "
+                + "middle of a bay is a hinge.",
+          check: "Rails level or following your chosen line, joints on posts, bottom rail clear of "
+               + "grade, nothing bowed.",
+          note: "Galvanised or stainless fasteners only. Modern treated lumber eats plain steel, and "
+              + "the streaks show on the boards long before the fastener fails." },
+
+        { phase: "Fence", diagram: 8, codeKey: "fn-pickets",
+          title: "Pickets — set the spacing with a jig, not by eye",
+          material: "Pickets, a spacer block cut to your gap",
+          orientation: "Plumb, bottoms held off the ground",
+          spacing: "Privacy: butted tight. Picket style: a consistent gap off a spacer",
+          fastener: "2 fasteners per rail crossing, galvanised or stainless",
+          action: "Cut a spacer block and use it for every board — eyeballing drifts, and the drift is "
+                + "cumulative and obvious. Hold the bottoms 1 to 2 in off the ground so they are not "
+                + "sitting in wet soil. Check plumb every few boards rather than every board, and "
+                + "adjust the gap slightly rather than forcing the last one.",
+          check: "Spacing even the whole run, bottoms clear of grade, boards plumb, two fasteners at "
+               + "every rail.",
+          note: "Butted-tight privacy boards will shrink and open a gap as they dry. Boards that are "
+              + "already dry when you hang them stay where you put them." },
+
+        { phase: "Fence", diagram: 9, codeKey: "fn-gate",
+          title: "Gate — the brace runs from the bottom hinge corner UP",
+          material: "Gate frame stock, diagonal brace, heavy hinges, latch",
+          orientation: "Diagonal from the BOTTOM of the hinge side to the TOP of the latch side",
+          spacing: "About 1/2 in clearance each side, more at the bottom",
+          fastener: "Through-bolts at the hinges, not screws into end grain",
+          action: "Build the frame square, then run the diagonal from the bottom corner on the HINGE "
+                + "side up to the top corner on the latch side. In that direction the brace is in "
+                + "compression and holds the gate up. Put it the other way and it is in tension, it "
+                + "stretches, and the gate sags — this is the single most common gate mistake. Three "
+                + "hinges on anything tall or heavy.",
+          check: "Frame square by diagonals, brace running the right way, even gap all round, gate "
+               + "swings without dragging and latches without lifting.",
+          note: "Gate posts take the most abuse of any post on the fence. Set them deeper, in more "
+              + "concrete, and bolt the hinges through rather than screwing into end grain." },
+
+        { phase: "Fence", diagram: 10, codeKey: "fn-finish",
+          title: "Finish it, and walk the line",
+          material: "Stain or sealer rated for exterior wood",
+          orientation: "Cut ends and end grain first — that is where water gets in",
+          spacing: "n/a",
+          fastener: "None",
+          action: "Let new treated lumber dry before finishing or nothing soaks in. Hit every cut end "
+                + "and every piece of end grain — that is where water enters and where rot starts. "
+                + "Then walk the whole line and sight down it from both ends.",
+          check: "Line straight from both ends, tops consistent, gate operating, nothing in contact "
+               + "with soil that was not rated for it.",
+          note: "Re-check the gate after the first season. Posts settle, and a gate is the first thing "
+              + "to tell you about it." }
+    ];
+
+    // ---- panel systems: vinyl, ornamental metal, chain link ---------------
+    var Fx_FENCE_PANEL_SEQUENCE = [
+        { phase: "Fence", diagram: 1, codeKey: "fn-rules",
+          title: "Find your height limit and your property line — before anything else",
+          material: "Your plat or survey, the city's zoning page",
+          orientation: "Fence sits inside your line",
+          spacing: "Zoning sets the height, not the building code",
+          fastener: "None",
+          action: "Same two questions as any fence, and the same trap. The building code exempts a "
+                + "fence under 7 ft from a permit and says nothing else. Height, setback and corner "
+                + "sight lines are zoning and they are local. Get your numbers, then locate the "
+                + "property line from a survey.",
+          check: "Height limit, setback and property line all confirmed from documents.",
+          note: "Panel fencing is expensive to move. Confirm the line before anything is ordered." },
+
+        { phase: "Fence", diagram: 2, codeKey: "fn-locate",
+          title: "Call 811 and wait for the marks",
+          material: "The phone",
+          orientation: "Every hole checked against the marks",
+          spacing: "Typically 2 to 3 business days, free",
+          fastener: "None",
+          action: "Same rule as any fence: two dozen deep holes along a property line is exactly where "
+                + "buried services run. Call, wait, keep the marks visible.",
+          check: "Locates complete, no post inside a marked corridor.",
+          note: "Hand-dig inside the tolerance zone of any mark." },
+
+        { phase: "Fence", diagram: 3, codeKey: "fn-panel-layout",
+          title: "Lay out to the PANEL, not to a round number",
+          material: "The panels themselves, mason's line, tape",
+          orientation: "Measure a real panel before marking anything",
+          spacing: "Post centres are fixed by the panel — usually its width plus the post",
+          fastener: "None",
+          action: "This is where panel fences go wrong. Post spacing is not yours to choose: the panel "
+                + "sets it, and being an inch out means the panel will not seat. Lay one panel on the "
+                + "ground with a post at each end, measure the actual centre-to-centre, and mark the "
+                + "whole run from that number. Put any cut panel at a corner or against the house, "
+                + "not in the middle of the front run.",
+          check: "Post centres measured off a real panel, whole run marked from that dimension, cut "
+               + "panel located where it is least visible.",
+          note: "With wood you cut the pickets to fit the bay. With panels the bay has to fit the "
+              + "panel. Everything about the layout follows from that." },
+
+        { phase: "Fence", diagram: 4, codeKey: "fn-dig",
+          title: "Dig the holes — a third of the post, and below frost",
+          material: "Auger or post-hole digger",
+          orientation: "Hole about three times the post width",
+          spacing: "Deeper of a third of the post or 24 in, and below the frost line",
+          fastener: "None",
+          action: "Depth is what resists the wind load, and a solid vinyl panel catches a lot of it. "
+                + "A third of the post's length or 24 in, whichever is deeper, and below your frost "
+                + "line where the ground freezes.",
+          check: "Every hole to depth, straight sided, clean bottomed.",
+          note: "Terminal, corner and gate posts take more load than line posts. Many systems specify "
+              + "a bigger hole or more concrete for those — follow the maker's chart." },
+
+        { phase: "Fence", diagram: 5, codeKey: "fn-panel-set",
+          title: "Set posts and hang panels together, not posts first",
+          material: "Posts, panels, concrete, level, braces",
+          orientation: "Plumb both ways, panel seated before the concrete sets",
+          spacing: "As measured off the panel",
+          fastener: "Per the system",
+          action: "Do not set the whole run of posts and then try to fit panels. Set a post, hang the "
+                + "panel, set the next post to the panel, and keep going — plumbing and bracing as "
+                + "you move. Concrete is still workable for a while; use that. Once it sets, a post "
+                + "an inch out is a post you dig up.",
+          check: "Every panel seated fully at both ends, posts plumb, tops to line, nothing forced.",
+          note: "Vinyl expands and contracts a surprising amount with temperature. Leave the movement "
+              + "gap the maker specifies — pinned tight, it buckles in July." },
+
+        { phase: "Fence", diagram: 6, codeKey: "fn-tension",
+          title: "Chain link only — top rail, then stretch the fabric",
+          material: "Top rail, tension bars and bands, fabric, come-along",
+          orientation: "Fabric on the outside face of the posts",
+          spacing: "Tension bar woven full height at every terminal post",
+          fastener: "Tension bands at terminals, tie wire on line posts and top rail",
+          action: "Skip this step for vinyl or ornamental panels. For chain link: run the top rail "
+                + "first, then weave a tension bar the full height into the fabric end and band it to "
+                + "the terminal post. Stretch the fabric with a come-along until the diamonds just "
+                + "start to deform, then tie it off. A fence that is not stretched sags and bellies "
+                + "within a year.",
+          check: "Fabric taut with no belly, ties at roughly 12 in on line posts and 24 in on the top "
+               + "rail, bottom consistent to grade.",
+          note: "Stretch it in one pull over as long a run as you can manage. Stretching bay by bay "
+              + "leaves visible steps in the tension." },
+
+        { phase: "Fence", diagram: 7, codeKey: "fn-gate",
+          title: "Gate and final walk",
+          material: "Gate, hinges, latch",
+          orientation: "Even gap all round",
+          spacing: "Per the system",
+          fastener: "Through-bolted hardware",
+          action: "Hang the gate on posts that were set for it. Check the gap top to bottom, swing it "
+                + "through its full travel, and latch it without lifting. Then walk the whole line and "
+                + "sight down it.",
+          check: "Gate swings and latches freely, line straight from both ends, tops consistent, no "
+               + "panel under stress.",
+          note: "Come back after the first freeze and the first hot week. Panel systems move, and the "
+              + "gate tells you first." }
+    ];
+
+    ["fn-rules","fn-locate","fn-layout","fn-dig","fn-set","fn-cut","fn-rails",
+     "fn-pickets","fn-gate","fn-finish","fn-panel-layout","fn-panel-set",
+     "fn-tension"].forEach(function (k) { Fx_STEP_TOOL[k] = "none"; });
+    Fx_STEP_TOOL["fn-rails"] = "nail";
+    Fx_STEP_TOOL["fn-pickets"] = "nail";
+
+    Fx_STEP_FASTENER["fn-rails"] = {
+        primary: "Galvanised or stainless structural screw / 16d hot-dip",
+        substitute: "Any fastener rated for contact with preservative-treated wood",
+        note: "Modern treated lumber corrodes plain steel. Use hot-dip galvanised, stainless, or a coating the fastener maker lists for treated wood. IRC R317.3." };
+    Fx_STEP_FASTENER["fn-pickets"] = {
+        primary: "2 galvanised or stainless fasteners per rail crossing",
+        substitute: "Ring-shank or screw, same corrosion rating",
+        note: "One fastener per crossing lets the board pivot and cup. Two holds it flat." };
+
+    // =====================================================================
+    // DECKS
+    // ---------------------------------------------------------------------
+    // The reference set this app was built from has no deck guide, which is
+    // why there were no deck steps. The code does cover it: IRC Section R507,
+    // Exterior Decks, with span tables for joists and beams, footing sizing,
+    // post connections, and -- the part that matters most -- the ledger
+    // connection in R507.9.
+    //
+    // Deck collapses are overwhelmingly ledger failures, and almost always
+    // the same two causes: the ledger was nailed instead of bolted, or it was
+    // fastened to something that could not carry it (brick veneer, a
+    // cantilever, a rim that was never checked). That gets its own step and
+    // its own warning, because a deck full of people comes down all at once.
+    //
+    // Span numbers are NOT reproduced here. They depend on species, grade,
+    // spacing and whether the joists cantilever, and getting one wrong is
+    // exactly the failure this app exists to prevent. The steps name the
+    // table and make you look it up.
+    // =====================================================================
+
+    // Guard height and the sphere rule are fixed numbers worth computing
+    // against, because they decide whether the deck needs guards at all.
+    var Fx_GUARD_TRIGGER_IN = 30,   // R312.1.1: more than 30 in above grade
+        Fx_GUARD_HEIGHT_IN = 36,    // R312.1.2: 36 in minimum for a dwelling deck
+        Fx_GUARD_SPHERE_IN = 4,     // R312.1.3: 4 in sphere must not pass
+        Fx_STAIR_SPHERE_IN = 4.375; // R312.1.3: 4 3/8 in at the stair triangle
+
+    function Fx_deckGuards(heightIn) {
+        var need = heightIn > Fx_GUARD_TRIGGER_IN;
+        return {
+            required: need, height: heightIn,
+            minGuard: Fx_GUARD_HEIGHT_IN, sphere: Fx_GUARD_SPHERE_IN,
+            why: need
+                ? "Walking surface is more than " + Fx_GUARD_TRIGGER_IN + " in above grade, so a "
+                  + Fx_GUARD_HEIGHT_IN + " in guard is required (IRC R312.1)."
+                : "At " + heightIn + " in the walking surface is " + Fx_GUARD_TRIGGER_IN
+                  + " in or less above grade, so no guard is required — but people still fall off "
+                  + "low decks, and the app is telling you the minimum, not the good idea."
+        };
+    }
+
+    var Fx_OUTDOOR_DECK_SEQUENCE = [
+        { phase: "Deck", diagram: 1, codeKey: "dk-permit",
+          title: "Pull the permit — a deck almost always needs one",
+          material: "Plans, the permit, 811",
+          orientation: "Built to the approved drawing",
+          spacing: "Footing depth is your local frost line",
+          fastener: "None",
+          action: "Fences slip under the radar; decks do not. An attached deck is structure carrying "
+                + "people above grade, and nearly every jurisdiction wants it permitted and inspected "
+                + "— usually a footing inspection before the pour and a framing inspection before the "
+                + "decking goes down. Get the permit, get your frost depth in writing, and call 811.",
+          check: "Permit issued, frost depth known, inspections understood, utilities marked.",
+          note: "Find out now which inspections you need. Decking screwed down over unin­spected "
+              + "framing comes back up." },
+
+        { phase: "Deck", diagram: 2, codeKey: "dk-layout",
+          title: "Lay it out and square it off the house",
+          material: "Batter boards, mason's line, long tape",
+          orientation: "Ledger line level; diagonals equal",
+          spacing: "Footing positions from the beam and joist spans",
+          fastener: "None",
+          action: "Mark the ledger height first — the deck surface usually sits about an inch below "
+                + "the door threshold so water and snow do not run inside, and so the door still "
+                + "opens over it. Then square the footprint out from the house with equal diagonals "
+                + "and set your footing positions from the spans you looked up, not from a guess.",
+          check: "Ledger line level and at the right height below the threshold, diagonals equal, "
+               + "footings marked to the span layout.",
+          note: "Every dimension below follows from this line. A ledger set at the wrong height is a "
+              + "door that will not open or a deck that drains into the house." },
+
+        { phase: "Deck", diagram: 3, codeKey: "dk-ledger",
+          title: "The ledger — bolted and flashed. This is the one that kills people",
+          material: "Ledger stock, 1/2 in lags or through-bolts, ledger flashing",
+          orientation: "Flashing over the ledger and behind the housewrap",
+          spacing: "From IRC Table R507.9.1.3(1) — set by joist span. Staggered, 2 in from top and bottom edges, 5 in from ends",
+          fastener: "1/2 in lag screws or through-bolts. NEVER nails, NEVER deck screws",
+          action: "Open the siding and find out what you are attaching to. The ledger fastens to the "
+                + "house band joist — solid, continuous framing — and nothing else. Look up the "
+                + "spacing in Table R507.9.1.3(1) for your joist span, stagger the bolts in two rows, "
+                + "keep them 2 in from the top and bottom edges and 5 in from each end. Then flash "
+                + "it: metal over the top of the ledger, tucked up behind the housewrap so water runs "
+                + "out over the flashing instead of down the back of the board.",
+          check: "Attached to solid band joist, 1/2 in bolts at the table spacing, staggered, edge "
+               + "and end distances held, flashing lapped correctly, no fastener into sheathing alone.",
+          note: "Never attach a ledger to brick veneer, to a cantilevered floor, or to stucco over "
+              + "foam — none of them carry load. If you cannot confirm solid framing behind it, build "
+              + "the deck freestanding on its own posts. Most deck collapses are this connection, and "
+              + "they fail with a full deck of people on them." },
+
+        { phase: "Deck", diagram: 4, codeKey: "dk-footing",
+          title: "Footings to frost depth, sized for the load they carry",
+          material: "Concrete, forms, rebar as detailed",
+          orientation: "Bottom flat, on undisturbed soil",
+          spacing: "Size from IRC Table R507.3.1 — tributary area and soil bearing",
+          fastener: "None",
+          action: "Dig to your frost line and keep going until you are on undisturbed soil, never on "
+                + "fill. Footing size comes from how much deck each post carries and what the soil "
+                + "will bear — a corner post carries a quarter of what an interior post does, and the "
+                + "table accounts for that. Flatten the bottom and pour.",
+          check: "Every footing to frost depth, on undisturbed soil, sized from the table, flat and "
+               + "level.",
+          note: "IRC R507.3. A deck footing is a small pad carrying a big tributary area. Undersized "
+              + "footings do not fail suddenly — the deck just slowly tilts away from the house, which "
+              + "is its own problem for the ledger." },
+
+        { phase: "Deck", diagram: 5, codeKey: "dk-posts",
+          title: "Posts on standoff bases, never buried in the concrete",
+          material: "4x4 or 6x6 ground-contact posts, galvanised standoff post bases",
+          orientation: "Plumb both ways",
+          spacing: "At every footing",
+          fastener: "The base manufacturer's own connector nails or bolts",
+          action: "Set a galvanised standoff base in or on the footing and stand the post in that. The "
+                + "standoff holds the post about an inch clear of the concrete so the end grain can "
+                + "dry instead of sitting in the water that collects on a footing top. Plumb both "
+                + "ways and brace until the beam is on.",
+          check: "Every post plumb both ways, on a standoff base, braced, bearing fully.",
+          note: "IRC R507.4. A post cast into concrete rots from the inside at the worst possible "
+              + "place to inspect. Connector hardware takes the connector maker's own fasteners — a "
+              + "framing screw in a post base voids its rating." },
+
+        { phase: "Deck", diagram: 6, codeKey: "dk-beam",
+          title: "Beam — sized from the table, and bearing, not hanging",
+          material: "Built-up or solid beam per the plan",
+          orientation: "Crown up; splices land over posts",
+          spacing: "Span from IRC Table R507.5",
+          fastener: "Post cap connectors, manufacturer's fasteners",
+          action: "Look the beam span up in Table R507.5 for your species and the joist span it "
+                + "carries. Set it ON the posts in a post cap so the load goes straight down through "
+                + "bearing — not bolted to the side of the posts where the fasteners carry it in "
+                + "shear. Any splice in a built-up beam lands over a post.",
+          check: "Beam size from the table, bearing on post caps, splices over posts, crown up, level.",
+          note: "IRC R507.5 and R507.7. Side-bolting a beam to posts is a common shortcut and it puts "
+              + "the whole deck load into a handful of bolts." },
+
+        { phase: "Deck", diagram: 7, codeKey: "dk-joists",
+          title: "Joists in hangers, at the spacing your decking needs",
+          material: "Joists, galvanised joist hangers, connector nails",
+          orientation: "Crown up; hangers square and tight",
+          spacing: "Span from IRC Table R507.6. 16 in o.c. typical, 12 in for diagonal decking or some composites",
+          fastener: "Joist hanger nails — every hole filled",
+          action: "Hang the joists off the ledger and set them over the beam. Crown up, same as a "
+                + "floor. Fill EVERY hole in every hanger with the connector nails the hanger "
+                + "manufacturer lists — a hanger with half its holes empty carries a fraction of its "
+                + "rating. Check your decking's required spacing before you set the layout; a lot of "
+                + "composite wants 12 in and diagonal boards always do.",
+          check: "Joists crowned up, hangers square and tight to the ledger, every hanger hole filled "
+               + "with the right nail, spacing matched to the decking.",
+          note: "Roofing nails and deck screws are not connector fasteners. Filling a hanger with the "
+              + "wrong fastener voids its rating just as surely as leaving holes empty." },
+
+        { phase: "Deck", diagram: 8, codeKey: "dk-blocking",
+          title: "Blocking and bracing — stop the frame racking",
+          material: "Blocking stock, hurricane or hold-down ties",
+          orientation: "Blocking staggered so you can fasten through",
+          spacing: "At the beam bearing line, and mid-span on long joists",
+          fastener: "As the tie manufacturer lists",
+          action: "Block over the beam so the joists cannot roll, and add a row mid-span on long "
+                + "joists. Then tie the frame down — a deck is a flat plate on posts and it has to "
+                + "resist lateral movement, not just gravity.",
+          check: "Blocking at every bearing line, joists held from rolling, lateral connections in.",
+          note: "A deck that bounces or sways usually has this step missing rather than undersized "
+              + "joists." },
+
+        { phase: "Deck", diagram: 9, codeKey: "dk-decking",
+          title: "Decking — gapped, fastened, and running the way you planned",
+          material: "Decking boards, deck screws or hidden clips",
+          orientation: "Start at the house and work out, or start at the outside edge and rip the last board at the wall",
+          spacing: "Gap per the decking — wood shrinks, composite moves with heat",
+          fastener: "2 per joist crossing, or the clip system's own hardware",
+          action: "Set the gap the board maker specifies. Dry wood needs a gap because it will not "
+                + "shrink much; wet treated boards can be laid tighter because they will. Composite "
+                + "moves with temperature, not moisture, and its gap is at the ENDS as much as the "
+                + "sides. Two fasteners at every joist crossing, and keep them back from the board "
+                + "ends so you do not split them.",
+          check: "Gaps even and per the maker, two fasteners per crossing, no split ends, boards "
+               + "running as planned.",
+          note: "Plan which board lands at the house wall before you start. Ripping a two-inch sliver "
+              + "to finish against the house is the usual result of not planning it." },
+
+        { phase: "Deck", diagram: 10, codeKey: "dk-guards",
+          title: "Guards — 36 in, and a 4 in sphere must not pass",
+          material: "Posts, rails, balusters, hardware",
+          orientation: "Guard posts bolted through the frame, not surface-screwed",
+          spacing: "36 in minimum height; no opening that passes a 4 in sphere",
+          fastener: "Through-bolts, or a tested guard-post connector",
+          action: "Any walking surface more than 30 in above grade needs a guard, and it has to stand "
+                + "36 in for a dwelling. No gap anywhere in it may let a 4 in sphere through — that is "
+                + "a child's head, and it is why the number is what it is. On the stair the triangle "
+                + "between tread, riser and bottom rail gets 4 3/8 in. Guard posts carry a 200 lb "
+                + "concentrated load in any direction at the top: bolt them through the framing.",
+          check: "36 in from the deck surface, no opening passing a 4 in sphere, posts through-bolted "
+               + "or on a tested connector, nothing that flexes when you lean on it hard.",
+          note: "IRC R312.1 and R301.5. A guard post lag-screwed to the outside of a rim will pull out "
+              + "under exactly the load it exists to stop. Lean on every one of them before you call "
+              + "it finished." },
+
+        { phase: "Deck", diagram: 11, codeKey: "dk-stairs",
+          title: "Stairs — every riser the same, within 3/8 in",
+          material: "Stringers, treads, risers, a solid landing",
+          orientation: "Cut stringers off the total rise, divided evenly",
+          spacing: "Riser 7 3/4 in maximum, tread 10 in minimum, variation not over 3/8 in",
+          fastener: "Hangers or a ledger at the top; stringers bearing on a landing at the bottom",
+          action: "Measure the total rise from the deck surface to the landing, divide into equal "
+                + "risers no taller than 7 3/4 in, and cut every stringer off that one number. The "
+                + "biggest and smallest riser in a flight may not differ by more than 3/8 in — the "
+                + "code is that tight because people fall on the odd one. Stairs need a solid landing "
+                + "at the bottom, not dirt, and a graspable handrail where there are four or more "
+                + "risers.",
+          check: "Risers equal within 3/8 in, none over 7 3/4 in, treads 10 in or more, landing solid, "
+               + "handrail graspable and continuous.",
+          note: "IRC R311.7. The last riser onto the landing is the one people get wrong, because the "
+              + "landing thickness gets forgotten. Measure to the finished landing surface." },
+
+        { phase: "Deck", diagram: 12, codeKey: "dk-final",
+          title: "Load it, shake it, then call the inspection",
+          material: "Your own weight, and a few other people's",
+          orientation: "Push on everything that is meant to stop a fall",
+          spacing: "n/a",
+          fastener: "None",
+          action: "Walk every joist bay. Lean hard on every guard post and every section of rail. Get "
+                + "several people on it and feel for bounce or sway. Then call the framing inspection "
+                + "before the decking hides anything, if your inspector has not already been.",
+          check: "No bounce, no sway, nothing that moves under a hard lean, inspection passed.",
+          note: "The time to find a soft guard post is now, with you leaning on it deliberately, and "
+              + "not later with somebody's weight against it by accident." }
+    ];
+
+    ["dk-permit","dk-layout","dk-footing","dk-blocking","dk-decking","dk-guards",
+     "dk-stairs","dk-final"].forEach(function (k) { Fx_STEP_TOOL[k] = "none"; });
+    Fx_STEP_TOOL["dk-ledger"] = "connector";
+    Fx_STEP_TOOL["dk-posts"] = "connector";
+    Fx_STEP_TOOL["dk-beam"] = "connector";
+    Fx_STEP_TOOL["dk-joists"] = "connector";
+
+    Fx_STEP_FASTENER["dk-ledger"] = {
+        primary: "1/2 in lag screw or through-bolt",
+        substitute: "No substitute. Not nails, not deck screws, not structural framing screws unless the screw's own evaluation report covers a deck ledger",
+        note: "Spacing from IRC Table R507.9.1.3(1) by joist span; staggered in two rows, 2 in from top and bottom edges, 5 in from each end. This is the connection that fails in deck collapses." };
+    Fx_STEP_FASTENER["dk-joists"] = {
+        primary: "Joist hanger nails — every hole in every hanger",
+        substitute: "Only the hanger manufacturer's listed fastener",
+        note: "A hanger carries its rated load only with every hole filled with the specified nail. Deck screws and roofing nails are not connector fasteners." };
+    Fx_STEP_FASTENER["dk-posts"] = {
+        primary: "Post base connector, manufacturer's fasteners",
+        substitute: "None",
+        note: "Standoff base keeps the post end out of standing water. IRC R507.4." };
+    Fx_STEP_FASTENER["dk-beam"] = {
+        primary: "Post cap connector, manufacturer's fasteners",
+        substitute: "None",
+        note: "The beam bears on the post through the cap. Side-bolting puts the whole deck load into fasteners in shear. IRC R507.7." };
 
     // =====================================================================
     // THE LAST MILE
@@ -63039,7 +63769,11 @@ No matching component was found for:
     // standing on something.
     function Fx_withGround(t, steps) {
         // A foundation-only job is the ground sequence and nothing above it.
-        var only = Fx_coverage(t).groundOnly;
+        // A fence or a deck is its own whole sequence — nothing in front of
+        // it and nothing behind it.
+        var cov = Fx_coverage(t), solo = Fx_soloSequence(t.name);
+        if (solo) return solo;
+        var only = cov.groundOnly;
         if (only) return Fx_groundSequence(false, only);
 
         // The finish expansion has to run for EVERY project, not only ones
@@ -63181,7 +63915,7 @@ No matching component was found for:
         practiceMode: o = !1
     }) {
         let _permitTick = Fx_usePermit(),
-            l = Fx_shapeForPermit(foe(t), _permitTick, r, Fx_scopeOf(t, 0).dwelling, Fx_coverage(t).groundOnly),
+            l = Fx_shapeForPermit(foe(t), _permitTick, r, Fx_scopeOf(t, 0).dwelling, Fx_coverage(t).groundOnly || Fx_coverage(t).solo),
             c = (Q0 => Q0.length ? Q0 : l)(r?.length ? l.filter(Q => r.includes(Q.phase)) : l),
             f = t.name + ":guided:",
             h = c.findIndex((Q, ee) => !n.has(f + ee)),
