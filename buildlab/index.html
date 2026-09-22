@@ -54911,10 +54911,13 @@ No matching component was found for:
                     ]
                 }) : null,
 
-                pick === "fastener"
-                    ? Fx_J($8, { mode: props.fastenerMode, kind: props.fastenerKind,
-                              position: arrow.fastener.position, label: props.fastenerLabel })
-                    : Fx_J(K8, arrow[pick] || arrow.action),
+                // No floating hammer. A cartoon mallet used to bob in mid-air
+                // swinging at a giant nail parked nowhere near the joint being
+                // described -- a stand-in from when no real fasteners were
+                // drawn. They are drawn at the joints now, at the right count
+                // and spacing, so the mime act was just noise over the work.
+                // The pointer stays, because it points at something.
+                pick === "fastener" ? null : Fx_J(K8, arrow[pick] || arrow.action),
 
                 Fx_J("gridHelper", { args: [gridSize, gridSize, "#415044", "#263027"], position: [0, -0.08, 0] }),
                 Fx_J(Dw, { position: [0, -0.07, 0], opacity: 0.6, scale: gridSize * 0.85, blur: 2.2, far: 14 })
@@ -55271,10 +55274,13 @@ No matching component was found for:
                     ]
                 }) : null,
 
-                pick === "fastener"
-                    ? Fx_J($8, { mode: props.fastenerMode, kind: props.fastenerKind,
-                              position: arrow.fastener.position, label: props.fastenerLabel })
-                    : Fx_J(K8, arrow[pick] || arrow.action),
+                // No floating hammer. A cartoon mallet used to bob in mid-air
+                // swinging at a giant nail parked nowhere near the joint being
+                // described -- a stand-in from when no real fasteners were
+                // drawn. They are drawn at the joints now, at the right count
+                // and spacing, so the mime act was just noise over the work.
+                // The pointer stays, because it points at something.
+                pick === "fastener" ? null : Fx_J(K8, arrow[pick] || arrow.action),
 
                 Fx_J("gridHelper", { args: [gridSize, gridSize, "#415044", "#263027"], position: [0, -(b.spec.stem.h + 0.5) * Fx_IN, 0] }),
                 Fx_J(Dw, { position: [0, -(b.spec.stem.h + 0.4) * Fx_IN, 0], opacity: 0.6, scale: gridSize * 0.85, blur: 2.4, far: 18 })
@@ -60187,6 +60193,9 @@ No matching component was found for:
                 }), (0, W.jsxs)("em", {
                     children: ["\u2192 BOW / BEND:", " ", l.bow ? "POSITION CHECKED \u2713" : "CHECK BEFORE PLACING"]
                 })]
+            }), (0, W.jsx)(Fx_FastenerTally, {
+                stage: t,
+                sceneType: r
             }), (0, W.jsxs)("div", {
                 className: "model-pan-controls",
                 "aria-label": "Model camera controls",
