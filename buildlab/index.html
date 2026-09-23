@@ -762,13 +762,16 @@ body>header{border-bottom:1px solid #2B323B}
 }
 
 /* ---- the tape ------------------------------------------------------- */
+/* Drawn as the tape in your pocket: yellow blade, black graduations coming
+   down off the top edge, red for the 16 in stud marks. The whole blade is a
+   tap target, because a beginner sees a MARK, not a count of sixteenths. */
 .tape-open-btn{background:#1E232B;color:#F0A62B;border:1px solid #F0A62B66;
   border-radius:.35rem;padding:.55rem .8rem;font:900 .66rem ui-monospace;
   letter-spacing:.12em;cursor:pointer;margin-right:.5rem}
 .tape-open-btn:hover{background:#2A1F0B;border-color:#F0A62B}
 .tape-overlay{position:fixed;inset:0;z-index:80;background:#0A0D11E8;
   display:grid;place-items:center;padding:1rem;overflow:auto}
-.tape-sheet{width:min(1040px,100%);background:#161A20;border:1px solid #2B323B;
+.tape-sheet{width:min(1120px,100%);background:#161A20;border:1px solid #2B323B;
   border-radius:.55rem;padding:1rem 1.1rem 1.2rem}
 .tape-sheet>header{display:flex;justify-content:space-between;align-items:center;
   margin-bottom:.8rem;padding-bottom:.6rem;border-bottom:1px solid #2B323B}
@@ -777,52 +780,88 @@ body>header{border-bottom:1px solid #2B323B}
   color:#98A3AF;font:800 .6rem ui-monospace;letter-spacing:.08em;padding:.35rem .6rem;cursor:pointer}
 .tape-sheet>header button:hover{color:#E8ECF1;border-color:#4A5563}
 
-.tape-head{display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.8rem}
+.tape-head{display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.7rem}
 .tape-head label{display:flex;flex-direction:column;gap:.25rem}
-.tape-head b{font:800 .58rem ui-monospace;letter-spacing:.1em;color:#98A3AF;text-transform:uppercase}
+.tape-head b{font:800 .58rem ui-monospace;letter-spacing:.09em;color:#98A3AF;text-transform:uppercase}
 .tape-head input{background:#0F1216;color:#F0A62B;border:1px solid #2B323B;border-radius:.35rem;
   padding:.5rem .6rem;font:800 1.3rem ui-monospace;width:11rem}
 .tape-head input:focus{outline:2px solid #F0A62B;outline-offset:1px}
-.tape-step{display:flex;gap:.3rem;flex-wrap:wrap}
+.tape-step{display:flex;gap:.3rem}
 .tape-step button{background:#1E232B;color:#CCD4DD;border:1px solid #2B323B;border-radius:.3rem;
-  padding:.45rem .55rem;font:700 .62rem ui-monospace;cursor:pointer}
+  padding:.5rem .7rem;font:700 .7rem ui-monospace;cursor:pointer}
 .tape-step button:hover{border-color:#F0A62B;color:#F0A62B}
+.tape-hint{margin:0;color:#F0A62B;font:700 .66rem ui-monospace;letter-spacing:.03em;flex:1 1 100%}
 
-.tape-read{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:.9rem}
+/* the blade */
+.tape-svg{width:100%;height:auto;display:block;overflow:visible;margin:1.1rem 0 .5rem;
+  cursor:crosshair;-webkit-tap-highlight-color:transparent}
+.tape-ctx{width:100%;height:auto;display:block;cursor:pointer;margin-bottom:.8rem;
+  -webkit-tap-highlight-color:transparent}
+.blade{fill:url(#bladeG)}
+.tape-ctx .blade{fill:#EFC01B}
+.blade-lip{fill:#B8890A;opacity:.55}
+.tape-svg .tick{stroke:#15130C;stroke-linecap:butt}
+.tape-svg .tick.lv0{stroke-width:4}
+.tape-svg .tick.lv1{stroke-width:3}
+.tape-svg .tick.lv2{stroke-width:2.4}
+.tape-svg .tick.lv3{stroke-width:1.9}
+.tape-svg .tick.lv4{stroke-width:1.4;stroke:#3A3320}
+.tape-svg .tick.here{stroke:#C61A12;stroke-width:4.5}
+.tape-svg .tlab{fill:#3A3320;font:700 12px ui-monospace;text-anchor:middle}
+.tape-svg .tlab.lv0{fill:#15130C;font-weight:900;font-size:26px}
+.tape-svg .tlab.lv1{fill:#15130C;font-weight:800;font-size:16px}
+.tape-svg .tlab.lv2{font-size:13px}
+.tape-svg .tlab.here{fill:#C61A12;font-weight:900}
+.tape-dot{fill:#C61A12;stroke:#fff;stroke-width:2}
+.tape-dot-line{stroke:#C61A12;stroke-width:2;stroke-dasharray:4 3;opacity:.8}
+.tape-flag{fill:#C61A12}
+.tape-flag-t{fill:#fff;font:900 13px ui-monospace;text-anchor:middle}
+
+/* the longer run underneath */
+.tape-ctx .ctick{stroke:#15130C;stroke-width:1.5}
+.tape-ctx .ctick.foot{stroke-width:3}
+.tape-ctx .ctick.stud{stroke:#C61A12;stroke-width:4}
+.tape-ctx .clab{fill:#3A3320;font:700 12px ui-monospace;text-anchor:middle}
+.tape-ctx .clab.stud{fill:#C61A12;font-weight:900}
+.ctx-here{fill:#0F1216;opacity:.85}
+
+.tape-read{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:.7rem}
 .tape-read>div{background:#0F1216;border:1px solid #2B323B;border-radius:.35rem;padding:.5rem .6rem}
+.tape-read>div.stud{border-color:#C61A12;background:#22100E}
 .tape-read b{display:block;color:#F0A62B;font:800 1.05rem ui-monospace;line-height:1.2}
+.tape-read>div.stud b{color:#FF7B6B}
 .tape-read span{display:block;color:#8A96A3;font-size:.58rem;line-height:1.35;margin-top:.15rem}
 
-.tape-svg{width:100%;height:auto;display:block;overflow:visible;margin:.9rem 0 .2rem}
-.tape-body{fill:#F3E4B8;stroke:#B9A472;stroke-width:1}
-.tape-svg .tick{stroke:#2A2A25;stroke-linecap:butt}
-.tape-svg .tick.lv0{stroke-width:3.2;stroke:#141414}
-.tape-svg .tick.lv1{stroke-width:2.4}
-.tape-svg .tick.lv2{stroke-width:1.9}
-.tape-svg .tick.lv3{stroke-width:1.5}
-.tape-svg .tick.lv4{stroke-width:1.1;stroke:#4A4A42}
-.tape-svg .tick.here{stroke:#C2410C;stroke-width:3.4}
-.tape-svg .tlab{fill:#6B6B5E;font:600 11px ui-monospace;text-anchor:middle}
-.tape-svg .tlab.lv0{fill:#141414;font-weight:800;font-size:15px}
-.tape-svg .tlab.lv1{fill:#2A2A25;font-weight:700;font-size:13px}
-.tape-svg .tlab.lv2{font-size:12px}
-.tape-svg .tlab.here{fill:#C2410C;font-weight:800}
-.tape-cursor{fill:#C2410C}
-.tape-cursor-line{stroke:#C2410C;stroke-width:1.4;stroke-dasharray:3 3;opacity:.75}
-
-.tape-key{display:flex;gap:.9rem;flex-wrap:wrap;margin:.5rem 0 .2rem}
+.tape-key{display:flex;gap:.9rem;flex-wrap:wrap;margin:.4rem 0 .2rem}
 .tape-key span{display:flex;align-items:center;gap:.3rem;font:700 .58rem ui-monospace;
-  letter-spacing:.06em;color:#98A3AF}
+  letter-spacing:.05em;color:#98A3AF}
 .tape-key i{display:block;width:2px;background:#CCD4DD}
-.tape-key .k0 i{height:15px}.tape-key .k1 i{height:12px}.tape-key .k2 i{height:9px}
-.tape-key .k3 i{height:7px}.tape-key .k4 i{height:5px}
+.tape-key .k0 i{height:16px}.tape-key .k1 i{height:13px}.tape-key .k2 i{height:10px}
+.tape-key .k3 i{height:8px}.tape-key .k4 i{height:6px}
+.tape-key .kr i{height:16px;width:3px;background:#C61A12}
 .tape-note{margin:.5rem 0 0;color:#98A3AF;font-size:.7rem;line-height:1.55}
 .tape-bad{color:#E8695C;font-size:.75rem;margin:.6rem 0}
-@media (max-width:760px){
-  .tape-read{grid-template-columns:1fr 1fr}
-  .tape-head input{width:100%}
-  .tape-svg .tlab{font-size:9px}
-  .tape-svg .tlab.lv0{font-size:13px}
+
+}
+
+/* ---- give the model room --------------------------------------------- */
+/* The stage was 560px with the canvas pinned to match, which left the model
+   cramped in the top third of a tall screen. 960 on a desktop, and a
+   viewport-relative fallback so a laptop or a phone does not end up with a
+   stage taller than the screen it is on. */
+.model-stage{min-height:960px}
+.model-stage canvas{height:960px!important}
+@media (max-height:1100px){
+  .model-stage{min-height:82vh}
+  .model-stage canvas{height:82vh!important}
+}
+@media (max-width:1100px){
+  .model-stage{min-height:min(700px,72vh)}
+  .model-stage canvas{height:min(700px,72vh)!important}
+}
+@media (max-width:640px){
+  .model-stage{min-height:min(460px,58vh)}
+  .model-stage canvas{height:min(460px,58vh)!important}
 }
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
@@ -54656,16 +54695,16 @@ No matching component was found for:
                 : Math.max(spec.wallLength, spec.depth || 0) / 12)
             : 14;
         var d = Math.max(9, ft * 1.28);
-        if (sceneType === "ground") return [d * 0.66, d * 0.62, d * 0.86];
+        if (sceneType === "ground") return [d * 0.82, d * 0.76, d * 1.06];
         if (sceneType === "window")
             return stage <= 1
                 ? [d * 0.34, d * 0.40, d * 0.56]   // low and close: the marks are the subject
                 : [d * 0.6, d * 0.46, d * 0.76];
-        if (stage <= 1) return [d * 0.72, d * 0.42, d * 0.88];
-        if (stage <= 6) return [d * 0.78, d * 0.47, d * 0.94];
-        if (stage <= 8) return [d * 0.82, d * 0.56, d * 0.92];
-        if (stage <= 10) return [d * 0.84, d * 0.6, d * 1.05];
-        return [d * 0.94, d * 0.76, d * 1.16];
+        if (stage <= 1) return [d * 0.88, d * 0.52, d * 1.08];
+        if (stage <= 6) return [d * 0.95, d * 0.57, d * 1.15];
+        if (stage <= 8) return [d * 1.00, d * 0.68, d * 1.12];
+        if (stage <= 10) return [d * 1.02, d * 0.73, d * 1.28];
+        return [d * 1.14, d * 0.92, d * 1.41];
     }
     function Fx_useTiled(src, rx, ry) {
         var tex = Wc(src);
@@ -54936,8 +54975,8 @@ No matching component was found for:
             wall = Ts.useMemo(function () { return Fx_buildWall(spec); }, [spec]),
             op = wall.openings[0],
             spanFt = wall.length / 12,
-            fogNear = Math.max(12, spanFt * 1.1),
-            fogFar = Math.max(28, spanFt * 3.4),
+            fogNear = Math.max(26, spanFt * 2.4),
+            fogFar = Math.max(70, spanFt * 6.5),
             gridSize = Math.max(24, Math.round(spanFt * 2.4)),
             half = wall.length / 2,
             D = wall.depth,
@@ -55209,8 +55248,8 @@ No matching component was found for:
             }, [spec]),
             hw = b.width / 2, hd = b.depth / 2, R = b.roof, wd = b.wallDepth,
             spanFt = Math.max(b.width, b.depth) / 12,
-            fogNear = Math.max(14, spanFt * 1.2),
-            fogFar = Math.max(34, spanFt * 3.6),
+            fogNear = Math.max(26, spanFt * 2.4),
+            fogFar = Math.max(70, spanFt * 6.5),
             gridSize = Math.max(30, Math.round(spanFt * 2.4));
 
         // ---- joist layout marks on the rim (step 3) ----------------------
@@ -62488,6 +62527,11 @@ No matching component was found for:
     }
 
     // ---- the tool ---------------------------------------------------------
+    // Drawn to look like the tape in your pocket: yellow blade, black
+    // graduations coming down off the top edge, black inch numerals, and the
+    // red stud marks every 16 in. The whole blade is tappable, because a
+    // beginner reading a real tape sees a MARK, not a number of sixteenths --
+    // asking them to press "+1/16" assumes the thing they came here to learn.
     function Fx_TapeTool(props) {
         var vS = Ts.useState("33"), raw = vS[0], setRaw = vS[1],
             parsed = Fx_parseMeasure(raw),
@@ -62495,17 +62539,34 @@ No matching component was found for:
             whole = val == null ? 0 : Math.floor(val + 1e-9),
             within = val == null ? 0 : Math.round((val - whole) * 16),
             ticks = Fx_inchTicks(whole),
-            TW = 960, TH = 126, pad = 26,
-            span = TW - pad * 2;
+            TW = 1000, pad = 34, span = TW - pad * 2,
+            CTX = 12,                                  // inches either side
+            ctxStart = Math.max(0, whole - CTX / 2);
 
         function x(i) { return pad + (i / 16) * span; }
+
+        // click anywhere on the blade -> nearest sixteenth
+        function tapBlade(e) {
+            var r = e.currentTarget.getBoundingClientRect(),
+                vx = (e.clientX - r.left) / r.width * TW,
+                i = Math.max(0, Math.min(16, Math.round((vx - pad) / span * 16)));
+            setRaw(Fx_inFmt(whole + i / 16).replace("\u2033", "").trim());
+        }
+        function tapContext(e) {
+            var r = e.currentTarget.getBoundingClientRect(),
+                f = (e.clientX - r.left) / r.width,
+                inch = Math.round(ctxStart + f * CTX);
+            setRaw(String(Math.max(0, inch)));
+        }
+
+        var studMark = whole % 16 === 0;
 
         return Fx_Jx("div", {
             className: "tape-tool",
             children: [
                 Fx_Jx("div", { className: "tape-head", children: [
                     Fx_Jx("label", { children: [
-                        Fx_J("b", { children: "Measurement" }),
+                        Fx_J("b", { children: "What does your tape say?" }),
                         Fx_J("input", {
                             value: raw, inputMode: "decimal",
                             placeholder: "33  or  33 5/8",
@@ -62515,16 +62576,12 @@ No matching component was found for:
                     ] }),
                     Fx_Jx("div", { className: "tape-step", children: [
                         Fx_J("button", { onClick: function () {
-                            setRaw(String(Fx_snap16((val == null ? 0 : val) - 1/16))); },
-                            children: "− 1/16" }),
+                            setRaw(String(Math.max(0, whole - 1))); }, children: "◀ 1″" }),
                         Fx_J("button", { onClick: function () {
-                            setRaw(String(Fx_snap16((val == null ? 0 : val) + 1/16))); },
-                            children: "+ 1/16" }),
-                        Fx_J("button", { onClick: function () {
-                            setRaw(String(Math.max(0, whole - 1))); }, children: "− 1″" }),
-                        Fx_J("button", { onClick: function () {
-                            setRaw(String(whole + 1)); }, children: "+ 1″" })
-                    ] })
+                            setRaw(String(whole + 1)); }, children: "1″ ▶" })
+                    ] }),
+                    Fx_J("p", { className: "tape-hint",
+                        children: "Or just tap the mark you are looking at." })
                 ] }),
 
                 val == null
@@ -62532,76 +62589,123 @@ No matching component was found for:
                         children: "Type an inch — 33 — or a measurement like 33 5/8." })
                     : Fx_Jx(W.Fragment, { children: [
 
+                        // ---- the blade, one inch across --------------------
+                        Fx_Jx("svg", {
+                            className: "tape-svg", viewBox: "0 0 " + TW + " 150",
+                            preserveAspectRatio: "xMidYMid meet",
+                            onClick: tapBlade,
+                            role: "img",
+                            "aria-label": "Tape blade from " + whole + " to " + (whole + 1)
+                                + " inches, divided into sixteenths. Tap a mark to read it.",
+                            children: [
+                                Fx_Jx("defs", { children: [
+                                    Fx_Jx("linearGradient", { id: "bladeG", x1: "0", y1: "0", x2: "0", y2: "1",
+                                        children: [
+                                            Fx_J("stop", { offset: "0",   stopColor: "#F7CE2E" }),
+                                            Fx_J("stop", { offset: "0.55", stopColor: "#EFC01B" }),
+                                            Fx_J("stop", { offset: "1",   stopColor: "#D9A806" })
+                                        ] })
+                                ] }),
+                                // blade
+                                Fx_J("rect", { className: "blade", x: 0, y: 14, width: TW, height: 118, rx: 2 }),
+                                Fx_J("rect", { className: "blade-lip", x: 0, y: 14, width: TW, height: 4 }),
+
+                                // graduations come DOWN off the top edge
+                                Fx_J("g", { children: ticks.map(function (t) {
+                                    return Fx_J("line", {
+                                        className: "tick lv" + t.level + (t.i === within ? " here" : ""),
+                                        x1: x(t.i), x2: x(t.i), y1: 18, y2: 18 + 74 * t.h
+                                    }, "t" + t.i);
+                                }) }),
+
+                                // fractions on the blade
+                                Fx_J("g", { children: ticks.map(function (t) {
+                                    return Fx_J("text", {
+                                        className: "tlab lv" + t.level + (t.i === within ? " here" : ""),
+                                        x: x(t.i), y: 122, children: t.label
+                                    }, "l" + t.i);
+                                }) }),
+
+                                // the reading, right on the blade
+                                Fx_J("circle", { className: "tape-dot", cx: x(within), cy: 18, r: 7 }),
+                                Fx_J("line", { className: "tape-dot-line",
+                                    x1: x(within), x2: x(within), y1: 18, y2: 132 }),
+                                // the flag stays inside the blade so it never
+                                // hangs off the end at 0/16 or 16/16
+                                Fx_J("rect", { className: "tape-flag",
+                                    x: Math.max(4, Math.min(TW - 96, x(within) - 46)),
+                                    y: -2, width: 92, height: 20, rx: 3 }),
+                                Fx_J("text", { className: "tape-flag-t",
+                                    x: Math.max(50, Math.min(TW - 50, x(within))),
+                                    y: 12, children: Fx_inFmt(whole + within / 16) })
+                            ]
+                        }),
+
+                        // ---- where that sits on a longer run ---------------
+                        Fx_Jx("svg", {
+                            className: "tape-ctx", viewBox: "0 0 " + TW + " 58",
+                            preserveAspectRatio: "none",
+                            onClick: tapContext,
+                            role: "img",
+                            "aria-label": "A foot of tape either side. Tap to jump to an inch.",
+                            children: [
+                                Fx_J("rect", { className: "blade", x: 0, y: 8, width: TW, height: 42 }),
+                                Fx_J("g", { children: (function () {
+                                    var out = [];
+                                    for (var k = 0; k <= CTX; k++) {
+                                        var inch = ctxStart + k, px = (k / CTX) * TW,
+                                            stud = inch % 16 === 0, foot = inch % 12 === 0;
+                                        out.push(Fx_J("line", {
+                                            className: "ctick" + (stud ? " stud" : foot ? " foot" : ""),
+                                            x1: px, x2: px, y1: 10, y2: foot || stud ? 34 : 24
+                                        }, "c" + k));
+                                        out.push(Fx_J("text", {
+                                            className: "clab" + (stud ? " stud" : ""),
+                                            x: Math.min(TW - 12, Math.max(12, px)), y: 46,
+                                            children: inch
+                                        }, "cl" + k));
+                                    }
+                                    return out;
+                                })() }),
+                                Fx_J("rect", { className: "ctx-here",
+                                    x: ((whole - ctxStart) / CTX) * TW - 1.5, y: 8, width: 3, height: 42 })
+                            ]
+                        }),
+
                         Fx_Jx("div", { className: "tape-read", children: [
                             Fx_Jx("div", { children: [
                                 Fx_J("b", { children: Fx_inFmt(val) }),
                                 Fx_J("span", { children: "what you call it" })] }),
                             Fx_Jx("div", { children: [
                                 Fx_J("b", { children: within + "/16" }),
-                                Fx_J("span", { children: "sixteenths past " + whole + "″" })] }),
+                                Fx_J("span", { children: "sixteenths past " + whole + "\u2033" })] }),
                             Fx_Jx("div", { children: [
                                 Fx_J("b", { children: Fx_feetInches(val) }),
                                 Fx_J("span", { children: "in feet, if you need it" })] }),
-                            Fx_Jx("div", { children: [
-                                Fx_J("b", { children: val.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") }),
-                                Fx_J("span", { children: "as a decimal" })] })
+                            Fx_Jx("div", { className: studMark ? "stud" : "", children: [
+                                Fx_J("b", { children: studMark ? "STUD MARK" : val.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") }),
+                                Fx_J("span", { children: studMark
+                                    ? whole + "\u2033 is a multiple of 16 \u2014 a layout mark"
+                                    : "as a decimal" })] })
                         ] }),
-
-                        // ---- one inch, blown up ----------------------------
-                        Fx_Jx("svg", {
-                            className: "tape-svg", viewBox: "0 0 " + TW + " " + TH,
-                            preserveAspectRatio: "xMidYMid meet",
-                            role: "img",
-                            "aria-label": "One inch from " + whole + " to " + (whole + 1)
-                                + ", divided into sixteenths",
-                            children: [
-                                Fx_J("rect", { className: "tape-body",
-                                    x: pad - 12, y: 6, width: span + 24, height: 112, rx: 3 }),
-                                // the graduations
-                                Fx_J("g", { children: ticks.map(function (t) {
-                                    var len = 62 * t.h;
-                                    return Fx_J("line", {
-                                        className: "tick lv" + t.level
-                                            + (t.i === within ? " here" : ""),
-                                        x1: x(t.i), x2: x(t.i), y1: 10, y2: 10 + len
-                                    }, "t" + t.i);
-                                }) }),
-                                // fraction under every mark
-                                Fx_J("g", { children: ticks.map(function (t) {
-                                    return Fx_J("text", {
-                                        className: "tlab lv" + t.level
-                                            + (t.i === within ? " here" : ""),
-                                        x: x(t.i), y: 104, children: t.label
-                                    }, "l" + t.i);
-                                }) }),
-                                // where you are
-                                Fx_J("polygon", {
-                                    className: "tape-cursor",
-                                    points: [x(within) + ",4", (x(within) - 7) + ",-6",
-                                             (x(within) + 7) + ",-6"].join(" ")
-                                }),
-                                Fx_J("line", { className: "tape-cursor-line",
-                                    x1: x(within), x2: x(within), y1: 6, y2: 118 })
-                            ]
-                        }),
 
                         Fx_Jx("div", { className: "tape-key", children: [
                             Fx_Jx("span", { className: "k0", children: [Fx_J("i", {}), "inch"] }),
                             Fx_Jx("span", { className: "k1", children: [Fx_J("i", {}), "half"] }),
                             Fx_Jx("span", { className: "k2", children: [Fx_J("i", {}), "quarter"] }),
                             Fx_Jx("span", { className: "k3", children: [Fx_J("i", {}), "eighth"] }),
-                            Fx_Jx("span", { className: "k4", children: [Fx_J("i", {}), "sixteenth"] })
+                            Fx_Jx("span", { className: "k4", children: [Fx_J("i", {}), "sixteenth"] }),
+                            Fx_Jx("span", { className: "kr", children: [Fx_J("i", {}), "16 in stud mark"] })
                         ] }),
 
                         Fx_J("p", { className: "tape-note",
-                            children: "The mark's HEIGHT tells you what it is — that is the whole "
-                                + "trick. Tallest is the inch, next is the half, then the quarter, "
-                                + "then the eighth, and the shortest are the sixteenths. "
+                            children: "The mark\u2019s HEIGHT is what tells you which one it is. Longest "
+                                + "is the inch, then the half, the quarter, the eighth, and the "
+                                + "shortest are the sixteenths. "
                                 + (within === 0
                                     ? "You are on the inch mark itself."
-                                    : "You are " + within + " sixteenths past " + whole + "″, which "
-                                      + "reduces to " + Fx_frac16(within) + " because "
-                                      + within + " and 16 share a factor.") })
+                                    : "You tapped " + within + " sixteenths past " + whole + "\u2033, and "
+                                      + within + "/16 reduces to " + Fx_frac16(within) + ".") })
                     ] })
             ]
         });
@@ -63291,9 +63395,9 @@ No matching component was found for:
         var spanFt = Math.max(g.padW, g.padD) / 12;
         return Fx_Jx(W.Fragment, {
             children: [
-                Fx_J("color", { attach: "background", args: ["#0F1216"] }),
-                Fx_J("fog", { attach: "fog", args: ["#0F1216",
-                    Math.max(12, spanFt * 1.2), Math.max(30, spanFt * 3.6)] }),
+                Fx_J("color", { attach: "background", args: ["#13171D"] }),
+                Fx_J("fog", { attach: "fog", args: ["#13171D",
+                    Math.max(26, spanFt * 2.4), Math.max(70, spanFt * 6.5)] }),
                 Fx_J("ambientLight", { intensity: 0.55 }),
                 Fx_J("hemisphereLight", { args: ["#dbeaff", "#3a2e1d", 1.15] }),
                 Fx_J("directionalLight", { position: [spanFt * 0.7, spanFt * 1.4, spanFt * 0.6],
