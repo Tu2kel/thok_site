@@ -863,6 +863,70 @@ body>header{border-bottom:1px solid #2B323B}
   .model-stage{min-height:min(460px,58vh)}
   .model-stage canvas{height:min(460px,58vh)!important}
 }
+
+/* ---- existing plans -------------------------------------------------- */
+.plan-open-btn{background:#1E232B;color:#8FB6CC;border:1px solid #8FB6CC66;
+  border-radius:.35rem;padding:.55rem .8rem;font:900 .66rem ui-monospace;
+  letter-spacing:.12em;cursor:pointer;margin-right:.5rem}
+.plan-open-btn:hover{background:#13212A;border-color:#8FB6CC}
+.plan-sheet{width:min(1200px,100%)}
+.plan-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.7rem}
+.plan-upload{background:#1E232B;color:#E8ECF1;border:1px solid #2B323B;border-radius:.35rem;
+  padding:.5rem .75rem;font:900 .62rem ui-monospace;letter-spacing:.08em;cursor:pointer}
+.plan-upload:hover{border-color:#8FB6CC;color:#8FB6CC}
+.plan-upload input{display:none}
+.plan-mode{font:800 .6rem ui-monospace;letter-spacing:.07em;padding:.35rem .55rem;border-radius:.3rem}
+.plan-mode.off{color:#98A3AF;border:1px dashed #4A5563}
+.plan-mode.on{color:#45C98A;border:1px solid #45C98A;background:#1e2023}
+.plan-go{background:#13212A;color:#8FB6CC;border:1px solid #8FB6CC;border-radius:.35rem;
+  padding:.5rem .7rem;font:900 .62rem ui-monospace;letter-spacing:.07em;cursor:pointer}
+.plan-bar button{background:#1E232B;color:#CCD4DD;border:1px solid #2B323B;border-radius:.3rem;
+  padding:.45rem .6rem;font:700 .6rem ui-monospace;cursor:pointer}
+.plan-bar button:hover{border-color:#F0A62B;color:#F0A62B}
+.plan-zoom{display:flex;align-items:center;gap:.35rem;margin-left:auto;
+  font:700 .56rem ui-monospace;letter-spacing:.07em;color:#98A3AF}
+
+.plan-cal{padding:.6rem .7rem;margin-bottom:.6rem;border:1px solid #8FB6CC;
+  border-left-width:3px;border-radius:.35rem;background:#111C24}
+.plan-cal b{display:block;color:#8FB6CC;font:800 .72rem ui-monospace;margin-bottom:.25rem}
+.plan-cal>span{display:block;color:#A4B0BE;font-size:.68rem;line-height:1.5}
+.plan-cal label{display:flex;align-items:center;gap:.4rem;margin-top:.5rem;
+  font:700 .58rem ui-monospace;letter-spacing:.06em;color:#98A3AF}
+.plan-cal input{background:#0F1216;color:#F0A62B;border:1px solid #2B323B;border-radius:.3rem;
+  padding:.35rem .5rem;font:800 .85rem ui-monospace;width:7rem}
+.plan-cal i{display:block;margin-top:.4rem;font-style:normal;color:#F0A62B;
+  font:800 .62rem ui-monospace;letter-spacing:.05em}
+
+.plan-stage{position:relative;border:1px solid #2B323B;border-radius:.4rem;
+  background:#0B0E12;overflow:auto;max-height:min(620px,62vh);cursor:default}
+.plan-stage.calibrating,.plan-stage.measuring{cursor:crosshair}
+.plan-stage img{display:block;max-width:none}
+.plan-marks{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.plan-marks line{stroke-width:2}
+.plan-marks circle{r:5;stroke:#0B0E12;stroke-width:1.5}
+.plan-marks .pin{fill:#F0A62B;stroke:#0B0E12;stroke-width:1.5}
+.plan-marks .cal line{stroke:#8FB6CC;stroke-dasharray:6 4}
+.plan-marks .cal circle{fill:#8FB6CC}
+.plan-marks .cal text{fill:#8FB6CC;font:800 12px ui-monospace;text-anchor:middle;
+  paint-order:stroke;stroke:#0B0E12;stroke-width:3}
+.plan-marks .meas line{stroke:#F0A62B}
+.plan-marks .meas circle{fill:#F0A62B}
+.plan-marks .meas text{fill:#FFD27A;font:800 13px ui-monospace;text-anchor:middle;
+  paint-order:stroke;stroke:#0B0E12;stroke-width:3.5}
+
+.plan-empty{display:grid;gap:.4rem;place-items:center;text-align:center;
+  padding:2.4rem 1.2rem;border:1px dashed #4A5563;border-radius:.4rem;background:#0F1216}
+.plan-empty b{color:#E8ECF1;font-size:1rem}
+.plan-empty span{color:#98A3AF;font-size:.72rem;line-height:1.55;max-width:46ch}
+.plan-list{margin-top:.7rem}
+.plan-list>b{display:block;color:#8FB6CC;font:800 .6rem ui-monospace;letter-spacing:.09em;
+  text-transform:uppercase;margin-bottom:.35rem}
+.plan-list ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
+.plan-list li{background:#0F1216;border:1px solid #2B323B;border-radius:.3rem;padding:.35rem .55rem}
+.plan-list li b{display:block;color:#F0A62B;font:800 .85rem ui-monospace}
+.plan-list li span{display:block;color:#8A96A3;font-size:.58rem}
+.plan-note{margin:.6rem 0 0;color:#8A96A3;font-size:.65rem;line-height:1.55}
+@media (max-width:640px){.plan-zoom{margin-left:0;width:100%}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -62713,7 +62777,12 @@ No matching component was found for:
 
     // Lives in the header, opens over whatever you are doing.
     function Fx_TapeButton() {
-        var oS = Ts.useState(false), open = oS[0], setOpen = oS[1];
+        var oS = Ts.useState(false), open = oS[0], setOpen = oS[1],
+            // A click fires wherever the pointer ENDS UP. Select text inside
+            // the sheet, release outside it, and a plain click-outside handler
+            // closes the thing you were reading. Remember where the press
+            // started and only dismiss when it started on the backdrop.
+            downOutside = Ts.useRef(false);
         Ts.useEffect(function () {
             function esc(e) { if (e.key === "Escape") setOpen(false); }
             if (open) document.addEventListener("keydown", esc);
@@ -62728,8 +62797,12 @@ No matching component was found for:
             }),
             open ? Fx_Jx("div", {
                 className: "tape-overlay",
+                onPointerDown: function (e) {
+                    downOutside.current = e.target === e.currentTarget;
+                },
                 onClick: function (e) {
-                    if (e.target === e.currentTarget) setOpen(false);
+                    if (e.target === e.currentTarget && downOutside.current) setOpen(false);
+                    downOutside.current = false;
                 },
                 children: [Fx_Jx("div", { className: "tape-sheet", children: [
                     Fx_Jx("header", { children: [
@@ -62738,6 +62811,270 @@ No matching component was found for:
                             "aria-label": "Close", children: "CLOSE ✕" })
                     ] }),
                     Fx_J(Fx_TapeTool, {})
+                ] })]
+            }) : null
+        ] });
+    }
+
+    // =====================================================================
+    // PLANS — YOUR EXISTING BUILDING
+    // ---------------------------------------------------------------------
+    // Not an annotation tool. This is EXISTING CONDITIONS: the drawing of the
+    // house you already have, so an addition has something real to attach to.
+    // Where the back wall runs, how long it is, where the band joist sits --
+    // an addition is defined by what it ties into, and without that the app
+    // can only build free-standing things. That is exactly why Room addition,
+    // Second-storey addition and Enclosed porch are all parked.
+    //
+    // It works in two stages on purpose. Drop a plan in and it is a REFERENCE
+    // straight away, no setup. Calibrate one known dimension and the same
+    // drawing becomes MEASURABLE -- every tap after that reads a real
+    // distance. Nothing is measured until the scale is known, and the panel
+    // says which mode it is in rather than letting anyone guess.
+    // =====================================================================
+    // Points are stored as a fraction of the image's width and height, which
+    // is what keeps a mark on the wall it was placed on through any zoom or
+    // resize. But those two fractions are NOT the same unit on a sheet that
+    // is not square -- 0.1 across is a different real distance from 0.1 down.
+    // Every diagonal would read wrong, and a plan is never square. So the
+    // vertical component is corrected by the aspect ratio before measuring.
+    function Fx_planDistance(a, b, aspect) {
+        var dx = a.x - b.x, dy = (a.y - b.y) * (aspect || 1);
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function Fx_planScale(p1, p2, knownIn, aspect) {
+        var d = Fx_planDistance(p1, p2, aspect);
+        if (!d || !knownIn || knownIn <= 0) return null;
+        return { inPerUnit: knownIn / d, units: d, knownIn: knownIn, aspect: aspect || 1 };
+    }
+
+    function Fx_planMeasure(scale, a, b) {
+        if (!scale) return null;
+        var inches = Fx_planDistance(a, b, scale.aspect) * scale.inPerUnit;
+        return { inches: inches, label: Fx_ftIn(inches), exact: Fx_inFmt(inches) };
+    }
+
+    function Fx_PlanPanel(props) {
+        var srcS = Ts.useState(null), src = srcS[0], setSrc = srcS[1],
+            nameS = Ts.useState(""), name = nameS[0], setName = nameS[1],
+            modeS = Ts.useState("ref"), mode = modeS[0], setMode = modeS[1],
+            calS = Ts.useState([]), cal = calS[0], setCal = calS[1],
+            knownS = Ts.useState("120"), known = knownS[0], setKnown = knownS[1],
+            scaleS = Ts.useState(null), scale = scaleS[0], setScale = scaleS[1],
+            mS = Ts.useState([]), pending = mS[0], setPending = mS[1],
+            listS = Ts.useState([]), saved = listS[0], setSaved = listS[1],
+            zS = Ts.useState(1), zoom = zS[0], setZoom = zS[1],
+            aS = Ts.useState(1), aspect = aS[0], setAspect = aS[1],
+            wrapRef = Ts.useRef(null),
+            urlRef = Ts.useRef(null);
+
+        Ts.useEffect(function () {
+            return function () { if (urlRef.current) URL.revokeObjectURL(urlRef.current); };
+        }, []);
+
+        function take(file) {
+            if (!file) return;
+            if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
+                setName("__PDF__:" + file.name);
+                return;                       // handled by the message below
+            }
+            if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+            urlRef.current = URL.createObjectURL(file);
+            setSrc(urlRef.current);
+            setName(file.name);
+            setMode("ref"); setCal([]); setScale(null);
+            setPending([]); setSaved([]); setZoom(1);
+        }
+
+        // taps land in the image's own coordinate space, so zooming or
+        // resizing the window never moves a mark off the wall it was on
+        function point(e) {
+            var img = wrapRef.current && wrapRef.current.querySelector("img");
+            if (!img) return null;
+            var r = img.getBoundingClientRect();
+            return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+        }
+
+        function tap(e) {
+            var p = point(e);
+            if (!p) return;
+            if (mode === "cal") {
+                var next = cal.concat([p]);
+                if (next.length === 2) {
+                    var inches = Fx_parseMeasure(known);
+                    var s = Fx_planScale(next[0], next[1], inches, aspect);
+                    setCal(next);
+                    if (s) { setScale(s); setMode("measure"); }
+                } else setCal(next);
+                return;
+            }
+            if (mode === "measure" && scale) {
+                var q = pending.concat([p]);
+                if (q.length === 2) {
+                    setSaved(saved.concat([{ a: q[0], b: q[1],
+                        m: Fx_planMeasure(scale, q[0], q[1]) }]));
+                    setPending([]);
+                } else setPending(q);
+            }
+        }
+
+        var pdfName = /^__PDF__:/.test(name) ? name.replace("__PDF__:", "") : null;
+
+        function svgLine(a, b, cls, label, nudge) {
+            return Fx_Jx("g", { className: cls, children: [
+                Fx_J("line", { x1: a.x * 100 + "%", y1: a.y * 100 + "%",
+                               x2: b.x * 100 + "%", y2: b.y * 100 + "%" }),
+                Fx_J("circle", { cx: a.x * 100 + "%", cy: a.y * 100 + "%", r: 5 }),
+                Fx_J("circle", { cx: b.x * 100 + "%", cy: b.y * 100 + "%", r: 5 }),
+                label ? Fx_J("text", {
+                    x: (a.x + b.x) / 2 * 100 + "%",
+                    y: (a.y + b.y) / 2 * 100 + "%",
+                    dy: -8 - (nudge || 0) * 15, children: label }) : null
+            ] });
+        }
+
+        return Fx_Jx("div", { className: "plan-panel", children: [
+
+            // ---- the bar ------------------------------------------------
+            Fx_Jx("div", { className: "plan-bar", children: [
+                Fx_Jx("label", { className: "plan-upload", children: [
+                    src ? "CHANGE PLAN" : "UPLOAD YOUR PLAN",
+                    Fx_J("input", { type: "file", accept: "image/*,.pdf",
+                        onChange: function (e) { take(e.target.files && e.target.files[0]); } })
+                ] }),
+                src ? Fx_J("span", {
+                    className: "plan-mode " + (scale ? "on" : "off"),
+                    children: scale ? "MEASURING — scale is set" : "REFERENCE ONLY — no scale yet"
+                }) : null,
+                src && !scale ? Fx_J("button", {
+                    className: "plan-go",
+                    onClick: function () { setMode("cal"); setCal([]); },
+                    children: mode === "cal" ? "TAP THE TWO ENDS…" : "SET THE SCALE →"
+                }) : null,
+                scale ? Fx_Jx(W.Fragment, { children: [
+                    Fx_J("button", { onClick: function () {
+                        setScale(null); setCal([]); setSaved([]); setPending([]); setMode("ref"); },
+                        children: "RESET SCALE" }),
+                    saved.length ? Fx_J("button", {
+                        onClick: function () { setSaved([]); setPending([]); },
+                        children: "CLEAR MARKS" }) : null
+                ] }) : null,
+                src ? Fx_Jx("label", { className: "plan-zoom", children: ["Zoom",
+                    Fx_J("input", { type: "range", min: "1", max: "4", step: "0.1", value: zoom,
+                        onChange: function (e) { setZoom(Number(e.target.value)); } })] }) : null
+            ] }),
+
+            // ---- calibration prompt -------------------------------------
+            mode === "cal" && !scale ? Fx_Jx("div", { className: "plan-cal", children: [
+                Fx_J("b", { children: "Pick something on the drawing you already know the length of" }),
+                Fx_J("span", { children: "A dimensioned wall is ideal — the longer the better, because "
+                    + "any error in your two taps gets divided across it. Tap one end, then the other." }),
+                Fx_Jx("label", { children: ["That distance is",
+                    Fx_J("input", { value: known, inputMode: "decimal",
+                        onChange: function (e) { setKnown(e.target.value); } }),
+                    Fx_J("span", { children: "in — or type 24' " })] }),
+                Fx_J("i", { children: cal.length === 0 ? "Waiting for the first tap"
+                    : cal.length === 1 ? "Now tap the other end"
+                    : "" })
+            ] }) : null,
+
+            // ---- the sheet ----------------------------------------------
+            pdfName
+                ? Fx_Jx("div", { className: "plan-empty", children: [
+                    Fx_J("b", { children: "PDFs are not read in the app yet" }),
+                    Fx_J("span", { children: "“" + pdfName + "” is a PDF. This app is one "
+                        + "self-contained file that works with no signal on a jobsite, and a PDF "
+                        + "reader would mean loading code from the internet every time. Export the "
+                        + "page as an image — in most viewers that is Print, then Save as image, or "
+                        + "just screenshot it — and drop that in." })
+                ] })
+                : src
+                    ? Fx_Jx("div", {
+                        className: "plan-stage" + (mode === "cal" ? " calibrating"
+                            : scale ? " measuring" : ""),
+                        ref: wrapRef, onClick: tap,
+                        children: [
+                            Fx_J("img", { src: src, alt: name || "Your plan",
+                                style: { width: (zoom * 100) + "%" },
+                                onLoad: function (e) {
+                                    var t = e.target;
+                                    if (t.naturalWidth) setAspect(t.naturalHeight / t.naturalWidth);
+                                } }),
+                            Fx_Jx("svg", { className: "plan-marks", children: [
+                                cal.length === 2 ? svgLine(cal[0], cal[1], "cal",
+                                    scale ? Fx_ftIn(scale.knownIn) + " known" : null) : null,
+                                cal.length === 1 ? Fx_J("circle", { className: "pin",
+                                    cx: cal[0].x * 100 + "%", cy: cal[0].y * 100 + "%", r: 5 }) : null,
+                                pending.length === 1 ? Fx_J("circle", { className: "pin",
+                                    cx: pending[0].x * 100 + "%", cy: pending[0].y * 100 + "%", r: 5 }) : null,
+                                Fx_J("g", { children: saved.map(function (s, i) {
+                                    return Fx_J(W.Fragment, {
+                                        children: svgLine(s.a, s.b, "meas", s.m.label, i % 3)
+                                    }, "m" + i);
+                                }) })
+                            ] })
+                        ]
+                    })
+                    : Fx_Jx("div", { className: "plan-empty", children: [
+                        Fx_J("b", { children: "Drop in the plan of the building you already have" }),
+                        Fx_J("span", { children: "An addition is defined by what it attaches to — where "
+                            + "the wall runs, how long it is, where the floor frame lands. Put the "
+                            + "existing drawing in and it is a reference straight away. Set the scale "
+                            + "from one dimension you know and you can measure anything on it." })
+                    ] }),
+
+            // ---- what you measured --------------------------------------
+            saved.length ? Fx_Jx("div", { className: "plan-list", children: [
+                Fx_J("b", { children: saved.length + (saved.length === 1 ? " measurement" : " measurements") }),
+                Fx_J("ul", { children: saved.map(function (s, i) {
+                    return Fx_Jx("li", { children: [
+                        Fx_J("b", { children: s.m.label }),
+                        Fx_J("span", { children: s.m.exact })
+                    ] }, "s" + i);
+                }) })
+            ] }) : null,
+
+            src && scale ? Fx_J("p", { className: "plan-note",
+                children: "Scale came from the " + Fx_ftIn(scale.knownIn) + " you entered across "
+                    + (Math.round(scale.units * 100)) + "% of the sheet. Two things limit how close "
+                    + "a reading gets: that one dimension being right, and how precisely you can hit "
+                    + "the ends. At this size one screen pixel is about "
+                    + Fx_inFmt(Math.max(0.01, scale.inPerUnit / 1000))
+                    + " on the drawing — zoom in before measuring anything you are going to cut, and "
+                    + "check a second known length before you trust the scale at all." }) : null
+        ] });
+    }
+
+    function Fx_PlanButton() {
+        var oS = Ts.useState(false), open = oS[0], setOpen = oS[1],
+            downOutside = Ts.useRef(false);
+        Ts.useEffect(function () {
+            function esc(e) { if (e.key === "Escape") setOpen(false); }
+            if (open) document.addEventListener("keydown", esc);
+            return function () { document.removeEventListener("keydown", esc); };
+        }, [open]);
+        return Fx_Jx(W.Fragment, { children: [
+            Fx_J("button", {
+                className: "plan-open-btn",
+                onClick: function () { setOpen(true); },
+                title: "Your existing building's plan",
+                children: "PLANS"
+            }),
+            open ? Fx_Jx("div", {
+                className: "tape-overlay",
+                onPointerDown: function (e) { downOutside.current = e.target === e.currentTarget; },
+                onClick: function (e) {
+                    if (e.target === e.currentTarget && downOutside.current) setOpen(false);
+                    downOutside.current = false;
+                },
+                children: [Fx_Jx("div", { className: "tape-sheet plan-sheet", children: [
+                    Fx_Jx("header", { children: [
+                        Fx_J("b", { children: "EXISTING PLANS" }),
+                        Fx_J("button", { onClick: function () { setOpen(false); },
+                            "aria-label": "Close", children: "CLOSE ✕" })
+                    ] }),
+                    Fx_J(Fx_PlanPanel, {})
                 ] })]
             }) : null
         ] });
@@ -66412,7 +66749,7 @@ No matching component was found for:
                             children: t === "sim" ? "Skill practice \u2022 Floor-joist layout" : t === "practice" ? "Choose a construction skill" : "Plan a complete project"
                         })]
                     })]
-                }), (0, Le.jsx)(Fx_TapeButton, {}), (0, Le.jsxs)("nav", {
+                }), (0, Le.jsx)(Fx_PlanButton, {}), (0, Le.jsx)(Fx_TapeButton, {}), (0, Le.jsxs)("nav", {
                     className: "view-switch",
                     children: [(0, Le.jsx)("button", {
                         className: t === "planner" ? "active" : "",
