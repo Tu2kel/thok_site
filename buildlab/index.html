@@ -969,6 +969,30 @@ body>header{border-bottom:1px solid #2B323B}
 @media (max-width:1100px){
   .guided-layout>.guided-step-list{position:static;max-height:none}
 }
+
+/* ---- court sizing panel --------------------------------------------- */
+.court-spec{margin:.6rem 0;padding:.65rem .75rem;border:1px solid #ffffff1c;
+  border-radius:.45rem;background:#161A20}
+.ct-inputs{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin-bottom:.6rem}
+.ct-inputs label{display:flex;flex-direction:column;gap:.2rem;
+  font:700 .54rem ui-monospace;letter-spacing:.06em;color:#98A6B4}
+.ct-inputs label:first-child{grid-column:1/-1}
+.ct-inputs select,.ct-inputs input{background:#141a1d;color:#e6eef2;
+  border:1px solid #ffffff24;border-radius:.28rem;padding:.3rem;font:700 .62rem ui-monospace}
+.ct-out{margin:0;display:grid;gap:.45rem}
+.ct-row{display:grid;grid-template-columns:9rem 1fr;gap:.2rem .7rem;
+  padding-bottom:.4rem;border-bottom:1px solid #ffffff12}
+.ct-row:last-child{border-bottom:0;padding-bottom:0}
+.ct-row dt{font:700 .58rem ui-monospace;letter-spacing:.06em;color:#8fb6cc;
+  text-transform:uppercase;padding-top:.1rem}
+.ct-row dd{margin:0;color:#ffc65c;font:800 .82rem ui-monospace}
+.ct-row.bad dd{color:#FF9F9F}
+.ct-row s{grid-column:2;text-decoration:none;color:#98A6B4;font-size:.62rem;line-height:1.45}
+.ct-row.bad s{color:#FFB3B3}
+.ct-warn{margin:.5rem 0 0;padding:.4rem .5rem;border:1px solid #ff6b6b4d;border-radius:.3rem;
+  background:#2a12128c;color:#ffb3b3;font-size:.65rem;line-height:1.5}
+.ct-src{margin:.55rem 0 0;color:#8A96A3;font-size:.6rem;line-height:1.5}
+@media (max-width:640px){.ct-inputs{grid-template-columns:1fr}.ct-row{grid-template-columns:1fr}}
 </style></head><body><div id="root"></div><noscript>Enable JavaScript to use Jobsite Build Lab.</noscript><script>"use strict";
 (() => {
     var _W = Object.create;
@@ -56598,6 +56622,42 @@ No matching component was found for:
               ["ASTM F1908", "Around a swimming pool this is a barrier, not a fence, and the pool rules govern"]],
         ibc: [], fasteners: [] };
 
+    // ---- outdoor court ----------------------------------------------------
+    Fx_CODE_LIBRARY["ct-size"] = {
+        irc: [["NFHS", "High school court 84 × 50 ft; NCAA and NBA 94 × 50. Playing rules, not building code"],
+              ["NFHS", "3 ft of unobstructed run-off minimum outside the lines, 10 ft recommended"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["ct-locate"] = {
+        irc: [["—", "811 utility locating is state law everywhere in the US and free"]],
+        ibc: [], fasteners: [] };
+    Fx_CODE_LIBRARY["ct-base"] = {
+        irc: [["R506.2", "Site preparation — all vegetation, top soil and foreign material removed"],
+              ["R506.2.1", "Fill compacted in lifts for uniform support"],
+              ["R506.2.2", "Base course of clean graded aggregate"]],
+        ibc: [["1804.6", "Compacted fill placed in lifts"]], fasteners: [] };
+    Fx_CODE_LIBRARY["ct-poles"] = {
+        irc: [["R403.1.4", "Footings below the frost line — a hoop post is a tall lever and frost will jack it"],
+              ["MANUFACTURER", "Footing diameter, depth, anchor pattern and embedment come from the hoop system"]],
+        ibc: [["1809.5", "Frost protection"]],
+        fasteners: [["Hoop anchor", "The system's own anchor kit, set in wet concrete. A drilled-in anchor afterwards is a different fastener with a different rating."]] };
+    Fx_CODE_LIBRARY["ct-forms"] = {
+        irc: [["R506.1", "Slab not less than 3 1/2 in thick"],
+              ["R401.3", "Surface water drained away — a dead-level court holds water"]],
+        ibc: [["1907", "Minimum slab thickness"]], fasteners: [] };
+    Fx_CODE_LIBRARY["ct-pour"] = {
+        irc: [["R402.2", "Concrete strength and placement"]],
+        ibc: [["1905", "Concrete — modifications to ACI 318"]], fasteners: [] };
+    Fx_CODE_LIBRARY["ct-joints"] = {
+        irc: [["R402.2", "Concrete — control of shrinkage cracking"]],
+        ibc: [["1905", "Concrete"]], fasteners: [] };
+    Fx_CODE_LIBRARY["ct-cure"] = {
+        irc: [["R402.2", "Curing — concrete hydrates, it does not dry"]],
+        ibc: [["1905", "Concrete"]], fasteners: [] };
+    Fx_CODE_LIBRARY["ct-lines"] = {
+        irc: [["NFHS", "Lane 12 ft wide, free throw line 15 ft from the face of the backboard, centre circle 12 ft"],
+              ["NFHS", "Three-point arc 19′-9″ high school; NCAA men 22′-1 3/4″; NBA 23′-9″ with 22 ft corners"]],
+        ibc: [], fasteners: [] };
+
     // =====================================================================
     // LIVE CAMERA
     // ---------------------------------------------------------------------
@@ -59842,6 +59902,7 @@ No matching component was found for:
         "Concrete slab": "ground", "Pier-and-beam foundation": "ground",
 
         // --- standalone outdoor work, each its own sequence ---
+        "Basketball court": "solo",
         "Wood privacy fence": "solo", "Wood shadowbox fence": "solo",
         "Horizontal wood fence": "solo", "Composite fence": "solo",
         "Post-and-rail fence": "solo", "Fence gate only": "solo",
@@ -59868,14 +59929,16 @@ No matching component was found for:
         "Vinyl privacy fence": "FENCE_PANEL", "Vinyl picket fence": "FENCE_PANEL",
         "Ornamental metal fence": "FENCE_PANEL", "Chain-link fence": "FENCE_PANEL",
         "Welded-wire garden fence": "FENCE_PANEL",
-        "Deck": "DECK"
+        "Deck": "DECK",
+        "Basketball court": "COURT"
     };
 
     function Fx_soloSequence(name) {
         var k = Fx_SOLO[name];
         return k === "FENCE_WOOD" ? Fx_FENCE_WOOD_SEQUENCE
              : k === "FENCE_PANEL" ? Fx_FENCE_PANEL_SEQUENCE
-             : k === "DECK" ? Fx_OUTDOOR_DECK_SEQUENCE : null;
+             : k === "DECK" ? Fx_OUTDOOR_DECK_SEQUENCE
+             : k === "COURT" ? Fx_COURT_SEQUENCE : null;
     }
 
     // What to point someone at instead.
@@ -60084,7 +60147,10 @@ No matching component was found for:
         "Welded-wire garden fence": 1,
 
         // --- decks (IRC R507) ---
-        "Deck": 1
+        "Deck": 1,
+
+        // --- outdoor sport slab: no roof, so no span, so no engineer ---
+        "Basketball court": 1
     };
 
     // Parked, with the reason. This doubles as the build order.
@@ -63226,6 +63292,312 @@ No matching component was found for:
     }
 
     // =====================================================================
+    // BASKETBALL COURT — OUTDOOR
+    // ---------------------------------------------------------------------
+    // Outdoors there is no roof, so there is no clear span, so none of the
+    // engineering that rules out an indoor court applies. A court is a slab,
+    // some post footings and a lot of layout -- all of which this app already
+    // knows how to do.
+    //
+    // Court geometry is from the NFHS (high school) and NCAA/NBA rule books.
+    // These are RULE dimensions, not building code: they decide whether the
+    // court plays right, and nobody inspects them.
+    // =====================================================================
+    var Fx_COURTS = [
+        { id: "nba",  label: "NBA / professional",     L: 94, W: 50, three: 23.75, threeCorner: 22,
+          lane: 16, ft: 15, circle: 6, note: "Pro only. The 16 ft lane and 23′-9″ arc are NBA-specific." },
+        { id: "ncaa", label: "College (NCAA men)",     L: 94, W: 50, three: 22.15, threeCorner: 21.66,
+          lane: 12, ft: 15, circle: 6, note: "NCAA men's arc is 22′-1 3/4″." },
+        { id: "hs",   label: "High school (NFHS)",     L: 84, W: 50, three: 19.75, threeCorner: 19.75,
+          lane: 12, ft: 15, circle: 6, note: "The usual full court in a park. 84 × 50 with a 19′-9″ arc." },
+        { id: "jr",   label: "Junior high / middle",   L: 74, W: 42, three: 19.75, threeCorner: 19.75,
+          lane: 12, ft: 15, circle: 6, note: "Smaller footprint where the lot will not take 84 × 50." },
+        { id: "half", label: "Half court (high school)", L: 42, W: 50, three: 19.75, threeCorner: 19.75,
+          lane: 12, ft: 15, circle: 6, half: true, note: "One end of an 84 × 50. The common park build." },
+        { id: "drive",label: "Driveway / small half",  L: 30, W: 30, three: 19.75, threeCorner: 19.75,
+          lane: 12, ft: 15, circle: 6, half: true, informal: true,
+          note: "Too small for a true arc — the three-point line will run off the pad." }
+    ];
+
+    // Safety run-off. NFHS wants 3 ft of unobstructed space minimum and
+    // recommends 10. Under 3 ft somebody goes into a fence at speed.
+    var Fx_RUNOFF_MIN = 3, Fx_RUNOFF_GOOD = 10;
+
+    // Backboard face sits 4 ft inside the baseline, so the POLE goes behind
+    // the baseline by 4 ft plus whatever the system's overhang adds.
+    var Fx_BACKBOARD_INSET = 4;
+
+    function Fx_courtPlan(id, runoffFt, overhangFt) {
+        var c = Fx_COURTS.filter(function (x) { return x.id === id; })[0] || Fx_COURTS[2],
+            r = runoffFt == null ? Fx_RUNOFF_MIN : runoffFt,
+            oh = overhangFt == null ? 4 : overhangFt,
+            padL = c.L + r * 2, padW = c.W + r * 2;
+        return {
+            court: c, runoff: r,
+            padL: padL, padW: padW, padSf: padL * padW,
+            // concrete at 4 in, plus 10% for waste and edge thickening
+            concreteYd: Math.ceil((padL * padW * (4 / 12)) / 27 * 1.1),
+            // pole centre measured back from the baseline
+            poleSetback: Fx_BACKBOARD_INSET + oh,
+            hoopCount: c.half ? 1 : 2,
+            runoffOk: r >= Fx_RUNOFF_MIN,
+            runoffGood: r >= Fx_RUNOFF_GOOD,
+            // control joints: panels about 30x the slab thickness, 4 in slab
+            jointSpacing: 10,
+            jointsL: Math.max(0, Math.ceil(padL / 10) - 1),
+            jointsW: Math.max(0, Math.ceil(padW / 10) - 1),
+            // 1% fall in ONE direction; a crown makes the ball break sideways
+            fallIn: Math.round(padW * 12 * 0.01 * 10) / 10
+        };
+    }
+
+    // In-ground hoop footing. Manufacturer governs, but these are the sizes
+    // the common heavy-duty systems specify, and frost always wins.
+    function Fx_hoopFooting(kind, frostIn) {
+        var base = kind === "portable"
+            ? null
+            : kind === "heavy" ? { dia: 36, depth: 48 } : { dia: 24, depth: 42 };
+        if (!base) return { portable: true };
+        return {
+            portable: false,
+            dia: base.dia,
+            depth: Math.max(base.depth, frostIn || 0),
+            governs: (frostIn || 0) > base.depth ? "your frost line" : "the system's own spec",
+            yards: Math.ceil((Math.PI * Math.pow(base.dia / 24, 2) *
+                     (Math.max(base.depth, frostIn || 0) / 12)) / 27 * 10) / 10
+        };
+    }
+
+    // ---- the build --------------------------------------------------------
+    var Fx_COURT_SEQUENCE = [
+        { phase: "Court", diagram: 1, codeKey: "ct-size",
+          title: "Settle the size before anything else — the pad is bigger than the court",
+          material: "A long tape, the lot, and the panel beside this",
+          orientation: "Long axis usually north-south so nobody shoots into the sun",
+          spacing: "84 × 50 full court, 42 × 50 half. Plus run-off on every side",
+          fastener: "None",
+          action: "A full park court is 84 × 50 — that is the high school size, and it is what "
+                + "almost every park is. 94 × 50 is college and pro. But the CONCRETE is bigger than "
+                + "the court: you need clear run-off outside the lines, 3 ft at an absolute minimum "
+                + "and 10 ft if the space allows, because a player chasing a ball does not stop at a "
+                + "painted line. Run the long axis north-south if you can, so neither end is shooting "
+                + "into a low sun.",
+          check: "Court size chosen, run-off decided, and the whole pad fits the lot with room to "
+               + "work around the forms.",
+          note: "Check the concrete figure in the panel before you fall in love with a full court. A "
+              + "90 × 56 pad is about 69 cubic yards — seven trucks — and that is the number that "
+              + "usually decides between a full court and a half." },
+
+        { phase: "Court", diagram: 2, codeKey: "ct-locate",
+          title: "Call 811, then square the pad",
+          material: "Batter boards, mason's line, long tape",
+          orientation: "Diagonals equal; check the corners 3-4-5",
+          spacing: "Pad dimensions, not court dimensions",
+          fastener: "None",
+          action: "Call 811 and wait for the locates — you are about to dig several deep post holes "
+                + "and strip a large area. Then set batter boards back from every corner and string "
+                + "the PAD outline. Pull both diagonals; on a pad this size a small angular error "
+                + "puts the far corner feet out of place.",
+          check: "Locates marked, diagonals equal within 1/2 in, corners 3-4-5, lines clear of the dig.",
+          note: "On a 90 ft pad, one degree out of square moves the far corner about 19 in. Measure "
+              + "the diagonals, not the corners." },
+
+        { phase: "Court", diagram: 3, codeKey: "ct-base",
+          title: "Strip the organics and build a compacted base",
+          material: "Excavator, compactable aggregate, plate compactor or roller",
+          orientation: "Base follows the finished slope, not level",
+          spacing: "4 to 6 in of compacted base, in lifts no deeper than 4 in",
+          fastener: "None",
+          action: "Take out every bit of topsoil, sod and root down to firm subsoil — a court is a "
+                + "big thin plate and it has no ability to bridge a soft spot. Then build 4 to 6 in "
+                + "of compactable aggregate in lifts, compacting every one. Build the base to the "
+                + "FALL you want in the finished slab, so the slab ends up a consistent thickness "
+                + "rather than thick at one end.",
+          check: "No organics anywhere, base compacted in lifts, surface following the intended fall, "
+               + "no print left when you walk it.",
+          note: "The single biggest cause of a cracked court is a base that was not compacted "
+              + "uniformly. Rent the roller." },
+
+        { phase: "Court", diagram: 4, codeKey: "ct-poles",
+          title: "Dig and pour the hoop footings — before the slab, not after",
+          material: "Post-hole digger or auger, concrete, the hoop maker's anchor kit",
+          orientation: "Pole centre 8 ft behind the baseline, dead on the court centreline",
+          spacing: "24 in dia × 42 in deep standard, 36 × 48 heavy duty — and below frost",
+          fastener: "The system's own anchor bolts, set in wet concrete",
+          action: "The backboard hangs about 4 ft inside the baseline and the arm adds about 4 more, "
+                + "so the pole centre sits roughly 8 ft BEHIND the baseline — check your system's "
+                + "chart, because extension varies. Dig below your frost line, set the anchor kit in "
+                + "wet concrete, and get it plumb and square to the court while it is still moving. "
+                + "Doing this before the slab means the slab can be poured tight around it.",
+          check: "Footings below frost, anchors plumb, bolt pattern square to the baseline, centred on "
+               + "the court centreline, and the two ends in line with each other.",
+          note: "A hydraulic or portable hoop skips this step entirely — it needs no footing, just a "
+              + "flat pad and its ballast filled. That is a real option if you want the pad to do "
+              + "more than basketball." },
+
+        { phase: "Court", diagram: 5, codeKey: "ct-forms",
+          title: "Form the pad and set the fall — one direction, never a crown",
+          material: "Forms, stakes, level or laser, reinforcement and chairs",
+          orientation: "Fall runs across the short dimension, one way only",
+          spacing: "1% — about 1/8 in per foot. Slab 4 in minimum",
+          fastener: "Form stakes outside the pour",
+          action: "Form the perimeter and set 1% of fall — roughly 1/8 in per foot — running in ONE "
+                + "direction across the court. Do not crown it down the middle: a crowned court makes "
+                + "the ball break sideways and players hate it. Set reinforcement on chairs so it "
+                + "lands in the middle of the slab rather than on the base.",
+          check: "Forms square and braced, fall consistent and one-directional, steel up on chairs, "
+               + "4 in minimum depth everywhere.",
+          note: "Flat sounds better than sloped, and it is wrong. A dead-level court holds water, and "
+              + "standing water wrecks the surface and freezes." },
+
+        { phase: "Court", diagram: 6, codeKey: "ct-pour",
+          title: "Pour, screed and finish — broom it, do not polish it",
+          material: "Concrete, screed, bull float, broom",
+          orientation: "Screed to the forms, in the direction of the fall",
+          spacing: "Pour continuously; a cold joint across a court is a permanent line",
+          fastener: "None",
+          action: "Order enough for a continuous pour. Screed to the forms, bull float, and finish "
+                + "with a light broom across the direction of play. Do not steel-trowel it to a "
+                + "polish — a slick court is dangerous wet and it will not hold a coating later.",
+          check: "Flat to the screed, consistent broom texture, no birdbaths, no cold joint.",
+          note: "Check for low spots with a straightedge before it sets, not after. Water finds every "
+              + "one of them and shows you for the next twenty years." },
+
+        { phase: "Court", diagram: 7, codeKey: "ct-joints",
+          title: "Cut the control joints early — and put them on the lines",
+          material: "Saw or jointer",
+          orientation: "Roughly square panels, about 10 ft",
+          spacing: "A quarter of the slab depth, cut within the first day",
+          fastener: "None",
+          action: "The slab is going to crack; joints decide where. Cut roughly square panels about "
+                + "10 ft across at a quarter of the slab depth, and cut them EARLY — within the first "
+                + "day, before shrinkage beats you. Where you can, line the joints up with court "
+                + "lines so they disappear into the layout instead of cutting across it.",
+          check: "Joints cut to depth, panels roughly square, layout aligned with the court lines "
+               + "where possible.",
+          note: "A joint that lands two inches off a sideline looks like a mistake forever. Plan the "
+              + "grid against the court lines before you start cutting." },
+
+        { phase: "Court", diagram: 8, codeKey: "ct-cure",
+          title: "Cure it properly, then leave it alone",
+          material: "Curing compound or water and cover",
+          orientation: "Keep the whole slab damp",
+          spacing: "Coating waits 28 days",
+          fastener: "None",
+          action: "Concrete cures by hydrating, not by drying. Keep it damp and covered, especially "
+                + "in sun or wind. Then wait — an acrylic sport surface needs the slab fully cured "
+                + "and dry, which is about 28 days, and going early is how coatings fail.",
+          check: "Kept damp through the cure, no early drying, no traffic, 28 days before coating.",
+          note: "This is the step everyone shortens and it is the one that decides whether the "
+              + "surface you paid for stays stuck down." },
+
+        { phase: "Court", diagram: 9, codeKey: "ct-lines",
+          title: "Lay out the lines from the centre, not from the edges",
+          material: "Chalk line, long tape, a nail and string for the arcs",
+          orientation: "Everything measured from the court centreline and the baselines",
+          spacing: "Lane 12 ft wide, free throw 15 ft off the backboard, arc per your level",
+          fastener: "None",
+          action: "Snap the centreline and the two baselines first and measure everything from those "
+                + "— chasing dimensions from the pad edges stacks your errors up. The lane is 12 ft "
+                + "wide for high school and college; the free throw line is 15 ft from the face of "
+                + "the backboard. Strike the three-point arc with a string from the point under the "
+                + "centre of the basket: 19′-9″ for high school, 22′-1 3/4″ for NCAA men, 23′-9″ for "
+                + "the NBA with 22 ft corners. Centre circle is 12 ft across.",
+          check: "Both halves mirror each other, arcs struck from the basket centre, lines the same "
+               + "width throughout, everything measured off the centreline.",
+          note: "Pick ONE level's dimensions and use it throughout. Mixing a college arc with a high "
+              + "school lane gives you a court that plays wrong and looks wronger." }
+    ];
+
+    ["ct-size","ct-locate","ct-base","ct-forms","ct-joints","ct-cure","ct-lines"]
+        .forEach(function (k) { Fx_STEP_TOOL[k] = "none"; });
+    Fx_STEP_TOOL["ct-poles"] = "anchor";
+    Fx_STEP_TOOL["ct-pour"] = "none";
+    Fx_STEP_FASTENER["ct-poles"] = {
+        primary: "The hoop manufacturer's own anchor kit, set in wet concrete",
+        substitute: "None",
+        note: "Anchor pattern, bolt size and embedment come from the system. A drilled-in anchor after the pour is a different fastener with a different rating." };
+
+    // ---- the panel that rides the court steps -----------------------------
+    function Fx_CourtSpec(props) {
+        var idS = Ts.useState("hs"), id = idS[0], setId = idS[1],
+            roS = Ts.useState(6), ro = roS[0], setRo = roS[1],
+            fS = Ts.useState(0), frost = fS[0], setFrost = fS[1],
+            hS = Ts.useState("standard"), hoop = hS[0], setHoop = hS[1],
+            p = Fx_courtPlan(id, ro),
+            f = Fx_hoopFooting(hoop, frost);
+
+        function row(k, v, why, bad) {
+            return Fx_Jx("div", { className: "ct-row" + (bad ? " bad" : ""), children: [
+                Fx_J("dt", { children: k }),
+                Fx_J("dd", { children: v }),
+                why ? Fx_J("s", { children: why }) : null
+            ] }, k);
+        }
+
+        return Fx_Jx("section", { className: "court-spec", children: [
+            Fx_J("p", { className: "eyebrow", children: "This court, sized" }),
+            Fx_Jx("div", { className: "ct-inputs", children: [
+                Fx_Jx("label", { children: ["Court",
+                    Fx_J("select", { value: id, onChange: function (e) { setId(e.target.value); },
+                        children: Fx_COURTS.map(function (c) {
+                            return Fx_J("option", { value: c.id, children: c.label }, c.id);
+                        }) })] }),
+                Fx_Jx("label", { children: ["Run-off each side",
+                    Fx_J("input", { type: "number", min: "0", step: "1", value: ro,
+                        onChange: function (e) { setRo(Math.max(0, Number(e.target.value) || 0)); } }),
+                    Fx_J("span", { children: "ft" })] }),
+                Fx_Jx("label", { children: ["Hoop",
+                    Fx_Jx("select", { value: hoop, onChange: function (e) { setHoop(e.target.value); },
+                        children: [
+                            Fx_J("option", { value: "standard", children: "In-ground, standard" }, "s"),
+                            Fx_J("option", { value: "heavy", children: "In-ground, heavy duty" }, "h"),
+                            Fx_J("option", { value: "portable", children: "Portable / hydraulic" }, "p")
+                        ] })] }),
+                Fx_Jx("label", { children: ["Frost line",
+                    Fx_J("input", { type: "number", min: "0", step: "1", value: frost,
+                        onChange: function (e) { setFrost(Math.max(0, Number(e.target.value) || 0)); } }),
+                    Fx_J("span", { children: "in" })] })
+            ] }),
+            Fx_Jx("dl", { className: "ct-out", children: [
+                row("Court", p.court.L + "′ × " + p.court.W + "′", p.court.note),
+                row("Concrete pad", p.padL + "′ × " + p.padW + "′",
+                    p.padSf.toLocaleString() + " sq ft with " + p.runoff + " ft of run-off"
+                    + (p.runoffGood ? " — the recommended clearance"
+                       : p.runoffOk ? " — the bare minimum; 10 ft is recommended"
+                       : " — UNDER the 3 ft minimum, somebody hits the fence"),
+                    !p.runoffOk),
+                row("Concrete", "~" + p.concreteYd + " cubic yards",
+                    "4 in slab plus 10% for waste and edge — about "
+                    + Math.ceil(p.concreteYd / 10) + " truckloads"),
+                row("Fall", p.fallIn + "″ across " + p.padW + "′",
+                    "1%, one direction only — never crown a court"),
+                row("Control joints", p.jointsL + " × " + p.jointsW + " cuts",
+                    "~10 ft panels; line them up with the court lines where you can"),
+                f.portable
+                    ? row("Hoop", "No footing", "Portable or hydraulic — needs a flat pad and its "
+                        + "ballast filled. Moves when you want the pad for something else.")
+                    : row("Hoop footings", p.hoopCount + " × " + f.dia + "″ dia by " + f.depth + "″ deep",
+                        "~" + (Math.round(f.yards * p.hoopCount * 10) / 10) + " yd³ total, depth set by "
+                        + f.governs + ". Pole centre " + p.poleSetback + " ft behind the baseline."),
+                row("Three-point arc", Fx_ftIn(p.court.three * 12)
+                        + (p.court.threeCorner !== p.court.three
+                        ? " (" + Fx_ftIn(p.court.threeCorner * 12) + " corners)" : ""),
+                    "struck from the point under the centre of the basket"),
+                row("Lane / free throw", p.court.lane + "′ wide, " + p.court.ft + "′ line",
+                    "free throw measured from the FACE of the backboard")
+            ] }),
+            p.court.informal ? Fx_J("p", { className: "ct-warn",
+                children: "At this size the three-point arc runs off the pad. That is fine for a "
+                    + "driveway, but it is not a court anyone can practise a real three on." }) : null,
+            Fx_J("p", { className: "ct-src",
+                children: "Court dimensions are NFHS and NCAA/NBA playing rules, not building code — "
+                    + "they decide whether it plays right, and nobody inspects them. The slab, the "
+                    + "base and the footing depth are construction, and your frost line governs." })
+        ] });
+    }
+
+    // =====================================================================
     // THE LAST MILE
     // ---------------------------------------------------------------------
     // Roof covering, cladding, trim and doors were one step each. "Roofing
@@ -64702,6 +65074,10 @@ No matching component was found for:
             category: "Structural framing",
             keywords: ["bearing wall", "header opening"]
         }, {
+            name: "Basketball court",
+            category: "Exterior projects",
+            keywords: ["basketball", "court", "hoop", "half court", "sport court", "park", "bball"]
+        }, {
             name: "Concrete slab",
             category: "Concrete & foundations",
             keywords: ["slab", "concrete pad"]
@@ -65288,7 +65664,7 @@ No matching component was found for:
                             children: ["Do this now \u2022 step ", p + 1]
                         }), (0, k.jsx)("h2", {
                             children: C.title
-                        }), C.phase === "Groundworks" ? (0, k.jsx)(Fx_GroundAdvice, {}) : null, C.phase === "Deck" ? (0, k.jsx)(Fx_DeckSpec, {}) : null, R && (0, k.jsxs)("section", {
+                        }), C.phase === "Groundworks" ? (0, k.jsx)(Fx_GroundAdvice, {}) : null, C.phase === "Deck" ? (0, k.jsx)(Fx_DeckSpec, {}) : null, C.phase === "Court" ? (0, k.jsx)(Fx_CourtSpec, {}) : null, R && (0, k.jsxs)("section", {
                             className: `lumber-check ${V?"ready":""}`,
                             children: [(0, k.jsxs)("header", {
                                 children: [(0, k.jsx)("b", {
