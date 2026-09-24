@@ -59887,6 +59887,7 @@ No matching component was found for:
 
         // --- platform-framed shells ---
         "Storage shed": "shell", "Workshop": "shell",
+        "Weight room / home gym": "shell",
         "Detached garage": "shell", "Attached garage": "shell",
         "Accessory dwelling unit (ADU)": "shell", "Single-family house": "shell",
         "Outdoor sauna": "shell", "Indoor sauna conversion": "shell",
@@ -60052,15 +60053,26 @@ No matching component was found for:
         "Indoor sauna conversion": 1, "Enclosed porch": 1
     };
 
-    // Conventional light-frame construction is a prescriptive path with
-    // limits. Past them the building needs designing, not looking up.
-    var Fx_PRESCRIPTIVE_SF = 1000;
+    // What actually limits conventional framing is the CLEAR SPAN the roof
+    // has to cross, not the floor area. A 20 x 100 building has a 20 ft span
+    // and is ordinary; a 40 x 40 is the same area as 20 x 80 and is not.
+    // Gating on square feet got that wrong in both directions.
+    //
+    //   up to 20 ft   rafter tables carry it — prescriptive
+    //   20 to 40 ft   still wood, but ENGINEERED trusses or glulam
+    //   over 40 ft    steel usually wins on cost, not because wood cannot
+    var Fx_SPAN_PRESCRIPTIVE = 20, Fx_SPAN_TRUSS = 40;
 
-    function Fx_scopeOf(project, sf) {
-        var name = project && project.name;
+    function Fx_scopeOf(project, sf, widthFt, lengthFt) {
+        var name = project && project.name,
+            span = Math.min(widthFt || 0, lengthFt || 0) || 0,
+            tier = !span ? null
+                 : span <= Fx_SPAN_PRESCRIPTIVE ? "prescriptive"
+                 : span <= Fx_SPAN_TRUSS ? "truss" : "engineered";
         return {
             dwelling: !!Fx_DWELLING[name],
-            big: sf > Fx_PRESCRIPTIVE_SF,
+            span: span, tier: tier,
+            big: tier === "truss" || tier === "engineered",
             sf: sf || 0
         };
     }
@@ -60068,29 +60080,40 @@ No matching component was found for:
     function Fx_ScopeNote(props) {
         var sc = props.scope;
         if (!sc || (!sc.dwelling && !sc.big)) return null;
+        var span = sc.span;
         return Fx_Jx("div", {
             className: "scope-note",
             children: [
                 Fx_J("b", { children: sc.dwelling
-                    ? "SOMEBODY LIVES IN THIS ONE — TAKE THE SIZES OFF THE PLANS"
-                    : "BIGGER THAN THE PRESCRIPTIVE PATH COVERS" }),
+                    ? "SOMEBODY LIVES IN THIS ONE \u2014 TAKE THE SIZES OFF THE PLANS"
+                    : sc.tier === "truss"
+                        ? "THE ROOF NEEDS ENGINEERED TRUSSES \u2014 THE REST IS ORDINARY FRAMING"
+                        : "THIS SPAN IS PAST WOOD FRAMING YOU CAN LOOK UP" }),
                 Fx_J("span", { children: sc.dwelling
-                    ? "The steps below are the right steps and the order is the right order. The "
-                    + "NUMBERS are not yours to take from here. Spans, header sizes, beams, posts, "
-                    + "bracing and hold-downs for a dwelling come off your approved drawings and your "
-                    + "building department. Everything this app sizes on its own comes from "
-                    + "prescriptive tables written around small, simple, conventionally framed "
-                    + "buildings, and those tables run out long before a house does."
-                    : "At " + Math.round(sc.sf) + " sq ft this is past the size where conventional "
-                    + "prescriptive framing carries the whole job on its own. Build the sequence, but "
-                    + "take every member size and every bracing detail from the approved drawings." }),
+                    ? "The steps below are the right steps in the right order. The NUMBERS are not "
+                    + "yours to take from here. Spans, header sizes, beams, posts, bracing and "
+                    + "hold-downs for a dwelling come off your approved drawings and your building "
+                    + "department. Everything this app sizes on its own comes from prescriptive "
+                    + "tables written around small, simple, conventionally framed buildings, and "
+                    + "those tables run out long before a house does."
+                    : sc.tier === "truss"
+                        ? "The narrow dimension is " + span + " ft, which is the distance your roof "
+                        + "has to cross. Past about " + Fx_SPAN_PRESCRIPTIVE + " ft the rafter tables "
+                        + "stop and you order engineered trusses \u2014 still wood, just designed and "
+                        + "stamped by the truss company rather than looked up. Everything below the "
+                        + "top plate is normal framing and these steps apply. Take the roof off the "
+                        + "truss drawings."
+                        : "The narrow dimension is " + span + " ft. At that span you are past wood "
+                        + "you can look up and usually past wood that pencils \u2014 glulam or steel, "
+                        + "designed by an engineer. The walls and the slab below are still ordinary "
+                        + "work, but the structure over the top is not a thing this app can give you." }),
                 Fx_J("em", { children: sc.dwelling
-                    ? "IRC R301.1 — buildings shall be constructed to safely support all loads. "
-                    + "Table R602.7(1) headers and Section R602.10 bracing are both bounded by "
-                    + "building width, storey count and ground snow load. Check you are inside them "
-                    + "before you copy a number out of this app."
-                    : "IRC R301.1 and Section R602.10. The prescriptive tables have stated limits; "
-                    + "outside them the framing has to be designed." })
+                    ? "IRC R301.1. Table R602.7(1) headers and Section R602.10 bracing are both "
+                    + "bounded by building width, storey count and ground snow load \u2014 check you "
+                    + "are inside them before copying a number out of this app."
+                    : "IRC R802 rafter spans run out around 20 ft depending on species, size, pitch "
+                    + "and snow load. Trusses cover roughly 20 to 60 ft. Past that the usual answer "
+                    + "is steel, on cost rather than capability." })
             ]
         });
     }
@@ -60150,7 +60173,8 @@ No matching component was found for:
         "Deck": 1,
 
         // --- outdoor sport slab: no roof, so no span, so no engineer ---
-        "Basketball court": 1
+        "Basketball court": 1,
+        "Weight room / home gym": 1
     };
 
     // Parked, with the reason. This doubles as the build order.
@@ -65074,6 +65098,10 @@ No matching component was found for:
             category: "Structural framing",
             keywords: ["bearing wall", "header opening"]
         }, {
+            name: "Weight room / home gym",
+            category: "Accessory structures",
+            keywords: ["gym", "weight room", "weights", "fitness", "workout", "exercise"]
+        }, {
             name: "Basketball court",
             category: "Exterior projects",
             keywords: ["basketball", "court", "hoop", "half court", "sport court", "park", "bball"]
@@ -65614,7 +65642,7 @@ No matching component was found for:
             }), (0, k.jsx)(Fx_ShellNote, {
                 level: Fx_cov.level
             }), (0, k.jsx)(Fx_ScopeNote, {
-                scope: Fx_scopeOf(t, (Number(Fx_pw) || 0) * (Number(Fx_pl) || 0))
+                scope: Fx_scopeOf(t, (Number(Fx_pw) || 0) * (Number(Fx_pl) || 0), Number(Fx_pw) || 0, Number(Fx_pl) || 0)
             }), (0, k.jsxs)("div", {
                 className: "guided-layout",
                 children: [(0, k.jsxs)("aside", {
