@@ -1,2 +1,5 @@
 /scc    /scc/scc_index.html    200
 /scc/   /scc/scc_index.html    200
+# Sixteenth was Jobsite Build Lab until 2026-10-06; keep old links working
+/buildlab    /sixteenth/          301
+/buildlab/*  /sixteenth/:splat    301
