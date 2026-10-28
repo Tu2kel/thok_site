@@ -22,6 +22,8 @@ export const KEYS = [
 "fans-smart-switches/ceiling-fan-light-2-switches",
 "fans-smart-switches/bath-exhaust-fan-own-switch",
 "fans-smart-switches/smart-switch-needs-neutral",
+"fans-smart-switches/bluetooth-switch-needs-neutral",
+"fans-smart-switches/bluetooth-switch-wireless-remote",
 "outlets-bedrooms-living-areas/single-receptacle",
 "outlets-bedrooms-living-areas/chain-pigtailed",
 "outlets-bedrooms-living-areas/chain-through-device",
