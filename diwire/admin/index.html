@@ -193,7 +193,7 @@ td .em{font-weight:600}td .nm{display:block;color:var(--mute);font-size:.82rem}
       $('loading').hidden=true;
       if(!me.admin){$('deniedMsg').textContent=`${me.email} isn't on the DiWire admin list.`;$('denied').hidden=false;return}
       $('who').textContent=`Signed in as ${me.email}`;$('dash').hidden=false;await load()}
-    catch(e){if(e.status){$('loading').innerHTML=`<p class="msg err">${esc(e.message)}</p>`}}
+    catch(e){$('loading').innerHTML=`<p class="msg err">${esc(e.status?e.message:'Couldn\'t reach DiWire. Refresh the page; if it keeps happening, the server may be down.')}</p>`}
   })();
 })();
 </script>

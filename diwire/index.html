@@ -400,7 +400,7 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
   const API='/api/diwire';
   const LIVE=/(^|\.)thehouseofkel\.com$/.test(location.hostname)||/netlify\.app$/.test(location.hostname);
   function note(html){const n=$('aNote');n.hidden=false;n.innerHTML=html}
-  $('forgot').onclick=e=>{e.preventDefault();note('To reset your password, email <b>info@imperiovita.co</b> from the address on your account. We\'ll send you a reset within one business day.')};
+  $('forgot').onclick=e=>{e.preventDefault();note('To reset your password, email <b>Anthony@ifedlog.com</b> from the address on your account. We\'ll send you a reset within one business day.')};
   $('authForm').addEventListener('submit',async e=>{e.preventDefault();const em=$('aEmail').value.trim(),pw=$('aPw').value,nm=$('aName').value.trim();
     let msg='';if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))msg='Enter a valid email address.';else if(pw.length<8)msg='Password needs at least 8 characters.';
     $('aErr').textContent=msg;if(msg)return;
