@@ -4,14 +4,17 @@
 //   POST /api/diwire/logout
 //   GET  /api/diwire/me
 //   POST /api/diwire/picks   { key }   spend one Pick 3 credit on a circuit
+//   POST /api/diwire/link    { email, name }  email a sign-in link (signs up new emails too)
+//   GET  /api/diwire/verify?t=…               the emailed link: signs in, then opens the app
 // Admin only (email listed in DIWIRE_ADMIN_EMAILS):
 //   GET  /api/diwire/admin-users?q=   list accounts (newest first, up to 200)
 //   POST /api/diwire/admin-plan       { email, action: "pro"|"pick3"|"free", days }
 //   POST /api/diwire/admin-app        { html }   publish a new app build
 import {
   getDb, hashPassword, verifyPassword, createSession, currentUser, endSession,
-  entitlement, publicUser, json, isAdmin,
+  entitlement, publicUser, json, isAdmin, sha, env,
 } from "../diwire/lib.mjs";
+import { randomBytes } from "node:crypto";
 import { KEYS, FREE } from "../diwire/keys.mjs";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -32,6 +35,25 @@ export default async (req, context) => {
     if (action === "me" && req.method === "GET") {
       const u = await currentUser(db, req);
       return u ? json(publicUser(u)) : json({ error: "Not signed in." }, 401);
+    }
+
+    if (action === "verify" && req.method === "GET") {
+      const url = new URL(req.url);
+      const t = url.searchParams.get("t") || "";
+      // Links work for 15 minutes and may be opened more than once (mail scanners often open links first).
+      const link = t && (await db.collection("links").findOne({ _id: sha(t) }));
+      if (!link || link.exp < new Date()) return Response.redirect(new URL("/diwire/#link-expired", req.url), 302);
+      const users = db.collection("users");
+      let u = await users.findOne({ email: link.email });
+      if (!u) {
+        const doc = { email: link.email, name: link.name || "", passHash: null, plan: "free", picks: [], picksLeft: 0, createdAt: new Date(), lastLoginAt: new Date(), via: "link" };
+        try { doc._id = (await users.insertOne(doc)).insertedId; u = doc; }
+        catch (e) { if (e?.code === 11000) u = await users.findOne({ email: link.email }); else throw e; }
+      } else {
+        await users.updateOne({ _id: u._id }, { $set: { lastLoginAt: new Date() } });
+      }
+      const cookie = await createSession(db, u._id, true);
+      return new Response(null, { status: 302, headers: { location: new URL("/diwire/app/", req.url).toString(), "set-cookie": cookie, "cache-control": "no-store" } });
     }
 
     if (action.startsWith("admin-")) {
@@ -109,6 +131,33 @@ export default async (req, context) => {
       await db.collection("users").updateOne({ _id: u._id }, { $set: { lastLoginAt: new Date() } });
       const cookie = await createSession(db, u._id, b?.keep !== false);
       return json(publicUser(u), 200, { "set-cookie": cookie });
+    }
+
+    if (action === "link") {
+      const b = await body(req);
+      const email = String(b?.email || "").trim().toLowerCase();
+      const name = String(b?.name || "").trim().slice(0, 80);
+      if (!EMAIL.test(email)) return json({ error: "Enter a valid email address." }, 400);
+      const key = env("RESEND_API_KEY");
+      if (!key) return json({ error: "Email sign-in isn't set up yet. Use your password." }, 503);
+      const token = randomBytes(32).toString("base64url");
+      await db.collection("links").insertOne({ _id: sha(token), email, name, exp: new Date(Date.now() + 15 * 60e3) });
+      const link = new URL(`/api/diwire/verify?t=${token}`, req.url).toString();
+      const exists = !!(await db.collection("users").findOne({ email }));
+      const subject = exists ? "Your DiWire sign-in link" : "Finish creating your DiWire account";
+      const text = `${exists ? "Tap this link to sign in to DiWire" : "Tap this link to finish creating your DiWire account"}:\n\n${link}\n\nIt works for 15 minutes. If you didn't ask for this, ignore this email.\n\nDiWire · The House of Kel LLC`;
+      const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto;padding:24px;background:#0b0b0d;color:#f3efe6;border-radius:12px">
+<p style="font-size:22px;font-weight:bold;margin:0 0 12px">DiWire</p>
+<p style="margin:0 0 20px;color:#d3cec3">${exists ? "Tap the button to sign in." : "Tap the button to finish creating your account."} The link works for 15 minutes.</p>
+<p style="margin:0 0 24px"><a href="${link}" style="display:inline-block;background:#d81624;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:8px">${exists ? "Sign in to DiWire" : "Create my account"}</a></p>
+<p style="margin:0;color:#77736b;font-size:12px">If you didn't ask for this, ignore this email. DiWire · The House of Kel LLC</p></div>`;
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "DiWire <diwire@ifedlog.com>", reply_to: "Anthony@ifedlog.com", to: [email], subject, text, html }),
+      });
+      if (!r.ok) { console.error("diwire link email", r.status, await r.text().catch(() => "")); return json({ error: "Couldn't send the email. Try again, or use your password." }, 502); }
+      return json({ ok: true });
     }
 
     if (action === "logout") {

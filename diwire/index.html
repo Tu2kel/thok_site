@@ -374,6 +374,8 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
       <p class="err" id="aErr" role="alert"></p>
       <button class="btn btn-red" type="submit" id="aSubmit">Sign in</button>
     </form>
+    <div class="or">or skip the password</div>
+    <button class="btn btn-ghost gbtn" type="button" id="aLink">Email me a sign-in link</button>
     <div class="note" id="aNote" hidden></div>
     <p class="fine" id="aFine">By creating an account you agree to the Terms and Privacy Policy.</p>
   </div></div>
@@ -391,16 +393,33 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
     $('authTitle').textContent=up?'Create your account':'Welcome back';
     $('authSub').textContent=up?'Free to start. Wire your first switch in minutes.':'Sign in to keep wiring.';
     $('aSubmit').textContent=up?'Create free account':'Sign in';
+    $('aLink').textContent=up?'Sign up with an email link':'Email me a sign-in link';
     $('aPw').setAttribute('autocomplete',up?'new-password':'current-password');
     $('aErr').textContent='';$('aNote').hidden=true}
-  function route(){const h=location.hash.slice(1);const a=h==='signin'||h==='signup';
-    home.hidden=a;auth.hidden=!a;if(a){setMode(h==='signup'?'up':'in');window.scrollTo(0,0)}}
+  function route(){const h=location.hash.slice(1);const a=h==='signin'||h==='signup'||h==='link-expired';
+    home.hidden=a;auth.hidden=!a;if(a){setMode(h==='signup'?'up':'in');window.scrollTo(0,0)}
+    if(h==='link-expired')$('aErr').textContent='That sign-in link has expired. Send yourself a new one.'}
   $('tabIn').onclick=()=>{location.hash='signin'};$('tabUp').onclick=()=>{location.hash='signup'};
   $('pwToggle').onclick=()=>{const i=$('aPw'),s=i.type==='password';i.type=s?'text':'password';$('pwToggle').textContent=s?'Hide':'Show';$('pwToggle').setAttribute('aria-label',s?'Hide password':'Show password')};
   const API='/api/diwire';
   const LIVE=/(^|\.)thehouseofkel\.com$/.test(location.hostname)||/netlify\.app$/.test(location.hostname);
   function note(html){const n=$('aNote');n.hidden=false;n.innerHTML=html}
   $('forgot').onclick=e=>{e.preventDefault();note('To reset your password, email <b>Anthony@ifedlog.com</b> from the address on your account. We\'ll send you a reset within one business day.')};
+  let linkWait=0;
+  $('aLink').onclick=async()=>{
+    const em=$('aEmail').value.trim(),nm=$('aName').value.trim(),b=$('aLink');
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){$('aErr').textContent='Enter your email address first.';$('aEmail').focus();return}
+    $('aErr').textContent='';
+    if(!LIVE){note('This preview isn\'t connected to accounts. Email links work on thehouseofkel.com/diwire.');return}
+    if(Date.now()<linkWait){note(`Already sent. Check <b>${em.replace(/</g,'&lt;')}</b>, including spam.`);return}
+    const label=b.textContent;b.disabled=true;b.textContent='Sending…';
+    try{const r=await fetch(API+'/link',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({email:em,name:nm})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){$('aErr').textContent=r.status===429?'Too many tries. Wait a minute and try again.':(j.error||'Couldn\'t send the email. Try again.');return}
+      linkWait=Date.now()+30000;
+      note(`Check <b>${em.replace(/</g,'&lt;')}</b> and tap the link in the email. Open it on this device; it works for 15 minutes. Not there? Check spam.`)}
+    catch(err){$('aErr').textContent='Couldn\'t reach DiWire. Check your connection and try again.'}
+    finally{b.disabled=false;b.textContent=label}};
   $('authForm').addEventListener('submit',async e=>{e.preventDefault();const em=$('aEmail').value.trim(),pw=$('aPw').value,nm=$('aName').value.trim();
     let msg='';if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))msg='Enter a valid email address.';else if(pw.length<8)msg='Password needs at least 8 characters.';
     $('aErr').textContent=msg;if(msg)return;

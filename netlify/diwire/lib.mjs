@@ -2,6 +2,7 @@
 // Data lives in the "diwire" database on the same cluster as MONGODB_URI.
 //   users     { email, name, passHash, plan: "free"|"pick3"|"pro", picks: [key], picksLeft, proUntil, createdAt, lastLoginAt }
 //   sessions  { _id: sha256(token), userId, exp }   (TTL index on exp)
+//   links     { _id: sha256(token), email, name, exp } emailed sign-in links, 15 minutes (TTL index on exp)
 //   assets    { _id: "app", html, updatedAt }       (the paid app page, uploaded by scripts/diwire-publish-app.mjs)
 import mongodb from "mongodb";
 import { randomBytes, scrypt as _scrypt, timingSafeEqual, createHash } from "node:crypto";
@@ -11,7 +12,7 @@ const { MongoClient, ObjectId } = mongodb;
 const scrypt = promisify(_scrypt);
 export { ObjectId };
 
-const env = (k) => (globalThis.Netlify?.env?.get(k) ?? process.env[k]);
+export const env = (k) => (globalThis.Netlify?.env?.get(k) ?? process.env[k]);
 
 let clientPromise = null;
 let dbOverride = null;
@@ -31,6 +32,7 @@ export async function getDb() {
     indexesReady = Promise.all([
       db.collection("users").createIndex({ email: 1 }, { unique: true }),
       db.collection("sessions").createIndex({ exp: 1 }, { expireAfterSeconds: 0 }),
+      db.collection("links").createIndex({ exp: 1 }, { expireAfterSeconds: 0 }),
     ]).catch((e) => { indexesReady = null; throw e; });
   }
   await indexesReady;
@@ -53,7 +55,7 @@ export async function verifyPassword(pw, stored) {
 
 // ---- sessions ----
 export const COOKIE = "dw_s";
-const sha = (t) => createHash("sha256").update(t).digest("hex");
+export const sha = (t) => createHash("sha256").update(t).digest("hex");
 
 export async function createSession(db, userId, keep) {
   const token = randomBytes(32).toString("base64url");
