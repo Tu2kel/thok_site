@@ -403,14 +403,16 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
   $('pwToggle').onclick=()=>{const i=$('aPw'),s=i.type==='password';i.type=s?'text':'password';$('pwToggle').textContent=s?'Hide':'Show';$('pwToggle').setAttribute('aria-label',s?'Hide password':'Show password')};
   const API='/api/diwire';
   const LIVE=/(^|\.)thehouseofkel\.com$/.test(location.hostname)||/netlify\.app$/.test(location.hostname);
+  const PREVIEW_NOTE='This Claude preview has no accounts, so there\'s nothing to sign in to. <a href="https://claude.ai/artifact/E4bTajctNX7Gqg3i64Seeg" target="_blank" rel="noopener">Open the DiWire app preview</a> and use <b>View as</b> in its header to see Free, Pick 3 and Pro.';
   function note(html){const n=$('aNote');n.hidden=false;n.innerHTML=html}
   $('forgot').onclick=e=>{e.preventDefault();note('To reset your password, email <b>Anthony@ifedlog.com</b> from the address on your account. We\'ll send you a reset within one business day.')};
   let linkWait=0;
   $('aLink').onclick=async()=>{
     const em=$('aEmail').value.trim(),nm=$('aName').value.trim(),b=$('aLink');
+    if(!LIVE){note(PREVIEW_NOTE);return}
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){$('aErr').textContent='Enter your email address first.';$('aEmail').focus();return}
     $('aErr').textContent='';
-    if(!LIVE){note('This preview isn\'t connected to accounts. Email links work on thehouseofkel.com/diwire.');return}
+    if(!LIVE){note(PREVIEW_NOTE);return}
     if(Date.now()<linkWait){note(`Already sent. Check <b>${em.replace(/</g,'&lt;')}</b>, including spam.`);return}
     const label=b.textContent;b.disabled=true;b.textContent='Sending…';
     try{const r=await fetch(API+'/link',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({email:em,name:nm})});
@@ -420,10 +422,10 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
       note(`Check <b>${em.replace(/</g,'&lt;')}</b> and tap the link in the email. Open it on this device; it works for 15 minutes. Not there? Check spam.`)}
     catch(err){$('aErr').textContent='Couldn\'t reach DiWire. Check your connection and try again.'}
     finally{b.disabled=false;b.textContent=label}};
-  $('authForm').addEventListener('submit',async e=>{e.preventDefault();const em=$('aEmail').value.trim(),pw=$('aPw').value,nm=$('aName').value.trim();
+  $('authForm').addEventListener('submit',async e=>{e.preventDefault();if(!LIVE){note(PREVIEW_NOTE);return}const em=$('aEmail').value.trim(),pw=$('aPw').value,nm=$('aName').value.trim();
     let msg='';if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))msg='Enter a valid email address.';else if(pw.length<8)msg='Password needs at least 8 characters.';
     $('aErr').textContent=msg;if(msg)return;
-    if(!LIVE){note('This preview isn\'t connected to accounts. Sign-in works on thehouseofkel.com/diwire.');return}
+    if(!LIVE){note(PREVIEW_NOTE);return}
     const btn=$('aSubmit'),label=btn.textContent;btn.disabled=true;btn.textContent=mode==='up'?'Creating account…':'Signing in…';
     try{const r=await fetch(API+(mode==='up'?'/signup':'/login'),{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
         body:JSON.stringify({email:em,password:pw,name:nm,keep:mode==='up'?true:$('aKeep').checked})});
