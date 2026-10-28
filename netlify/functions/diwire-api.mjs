@@ -4,9 +4,13 @@
 //   POST /api/diwire/logout
 //   GET  /api/diwire/me
 //   POST /api/diwire/picks   { key }   spend one Pick 3 credit on a circuit
+// Admin only (email listed in DIWIRE_ADMIN_EMAILS):
+//   GET  /api/diwire/admin-users?q=   list accounts (newest first, up to 200)
+//   POST /api/diwire/admin-plan       { email, action: "pro"|"pick3"|"free", days }
+//   POST /api/diwire/admin-app        { html }   publish a new app build
 import {
   getDb, hashPassword, verifyPassword, createSession, currentUser, endSession,
-  entitlement, publicUser, json,
+  entitlement, publicUser, json, isAdmin,
 } from "../diwire/lib.mjs";
 import { KEYS, FREE } from "../diwire/keys.mjs";
 
@@ -28,6 +32,52 @@ export default async (req, context) => {
     if (action === "me" && req.method === "GET") {
       const u = await currentUser(db, req);
       return u ? json(publicUser(u)) : json({ error: "Not signed in." }, 401);
+    }
+
+    if (action.startsWith("admin-")) {
+      const me = await currentUser(db, req);
+      if (!me) return json({ error: "Sign in first." }, 401);
+      if (!isAdmin(me)) return json({ error: "Admins only." }, 403);
+      const users = db.collection("users");
+
+      if (action === "admin-users" && req.method === "GET") {
+        const q = (new URL(req.url).searchParams.get("q") || "").trim().toLowerCase();
+        const filter = q ? { email: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") } } : {};
+        const list = await users.find(filter, { projection: { passHash: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
+        const total = await users.countDocuments({});
+        const app = await db.collection("assets").findOne({ _id: "app" }, { projection: { html: 0 } });
+        return json({
+          total,
+          app: app ? { updatedAt: app.updatedAt, bytes: app.bytes } : null,
+          users: list.map((u) => ({ ...publicUser(u), createdAt: u.createdAt, lastLoginAt: u.lastLoginAt })),
+        });
+      }
+
+      if (action === "admin-plan" && req.method === "POST") {
+        const b = await body(req);
+        const email = String(b?.email || "").trim().toLowerCase();
+        const u = email && (await users.findOne({ email }));
+        if (!u) return json({ error: `No DiWire account for ${email || "that email"}.` }, 404);
+        let update;
+        if (b?.action === "pro") update = { $set: { plan: "pro", proUntil: new Date(Date.now() + (Math.min(Math.max(Number(b.days) || 365, 1), 3650)) * 864e5) } };
+        else if (b?.action === "pick3") update = { $inc: { picksLeft: 3 } };
+        else if (b?.action === "free") update = { $set: { plan: "free", proUntil: null } };
+        else return json({ error: "Choose pro, pick3 or free." }, 400);
+        await users.updateOne({ _id: u._id }, update);
+        const after = await users.findOne({ _id: u._id });
+        return json({ ...publicUser(after), createdAt: after.createdAt, lastLoginAt: after.lastLoginAt });
+      }
+
+      if (action === "admin-app" && req.method === "POST") {
+        const b = await body(req);
+        const html = String(b?.html || "");
+        if (!html.includes('id="entitlements"')) return json({ error: "That file isn't the live-site build of DiWire (it has no access script)." }, 400);
+        const bytes = Buffer.byteLength(html);
+        await db.collection("assets").updateOne({ _id: "app" }, { $set: { html, bytes, updatedAt: new Date(), by: me.email } }, { upsert: true });
+        return json({ ok: true, bytes, updatedAt: new Date() });
+      }
+
+      return json({ error: "Not found." }, 404);
     }
 
     if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);

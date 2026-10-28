@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>DiWire Admin</title>
+<link rel="icon" type="image/png" href="/images/diwire_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@700;800&family=Kaushan+Script&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: control-room dark — header bar, app-build panel, customer table with per-row plan actions */
+:root{
+  --ink:#0b0b0d;--ink2:#141418;--ink3:#1d1d23;--line:#2b2b33;--fg:#f3efe6;--mute:#a9a49a;--dim:#77736b;
+  --red:#d81624;--red2:#ff4d4d;--gold:#d9a441;--gold2:#f2cf6b;--green:#22b356;
+  --f-head:"Exo 2",system-ui,sans-serif;--f-body:"Plus Jakarta Sans",system-ui,sans-serif;--f-script:"Kaushan Script","Brush Script MT",cursive;--f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--ink);color:var(--fg);font:15px/1.55 var(--f-body);-webkit-font-smoothing:antialiased}
+a{color:var(--gold2)}
+.wrap{max-width:1280px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{border-bottom:1px solid var(--line);background:var(--ink2)}
+header .wrap{display:flex;align-items:center;gap:14px;padding-block:12px;flex-wrap:wrap}
+.wlogo{font:400 1.7rem/1 var(--f-script);display:inline-flex;text-decoration:none}
+.wlogo span{-webkit-background-clip:text;background-clip:text;color:transparent}
+.wlogo .l1{background-image:linear-gradient(170deg,#ffd0cc,#ff4d4d 18%,#b3101b 42%,#ff6b6b 55%,#7a0710 78%,#d42430)}
+.wlogo .l2{background-image:linear-gradient(180deg,#e9e6dd,#a8a294)}
+.wlogo .l3{background-image:linear-gradient(170deg,#fff6d2,#f2cf6b 18%,#a8761c 42%,#ffe08a 55%,#7a5410 78%,#d9a441)}
+.wlogo .l4{background-image:linear-gradient(180deg,#6fcf8c,#11702f)}
+.wlogo .l5{background-image:linear-gradient(180deg,#f0b07e,#9c4614)}
+.wlogo .l6{background-image:linear-gradient(180deg,#86b6ec,#164a9e)}
+.tag{font:700 .7rem var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gold);border:1px solid #d9a44166;border-radius:6px;padding:4px 8px}
+header nav{margin-left:auto;display:flex;gap:16px;align-items:center;font-size:.9rem}
+header nav a{text-decoration:none;color:var(--mute)}header nav a:hover{color:var(--fg)}
+.lnk{all:unset;cursor:pointer;color:var(--mute);font-size:.9rem}.lnk:hover{color:var(--fg)}
+main{padding-block:28px 60px;display:grid;gap:24px}
+h1,h2{font-family:var(--f-head);margin:0;line-height:1.15;text-wrap:balance}
+h1{font-size:clamp(1.6rem,3vw,2.2rem);font-weight:800}
+h2{font-size:1.2rem;font-weight:700}
+.sub{color:var(--mute);margin:4px 0 0}
+.panel{border:1px solid var(--line);border-radius:14px;background:var(--ink2);padding:20px;display:grid;gap:14px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{border:1px solid var(--line);border-radius:12px;background:var(--ink3);padding:14px;display:grid;gap:2px}
+.stat b{font:800 1.6rem var(--f-head);font-variant-numeric:tabular-nums}
+.stat span{font-size:.82rem;color:var(--mute)}
+.stat.pro b{color:var(--gold2)}.stat.pick b{color:var(--red2)}
+@media (max-width:700px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:9px;font:700 .86rem var(--f-body);border:1px solid var(--line);color:var(--fg);background:var(--ink3);white-space:nowrap}
+.btn:hover{border-color:var(--gold)}.btn:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.btn.gold{background:linear-gradient(180deg,#f2cf6b,#b8861f);color:#1a1205;border-color:transparent}
+.btn.sm{padding:6px 10px;font-size:.78rem}
+.btn.warn{color:var(--red2)}
+.btn[disabled]{opacity:.5;pointer-events:none}
+input[type=search]{flex:1;min-width:200px;font:500 .95rem var(--f-body);color:var(--fg);background:var(--ink3);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+input[type=search]:focus{outline:none;border-color:var(--gold)}
+.file{position:relative;overflow:hidden}.file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.msg{font-size:.88rem;min-height:1.2em}.msg.ok{color:var(--green)}.msg.err{color:var(--red2)}
+.mono{font-family:var(--f-mono);font-size:.82rem;color:var(--mute)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:860px}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font:700 .7rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--ink3)}
+tr:last-child td{border-bottom:0}
+td .em{font-weight:600}td .nm{display:block;color:var(--mute);font-size:.82rem}
+.pill{display:inline-block;font:700 .68rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:6px;border:1px solid}
+.pill.pro{color:var(--gold2);border-color:#d9a44188}.pill.pick3{color:var(--red2);border-color:#ff4d4d77}.pill.free{color:var(--mute);border-color:var(--line)}.pill.admin{color:var(--green);border-color:#22b35677;margin-left:4px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.num{font-variant-numeric:tabular-nums}
+.gate{max-width:520px}
+.empty{color:var(--mute);padding:18px;text-align:center}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="wlogo" href="/diwire/" aria-label="DiWire"><span class="l1">D</span><span class="l2">i</span><span class="l3">W</span><span class="l4">i</span><span class="l5">r</span><span class="l6">e</span></a>
+  <span class="tag">Admin</span>
+  <nav><a href="/diwire/app/">Open app</a><a href="/diwire/">Landing page</a><button class="lnk" id="out" type="button">Sign out</button></nav>
+</div></header>
+
+<main class="wrap">
+  <section id="loading" class="panel gate"><p class="sub">Checking your account…</p></section>
+
+  <section id="denied" class="panel gate" hidden>
+    <h2>Admins only</h2>
+    <p class="sub" id="deniedMsg">This account isn't on the DiWire admin list.</p>
+    <div class="row"><a class="btn" href="/diwire/app/">Open the app</a></div>
+  </section>
+
+  <div id="dash" hidden style="display:grid;gap:24px">
+    <div><h1>DiWire customers</h1><p class="sub" id="who"></p></div>
+
+    <div class="stats">
+      <div class="stat"><b id="sTotal">0</b><span>accounts</span></div>
+      <div class="stat pro"><b id="sPro">0</b><span>Pro (shown below)</span></div>
+      <div class="stat pick"><b id="sPick">0</b><span>Pick 3 (shown below)</span></div>
+      <div class="stat"><b id="sFree">0</b><span>Free (shown below)</span></div>
+    </div>
+
+    <section class="panel">
+      <div><h2>App version</h2><p class="sub" id="appStatus">No app uploaded yet. Signed-in users see "hasn't been published yet" until you upload one.</p></div>
+      <div class="row">
+        <label class="btn gold file" for="appFile">Upload new app file<input type="file" id="appFile" accept=".html,text/html"></label>
+        <span class="mono">Use the live-site build (diwire-app-live.html).</span>
+      </div>
+      <p class="msg" id="appMsg" role="status"></p>
+    </section>
+
+    <section class="panel">
+      <div class="row" style="justify-content:space-between"><h2>Accounts</h2><span class="mono" id="shown"></span></div>
+      <div class="row"><input type="search" id="q" placeholder="Search by email" aria-label="Search accounts by email" autocomplete="off"><button class="btn" id="refresh" type="button">Refresh</button></div>
+      <p class="msg" id="rowMsg" role="status"></p>
+      <div class="tbl"><table>
+        <thead><tr><th>Customer</th><th>Plan</th><th>Picks</th><th>Pro until</th><th>Joined</th><th>Last sign-in</th><th>Change plan</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+      </table></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function(){
+  const API='/api/diwire';const $=id=>document.getElementById(id);
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const day=d=>d?new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'—';
+  const kb=b=>b?(b/1024).toFixed(0)+' KB':'';
+  let confirmFor=null;
+
+  async function api(path,opts={}){
+    const r=await fetch(API+path,{credentials:'same-origin',...opts,headers:{'content-type':'application/json',...(opts.headers||{})}});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===401){location.href='/diwire/#signin';throw new Error('Sign in first.')}
+    if(!r.ok)throw Object.assign(new Error(j.error||'Something went wrong.'),{status:r.status});
+    return j}
+
+  function render(d){
+    $('sTotal').textContent=d.total;
+    const c={pro:0,pick3:0,free:0};d.users.forEach(u=>c[u.plan]=(c[u.plan]||0)+1);
+    $('sPro').textContent=c.pro;$('sPick').textContent=c.pick3;$('sFree').textContent=c.free;
+    $('shown').textContent=`${d.users.length} shown`;
+    $('appStatus').textContent=d.app?`Live version uploaded ${new Date(d.app.updatedAt).toLocaleString()} · ${kb(d.app.bytes)}`:'No app uploaded yet. Signed-in users see "hasn\'t been published yet" until you upload one.';
+    $('rows').innerHTML=d.users.length?d.users.map(u=>{
+      const picks=u.picks.length||u.picksLeft?`<span class="num">${u.picks.length} used · ${u.picksLeft} left</span>`:'—';
+      const confirming=confirmFor===u.email;
+      return `<tr data-email="${esc(u.email)}">
+        <td><span class="em">${esc(u.email)}</span><span class="nm">${esc(u.name)||'&nbsp;'}</span></td>
+        <td><span class="pill ${u.plan}">${u.plan==='pick3'?'Pick 3':u.plan}</span>${u.admin?'<span class="pill admin">admin</span>':''}</td>
+        <td>${picks}</td>
+        <td class="num">${u.admin?'always':u.proUntil?day(u.proUntil):'—'}</td>
+        <td class="num">${day(u.createdAt)}</td>
+        <td class="num">${day(u.lastLoginAt)}</td>
+        <td><div class="acts">${u.admin?'<span class="mono">full access</span>':confirming
+          ?`<button class="btn sm warn" data-a="free">Yes, end Pro</button><button class="btn sm" data-a="cancel">Keep it</button>`
+          :`<button class="btn sm" data-a="pro">Pro 1 year</button><button class="btn sm" data-a="pick3">+3 picks</button>${u.plan==='pro'&&!u.admin?'<button class="btn sm warn" data-a="ask">End Pro</button>':''}`}</div></td></tr>`}).join('')
+      :`<tr><td colspan="7" class="empty">No accounts match.</td></tr>`;
+  }
+
+  let last=null;
+  async function load(){
+    const q=$('q').value.trim();
+    try{last=await api('/admin-users'+(q?'?q='+encodeURIComponent(q):''));render(last)}
+    catch(e){$('rowMsg').className='msg err';$('rowMsg').textContent=e.message}}
+
+  $('rows').addEventListener('click',async e=>{
+    const b=e.target.closest('[data-a]');if(!b)return;
+    const email=b.closest('tr').dataset.email,a=b.dataset.a;
+    if(a==='ask'){confirmFor=email;return render(last)}
+    if(a==='cancel'){confirmFor=null;return render(last)}
+    b.disabled=true;$('rowMsg').className='msg';$('rowMsg').textContent='Saving…';
+    try{const u=await api('/admin-plan',{method:'POST',body:JSON.stringify({email,action:a,days:365})});
+      confirmFor=null;
+      const label=a==='pro'?`Pro until ${day(u.proUntil)}`:a==='pick3'?`${u.picksLeft} picks available`:'back on Free';
+      $('rowMsg').className='msg ok';$('rowMsg').textContent=`${email}: ${label}.`;await load()}
+    catch(err){b.disabled=false;$('rowMsg').className='msg err';$('rowMsg').textContent=err.message}});
+
+  let t;$('q').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(load,250)});
+  $('refresh').onclick=load;
+
+  $('appFile').addEventListener('change',async e=>{
+    const f=e.target.files[0];if(!f)return;
+    $('appMsg').className='msg';$('appMsg').textContent=`Uploading ${f.name}…`;
+    try{const html=await f.text();
+      if(!html.includes('id="entitlements"'))throw new Error('That file isn\'t the live-site build. Use diwire-app-live.html.');
+      const r=await api('/admin-app',{method:'POST',body:JSON.stringify({html})});
+      $('appMsg').className='msg ok';$('appMsg').textContent=`Published ${f.name} (${kb(r.bytes)}). Customers get it within a minute.`;await load()}
+    catch(err){$('appMsg').className='msg err';$('appMsg').textContent=err.message}
+    finally{e.target.value=''}});
+
+  $('out').onclick=async()=>{try{await fetch(API+'/logout',{method:'POST',credentials:'same-origin'})}catch(e){}location.href='/diwire/'};
+
+  (async()=>{
+    try{const me=await api('/me');
+      $('loading').hidden=true;
+      if(!me.admin){$('deniedMsg').textContent=`${me.email} isn't on the DiWire admin list.`;$('denied').hidden=false;return}
+      $('who').textContent=`Signed in as ${me.email}`;$('dash').hidden=false;await load()}
+    catch(e){if(e.status){$('loading').innerHTML=`<p class="msg err">${esc(e.message)}</p>`}}
+  })();
+})();
+</script>
+</body>
+</html>

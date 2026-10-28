@@ -85,8 +85,15 @@ export async function endSession(db, req) {
   return `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
+// ---- admins: emails listed in DIWIRE_ADMIN_EMAILS (comma-separated) ----
+export function isAdmin(user) {
+  const list = String(env("DIWIRE_ADMIN_EMAILS") || "").toLowerCase().split(",").map((x) => x.trim()).filter(Boolean);
+  return !!user?.email && list.includes(user.email.toLowerCase());
+}
+
 // ---- what an account can use right now ----
 export function entitlement(user) {
+  if (isAdmin(user)) return { plan: "pro", picks: user.picks || [], picksLeft: user.picksLeft || 0, proUntil: null, admin: true };
   const now = new Date();
   const proActive = user.plan === "pro" && (!user.proUntil || new Date(user.proUntil) > now);
   const picks = Array.isArray(user.picks) ? user.picks : [];
