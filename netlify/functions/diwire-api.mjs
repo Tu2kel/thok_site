@@ -6,6 +6,7 @@
 //   POST /api/diwire/picks   { key }   spend one Pick 3 credit on a circuit
 //   POST /api/diwire/link    { email, name }  email a sign-in link (signs up new emails too)
 //   GET  /api/diwire/verify?t=…               the emailed link: signs in, then opens the app
+//   POST /api/diwire/photo   { image: dataURL }  read a photo of an open box (Pro: full answer; others: blurred teaser)
 // Admin only (email listed in DIWIRE_ADMIN_EMAILS):
 //   GET  /api/diwire/admin-users?q=   list accounts (newest first, up to 200)
 //   POST /api/diwire/admin-plan       { email, action: "pro"|"pick3"|"free", days }
@@ -15,6 +16,7 @@ import {
   entitlement, publicUser, json, isAdmin, sha, env,
 } from "../diwire/lib.mjs";
 import { randomBytes } from "node:crypto";
+import { PRO_DAILY, TEASER_DAILY, readPhoto, teaserOf } from "../diwire/photo.mjs";
 import { KEYS, FREE } from "../diwire/keys.mjs";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -84,6 +86,7 @@ export default async (req, context) => {
         if (b?.action === "pro") update = { $set: { plan: "pro", proUntil: new Date(Date.now() + (Math.min(Math.max(Number(b.days) || 365, 1), 3650)) * 864e5) } };
         else if (b?.action === "pick3") update = { $inc: { picksLeft: 3 } };
         else if (b?.action === "free") update = { $set: { plan: "free", proUntil: null } };
+        else if (b?.action === "photos10") update = { $inc: { photoCredits: 10 } };
         else return json({ error: "Choose pro, pick3 or free." }, 400);
         await users.updateOne({ _id: u._id }, update);
         const after = await users.findOne({ _id: u._id });
@@ -158,6 +161,42 @@ export default async (req, context) => {
       });
       if (!r.ok) { console.error("diwire link email", r.status, await r.text().catch(() => "")); return json({ error: "Couldn't send the email. Try again, or use your password." }, 502); }
       return json({ ok: true });
+    }
+
+    if (action === "photo") {
+      const u = await currentUser(db, req);
+      if (!u) return json({ error: "Sign in first." }, 401);
+      const b = await body(req);
+      const m = String(b?.image || "").match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return json({ error: "Send a JPEG, PNG or WebP photo." }, 400);
+      if (m[2].length > 5_000_000) return json({ error: "That photo is too large. Try again; the app shrinks it before sending." }, 413);
+      const key = env("ANTHROPIC_API_KEY");
+      if (!key) return json({ error: "Photo reading isn't set up yet." }, 503);
+      const ent = entitlement(u);
+      const pro = ent.plan === "pro";
+      const day = new Date().toISOString().slice(0, 10);
+      const usage = db.collection("photos");
+      const uid = `${u._id}:${day}`;
+      const today = (await usage.findOne({ _id: uid })) || { n: 0, t: 0 };
+      let paidWithCredit = false;
+      if (pro && !ent.admin && today.n >= PRO_DAILY) {
+        const r = await db.collection("users").findOneAndUpdate({ _id: u._id, photoCredits: { $gte: 1 } }, { $inc: { photoCredits: -1 } }, { returnDocument: "after" });
+        const after = r && (r.value !== undefined ? r.value : r);
+        if (!after) return json({ error: `You've used today's ${PRO_DAILY} photos. Extra photos come in packs, or your count resets tomorrow.`, used: today.n, limit: PRO_DAILY, credits: 0, needCredits: true }, 402);
+        paidWithCredit = true;
+      }
+      if (!pro && today.t >= TEASER_DAILY) return json({ error: "You've used today's free photo preview. Go Pro to read photos and see the full wiring.", locked: true }, 429);
+      let out;
+      try { out = await readPhoto({ key, model: env("DIWIRE_VISION_MODEL") || "claude-sonnet-4-6", media: m[1], data: m[2] }); }
+      catch (e) {
+        console.error("diwire photo", e.status, e.body || e.message);
+        if (paidWithCredit) await db.collection("users").updateOne({ _id: u._id }, { $inc: { photoCredits: 1 } });
+        return json({ error: "Couldn't read that photo right now. Try again in a minute; it didn't count against you." }, 502);
+      }
+      await usage.updateOne({ _id: uid }, { $inc: pro ? { n: 1 } : { t: 1 }, $set: { day, userId: u._id } }, { upsert: true });
+      if (!pro) return json({ locked: true, teaser: teaserOf(out.result) });
+      const fresh = await db.collection("users").findOne({ _id: u._id });
+      return json({ result: out.result, used: today.n + 1, limit: ent.admin ? null : PRO_DAILY, credits: fresh?.photoCredits || 0 });
     }
 
     if (action === "logout") {
