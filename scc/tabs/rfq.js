@@ -656,7 +656,7 @@
       del +
       " days ARO\nShip-to: " +
       ship +
-      "\nDelivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kel\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.imperiovita.co\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kel\nImperio Talent Solutions | Supply Chain Command"
+      "\nDelivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kel\nThe House of Kel LLC · Imperio Talent Solutions\nAnthony@ifedlog.com  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.ifedlog.com\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kel\nImperio Talent Solutions | Supply Chain Command"
     );
   }
 
@@ -718,7 +718,7 @@
       del +
       " days ARO\nShip-to: " +
       ship +
-      "\nDelivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kel\nThe House of Kel LLC · Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.imperiovita.co\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kel\nImperio Talent Solutions | Supply Chain Command"
+      "\nDelivery Terms: FOB Destination preferred\nPackaging: MIL-SPEC / contractor-grade per solicitation requirements\n\nPlease provide your best government pricing, unit of issue confirmation, and estimated lead time for each line. We are a direct federal prime contractor — no broker markup on our end.\n\nPoint of Contact:\nAnthony Kel\nThe House of Kel LLC · Imperio Talent Solutions\nAnthony@ifedlog.com  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified  |  www.ifedlog.com\n\nWe appreciate your time and look forward to your quote.\n\nVery respectfully,\nAnthony Kel\nImperio Talent Solutions | Supply Chain Command"
     );
   }
 
@@ -1889,7 +1889,7 @@
                     const emailBody =
                       "To the Quotes / Government Sales Team,\n\nMy name is Anthony Kelley Sr., and I represent The House of Kel LLC (DBA Imperio Talent Solutions) \u2014 a Service-Disabled Veteran-Owned Small Business (SDVOSB), CAGE 152U4, based in Killeen, Texas.\n\nI am requesting pricing and availability on a DLA solicitation requirement" +
                       (solNum ? " \u2014 Solicitation " + solNum : "") +
-                      ".\n\nPlease reply with your best government pricing, unit of issue confirmation, and lead time.\n\nPoint of Contact:\nAnthony Kelley Sr.\nThe House of Kel LLC \u00b7 Imperio Talent Solutions\nanthony@imperiovita.co  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified\n\nVery respectfully,\nAnthony Kelley Sr.\nImperio Talent Solutions";
+                      ".\n\nPlease reply with your best government pricing, unit of issue confirmation, and lead time.\n\nPoint of Contact:\nAnthony Kelley Sr.\nThe House of Kel LLC \u00b7 Imperio Talent Solutions\nAnthony@ifedlog.com  |  (254) 265-9335\nCAGE: 152U4  |  SDVOSB Verified\n\nVery respectfully,\nAnthony Kelley Sr.\nImperio Talent Solutions";
 
                     setRfqSending(true);
                     setRfqSendStatus(null);

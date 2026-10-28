@@ -697,7 +697,7 @@ Quotes can be returned to this email. If you have questions, feel free to reach 
 Best regards,<br>
 Anthony K. Kelley | Founder & CEO<br>
 Imperio Talent Solutions | CAGE 152U4<br>
-(254) 265-9335 | anthony@imperiovita.co`;
+(254) 265-9335 | Anthony@ifedlog.com`;
 
     const [emailBody, setEmailBody] = usePState(quoteEmail);
     const [copied, setCopied] = usePState(false);

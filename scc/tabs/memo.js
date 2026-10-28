@@ -225,7 +225,7 @@
                 display: "block",
               },
             },
-            "(254) 226-5216 · anthony@imperiovita.co",
+            "(254) 226-5216 · Anthony@ifedlog.com",
           ),
           hM(
             "div",
@@ -446,7 +446,7 @@
               marginTop: "6px",
             },
           },
-          "SDVOSB · CAGE 152U4 · (254) 226-5216 · anthony@imperiovita.co",
+          "SDVOSB · CAGE 152U4 · (254) 226-5216 · Anthony@ifedlog.com",
         ),
       ),
 
