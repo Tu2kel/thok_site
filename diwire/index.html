@@ -243,7 +243,7 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
 <header class="nav"><div class="wrap">
   <a href="#top" class="wlogo" aria-label="DiWire home"><span class="l1">D</span><span class="l2">i</span><span class="l3">W</span><span class="l4">i</span><span class="l5">r</span><span class="l6">e</span></a>
   <nav aria-label="Sections"><a href="#how">How it works</a><a href="#circuits">Circuits</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
-  <a class="btn btn-ghost btn-sm" href="#signin">Sign in</a>
+  <a class="btn btn-ghost btn-sm" href="#signin" id="navAuth">Sign in</a>
 </div></header>
 
 <main id="top">
@@ -366,8 +366,6 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
     <a class="back" href="#top">← Back to DiWire</a>
     <div><h2 id="authTitle" style="font-size:2rem">Welcome back</h2><p id="authSub" style="color:var(--mute);margin-top:6px">Sign in to keep wiring.</p></div>
     <div class="tabs" role="tablist"><button id="tabIn" role="tab" aria-selected="true">Sign in</button><button id="tabUp" role="tab" aria-selected="false">Create account</button></div>
-    <button class="btn btn-ghost gbtn" id="gBtn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg>Continue with Google</button>
-    <div class="or">or with email</div>
     <form id="authForm" novalidate>
       <label id="nameRow" hidden>Name<input id="aName" type="text" autocomplete="name" placeholder="Your name"></label>
       <label>Email<input id="aEmail" type="email" autocomplete="email" placeholder="you@example.com" required></label>
@@ -399,13 +397,25 @@ input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133
     home.hidden=a;auth.hidden=!a;if(a){setMode(h==='signup'?'up':'in');window.scrollTo(0,0)}}
   $('tabIn').onclick=()=>{location.hash='signin'};$('tabUp').onclick=()=>{location.hash='signup'};
   $('pwToggle').onclick=()=>{const i=$('aPw'),s=i.type==='password';i.type=s?'text':'password';$('pwToggle').textContent=s?'Hide':'Show';$('pwToggle').setAttribute('aria-label',s?'Hide password':'Show password')};
-  function pending(){const n=$('aNote');n.hidden=false;
-    n.innerHTML='Accounts open when DiWire launches. This page is the sign-in design; checkout and saved progress connect once hosting is set up.'}
-  $('gBtn').onclick=pending;
-  $('forgot').onclick=e=>{e.preventDefault();const em=$('aEmail').value.trim();$('aErr').textContent=em?'':'Enter your email first, then tap Forgot password.';if(em)pending()};
-  $('authForm').addEventListener('submit',e=>{e.preventDefault();const em=$('aEmail').value.trim(),pw=$('aPw').value;
+  const API='/api/diwire';
+  const LIVE=/(^|\.)thehouseofkel\.com$/.test(location.hostname)||/netlify\.app$/.test(location.hostname);
+  function note(html){const n=$('aNote');n.hidden=false;n.innerHTML=html}
+  $('forgot').onclick=e=>{e.preventDefault();note('To reset your password, email <b>info@imperiovita.co</b> from the address on your account. We\'ll send you a reset within one business day.')};
+  $('authForm').addEventListener('submit',async e=>{e.preventDefault();const em=$('aEmail').value.trim(),pw=$('aPw').value,nm=$('aName').value.trim();
     let msg='';if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))msg='Enter a valid email address.';else if(pw.length<8)msg='Password needs at least 8 characters.';
-    $('aErr').textContent=msg;if(!msg)pending()});
+    $('aErr').textContent=msg;if(msg)return;
+    if(!LIVE){note('This preview isn\'t connected to accounts. Sign-in works on thehouseofkel.com/diwire.');return}
+    const btn=$('aSubmit'),label=btn.textContent;btn.disabled=true;btn.textContent=mode==='up'?'Creating account…':'Signing in…';
+    try{const r=await fetch(API+(mode==='up'?'/signup':'/login'),{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
+        body:JSON.stringify({email:em,password:pw,name:nm,keep:mode==='up'?true:$('aKeep').checked})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){$('aErr').textContent=r.status===429?'Too many tries. Wait a minute and try again.':(j.error||'Something went wrong. Try again.');return}
+      location.href='/diwire/app/';
+    }catch(err){$('aErr').textContent='Couldn\'t reach DiWire. Check your connection and try again.'}
+    finally{btn.disabled=false;btn.textContent=label}});
+  if(LIVE)fetch(API+'/me',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).then(j=>{if(!j)return;
+    const a=$('navAuth');a.textContent='Open DiWire';a.href='/diwire/app/';
+    document.querySelectorAll('a[href="#signup"]').forEach(x=>{if(x.closest('.plan'))return;x.textContent='Open DiWire';x.href='/diwire/app/'})}).catch(()=>{});
   addEventListener('hashchange',route);route();
 })();
 </script>
