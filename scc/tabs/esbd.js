@@ -1525,7 +1525,7 @@
       "",
       "The House of Kel LLC | Imperio Talent Solutions | CAGE 152U4",
       "SDVOSB | VetHUB Certified | TVC Certified",
-      "Email: anthony@imperiovita.co | Phone: (254) 265-9335 | (254) 226-5216",
+      "Email: Anthony@ifedlog.com | Phone: (254) 265-9335 | (254) 226-5216",
       "",
       "ITEM PRICING:",
       "Description: " + bid.item_desc,

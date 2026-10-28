@@ -1483,7 +1483,7 @@
                       color: "var(--body-faint)",
                     },
                   },
-                  "anthony@imperiovita.co \u00b7 (254) 265-9335",
+                  "Anthony@ifedlog.com \u00b7 (254) 265-9335",
                 ),
               ),
               hW(

@@ -48,7 +48,7 @@ Respectfully,
 Anthony Kelley Sr.
 Founder & CEO | Imperio Talent Solutions
 (254) 265-9335 | (254) 226-5216
-anthony@imperiovita.co`,
+Anthony@ifedlog.com`,
     },
     sol: {
       subject: "Solicitation Inquiry — {sol} | Imperio Talent Solutions",
@@ -67,7 +67,7 @@ Please reply to this email or call (254) 265-9335 with your pricing.
 Respectfully,
 Anthony Kelley Sr.
 Founder & CEO | Imperio Talent Solutions
-anthony@imperiovita.co`,
+Anthony@ifedlog.com`,
     },
     vendor: {
       subject:
@@ -84,7 +84,7 @@ Respectfully,
 Anthony Kelley Sr.
 Founder & CEO | Imperio Talent Solutions
 (254) 265-9335 | (254) 226-5216
-anthony@imperiovita.co`,
+Anthony@ifedlog.com`,
     },
     capability: {
       subject:
@@ -112,7 +112,7 @@ Respectfully,
 Anthony Kelley Sr.
 Founder & CEO | Imperio Talent Solutions
 (254) 265-9335
-anthony@imperiovita.co`,
+Anthony@ifedlog.com`,
     },
   };
 
