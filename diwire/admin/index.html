@@ -58,7 +58,7 @@ input[type=search]:focus{outline:none;border-color:var(--gold)}
 .msg{font-size:.88rem;min-height:1.2em}.msg.ok{color:var(--green)}.msg.err{color:var(--red2)}
 .mono{font-family:var(--f-mono);font-size:.82rem;color:var(--mute)}
 .tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
-table{width:100%;border-collapse:collapse;min-width:860px}
+table{width:100%;border-collapse:collapse;min-width:960px}
 th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
 th{font:700 .7rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--ink3)}
 tr:last-child td{border-bottom:0}
@@ -111,8 +111,8 @@ td .em{font-weight:600}td .nm{display:block;color:var(--mute);font-size:.82rem}
       <div class="row"><input type="search" id="q" placeholder="Search by email" aria-label="Search accounts by email" autocomplete="off"><button class="btn" id="refresh" type="button">Refresh</button></div>
       <p class="msg" id="rowMsg" role="status"></p>
       <div class="tbl"><table>
-        <thead><tr><th>Customer</th><th>Plan</th><th>Picks</th><th>Pro until</th><th>Joined</th><th>Last sign-in</th><th>Change plan</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        <thead><tr><th>Customer</th><th>Plan</th><th>Picks</th><th>Pro until</th><th>Extra photos</th><th>Joined</th><th>Last sign-in</th><th>Change plan</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
       </table></div>
     </section>
   </div>
@@ -147,12 +147,13 @@ td .em{font-weight:600}td .nm{display:block;color:var(--mute);font-size:.82rem}
         <td><span class="pill ${u.plan}">${u.plan==='pick3'?'Pick 3':u.plan}</span>${u.admin?'<span class="pill admin">admin</span>':''}</td>
         <td>${picks}</td>
         <td class="num">${u.admin?'always':u.proUntil?day(u.proUntil):'—'}</td>
+        <td class="num">${u.photoCredits||0}</td>
         <td class="num">${day(u.createdAt)}</td>
         <td class="num">${day(u.lastLoginAt)}</td>
         <td><div class="acts">${u.admin?'<span class="mono">full access</span>':confirming
           ?`<button class="btn sm warn" data-a="free">Yes, end Pro</button><button class="btn sm" data-a="cancel">Keep it</button>`
-          :`<button class="btn sm" data-a="pro">Pro 1 year</button><button class="btn sm" data-a="pick3">+3 picks</button>${u.plan==='pro'&&!u.admin?'<button class="btn sm warn" data-a="ask">End Pro</button>':''}`}</div></td></tr>`}).join('')
-      :`<tr><td colspan="7" class="empty">No accounts match.</td></tr>`;
+          :`<button class="btn sm" data-a="pro">Pro 1 year</button><button class="btn sm" data-a="pick3">+3 picks</button><button class="btn sm" data-a="photos10">+10 photos</button>${u.plan==='pro'&&!u.admin?'<button class="btn sm warn" data-a="ask">End Pro</button>':''}`}</div></td></tr>`}).join('')
+      :`<tr><td colspan="8" class="empty">No accounts match.</td></tr>`;
   }
 
   let last=null;
@@ -169,7 +170,7 @@ td .em{font-weight:600}td .nm{display:block;color:var(--mute);font-size:.82rem}
     b.disabled=true;$('rowMsg').className='msg';$('rowMsg').textContent='Saving…';
     try{const u=await api('/admin-plan',{method:'POST',body:JSON.stringify({email,action:a,days:365})});
       confirmFor=null;
-      const label=a==='pro'?`Pro until ${day(u.proUntil)}`:a==='pick3'?`${u.picksLeft} picks available`:'back on Free';
+      const label=a==='pro'?`Pro until ${day(u.proUntil)}`:a==='pick3'?`${u.picksLeft} picks available`:a==='photos10'?`${u.photoCredits} extra photos`:'back on Free';
       $('rowMsg').className='msg ok';$('rowMsg').textContent=`${email}: ${label}.`;await load()}
     catch(err){b.disabled=false;$('rowMsg').className='msg err';$('rowMsg').textContent=err.message}});
 

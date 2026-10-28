@@ -105,7 +105,7 @@ export function entitlement(user) {
 }
 
 export function publicUser(user) {
-  return { email: user.email, name: user.name || "", ...entitlement(user) };
+  return { email: user.email, name: user.name || "", photoCredits: user.photoCredits || 0, ...entitlement(user) };
 }
 
 export const json = (body, status = 200, headers = {}) =>
