@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DiWire — Wire It Yourself | The House of Kel</title>
+<meta name="description" content="DiWire is an animated home-wiring trainer. Watch outlets, switches and lights wired step by step, wire them yourself, and check your work against the 2023 NEC.">
+<meta property="og:title" content="DiWire — Wire It Yourself">
+<meta property="og:description" content="Outlets, Switches &amp; Lights — Done Right &amp; SAFE. An animated wiring trainer from The House of Kel.">
+<meta property="og:url" content="https://thehouseofkel.com/diwire/">
+<meta property="og:image" content="https://thehouseofkel.com/images/diwire_icon.png">
+<link rel="icon" type="image/png" href="/images/diwire_icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;700;800&family=Kaushan+Script&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: panel-room dark — neon sign hero, alternating "watch / wire / test" rows framed like a breaker-panel door, pricing as three labeled breakers */
+:root{
+  --ink:#0b0b0d;--ink2:#141418;--ink3:#1d1d23;--line:#2b2b33;--fg:#f3efe6;--mute:#a9a49a;--dim:#77736b;
+  --red:#d81624;--red2:#ff4d4d;--gold:#d9a441;--gold2:#f2cf6b;--green:#22b356;--blue:#2f7fd8;--orange:#e0742e;
+  --f-head:"Exo 2",system-ui,sans-serif;--f-body:"Plus Jakarta Sans",system-ui,sans-serif;--f-script:"Kaushan Script","Brush Script MT",cursive;--f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+@media (min-width:1700px){html{font-size:18px}}
+@media (min-width:2300px){html{font-size:20px}}
+body{margin:0;background:var(--ink);color:var(--fg);font:1rem/1.6 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--ink)}
+a{color:inherit}
+.wrap{max-width:1520px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-head);text-wrap:balance;margin:0;line-height:1.1}
+h2{font-size:clamp(1.8rem,3.2vw,3.4rem);font-weight:800;letter-spacing:-.01em}
+h3{font-size:clamp(1.25rem,1.5vw,1.6rem);font-weight:700}
+p{margin:0}
+.eyebrow{font:700 .74rem var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold2);outline-offset:3px;border-radius:6px}
+
+/* wordmark */
+.wlogo{font:400 1.9rem/1 var(--f-script);letter-spacing:.02em;text-decoration:none;display:inline-flex}
+.wlogo span{-webkit-background-clip:text;background-clip:text;color:transparent}
+.wlogo .l1{background-image:linear-gradient(170deg,#ffd0cc 0%,#ff4d4d 18%,#b3101b 42%,#ff6b6b 55%,#7a0710 78%,#d42430 100%)}
+.wlogo .l2{background-image:linear-gradient(180deg,#e9e6dd,#d4cfc2 45%,#a8a294)}
+.wlogo .l3{background-image:linear-gradient(170deg,#fff6d2 0%,#f2cf6b 18%,#a8761c 42%,#ffe08a 55%,#7a5410 78%,#d9a441 100%)}
+.wlogo .l4{background-image:linear-gradient(180deg,#6fcf8c,#1ea650 42%,#11702f)}
+.wlogo .l5{background-image:linear-gradient(180deg,#f0b07e,#d8732c 42%,#9c4614)}
+.wlogo .l6{background-image:linear-gradient(180deg,#86b6ec,#2a76d6 42%,#164a9e)}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--ink) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:20px;padding-block:12px}
+.nav nav{display:flex;gap:22px;margin-left:auto;font-size:.92rem;color:var(--mute)}
+.nav nav a{text-decoration:none}.nav nav a:hover{color:var(--fg)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 .95rem var(--f-body);text-decoration:none;border-radius:10px;padding:12px 20px;border:1px solid transparent;cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s}
+.btn:active{transform:translateY(1px)}
+.btn-red{background:linear-gradient(180deg,#e52a36,#a50e19);color:#fff;box-shadow:0 0 0 1px #ff6b6b40 inset,0 8px 24px -8px #d8162499}
+.btn-red:hover{box-shadow:0 0 0 1px #ff8a8a60 inset,0 10px 30px -6px #d81624cc}
+.btn-gold{background:linear-gradient(180deg,#f2cf6b,#b8861f);color:#1a1205;box-shadow:0 0 0 1px #fff3c470 inset}
+.btn-ghost{border-color:var(--line);color:var(--fg);background:var(--ink2)}
+.btn-ghost:hover{border-color:var(--gold)}
+.btn-sm{padding:8px 14px;font-size:.88rem}
+@media (max-width:760px){.nav nav{display:none}.nav .btn-sm{margin-left:auto}}
+
+/* hero */
+.hero{position:relative;padding-block:clamp(40px,6vw,110px) clamp(48px,6vw,110px);overflow:hidden;isolation:isolate}
+.hero::before{content:"";position:absolute;inset:-20% -10% auto;height:120%;z-index:-1;background:radial-gradient(50% 45% at 30% 40%,#d8162422,transparent 70%),radial-gradient(40% 40% at 75% 30%,#d9a44118,transparent 70%)}
+.hero .wrap{display:grid;grid-template-columns:1.45fr .8fr;gap:clamp(32px,4vw,80px);align-items:center}
+.hero .sign{min-width:0}
+.badge{display:inline-block;font:700 .72rem var(--f-mono);letter-spacing:.14em;text-transform:uppercase;background:var(--red);color:#fff;padding:5px 10px;border-radius:6px;border:1px solid #ff6b6b66;margin-bottom:14px}
+.nz{width:100%;max-width:none;height:auto;display:block;overflow:visible}
+.sub{font:400 clamp(1.9rem,3.6vw,3.8rem)/1.1 var(--f-script);margin-top:10px;background:linear-gradient(90deg,#e52a36,#f3efe6 60%,#cfcac0);-webkit-background-clip:text;background-clip:text;color:transparent;display:inline-block;padding-right:.2em}
+.tag{font:400 clamp(1.05rem,1.8vw,2rem)/1.3 var(--f-script);margin-top:8px;background:linear-gradient(90deg,#ff4d4d,#3a3a40 40%,#f3efe6 70%,#22b356);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tag b{font-weight:400;color:var(--green);-webkit-text-fill-color:var(--green)}
+.hero .copy{display:grid;gap:22px;min-width:0}
+.lede{font-size:clamp(1.1rem,1.25vw,1.4rem);color:#ddd8cd;max-width:34ch}
+.cta{display:flex;flex-wrap:wrap;gap:12px}
+.proof{display:flex;flex-wrap:wrap;gap:8px 18px;padding:0;margin:0;list-style:none;font-size:.88rem;color:var(--mute)}
+.proof li{display:flex;align-items:center;gap:8px}
+.proof li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.proof b{color:var(--fg)}
+@media (max-width:900px){.hero .wrap{grid-template-columns:1fr;gap:28px}.hero{padding-block:32px 48px}}
+
+/* trust strip */
+.strip{border-block:1px solid var(--line);background:var(--ink2)}
+.strip .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding-block:22px}
+.strip div{display:grid;gap:2px}
+.strip b{font:800 clamp(1.4rem,2vw,2.2rem) var(--f-head);color:var(--gold2);font-variant-numeric:tabular-nums}
+.strip span{font-size:.84rem;color:var(--mute)}
+@media (max-width:700px){.strip .wrap{grid-template-columns:repeat(2,1fr)}}
+
+/* sections */
+section{padding-block:clamp(56px,6vw,120px)}
+.head{display:grid;gap:12px;max-width:820px;margin-bottom:clamp(32px,3.5vw,64px)}
+.head p{color:var(--mute);font-size:1.05rem}
+.rows{display:grid;gap:clamp(56px,6vw,120px)}
+.row{display:grid;grid-template-columns:minmax(280px,.62fr) 1.38fr;gap:clamp(28px,3.5vw,72px);align-items:center}
+.row:nth-child(even){grid-template-columns:1.38fr minmax(280px,.62fr)}
+.row:nth-child(even) .shot{order:-1}
+.row .txt{display:grid;gap:14px;min-width:0}
+.row .txt p{color:#d3cec3;font-size:clamp(1rem,1.1vw,1.2rem)}
+.row ul{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:8px;font-size:.95rem;color:var(--mute)}
+.row ul li{padding-left:22px;position:relative}
+.row ul li::before{content:"";position:absolute;left:0;top:.62em;width:12px;height:3px;border-radius:2px;background:var(--gold)}
+.step{font:700 .78rem var(--f-mono);letter-spacing:.12em;color:var(--red2);text-transform:uppercase}
+.shot{min-width:0;border-radius:16px;padding:clamp(8px,.8vw,14px);background:linear-gradient(160deg,#2a2b31,#121216);border:1px solid #3a3a44;box-shadow:0 30px 60px -30px #000,0 0 0 1px #000}
+.shot .bar{display:flex;gap:6px;align-items:center;padding:2px 4px 10px;font:500 .72rem var(--f-mono);color:var(--dim)}
+.shot .bar i{width:9px;height:9px;border-radius:50%;background:#3a3a44}
+.shot .bar i:first-child{background:var(--red)}
+.shot .bar span{margin-left:8px}
+.shot img{display:block;width:100%;height:auto;border-radius:8px}
+@media (max-width:900px){.row,.row:nth-child(even){grid-template-columns:1fr;gap:22px}.row:nth-child(even) .shot{order:0}}
+
+/* circuits */
+.cats{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.cat{background:var(--ink2);padding:22px;display:grid;gap:6px;align-content:start}
+.cat .top{display:grid;gap:4px}
+.cat h3{font-size:1.05rem}
+.cat .n{font:700 .8rem var(--f-mono);color:var(--gold2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.cat p{font-size:.9rem;color:var(--mute)}
+.cat .wires{display:flex;gap:4px;margin-top:6px}
+.cat .wires i{height:4px;flex:1;border-radius:2px}
+@media (max-width:1300px){.cats{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.cats{grid-template-columns:1fr}}
+
+/* safety band */
+.safe{background:linear-gradient(180deg,var(--ink2),var(--ink));border-block:1px solid var(--line)}
+.safe .wrap{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.ldl{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.ldl div{border:1px solid var(--line);border-radius:12px;padding:18px 14px;background:var(--ink3);display:grid;gap:6px;text-align:center}
+.ldl b{font:800 1.15rem var(--f-head)}
+.ldl span{font-size:.82rem;color:var(--mute)}
+.ldl .live b{color:var(--red2)}.ldl .dead b{color:var(--green)}
+.ldl .pen{height:6px;border-radius:3px;margin:4px auto 0;width:60%}
+.ldl .live .pen{background:var(--red2);box-shadow:0 0 12px var(--red2)}
+.ldl .dead .pen{background:#33333b}
+.safe p{color:#d3cec3}
+.safe .head{margin-bottom:0}
+@media (max-width:900px){.safe .wrap{grid-template-columns:1fr;gap:28px}}
+
+/* pricing */
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(16px,2vw,32px);align-items:stretch}
+.plan{position:relative;border:1px solid var(--line);border-radius:16px;padding:28px 24px 24px;background:var(--ink2);display:grid;grid-template-rows:auto auto auto 1fr auto;gap:14px}
+.plan.best{border-color:var(--gold);background:linear-gradient(180deg,#1f1a10,var(--ink2) 45%);box-shadow:0 0 0 1px #d9a44144,0 30px 60px -30px #d9a44155}
+.plan .flag{position:absolute;top:-12px;left:24px;font:700 .7rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;background:var(--gold);color:#1a1205;padding:4px 10px;border-radius:6px}
+.plan .amp{font:700 .74rem var(--f-mono);color:var(--dim);letter-spacing:.1em}
+.price{display:flex;align-items:baseline;gap:6px}
+.price b{font:800 2.6rem var(--f-head);font-variant-numeric:tabular-nums}
+.price span{color:var(--mute);font-size:.9rem}
+.plan ul{margin:0;padding:0;list-style:none;display:grid;gap:9px;font-size:.93rem;align-content:start}
+.plan li{display:flex;gap:10px}
+.plan li::before{content:"";flex:none;width:16px;height:16px;margin-top:3px;border-radius:50%;background:radial-gradient(circle at 50% 50%,var(--green) 0 4px,transparent 5px),#22b35622;border:1px solid #22b35666}
+.plan li.no{color:var(--dim)}
+.plan li.no::before{background:#2b2b33;border-color:#3a3a44}
+.plan .btn{width:100%}
+.pnote{margin-top:18px;font-size:.85rem;color:var(--dim)}
+@media (max-width:760px){.plans{grid-template-columns:1fr;max-width:460px}}
+
+/* faq */
+.faq{display:grid;gap:10px;max-width:980px}
+.faqwrap{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);gap:clamp(24px,4vw,80px);align-items:start}
+@media (max-width:1000px){.faqwrap{grid-template-columns:1fr}}
+details{border:1px solid var(--line);border-radius:12px;background:var(--ink2);padding:0 20px}
+summary{cursor:pointer;padding:18px 0;font:700 1.02rem var(--f-head);list-style:none;display:flex;justify-content:space-between;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--gold);font-size:1.3rem;line-height:1}
+details[open] summary::after{content:"–"}
+details p{padding-bottom:18px;color:var(--mute)}
+
+/* final + footer */
+.final{text-align:center}
+.final .wrap{display:grid;justify-items:center;gap:18px}
+.final p{color:var(--mute);max-width:46ch}
+footer{border-top:1px solid var(--line);padding-block:32px;color:var(--dim);font-size:.82rem}
+footer .wrap{display:grid;gap:10px}
+footer .row2{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center}
+
+/* ===== sign in view ===== */
+.auth{min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
+.auth .side{position:relative;overflow:hidden;background:radial-gradient(60% 50% at 45% 45%,#d8162426,transparent 70%),var(--ink2);border-right:1px solid var(--line);display:grid;align-content:center;justify-items:start;gap:clamp(18px,2vw,30px);padding-block:48px;padding-left:max(clamp(40px,6vw,120px),env(safe-area-inset-left,0px));padding-right:clamp(40px,5vw,100px)}
+.auth .side .lit{width:100%;max-width:820px}
+.auth .side ul{font-size:clamp(1rem,1.1vw,1.25rem)}
+.auth .side .sub{font-size:clamp(2rem,3.4vw,3.6rem)}
+.auth .side .nz{max-width:100%}
+.auth .side ul{list-style:none;margin:0;padding:0;display:grid;gap:10px;color:#d3cec3}
+.auth .side li{display:flex;gap:10px;align-items:flex-start}
+.auth .side li::before{content:"";flex:none;width:10px;height:10px;margin-top:7px;border-radius:2px;background:var(--gold)}
+.auth .main{display:grid;place-items:center;padding-block:40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.card{width:100%;max-width:clamp(380px,28vw,500px);display:grid;gap:18px}
+.card .back{font-size:.88rem;color:var(--mute);text-decoration:none}
+.card .back:hover{color:var(--fg)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--ink2);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tabs button{all:unset;text-align:center;padding:9px;border-radius:7px;font:600 .92rem var(--f-body);color:var(--mute);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ink3);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
+.tabs button:focus-visible{outline:2px solid var(--gold2)}
+form{display:grid;gap:14px}
+label{display:grid;gap:6px;font-size:.86rem;font-weight:600;color:#d3cec3}
+input[type=email],input[type=password],input[type=text]{width:100%;font:500 1rem var(--f-body);color:var(--fg);background:var(--ink2);border:1px solid var(--line);border-radius:10px;padding:13px 14px}
+input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px #d9a44133}
+.pw{position:relative}
+.pw button{position:absolute;right:8px;top:50%;transform:translateY(-50%);all:unset;position:absolute;right:12px;top:50%;transform:translateY(-50%);font:600 .8rem var(--f-body);color:var(--gold2);cursor:pointer}
+.rowx{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--mute)}
+.rowx a{color:var(--gold2);text-decoration:none}
+.chk{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--mute)}
+.or{display:flex;align-items:center;gap:12px;color:var(--dim);font-size:.8rem}
+.or::before,.or::after{content:"";height:1px;background:var(--line);flex:1}
+.gbtn{width:100%}
+.gbtn svg{width:18px;height:18px}
+.err{font-size:.84rem;color:var(--red2);min-height:1.2em}
+.note{border:1px solid #d9a44155;background:#d9a44112;border-radius:10px;padding:12px 14px;font-size:.88rem;color:#e8dcc0}
+.note a{color:var(--gold2)}
+.fine{font-size:.78rem;color:var(--dim)}
+.fine a{color:var(--mute)}
+@media (max-width:860px){.auth{grid-template-columns:1fr}.auth .side{display:none}}
+
+/* neon sign animation */
+@keyframes nsw{0%,6.12%{transform:translateY(0)}6.25%,87.50%{transform:translateY(-150px)}87.62%,100%{transform:translateY(0)}}
+@keyframes nfeed{0%,6.25%{opacity:0}6.88%,87.50%{opacity:1}88.12%,100%{opacity:0}}
+@keyframes nl0{0%,10.62%{opacity:0}11.12%{opacity:1}11.62%{opacity:.35}12.12%,87.50%{opacity:1}88.25%,100%{opacity:0}}
+.nz .L0 .on{animation:nl0 8.0s infinite}
+@keyframes nl1{0%,14.12%{opacity:0}14.62%{opacity:1}15.12%{opacity:.35}15.62%,87.50%{opacity:1}88.25%,100%{opacity:0}}
+.nz .L1 .on{animation:nl1 8.0s infinite}
+@keyframes nl2{0%,17.62%{opacity:0}18.13%{opacity:1}18.63%{opacity:.35}19.13%,87.50%{opacity:1}88.25%,100%{opacity:0}}
+.nz .L2 .on{animation:nl2 8.0s infinite}
+@keyframes nl3{0%,21.12%{opacity:0}21.62%{opacity:1}22.12%{opacity:.35}22.62%,87.50%{opacity:1}88.25%,100%{opacity:0}}
+.nz .L3 .on{animation:nl3 8.0s infinite}
+@keyframes nl4{0%,24.63%{opacity:0}25.13%{opacity:1}25.63%{opacity:.35}26.13%,87.50%{opacity:1}88.25%,100%{opacity:0}}
+.nz .L4 .on{animation:nl4 8.0s infinite}
+@keyframes nl5{0%,28.12%{opacity:0}28.62%{opacity:1}29.12%{opacity:.35}29.62%,87.50%{opacity:1}88.25%,100%{opacity:0}}
+.nz .L5 .on{animation:nl5 8.0s infinite}
+.nz .flow{stroke-dasharray:60 160;animation:nflow 1.3s linear infinite}
+@keyframes nflow{to{stroke-dashoffset:-220}}
+.nz .lever{animation:nsw 8.0s infinite}
+.nz .feedon{animation:nfeed 8.0s infinite}
+@media (prefers-reduced-motion:reduce){.nz .on,.nz .feedon{animation:none!important;opacity:1}.nz .lever{animation:none;transform:translateY(-150px)}.nz .flow{animation:none}}
+.lit .nz .on,.lit .nz .feedon{animation:none!important;opacity:1}.lit .nz .lever{animation:none;transform:translateY(-150px)}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+
+<div id="v-home">
+<header class="nav"><div class="wrap">
+  <a href="#top" class="wlogo" aria-label="DiWire home"><span class="l1">D</span><span class="l2">i</span><span class="l3">W</span><span class="l4">i</span><span class="l5">r</span><span class="l6">e</span></a>
+  <nav aria-label="Sections"><a href="#how">How it works</a><a href="#circuits">Circuits</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
+  <a class="btn btn-ghost btn-sm" href="#signin" id="navAuth">Sign in</a>
+</div></header>
+
+<main id="top">
+<section class="hero"><div class="wrap">
+  <div class="sign">
+        <h1 aria-label="DiWire"><svg class="nz" viewBox="-1330 -60 9137.34 1796" role="img" aria-label="DiWire" style="width:100%;max-width:100%;height:auto;display:block;overflow:visible"><defs><linearGradient id="nzred" x1="0" y1="1" x2=".35" y2="0"><stop offset="0" stop-color="#ffd0cc"/><stop offset=".18" stop-color="#ff4d4d"/><stop offset=".42" stop-color="#9e0d17"/><stop offset=".56" stop-color="#ff6b6b"/><stop offset=".78" stop-color="#6e060e"/><stop offset="1" stop-color="#d42430"/></linearGradient><linearGradient id="nzgold" x1="0" y1="1" x2=".35" y2="0"><stop offset="0" stop-color="#fff6d2"/><stop offset=".18" stop-color="#f2cf6b"/><stop offset=".42" stop-color="#a8761c"/><stop offset=".56" stop-color="#ffe08a"/><stop offset=".78" stop-color="#7a5410"/><stop offset="1" stop-color="#e3b04f"/></linearGradient><filter id="swsh" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="18"/></filter><linearGradient id="swgold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6d2"/><stop offset=".2" stop-color="#e3b04f"/><stop offset=".45" stop-color="#8a5f14"/><stop offset=".6" stop-color="#f6d47a"/><stop offset=".82" stop-color="#7a5410"/><stop offset="1" stop-color="#d9a441"/></linearGradient><linearGradient id="swface" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2c30"/><stop offset=".5" stop-color="#121316"/><stop offset="1" stop-color="#060607"/></linearGradient><linearGradient id="swwell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset=".5" stop-color="#0c0c0e"/><stop offset="1" stop-color="#1c1c20"/></linearGradient><linearGradient id="swtog" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff2c0"/><stop offset=".3" stop-color="#e3b04f"/><stop offset=".65" stop-color="#9a6b18"/><stop offset="1" stop-color="#5e400c"/></linearGradient><filter id="nzglow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="55"/></filter><path id="nzg0" d="M525 432V1224Q525 1224 1016 1224Q1135 1224 1220.5 1107.5Q1306 991 1306 828Q1306 664 1220.5 548.0Q1135 432 1016 432ZM597 504H1016Q1105 504 1168.5 599.0Q1232 694 1232 828Q1232 963 1168.5 1057.5Q1105 1152 1016 1152H597ZM453 360H1016Q1165 360 1272.5 497.5Q1380 635 1380 828Q1380 955 1330.5 1063.0Q1281 1171 1197.5 1233.5Q1114 1296 1016 1296H453ZM381 288V1368H1016Q1133 1368 1234.0 1296.0Q1335 1224 1394.5 1099.5Q1454 975 1454 828Q1454 682 1394.5 557.0Q1335 432 1234.0 360.0Q1133 288 1016 288ZM309 216H1016Q1153 216 1270.5 298.0Q1388 380 1458.0 521.0Q1528 662 1528 828Q1528 993 1458.0 1134.5Q1388 1276 1270.0 1358.0Q1152 1440 1016 1440H309ZM237 144V1512H1016Q1172 1512 1307.0 1420.5Q1442 1329 1522.0 1171.0Q1602 1013 1602.0 828.0Q1602 643 1522.0 485.0Q1442 327 1307.0 235.5Q1172 144 1016 144ZM165 72H1016Q1147 72 1269.0 132.0Q1391 192 1480.0 293.0Q1569 394 1622.5 534.5Q1676 675 1676.0 828.0Q1676 981 1622.5 1121.0Q1569 1261 1480.0 1362.5Q1391 1464 1269.0 1524.0Q1147 1584 1016 1584H165ZM1016 0H93V1656H1016Q1211 1656 1380.0 1545.0Q1549 1434 1649.5 1243.0Q1750 1052 1750 828Q1750 660 1690.5 506.5Q1631 353 1532.0 242.0Q1433 131 1297.5 65.5Q1162 0 1016 0Z"/><path id="nzg1" d="M525 1440H597V0H525ZM381 1440H453V0H381ZM237 1440H309V0H237ZM93 1440H165V0H93Z"/><path id="nzg2" d="M567 509 533 367 191 1656H265ZM642 786 605 648 340 1656H413ZM717 1073 679 933 488 1656H563ZM1002 0H927L1365 1654L1364 1656H1440V1654L1635 982L1814 1656H1889L1450 0H1375L1179 671ZM852 0H778L1216 1656H1290ZM703 0H629L1068 1656H1141ZM1898 0H1823L2261 1656H2336ZM1748 0H1674L2112 1656H2186ZM1599 0H1525L1964 1656H2037ZM517 142 918 1656H993L554 0H479L41 1656H116ZM1217 812 1411 136 1449 279 1254 953ZM1291 1094 1486 420 1524 561 1329 1236ZM1365 1374 1561 700 1598 842 1404 1518Z"/><path id="nzg3" d="M525 1440H597V0H525ZM381 1440H453V0H381ZM237 1440H309V0H237ZM93 1440H165V0H93Z"/><path id="nzg4" d="M637 688H1071Q1157 688 1217.0 742.0Q1277 796 1277 894Q1277 966 1214.5 1023.0Q1152 1080 1071 1080H453V0H381V1152H1071Q1182 1152 1265.5 1074.0Q1349 996 1349 894Q1349 767 1268.0 691.5Q1187 616 1071 616H637ZM637 544H1071Q1215 544 1318.0 642.0Q1421 740 1421 894Q1421 1025 1316.0 1124.5Q1211 1224 1071 1224H309V0H237V1296H1071Q1241 1296 1367.0 1175.5Q1493 1055 1493 894Q1493 714 1368.5 593.0Q1244 472 1071 472H637ZM637 400H1071Q1204 400 1317.0 464.0Q1430 528 1497.5 642.0Q1565 756 1565 894Q1565 1019 1498.0 1128.5Q1431 1238 1316.5 1303.0Q1202 1368 1071 1368H165V0H93V1440H1071Q1184 1440 1288.5 1395.5Q1393 1351 1469.0 1277.5Q1545 1204 1591.0 1103.0Q1637 1002 1637 894Q1637 719 1557.0 588.5Q1477 458 1342 390L1493 0H1416L1273 361Q1246 352 1210 343L1345 0H1268L1136 331Q1105 328 1071 328L1198 0H1122L996 328H931L1052 0H976L854 328H637ZM597 0H525V1008H1071Q1127 1008 1166.0 974.5Q1205 941 1205 894Q1205 760 1071 760H637V832H1071Q1133 832 1133 894Q1133 911 1114.5 923.5Q1096 936 1071 936H597Z"/><path id="nzg5" d="M453 0H381V1440H453ZM309 0H237V1440H309ZM165 0H93V1440H165ZM597 360H1286V288H597V216H1286V144H597V72H1286V0H525V1440H1286V1368H597V1296H1286V1224H597V1152H1286V1080H597V901H1246V829H597V757H1246V685H597V613H1246V541H597Z"/></defs><g transform="translate(-1290 -130) scale(1.3)"><rect x="14" y="356" width="560" height="1000" rx="74" fill="#000" opacity=".55" filter="url(#swsh)"/><rect x="0" y="330" width="560" height="1000" rx="74" fill="url(#swgold)"/><rect x="10" y="340" width="540" height="980" rx="66" fill="none" stroke="#fff3c4" stroke-opacity=".55" stroke-width="4"/><rect x="34" y="364" width="492" height="932" rx="50" fill="url(#swface)"/><path d="M84 364 H476 Q526 364 526 414 V560 Q300 470 34 640 V414 Q34 364 84 364Z" fill="#fff" opacity=".07"/><rect x="180" y="510" width="200" height="640" rx="48" fill="url(#swgold)"/><rect x="194" y="524" width="172" height="612" rx="38" fill="url(#swwell)"/><g class="lever"><rect x="210" y="830" width="140" height="290" rx="40" fill="#000" opacity=".5" transform="translate(6 14)"/><rect x="210" y="830" width="140" height="290" rx="40" fill="url(#swtog)" stroke="#5a3f0c" stroke-width="6"/><rect x="228" y="846" width="40" height="250" rx="20" fill="#fff8dc" opacity=".55"/></g><circle cx="453" cy="580" r="15" fill="#3a0a0d"/><g class="feedon"><circle cx="453" cy="580" r="34" fill="#ff2d3a" opacity=".45" filter="url(#swsh)"/><circle cx="453" cy="580" r="13" fill="#ff5a5a"/><circle cx="449" cy="575" r="4" fill="#fff"/></g><g><circle cx="280" cy="430" r="24" fill="url(#swgold)" stroke="#5a3f0c" stroke-width="4"/><path d="M262 430 H298" stroke="#5a3f0c" stroke-width="6" stroke-linecap="round"/><circle cx="280" cy="1230" r="24" fill="url(#swgold)" stroke="#5a3f0c" stroke-width="4"/><path d="M262 1230 H298" stroke="#5a3f0c" stroke-width="6" stroke-linecap="round"/></g></g><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" stroke="#000" stroke-width="70" fill="none" stroke-linecap="round"/><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" stroke="#2a2d31" stroke-width="52" fill="none" stroke-linecap="round"/><g class="feedon"><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" stroke="#f2a52a" stroke-width="110" stroke-opacity=".35" fill="none" stroke-linecap="round"/><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" class="flow" stroke="#ffd36b" stroke-width="22" fill="none" stroke-linecap="round"/></g><g class="L0" transform="translate(0 1656) scale(1 -1)"><use href="#nzg0" fill="#2a2c31"/><g class="on"><use href="#nzg0" fill="#e0222e" filter="url(#nzglow)" opacity="1"/><use href="#nzg0" fill="url(#nzred)"/><use href="#nzg0" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="1" stroke-width="16" stroke-linecap="round"/></g></g><g class="L1" transform="translate(1815 1656) scale(0.78 -0.78)"><use href="#nzg1" fill="#2a2c31"/><g class="on"><use href="#nzg1" fill="#d8d3c6" filter="url(#nzglow)" opacity="0.5"/><use href="#nzg1" fill="#d8d3c6"/><use href="#nzg1" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g><g class="L2" transform="translate(2374.76 1656) scale(1 -1)"><use href="#nzg2" fill="#2a2c31"/><g class="on"><use href="#nzg2" fill="#d9a441" filter="url(#nzglow)" opacity="1"/><use href="#nzg2" fill="url(#nzgold)"/><use href="#nzg2" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="1" stroke-width="16" stroke-linecap="round"/></g></g><g class="L3" transform="translate(4753.76 1656) scale(0.78 -0.78)"><use href="#nzg3" fill="#2a2c31"/><g class="on"><use href="#nzg3" fill="#22b356" filter="url(#nzglow)" opacity="0.5"/><use href="#nzg3" fill="#22b356"/><use href="#nzg3" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g><g class="L4" transform="translate(5313.52 1656) scale(0.78 -0.78)"><use href="#nzg4" fill="#2a2c31"/><g class="on"><use href="#nzg4" fill="#e0742e" filter="url(#nzglow)" opacity="0.5"/><use href="#nzg4" fill="#e0742e"/><use href="#nzg4" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g><g class="L5" transform="translate(6661.860000000001 1656) scale(0.78 -0.78)"><use href="#nzg5" fill="#2a2c31"/><g class="on"><use href="#nzg5" fill="#2f7fd8" filter="url(#nzglow)" opacity="0.5"/><use href="#nzg5" fill="#2f7fd8"/><use href="#nzg5" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g></svg></h1>
+    <p class="sub">Wire It Yourself</p>
+    <p class="tag">Outlets, Switches &amp; Lights — Done Right &amp; <b>SAFE</b></p>
+  </div>
+  <div class="copy">
+    <p class="lede">Pick the job. Watch it wired, wire by wire. Then wire it yourself, land it at the panel and flip the breaker before you ever open the real box.</p>
+    <div class="cta"><a class="btn btn-red" href="#signup">Start free</a><a class="btn btn-ghost" href="#pricing">See pricing</a></div>
+    <ul class="proof"><li><b>51</b>&nbsp;ready-to-wire circuits</li><li><b>NEC 2023</b>&nbsp;code checks</li><li>Phone, tablet &amp; computer</li></ul>
+  </div>
+</div></section>
+
+<div class="strip"><div class="wrap">
+  <div><b>51</b><span>circuits, switches to 240 V</span></div>
+  <div><b>AFCI · GFCI</b><span>breakers set by the room</span></div>
+  <div><b>60 °C</b><span>gauge chart on every job</span></div>
+  <div><b>0 V</b><span>real voltage while you practice</span></div>
+</div></div>
+
+<section id="how"><div class="wrap">
+  <div class="head"><span class="eyebrow">How it works</span><h2>Watch it. Wire it. Test it.</h2><p>Every circuit runs from the panel to the last device, with the code reason for each step.</p></div>
+  <div class="rows">
+    <article class="row">
+      <div class="txt"><span class="step">Watch</span><h3>See the whole job built, step by step</h3><p>Tell DiWire what you're wiring. It animates the build from the home run at the panel to the last wire nut, and explains every term as it goes.</p>
+        <ul><li>Wire gauge and breaker size checked against the 60 °C column</li><li>Box fill worked out for every box</li><li>Common mistakes shown so you can spot them</li></ul></div>
+      <figure class="shot" style="margin:0"><div class="bar"><i></i><i></i><i></i><span>3-way switches · feed at the first switch</span></div><img alt="DiWire build view: two 3-way switches and a ceiling light wired step by step, with the gauge and breaker explained" src="img/build.jpg" width="1000" height="715"></figure>
+    </article>
+    <article class="row">
+      <div class="txt"><span class="step">Wire</span><h3>Then do it yourself, with no guide marks</h3><p>Drag every wire end where you think it goes. Land the home run on the right breaker, then turn it on. Real-world mode stays quiet until power-on. Coach mode points out mistakes as you make them.</p>
+        <ul><li>Drag and drop on phone, tablet or computer</li><li>Graded at the panel, AFCI and GFCI included</li><li>Pass it and get a job card to take to the real box</li></ul></div>
+      <figure class="shot" style="margin:0"><div class="bar"><i></i><i></i><i></i><span>Try it · Real world</span></div><img alt="DiWire Try-it mode: unconnected wire ends ready to drag onto device screws" src="img/try.jpg" width="1000" height="431" loading="lazy"></figure>
+    </article>
+    <article class="row">
+      <div class="txt"><span class="step">Test</span><h3>Troubleshoot with a tester pen</h3><p>Sweep a non-contact tester over any wire the way you would on the job. It beeps on the hot conductor and stays silent on the neutral, so you learn what "dead" really means.</p>
+        <ul><li>Live-dead-live habit built into every job</li><li>Switch the circuit on and off and see what changes</li><li>Hot and neutral current drawn in color</li></ul></div>
+      <figure class="shot" style="margin:0"><div class="bar"><i></i><i></i><i></i><span>Troubleshoot · single-pole switch</span></div><img alt="DiWire troubleshoot mode with a non-contact tester over the switch wiring" src="img/test.jpg" width="1000" height="660" loading="lazy"></figure>
+    </article>
+  </div>
+</div></section>
+
+<section id="circuits" style="padding-top:0"><div class="wrap">
+  <div class="head"><span class="eyebrow">What you can wire</span><h2>From a single switch to the dryer</h2></div>
+  <div class="cats">
+    <div class="cat"><div class="top"><h3>Lights · one switch</h3><span class="n">8 circuits</span></div><p>One wall switch turns the light on and off.</p><div class="wires"><i style="background:#222"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Lights · 3-way</h3><span class="n">5 circuits</span></div><p>Control a light from two places: stairs, halls, rooms with two doors.</p><div class="wires"><i style="background:#222"></i><i style="background:var(--red)"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Lights · 4-way</h3><span class="n">5 circuits</span></div><p>Add a 4-way between the 3-ways for every extra location.</p><div class="wires"><i style="background:#222"></i><i style="background:var(--red)"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Fans &amp; smart switches</h3><span class="n">3 circuits</span></div><p>Ceiling fans with light kits, bath exhaust fans, smart switches.</p><div class="wires"><i style="background:#222"></i><i style="background:var(--blue)"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Outlets · bedrooms &amp; living</h3><span class="n">6 circuits</span></div><p>Everyday receptacles on AFCI breakers.</p><div class="wires"><i style="background:#222"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Outlets · wet &amp; work areas</h3><span class="n">4 circuits</span></div><p>Bath, kitchen, garage and laundry receptacles with GFCI protection.</p><div class="wires"><i style="background:#222"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Kitchen appliances</h3><span class="n">2 circuits</span></div><p>Dedicated circuits for the dishwasher and disposal.</p><div class="wires"><i style="background:#222"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Outdoor</h3><span class="n">2 circuits</span></div><p>Weather-resistant GFCI receptacles with in-use covers.</p><div class="wires"><i style="background:#222"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>Room layouts</h3><span class="n">12 circuits</span></div><p>Switch loops, 3-way and 4-way runs, split receptacles and feed-through protection.</p><div class="wires"><i style="background:#222"></i><i style="background:var(--red)"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+    <div class="cat"><div class="top"><h3>240 V appliances</h3><span class="n">4 circuits</span></div><p>Dryer, range, water heater, EV charger on 2-pole breakers.</p><div class="wires"><i style="background:#222"></i><i style="background:var(--red)"></i><i style="background:#e9e6dd"></i><i style="background:var(--green)"></i></div></div>
+  </div>
+</div></section>
+
+<section class="safe"><div class="wrap">
+  <div class="head"><span class="eyebrow">Safety first, every job</span><h2>Breaker off. Lock it. Test it dead.</h2><p>DiWire builds the habit into every circuit, then checks your work against the 2023 National Electrical Code. You get the code reason, not just the rule.</p></div>
+  <div class="ldl" aria-label="Live-dead-live test">
+    <div class="live"><b>Live</b><span>Test the pen on a known hot circuit</span><i class="pen"></i></div>
+    <div class="dead"><b>Dead</b><span>Test the circuit you're working on</span><i class="pen"></i></div>
+    <div class="live"><b>Live</b><span>Test the pen again</span><i class="pen"></i></div>
+  </div>
+</div></section>
+
+<section id="pricing"><div class="wrap">
+  <div class="head"><span class="eyebrow">Pricing</span><h2>One project, or every project after</h2><p>Start free. Buy the 3 circuits your job needs, or go Pro for all of them.</p></div>
+  <div class="plans">
+    <div class="plan"><span class="amp">15 A · STARTER</span><h3>Free</h3><div class="price"><b>$0</b><span>forever</span></div>
+      <ul><li>3 starter circuits: switch, outlet, GFCI</li><li>Gauge chart and glossary</li><li>Watch mode</li><li class="no">Try-it grading and job cards</li><li class="no">Troubleshoot tester</li><li class="no">240 V circuits</li></ul>
+      <a class="btn btn-ghost" href="#signup">Create free account</a></div>
+    <div class="plan"><span class="amp">20 A · YOUR JOB</span><h3>Pick 3</h3><div class="price"><b>$59</b><span>one time</span></div>
+      <ul><li>Choose any 3 circuits, yours for life</li><li>Try-it with Real-world grading</li><li>Troubleshoot tester</li><li>Job cards for your 3 circuits</li><li class="no">The other 48 circuits</li></ul>
+      <a class="btn btn-ghost" href="#signup">Pick my 3</a></div>
+    <div class="plan best"><span class="flag">Every circuit</span><span class="amp">30 A · PRO</span><h3>Pro</h3><div class="price"><b>$99</b><span>per year</span></div>
+      <ul><li>All 51 circuits, switches to 240 V</li><li>Try-it, tester and job cards on all of them</li><li>New circuits as they're added</li><li>Code updates when the NEC changes</li><li>Cancel anytime</li></ul>
+      <a class="btn btn-gold" href="#signup">Go Pro</a></div>
+  </div>
+  <p class="pnote">Prices in USD.</p>
+</div></section>
+
+<section id="faq" style="padding-top:0"><div class="wrap faqwrap">
+  <div class="head"><span class="eyebrow">Questions</span><h2>Before you start</h2></div>
+  <div class="faq">
+    <details><summary>Which code does DiWire follow?</summary><p>The 2023 National Electrical Code. Cities and states adopt the NEC on their own schedule and add amendments, so confirm the edition your inspector enforces.</p></details>
+    <details><summary>Do I still need a permit?</summary><p>Often, yes. Many places require a permit and inspection for new circuits, even for homeowners. Call your local building department before you start.</p></details>
+    <details><summary>Does it work on my phone?</summary><p>Yes. Watch, wire and test all work on phone, tablet and computer. Drag-and-drop wiring works with touch.</p></details>
+    <details><summary>What if I'm brand new to this?</summary><p>Start with the learning path. It begins at a single switch and a single outlet, and every term has a plain-English explanation one tap away.</p></details>
+    <details><summary>What do I get with Pick 3?</summary><p>You choose any 3 circuits and keep them for good, with Try-it, the tester and job cards. Need more later? Buy another Pick 3 or upgrade to Pro.</p></details>
+    <details><summary>Can I cancel Pro?</summary><p>Yes, anytime. You keep access until the end of the year you paid for.</p></details>
+  </div>
+</div></section>
+
+<section class="final"><div class="wrap">
+  <span class="eyebrow">Ready when you are</span>
+  <h2>Wire it here first. Then do it for real.</h2>
+  <p>Create a free account and wire your first switch in a few minutes.</p>
+  <a class="btn btn-red" href="#signup">Start free</a>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <div class="row2"><a href="#top" class="wlogo" style="font-size:1.4rem" aria-label="DiWire"><span class="l1">D</span><span class="l2">i</span><span class="l3">W</span><span class="l4">i</span><span class="l5">r</span><span class="l6">e</span></a><span>© 2026 <a href="/" style="text-decoration:none">The House of Kel LLC</a></span></div>
+  <p>DiWire is a training tool. Code notes paraphrase the 2023 NEC. Always turn off and verify power before working, and follow your local code, permit and inspection rules.</p>
+</div></footer>
+</div>
+
+<div id="v-auth" hidden>
+<div class="auth">
+  <aside class="side">
+        <div aria-hidden="true" class="lit"><svg class="nz" viewBox="-1330 -60 9137.34 1796" role="img" aria-label="DiWire" style="width:100%;max-width:100%;height:auto;display:block;overflow:visible"><defs><linearGradient id="b_nzred" x1="0" y1="1" x2=".35" y2="0"><stop offset="0" stop-color="#ffd0cc"/><stop offset=".18" stop-color="#ff4d4d"/><stop offset=".42" stop-color="#9e0d17"/><stop offset=".56" stop-color="#ff6b6b"/><stop offset=".78" stop-color="#6e060e"/><stop offset="1" stop-color="#d42430"/></linearGradient><linearGradient id="b_nzgold" x1="0" y1="1" x2=".35" y2="0"><stop offset="0" stop-color="#fff6d2"/><stop offset=".18" stop-color="#f2cf6b"/><stop offset=".42" stop-color="#a8761c"/><stop offset=".56" stop-color="#ffe08a"/><stop offset=".78" stop-color="#7a5410"/><stop offset="1" stop-color="#e3b04f"/></linearGradient><filter id="b_swsh" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="18"/></filter><linearGradient id="b_swgold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6d2"/><stop offset=".2" stop-color="#e3b04f"/><stop offset=".45" stop-color="#8a5f14"/><stop offset=".6" stop-color="#f6d47a"/><stop offset=".82" stop-color="#7a5410"/><stop offset="1" stop-color="#d9a441"/></linearGradient><linearGradient id="b_swface" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2c30"/><stop offset=".5" stop-color="#121316"/><stop offset="1" stop-color="#060607"/></linearGradient><linearGradient id="b_swwell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset=".5" stop-color="#0c0c0e"/><stop offset="1" stop-color="#1c1c20"/></linearGradient><linearGradient id="b_swtog" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff2c0"/><stop offset=".3" stop-color="#e3b04f"/><stop offset=".65" stop-color="#9a6b18"/><stop offset="1" stop-color="#5e400c"/></linearGradient><filter id="b_nzglow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="55"/></filter><path id="b_nzg0" d="M525 432V1224Q525 1224 1016 1224Q1135 1224 1220.5 1107.5Q1306 991 1306 828Q1306 664 1220.5 548.0Q1135 432 1016 432ZM597 504H1016Q1105 504 1168.5 599.0Q1232 694 1232 828Q1232 963 1168.5 1057.5Q1105 1152 1016 1152H597ZM453 360H1016Q1165 360 1272.5 497.5Q1380 635 1380 828Q1380 955 1330.5 1063.0Q1281 1171 1197.5 1233.5Q1114 1296 1016 1296H453ZM381 288V1368H1016Q1133 1368 1234.0 1296.0Q1335 1224 1394.5 1099.5Q1454 975 1454 828Q1454 682 1394.5 557.0Q1335 432 1234.0 360.0Q1133 288 1016 288ZM309 216H1016Q1153 216 1270.5 298.0Q1388 380 1458.0 521.0Q1528 662 1528 828Q1528 993 1458.0 1134.5Q1388 1276 1270.0 1358.0Q1152 1440 1016 1440H309ZM237 144V1512H1016Q1172 1512 1307.0 1420.5Q1442 1329 1522.0 1171.0Q1602 1013 1602.0 828.0Q1602 643 1522.0 485.0Q1442 327 1307.0 235.5Q1172 144 1016 144ZM165 72H1016Q1147 72 1269.0 132.0Q1391 192 1480.0 293.0Q1569 394 1622.5 534.5Q1676 675 1676.0 828.0Q1676 981 1622.5 1121.0Q1569 1261 1480.0 1362.5Q1391 1464 1269.0 1524.0Q1147 1584 1016 1584H165ZM1016 0H93V1656H1016Q1211 1656 1380.0 1545.0Q1549 1434 1649.5 1243.0Q1750 1052 1750 828Q1750 660 1690.5 506.5Q1631 353 1532.0 242.0Q1433 131 1297.5 65.5Q1162 0 1016 0Z"/><path id="b_nzg1" d="M525 1440H597V0H525ZM381 1440H453V0H381ZM237 1440H309V0H237ZM93 1440H165V0H93Z"/><path id="b_nzg2" d="M567 509 533 367 191 1656H265ZM642 786 605 648 340 1656H413ZM717 1073 679 933 488 1656H563ZM1002 0H927L1365 1654L1364 1656H1440V1654L1635 982L1814 1656H1889L1450 0H1375L1179 671ZM852 0H778L1216 1656H1290ZM703 0H629L1068 1656H1141ZM1898 0H1823L2261 1656H2336ZM1748 0H1674L2112 1656H2186ZM1599 0H1525L1964 1656H2037ZM517 142 918 1656H993L554 0H479L41 1656H116ZM1217 812 1411 136 1449 279 1254 953ZM1291 1094 1486 420 1524 561 1329 1236ZM1365 1374 1561 700 1598 842 1404 1518Z"/><path id="b_nzg3" d="M525 1440H597V0H525ZM381 1440H453V0H381ZM237 1440H309V0H237ZM93 1440H165V0H93Z"/><path id="b_nzg4" d="M637 688H1071Q1157 688 1217.0 742.0Q1277 796 1277 894Q1277 966 1214.5 1023.0Q1152 1080 1071 1080H453V0H381V1152H1071Q1182 1152 1265.5 1074.0Q1349 996 1349 894Q1349 767 1268.0 691.5Q1187 616 1071 616H637ZM637 544H1071Q1215 544 1318.0 642.0Q1421 740 1421 894Q1421 1025 1316.0 1124.5Q1211 1224 1071 1224H309V0H237V1296H1071Q1241 1296 1367.0 1175.5Q1493 1055 1493 894Q1493 714 1368.5 593.0Q1244 472 1071 472H637ZM637 400H1071Q1204 400 1317.0 464.0Q1430 528 1497.5 642.0Q1565 756 1565 894Q1565 1019 1498.0 1128.5Q1431 1238 1316.5 1303.0Q1202 1368 1071 1368H165V0H93V1440H1071Q1184 1440 1288.5 1395.5Q1393 1351 1469.0 1277.5Q1545 1204 1591.0 1103.0Q1637 1002 1637 894Q1637 719 1557.0 588.5Q1477 458 1342 390L1493 0H1416L1273 361Q1246 352 1210 343L1345 0H1268L1136 331Q1105 328 1071 328L1198 0H1122L996 328H931L1052 0H976L854 328H637ZM597 0H525V1008H1071Q1127 1008 1166.0 974.5Q1205 941 1205 894Q1205 760 1071 760H637V832H1071Q1133 832 1133 894Q1133 911 1114.5 923.5Q1096 936 1071 936H597Z"/><path id="b_nzg5" d="M453 0H381V1440H453ZM309 0H237V1440H309ZM165 0H93V1440H165ZM597 360H1286V288H597V216H1286V144H597V72H1286V0H525V1440H1286V1368H597V1296H1286V1224H597V1152H1286V1080H597V901H1246V829H597V757H1246V685H597V613H1246V541H597Z"/></defs><g transform="translate(-1290 -130) scale(1.3)"><rect x="14" y="356" width="560" height="1000" rx="74" fill="#000" opacity=".55" filter="url(#b_swsh)"/><rect x="0" y="330" width="560" height="1000" rx="74" fill="url(#b_swgold)"/><rect x="10" y="340" width="540" height="980" rx="66" fill="none" stroke="#fff3c4" stroke-opacity=".55" stroke-width="4"/><rect x="34" y="364" width="492" height="932" rx="50" fill="url(#b_swface)"/><path d="M84 364 H476 Q526 364 526 414 V560 Q300 470 34 640 V414 Q34 364 84 364Z" fill="#fff" opacity=".07"/><rect x="180" y="510" width="200" height="640" rx="48" fill="url(#b_swgold)"/><rect x="194" y="524" width="172" height="612" rx="38" fill="url(#b_swwell)"/><g class="lever"><rect x="210" y="830" width="140" height="290" rx="40" fill="#000" opacity=".5" transform="translate(6 14)"/><rect x="210" y="830" width="140" height="290" rx="40" fill="url(#b_swtog)" stroke="#5a3f0c" stroke-width="6"/><rect x="228" y="846" width="40" height="250" rx="20" fill="#fff8dc" opacity=".55"/></g><circle cx="453" cy="580" r="15" fill="#3a0a0d"/><g class="feedon"><circle cx="453" cy="580" r="34" fill="#ff2d3a" opacity=".45" filter="url(#b_swsh)"/><circle cx="453" cy="580" r="13" fill="#ff5a5a"/><circle cx="449" cy="575" r="4" fill="#fff"/></g><g><circle cx="280" cy="430" r="24" fill="url(#b_swgold)" stroke="#5a3f0c" stroke-width="4"/><path d="M262 430 H298" stroke="#5a3f0c" stroke-width="6" stroke-linecap="round"/><circle cx="280" cy="1230" r="24" fill="url(#b_swgold)" stroke="#5a3f0c" stroke-width="4"/><path d="M262 1230 H298" stroke="#5a3f0c" stroke-width="6" stroke-linecap="round"/></g></g><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" stroke="#000" stroke-width="70" fill="none" stroke-linecap="round"/><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" stroke="#2a2d31" stroke-width="52" fill="none" stroke-linecap="round"/><g class="feedon"><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" stroke="#f2a52a" stroke-width="110" stroke-opacity=".35" fill="none" stroke-linecap="round"/><path d="M-560 860 C-380 860 -300 1520 -120 1520 C40 1520 60 1400 93 1300" class="flow" stroke="#ffd36b" stroke-width="22" fill="none" stroke-linecap="round"/></g><g class="L0" transform="translate(0 1656) scale(1 -1)"><use href="#b_nzg0" fill="#2a2c31"/><g class="on"><use href="#b_nzg0" fill="#e0222e" filter="url(#b_nzglow)" opacity="1"/><use href="#b_nzg0" fill="url(#b_nzred)"/><use href="#b_nzg0" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="1" stroke-width="16" stroke-linecap="round"/></g></g><g class="L1" transform="translate(1815 1656) scale(0.78 -0.78)"><use href="#b_nzg1" fill="#2a2c31"/><g class="on"><use href="#b_nzg1" fill="#d8d3c6" filter="url(#b_nzglow)" opacity="0.5"/><use href="#b_nzg1" fill="#d8d3c6"/><use href="#b_nzg1" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g><g class="L2" transform="translate(2374.76 1656) scale(1 -1)"><use href="#b_nzg2" fill="#2a2c31"/><g class="on"><use href="#b_nzg2" fill="#d9a441" filter="url(#b_nzglow)" opacity="1"/><use href="#b_nzg2" fill="url(#b_nzgold)"/><use href="#b_nzg2" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="1" stroke-width="16" stroke-linecap="round"/></g></g><g class="L3" transform="translate(4753.76 1656) scale(0.78 -0.78)"><use href="#b_nzg3" fill="#2a2c31"/><g class="on"><use href="#b_nzg3" fill="#22b356" filter="url(#b_nzglow)" opacity="0.5"/><use href="#b_nzg3" fill="#22b356"/><use href="#b_nzg3" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g><g class="L4" transform="translate(5313.52 1656) scale(0.78 -0.78)"><use href="#b_nzg4" fill="#2a2c31"/><g class="on"><use href="#b_nzg4" fill="#e0742e" filter="url(#b_nzglow)" opacity="0.5"/><use href="#b_nzg4" fill="#e0742e"/><use href="#b_nzg4" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g><g class="L5" transform="translate(6661.860000000001 1656) scale(0.78 -0.78)"><use href="#b_nzg5" fill="#2a2c31"/><g class="on"><use href="#b_nzg5" fill="#2f7fd8" filter="url(#b_nzglow)" opacity="0.5"/><use href="#b_nzg5" fill="#2f7fd8"/><use href="#b_nzg5" class="flow" fill="none" stroke="#fff6c8" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round"/></g></g></svg></div>
+    <p class="sub" style="margin:0">Wire It Yourself</p>
+    <ul><li>Pick up where you left off on any device</li><li>Your job cards and progress, saved</li><li>Unlock circuits with Pick 3 or Pro</li></ul>
+  </aside>
+  <div class="main"><div class="card">
+    <a class="back" href="#top">← Back to DiWire</a>
+    <div><h2 id="authTitle" style="font-size:2rem">Welcome back</h2><p id="authSub" style="color:var(--mute);margin-top:6px">Sign in to keep wiring.</p></div>
+    <div class="tabs" role="tablist"><button id="tabIn" role="tab" aria-selected="true">Sign in</button><button id="tabUp" role="tab" aria-selected="false">Create account</button></div>
+    <form id="authForm" novalidate>
+      <label id="nameRow" hidden>Name<input id="aName" type="text" autocomplete="name" placeholder="Your name"></label>
+      <label>Email<input id="aEmail" type="email" autocomplete="email" placeholder="you@example.com" required></label>
+      <label>Password<span class="pw"><input id="aPw" type="password" autocomplete="current-password" placeholder="At least 8 characters" required minlength="8"><button type="button" id="pwToggle" aria-label="Show password">Show</button></span></label>
+      <div class="rowx" id="inExtras"><label class="chk"><input id="aKeep" type="checkbox" checked> Keep me signed in</label><a href="#signin" id="forgot">Forgot password?</a></div>
+      <p class="err" id="aErr" role="alert"></p>
+      <button class="btn btn-red" type="submit" id="aSubmit">Sign in</button>
+    </form>
+    <div class="or">or skip the password</div>
+    <button class="btn btn-ghost gbtn" type="button" id="aLink">Email me a sign-in link</button>
+    <div class="note" id="aNote" hidden></div>
+    <p class="fine" id="aFine">By creating an account you agree to the Terms and Privacy Policy.</p>
+  </div></div>
+</div>
+</div>
+
+<script>
+(function(){
+  const home=document.getElementById('v-home'),auth=document.getElementById('v-auth');
+  const $=id=>document.getElementById(id);
+  let mode='in';
+  function setMode(m){mode=m;const up=m==='up';
+    $('tabIn').setAttribute('aria-selected',!up);$('tabUp').setAttribute('aria-selected',up);
+    $('nameRow').hidden=!up;$('inExtras').hidden=up;$('aFine').hidden=!up;
+    $('authTitle').textContent=up?'Create your account':'Welcome back';
+    $('authSub').textContent=up?'Free to start. Wire your first switch in minutes.':'Sign in to keep wiring.';
+    $('aSubmit').textContent=up?'Create free account':'Sign in';
+    $('aLink').textContent=up?'Sign up with an email link':'Email me a sign-in link';
+    $('aPw').setAttribute('autocomplete',up?'new-password':'current-password');
+    $('aErr').textContent='';$('aNote').hidden=true}
+  function route(){const h=location.hash.slice(1);const a=h==='signin'||h==='signup'||h==='link-expired';
+    home.hidden=a;auth.hidden=!a;if(a){setMode(h==='signup'?'up':'in');window.scrollTo(0,0)}
+    if(h==='link-expired')$('aErr').textContent='That sign-in link has expired. Send yourself a new one.'}
+  $('tabIn').onclick=()=>{location.hash='signin'};$('tabUp').onclick=()=>{location.hash='signup'};
+  $('pwToggle').onclick=()=>{const i=$('aPw'),s=i.type==='password';i.type=s?'text':'password';$('pwToggle').textContent=s?'Hide':'Show';$('pwToggle').setAttribute('aria-label',s?'Hide password':'Show password')};
+  const API='/api/diwire';
+  const LIVE=/(^|\.)thehouseofkel\.com$/.test(location.hostname)||/netlify\.app$/.test(location.hostname);
+  const PREVIEW_NOTE='This Claude preview has no accounts, so there\'s nothing to sign in to. <a href="https://claude.ai/artifact/E4bTajctNX7Gqg3i64Seeg" target="_blank" rel="noopener">Open the DiWire app preview</a> and use <b>View as</b> in its header to see Free, Pick 3 and Pro.';
+  function note(html){const n=$('aNote');n.hidden=false;n.innerHTML=html}
+  $('forgot').onclick=e=>{e.preventDefault();note('To reset your password, email <b>Anthony@ifedlog.com</b> from the address on your account. We\'ll send you a reset within one business day.')};
+  let linkWait=0;
+  $('aLink').onclick=async()=>{
+    const em=$('aEmail').value.trim(),nm=$('aName').value.trim(),b=$('aLink');
+    if(!LIVE){note(PREVIEW_NOTE);return}
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){$('aErr').textContent='Enter your email address first.';$('aEmail').focus();return}
+    $('aErr').textContent='';
+    if(!LIVE){note(PREVIEW_NOTE);return}
+    if(Date.now()<linkWait){note(`Already sent. Check <b>${em.replace(/</g,'&lt;')}</b>, including spam.`);return}
+    const label=b.textContent;b.disabled=true;b.textContent='Sending…';
+    try{const r=await fetch(API+'/link',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({email:em,name:nm})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){$('aErr').textContent=r.status===429?'Too many tries. Wait a minute and try again.':(j.error||'Couldn\'t send the email. Try again.');return}
+      linkWait=Date.now()+30000;
+      note(`Check <b>${em.replace(/</g,'&lt;')}</b> and tap the link in the email. Open it on this device; it works for 15 minutes. Not there? Check spam.`)}
+    catch(err){$('aErr').textContent='Couldn\'t reach DiWire. Check your connection and try again.'}
+    finally{b.disabled=false;b.textContent=label}};
+  $('authForm').addEventListener('submit',async e=>{e.preventDefault();if(!LIVE){note(PREVIEW_NOTE);return}const em=$('aEmail').value.trim(),pw=$('aPw').value,nm=$('aName').value.trim();
+    let msg='';if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))msg='Enter a valid email address.';else if(pw.length<8)msg='Password needs at least 8 characters.';
+    $('aErr').textContent=msg;if(msg)return;
+    if(!LIVE){note(PREVIEW_NOTE);return}
+    const btn=$('aSubmit'),label=btn.textContent;btn.disabled=true;btn.textContent=mode==='up'?'Creating account…':'Signing in…';
+    try{const r=await fetch(API+(mode==='up'?'/signup':'/login'),{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
+        body:JSON.stringify({email:em,password:pw,name:nm,keep:mode==='up'?true:$('aKeep').checked})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){$('aErr').textContent=r.status===429?'Too many tries. Wait a minute and try again.':(j.error||'Something went wrong. Try again.');return}
+      location.href='/diwire/app/';
+    }catch(err){$('aErr').textContent='Couldn\'t reach DiWire. Check your connection and try again.'}
+    finally{btn.disabled=false;btn.textContent=label}});
+  if(LIVE)fetch(API+'/me',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).then(j=>{if(!j)return;
+    const a=$('navAuth');a.textContent='Open DiWire';a.href='/diwire/app/';
+    document.querySelectorAll('a[href="#signup"]').forEach(x=>{if(x.closest('.plan'))return;x.textContent='Open DiWire';x.href='/diwire/app/'})}).catch(()=>{});
+  addEventListener('hashchange',route);route();
+})();
+</script>
+
+</body>
+</html>

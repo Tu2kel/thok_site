@@ -47,3 +47,9 @@
   for = "/sixteenth/"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
+
+# DiWire admin page: keep it out of search results.
+[[headers]]
+  for = "/diwire/admin/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
