@@ -1,5 +1,5 @@
 // DiWire shared server code: MongoDB access, passwords, sessions.
-// Data lives in the "diwire" database on the same cluster as MONGODB_URI.
+// Data lives in the "diwire" database on DIWIRE_MONGODB_URI if set, else the cluster in MONGODB_URI.
 //   users     { email, name, passHash, plan: "free"|"pick3"|"pro", picks: [key], picksLeft, proUntil, createdAt, lastLoginAt }
 //   sessions  { _id: sha256(token), userId, exp }   (TTL index on exp)
 //   links     { _id: sha256(token), email, name, exp } emailed sign-in links, 15 minutes (TTL index on exp)
@@ -23,7 +23,8 @@ export function _setDb(db) { dbOverride = db; indexesReady = null; } // tests on
 export async function getDb() {
   if (dbOverride) return dbOverride;
   if (!clientPromise) {
-    const uri = env("MONGODB_URI");
+    // DiWire can run on its own cluster: set DIWIRE_MONGODB_URI. Otherwise it shares the site's MONGODB_URI.
+    const uri = env("DIWIRE_MONGODB_URI") || env("MONGODB_URI");
     if (!uri) throw new Error("MONGODB_URI is not set");
     clientPromise = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 }).connect();
   }

@@ -10,14 +10,14 @@ import mongodb from "mongodb";
 
 const file = process.argv[2];
 if (!file) { console.error("Usage: node scripts/diwire-publish-app.mjs <app.html>"); process.exit(1); }
-if (!process.env.MONGODB_URI) { console.error("MONGODB_URI is not set (add it to .env)."); process.exit(1); }
+if (!(process.env.DIWIRE_MONGODB_URI || process.env.MONGODB_URI)) { console.error("MONGODB_URI is not set (add it to .env)."); process.exit(1); }
 
 const html = await readFile(file, "utf8");
 if (!html.includes('id="entitlements"')) {
   console.error("This file doesn't have the DiWire access script (id=\"entitlements\"). Publish the build made for the live site.");
   process.exit(1);
 }
-const client = await new mongodb.MongoClient(process.env.MONGODB_URI).connect();
+const client = await new mongodb.MongoClient((process.env.DIWIRE_MONGODB_URI || process.env.MONGODB_URI)).connect();
 try {
   await client.db("diwire").collection("assets").updateOne(
     { _id: "app" },
