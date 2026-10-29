@@ -193,7 +193,9 @@ td .em{font-weight:600}td .nm{display:block;color:var(--mute);font-size:.82rem}
     try{const me=await api('/me');
       $('loading').hidden=true;
       if(!me.admin){$('deniedMsg').textContent=`${me.email} isn't on the DiWire admin list.`;$('denied').hidden=false;return}
-      $('who').textContent=`Signed in as ${me.email}`;$('dash').hidden=false;await load()}
+      $('who').textContent=`Signed in as ${me.email}`;$('dash').hidden=false;await load();
+      if(!last||!last.app){const sec=$('appFile').closest('.panel');sec.style.borderColor='var(--gold)';sec.style.boxShadow='0 0 0 1px #d9a44155,0 20px 50px -25px #d9a44199';
+        $('appMsg').className='msg';$('appMsg').innerHTML='<b>Step 1:</b> upload <b>diwire-app-live.html</b> here. Until you do, the app shows "almost ready" to everyone.';sec.scrollIntoView({block:'center'})}}
     catch(e){$('loading').innerHTML=`<p class="msg err">${esc(e.status?e.message:'Couldn\'t reach DiWire. Refresh the page; if it keeps happening, the server may be down.')}</p>`}
   })();
 })();
