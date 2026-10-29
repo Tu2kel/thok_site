@@ -1,7 +1,25 @@
 // Serves the DiWire app only to signed-in users.
-// The app page itself is not in this (public) repo: it is stored in MongoDB
-// (diwire.assets, _id "app") by scripts/diwire-publish-app.mjs.
-import { getDb, currentUser, isAdmin } from "../diwire/lib.mjs";
+// The app ships with every deploy, encrypted (netlify/diwire/app-enc.mjs), so this public repo
+// never holds it in readable form. DIWIRE_APP_KEY (Netlify env, secret) unlocks it at request time.
+// An admin can still upload a newer build from /diwire/admin; the newest of the two wins.
+import { createDecipheriv } from "node:crypto";
+import { getDb, currentUser, isAdmin, env } from "../diwire/lib.mjs";
+import { APP } from "../diwire/app-enc.mjs";
+
+let bundled = null;
+function bundledHtml() {
+  if (bundled !== null) return bundled;
+  try {
+    const key = Buffer.from(String(env("DIWIRE_APP_KEY") || ""), "base64");
+    const d = createDecipheriv("aes-256-gcm", key, Buffer.from(APP.iv, "base64"));
+    d.setAuthTag(Buffer.from(APP.tag, "base64"));
+    bundled = Buffer.concat([d.update(Buffer.from(APP.data, "base64")), d.final()]).toString("utf8");
+  } catch (e) {
+    console.error("diwire-app: can't unlock the bundled app (check DIWIRE_APP_KEY)", e.message);
+    bundled = "";
+  }
+  return bundled;
+}
 
 let cache = { html: null, at: 0 };
 
@@ -16,11 +34,11 @@ export default async (req) => {
 
   if (!cache.html || Date.now() - cache.at > 60_000) {
     const doc = await db.collection("assets").findOne({ _id: "app" });
-    // Only remember a found app, so a fresh upload shows up right away.
-    cache = { html: doc?.html || null, at: doc?.html ? Date.now() : 0 };
+    const uploadedNewer = doc?.html && doc.updatedAt && new Date(doc.updatedAt) > new Date(APP.builtAt);
+    const html = uploadedNewer ? doc.html : bundledHtml() || doc?.html || null;
+    cache = { html, at: html ? Date.now() : 0 };
   }
   if (!cache.html) {
-    // Admin: go straight to the upload. Everyone else: a short holding page.
     if (isAdmin(user)) return Response.redirect(new URL("/diwire/admin/#upload", req.url), 302);
     return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DiWire</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0b0d;color:#f3efe6;font:16px/1.6 system-ui,sans-serif;padding:24px;text-align:center}h1{font-size:28px;margin:0 0 8px}a{color:#f2cf6b}</style></head>
