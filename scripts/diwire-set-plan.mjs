@@ -13,7 +13,7 @@ if (!email || !["pro", "pick3", "free"].includes(plan)) {
   console.error("Usage: node scripts/diwire-set-plan.mjs <email> <pro|pick3|free> [days for pro]");
   process.exit(1);
 }
-const client = await new mongodb.MongoClient(process.env.MONGODB_URI).connect();
+const client = await new mongodb.MongoClient((process.env.DIWIRE_MONGODB_URI || process.env.MONGODB_URI)).connect();
 try {
   const users = client.db("diwire").collection("users");
   const u = await users.findOne({ email: email.toLowerCase() });
