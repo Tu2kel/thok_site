@@ -187,11 +187,20 @@ export default async (req, context) => {
       }
       if (!pro && today.t >= TEASER_DAILY) return json({ error: "You've used today's free photo preview. Go Pro to read photos and see the full wiring.", locked: true }, 429);
       let out;
-      try { out = await readPhoto({ key, model: env("DIWIRE_VISION_MODEL") || "claude-sonnet-4-6", media: m[1], data: m[2] }); }
-      catch (e) {
-        console.error("diwire photo", e.status, e.body || e.message);
+      // Newest model first; a retired or unknown model name falls through to the next one.
+      const models = [...new Set([env("DIWIRE_VISION_MODEL"), "claude-sonnet-5-5", "claude-haiku-5-5", "claude-sonnet-4-6"].filter(Boolean))];
+      let lastErr;
+      for (const model of models) {
+        try { out = await readPhoto({ key, model, media: m[1], data: m[2] }); break; }
+        catch (e) { lastErr = e; console.error("diwire photo", model, e.status, (e.body || e.message || "").slice(0, 400)); if (!(e.status === 404 || (e.status === 400 && /model/i.test(e.body || "")))) break; }
+      }
+      if (!out) {
+        const e = lastErr || {};
         if (paidWithCredit) await db.collection("users").updateOne({ _id: u._id }, { $inc: { photoCredits: 1 } });
-        return json({ error: "Couldn't read that photo right now. Try again in a minute; it didn't count against you." }, 502);
+        let why = "";
+        if (isAdmin(u)) { let msg = ""; try { msg = JSON.parse(e.body || "{}").error?.message || ""; } catch {} why = ` [admin: ${e.status || "no status"} ${(msg || e.message || "").slice(0, 160)}]`; }
+        const busy = e.status === 429 || e.status === 529 || e.status >= 500;
+        return json({ error: (busy ? "Photo reading is busy right now. Try again in a minute; it didn't count against you." : "Couldn't read that photo right now. Try again in a minute; it didn't count against you.") + why }, 502);
       }
       await usage.updateOne({ _id: uid }, { $inc: pro ? { n: 1 } : { t: 1 }, $set: { day, userId: u._id } }, { upsert: true });
       if (!pro) return json({ locked: true, teaser: teaserOf(out.result) });
